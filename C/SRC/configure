@@ -1,0 +1,93 @@
+#!/bin/bash
+#*****************************************************************************#
+#                                                                             #
+#  Filename:	    configure						      #
+#                                                                             #
+#  Description:     Prepare the environment for making SysToolsLib C tools    #
+#                                                                             #
+#  Notes:	    Verifies if MsvcLibX' debugm.h is accessible, and if not  #
+#                   tries to make it accessible.                              #
+#                                                                             #
+#  History:                                                                   #
+#    2015-12-16 JFL Created this script.                                      #
+#    2016-01-06 JFL Automatically create a symbolic link to debugm.h if poss. #
+#    2016-01-08 JFL Actually copy the file instead of making a link.          #
+#                                                                             #
+#*****************************************************************************#
+
+# Global variables
+VERSION="2016-01-08"
+
+VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+
+# Helper routines to test verbosity levels
+Verbose() {
+  [[ $VERBOSITY > 1 ]]
+}
+Debug() {
+  [[ $VERBOSITY > 2 ]]
+}
+
+# Display a string in verbose mode
+EchoV() { # $*=echo arguments
+  if Verbose ; then
+    echo "$@"
+  fi
+}
+
+# Command line analysis
+case "$1" in
+  -d|--debug)
+    VERBOSITY=$(expr $VERBOSITY + 2)
+  ;;
+  -h | --help | "-?")
+    echo "Prepare the environment for making SysToolsLib C tools"
+    echo "Usage: ./configure [-v]"
+    exit 0
+  ;;
+  -v | --verbose)
+    VERBOSITY=$(expr $VERBOSITY + 1)
+  ;;
+  -V | --version)
+    echo $VERSION
+    exit 0
+  ;;
+esac
+
+# Send cc output to /dev/null, except in debug mode
+if Debug ; then
+  exec 6>&1
+else
+  exec 6>/dev/null
+fi
+
+# Make sure that MsvcLibX/include is NOT accessible
+EchoV "Making sure that MsvcLibX/include is NOT accessible"
+cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include <stdio.h> /* This will include MsvcLibX' stdio.h if it's in the same dir as debugm.h, and it'll fail to compile in Linux */
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -ne 0 ] ; then
+  echo>&2 Error: You must not put MsvcLibX/include in your C_INCLUDE_PATH. Copy debugm.h alone to another directory and export that one.
+  exit 1
+fi
+EchoV "OK"
+
+# Make sure that debugm.h is accessible
+EchoV "Making sure that debugm.h is accessible"
+cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include "debugm.h"
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -ne 0 ] ; then # It's not accessible
+  if [ -f ../MsvcLibX/include/debugm.h ] ; then
+    EchoV "Copying ../MsvcLibX/include/debugm.h"
+    cp -p ../MsvcLibX/include/debugm.h debugm.h # Don't create a link, as this does not always work.
+  else
+    echo>&2 Error: Please copy MsvcLibX"'" debugm.h into the current directory, or into one in your C_INCLUDE_PATH
+    exit 1
+  fi
+fi
+EchoV "OK"
+
+echo Configuration done successfully.

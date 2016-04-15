@@ -1,0 +1,252 @@
+SysToolsLib C Tools and MsvcLibX Library change log.
+
+------------------------------------------------------------------------
+
+2016-01-08 release changes
+
+Tools
+_____
+
+Changes for the Linux version only:
+- The configure script now copies debugm.h automatically.
+- Use the -Wall option, and fixed all warnings... and a few real bugs.
+
+MsvcLibX
+________
+
+include/
+    inttypes.h
+	Completely rewritten to improve support for DOS.
+
+------------------------------------------------------------------------
+
+2015-12-15 release changes
+
+Tools
+_____
+
+The win32 version now runs in all Windows versions from Windows 95 to Windows 10.
+All tools rebuilt for Windows 95 and XP, with their version unchanged, except...
+
+    backnum.exe		Version 2.1.2
+	Work around issue with old versions of Linux.
+
+    chars.exe		Version 1.1
+	Fix output for Linux, including when encoding is UTF-8.
+
+    cpuid.exe		Version 2013-05-30
+	New program displaying the processor ID string, and optionally its features.
+
+    dirc.exe		Version 3.0.4
+	In recursive mode, only show total statistics if they're not 0.
+	Fixed bugs with naked drives (Ex: "D:") and root dirs (Ex: "D:\");
+
+    driver.exe		Version 2.0
+	New program displaying a list of windows drivers.
+
+    update.exe		Version 3.3.5
+	Bug fix: Delete the target if it's not the same type as the source file; But don't in test mode.
+	Work around issue with old versions of Linux that define lchmod and lutimes, but implement only stubs that always fail.
+	Bug fix: In recursive mode, an incorrect directory name was sometimes displayed. (But the correct directory was copied.)
+	Fixed bugs with naked drives (Ex: "D:") and root dirs (Ex: "D:\");
+
+
+
+MsvcLibX
+________
+
+include/
+
+    direct.h
+    process.h
+    stdio.h
+    time.h
+    sys/stat.h
+    sys/types.h
+	Visual Studio 2015 moved this file to the Windows Kit UCRT.
+
+    dirent.h
+	Added the conditional definition of symlink constants, so that our code builds even in XP and older Windows SDKs.
+
+    msvclibx.h
+	Added macro UCRT_INCLUDE_FILE for suppoting Visual Studio 2015 and its "Universal C RunTime".
+
+    stdint.h
+	Bug fix: With VS14/VC19, MSVC's wchar.h includes inttypes.h, which in turn includes this stdint.h, causing loop issues.
+
+    stdio.h
+	Alias fputs to fputsU, and vfprintf to vfprintfU.
+
+    sys/time.h
+	Bug fix: With VS14/VC19, the UCRT defines timespec, with a long tv_nsec.
+
+src/
+
+    configure.bat
+	Redesigned, and added support for finding and configuring several other versions of the MSVC compiler:
+	- MSVC 8, supporting builds for Windows 95
+	- IA64 and ARM compilers
+
+    make.bat
+	Redesigned, and added support for building BIOS and Windows 95 executables. (Tested)
+	Added support for building IA64 and ARM executables. (Not tested)
+	Build for OS/proc targets we have build tools for, and silently avoid others.
+
+    All.mak
+	New file for building for all supported and possible target OS/processor combinations.
+
+    arm.mak
+	New file for building for Windows RT. Define ARM-specific things, and include win32.mak
+
+    bios.mak
+	New file for building for 16-bits BIOS option ROMs. Modeled after dos.mak.
+
+    dos.mak
+	Reshuffled the DOS\ output tree, to allow building several memory model versions.
+
+    doswin.mak
+	Removed and replaced by All.mak
+
+    win32.mak
+	Numerous bug fixes and improvements
+
+    win64.mak
+	Define win64-specific things, and include win32.mak
+
+    win95.mak
+	New file for building for Windows 95. Define win95-specific things, and include win32.mak
+
+    dirent.c
+	Several bug fixes
+
+    err2errno.c
+	Use the new error conversion routine name in the UCRT.
+
+    iconv.c
+	Added routines fputsU and vfprintfU.
+
+    symlink.c
+	Added a workaround allowing to link support for symlinks in all apps, 
+	even when targeting XP or older systems that do not support symlinks.
+
+
+------------------------------------------------------------------------
+
+2014-12-05 release changes
+
+Tools
+_____
+
+Added a make system working both in Windows and in Linux.
+Added a make zip target, to build a new source release.
+
+Added Linux versions of detab, dump, lessive, remplace
+
+2clip.exe	Version 1.3.2
+	Fixed a bug which prevented work in code page 1252.
+	Remove NULs from the incoming stream, to avoid losing the data that follows.
+
+update.exe	Version 3.3.1
+	Added support for pathnames > 260 bytes in Windows.
+	Fixed bug copying files > 2GB in Windows.
+	Fixed bug when copying files from the root directory.
+	Report non ASCII file names correctly in error messages.
+	Copy the date of directories too.
+	Fixed a bug when updating existing links.
+
+backnum.exe	Version 2.1.1
+dirc.exe	Version 3.0.1
+dirsize.exe	Version 3.1.1
+redo.exe	Version 3.0.1
+remplace.exe	Version 2.4.5
+truename.exe	Version 1.0.1
+which.exe	Version 1.7.1
+	Added support for pathnames > 260 bytes in Windows.
+
+
+
+MsvcLibX
+________
+
+include/
+
+    debugm.h
+	Renamed macro RETURN() as RETURN_CONST(), and defined new macro RETURN() to return nothing.
+	Idem for RETURN_COMMENT() as RETURN_CONST_COMMENT().
+
+    msvclibx.h
+	Added macro MSVC_INCLUDE_FILE(path), to work around the lack of an #include_next directive.
+
+    limits.h
+    stdio.h
+    time.h
+    sys/param.h
+    sys/types.h
+	New MsvcLibX file with extensions to the corresponding MSVC include file.
+
+    unistd.h
+	Moved several definitions to their standard location in the new include files extensions
+
+    sys/utsname.h
+	New MsvcLibX file defining structure utsname and function uname()
+
+src/
+
+    configure.bat
+    make.bat
+	Moved configuration operations to the new configure.bat script, which needs to be run only once.
+	Added a make zip target, to build a new source release.
+
+    configure.MsvcLibX.bat
+	New script with MsvcLibX.lib-specific adaptations of configure.bat
+
+    Files.mak
+    NMakeFile
+	Move the OBJECTS list from NMakeFile to Files.mak, and added objects for new .c files.
+
+    win32.mak
+    win64.mak
+	Added rules to build a DLL
+
+    clock_gettime.c	Define standard function clock_gettime().
+    fstat*.c		Redefine standard function fstat() (To work around issues with MSVC's own.)
+    gettimeofday.c	Define standard function gettimeofday().
+    mb2wpath.c		New MsvcLibX routine MultiByteToWidePath(), working around the 260-byte limitation of many Windows file management APIs.
+    uname.c		Define standard function uname().
+	New files
+
+    access.c
+    chdir.c
+    dirent.c
+    fopen.c
+    getcwd.c
+    lstat.c
+    mkdir.c
+    readlink.c
+    realpath.c
+    spawn.c
+    symlink.c
+    utime.c
+    utimes.c		
+	Added support for WIN32 pathnames >= 260 characters. 
+
+    filetime.c
+	Output time with µs precision if possible.
+
+    iconv.c
+	Added internal routine FPrintfUtf8().
+
+    utimes.c
+	Added support for WIDE, ANSI and UTF8 versions.
+	Added handling of UTIME_NOW and UTIME_OMIT.
+
+    - error.c
+    - initmain.c
+    - xnmalloc.c
+	Removed these files, redefining GnuLib routines that were mistakenly placed here
+
+------------------------------------------------------------------------
+
+2014-04-01 Initial release
+
+------------------------------------------------------------------------

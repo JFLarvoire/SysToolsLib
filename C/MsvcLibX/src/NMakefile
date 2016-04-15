@@ -1,0 +1,182 @@
+###############################################################################
+#									      #
+#   File name	    NMakefile						      #
+#									      #
+#   Description     An NMake file for making all MsvcLibX library versions    #
+#									      #
+#   Notes	    make.bat looks for a default nmake file called nmakefile. #
+#									      #
+#   History								      #
+#    2012-10-21 JFL Initial version                                           #
+#    2014-03-05 JFL Generate the DOS version only if DOS tools are present.   #
+#    2014-04-22 JFL Fixed the clean target to work even without 16-bits tools.#
+#    2014-05-30 JFL Moved the OBJECTS macro definition to Files.mak.          #
+#    2014-12-03 JFL Fixed the zip target creation.                            #
+#    2015-11-06 JFL Added support for a Win95 version.                        #
+#    2016-01-11 JFL Added a rule to create the common ..\lib directory.       #
+#									      #
+###############################################################################
+
+!IF DEFINED(OUTDIR)
+OD=$(OUTDIR)^\
+!ELSE
+OD=
+!ENDIF
+
+# Default goal: Generate all versions
+all: \
+!IF DEFINED(DOS_CC)
+     $(OD)DOS\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN95_CC)
+     $(OD)WIN95\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN32_CC)
+     $(OD)WIN32\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN64_CC)
+     $(OD)WIN64\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(DOS_CC)
+     $(OD)DOS\DEBUG\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN95_CC)
+     $(OD)WIN95\DEBUG\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN32_CC)
+     $(OD)WIN32\DEBUG\MsvcLibX.lib \
+!ENDIF
+!IF DEFINED(WIN64_CC)
+     $(OD)WIN64\DEBUG\MsvcLibX.lib \
+!ENDIF
+
+# Define the OBJECTS macro = the list of object files to include in the library
+!INCLUDE "Files.mak"
+
+# Create the common libs directory
+..\lib:
+    echo>con Creating ..\lib
+    md ..\lib
+
+# Rules for building specific versions of the MsvcLibX library
+$(OD)DOS\MsvcLibX.lib: $(OD)DOS\BIN\T\MsvcLibX.lib $(OD)DOS\BIN\S\MsvcLibX.lib $(OD)DOS\BIN\L\MsvcLibX.lib
+    @echo Done building all MS-DOS libraries
+    rem # $(MAKE) /$(MAKEFLAGS) /f $(MAKEFILE) $**
+
+$(OD)DOS\DEBUG\MsvcLibX.lib: $(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib $(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib $(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib
+    @echo Done building all MS-DOS debug libraries
+    rem # $(MAKE) /$(MAKEFLAGS) /f $(MAKEFILE) $**
+
+$(OD)DOS\BIN\T\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS tiny version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\T\%" "MEM=T" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXdt.lib
+
+$(OD)DOS\BIN\S\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS small version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\S\%" "MEM=S" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXds.lib
+
+$(OD)DOS\BIN\L\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS large version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\L\%" "MEM=L" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXdl.lib
+
+$(OD)WIN95\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 95 version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f WIN95.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN95\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw95.lib
+
+$(OD)WIN32\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 32-bits version
+    set OBJECTS=$(OBJECTS)
+    set OD=$(OD)
+    $(MAKE) /$(MAKEFLAGS) /f WIN32.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN32\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw32.lib
+
+$(OD)WIN64\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 64-bits version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f WIN64.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN64\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw64.lib
+
+$(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS tiny debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\T\%" "MEM=T" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXdtd.lib
+
+$(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS small debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS%:+=+$(OD)DOS\DEBUG\OBJ\S\" "MEM=S" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXdsd.lib
+
+$(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib: ..\lib NUL
+    echo>con Building MS-DOS large debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\L\%" "MEM=L" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXdld.lib
+
+$(OD)WIN95\DEBUG\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 95 debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f WIN95.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN95\DEBUG\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw95d.lib
+
+$(OD)WIN32\DEBUG\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 32-bits debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f WIN32.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN32\DEBUG\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw32d.lib
+
+$(OD)WIN64\DEBUG\MsvcLibX.lib: ..\lib NUL
+    echo>con Building Windows 64-bits debug version
+    set OBJECTS=$(OBJECTS)
+    $(MAKE) /$(MAKEFLAGS) /f WIN64.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN64\DEBUG\OBJ\%" dirs $@
+    if exist $@ copy $@ ..\lib\MsvcLibXw64d.lib
+
+# Dummy target, to display a help screen
+help:
+    @echo Targets:
+    @echo.
+    @echo "  all       Rebuild all library versions (Default)"
+    @echo "  clean     Delete all build files"
+    @echo "  zip       Build a source archive in ..\MsvcLibX.zip. Requires 7-zip."
+
+# Dummy target, to delete all files built by these make files
+clean:
+    rem # Delete temporary files 
+    -for /f "delims=" %f in ('dir /b /s ..\*~ ..\*.bak 2^>NUL') do del "%f"
+    rem # Delete files built by this nmakefile
+    -for /f "delims=" %f in ('dir /b /s ..\*.zip ..\*.log 2^>NUL') do del "%f"
+    rem # Delete files built by the DOS.mak, WIN32.mak, WIN64.mak make files
+    rem # But make DOS.mak will fail if 16-bit tools are missing. Workaround:
+    -$(MAKE) /$(MAKEFLAGS) /f DOS.mak clean
+    if exist $(OD)DOS rd /s /q $(OD)DOS
+    rem # No such problem with the others, but just in case, do the same.
+    -$(MAKE) /$(MAKEFLAGS) /f WIN95.mak clean
+    if exist $(OD)WIN95 rd /s /q $(OD)WIN95
+    -$(MAKE) /$(MAKEFLAGS) /f WIN32.mak clean
+    if exist $(OD)WIN32 rd /s /q $(OD)WIN32
+    -$(MAKE) /$(MAKEFLAGS) /f WIN64.mak clean
+    if exist $(OD)WIN64 rd /s /q $(OD)WIN64
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+
+# Dummy target, to build a source archive
+zip:
+    echo>con Building ..\MsvcLibX.zip
+    cd ..
+    if exist MsvcLibX.zip del MsvcLibX.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    7z.exe a MsvcLibX.zip *.txt src\*.bat src\*.mak src\nmakefile src\exe src\*.c -r include\*.h lib\
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    7z.exe d MsvcLibX.zip src\config.bat lib\*.lib
+    cd src
+

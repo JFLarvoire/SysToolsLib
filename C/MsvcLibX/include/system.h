@@ -1,0 +1,2 @@
+/* Global system configuration definitions */
+

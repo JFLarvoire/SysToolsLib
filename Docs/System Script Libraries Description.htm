@@ -1,0 +1,2556 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+
+<head>
+<meta http-equiv="Content-Language" content="en-us" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>System Script Libraries Descript</title>
+
+<!-- -=-=-=-=-=-=-=-=-=-=-=- Begin HPDocStyle -=-=-=-=-=-=-=-=-=-=-=-=- -->
+<style type="text/css" media="all">
+/* Begin hpdoc.css */
+/* General style for all media types */
+/* Override the predefined body layout for various wikis and browsers */
+body {   /* Left column */
+  margin: 0 5px;
+  padding: 0 0 0 90px; /* Leave room for indenting headers in the left margin. */
+  /* Bottom padding must be >= 1px, to avoid hiding TWiki's red preview frame bottom line. */
+  color: black;
+  border-color: black;
+  background-color: transparent;
+  font-family: "Futura Bk", Arial, sans-serif; /* Slides use "HP Simplified", but manuals don't */
+  font-size: 13pt; /* All font sizes will be relative to this one */
+  line-height: normal;
+  letter-spacing: normal;
+}
+/* The browser collapses the margins of the top elements: html / body / h1
+   The biggest of these is the h1 margin.
+   Without !DOCTYPE html, the browser aligns the body at the top of the viewport, and discards the top of the h1 margin.
+   With !DOCTYPE html, the browser fully displays all top margins, forcing the body to begin _below_ the top of the viewport.
+   This rule allows clearing the margin for the top title, thus returning to the old (non !DOCTYPE html) behaviour */
+body>*:first-child {
+  margin-top:0;
+}
+/* Fonts; Sizes inherited from browser by all */
+p,
+table, tr, th, td,
+ol, ul, li,
+.text, pre.text, .text pre,
+tt.text, .text tt { /* Variable width fonts */
+  font-family: "Futura Bk", Arial, sans-serif; /* Slides use "HP Simplified", but manuals don't */
+  font-size: 100%;
+  line-height: normal;
+}
+code, code em,
+pre, pre em,
+tt, tt em,
+var, samp, kbd { /* Fixed width fonts */
+  font-family: "Courier New", Courier, monospace;
+  font-size: 100%; /* Courier New, Futura and Arial are the same size, but Courier is noticeably smaller. */
+  letter-spacing: -1px; /* Default 0 actually has 2 pixels between most characters */
+  color: black;
+  line-height: normal;
+}
+var, em { /* var = Variable or program argument */
+  font-style: italic;
+}
+kbd, strong { /* kbd = User input samples */
+  font-weight: bold;
+  color: inherit;
+}
+/* Block margins */
+p,
+ul li,
+ol li,
+dl, dt, dd,
+blockquote,
+table,
+.tip, .note, .important, .caution, .warning, .example, .figure, .table {
+  margin: 1em 0;
+  padding: 0;
+}
+pre,
+ul,
+ol {
+  margin: 0; /* No space between consecutive verbatim sections */
+  padding: 0;
+}
+/* Headers */
+h1, h2, h3, h4,
+h5, h6, .color, big, .big,
+th, th strong, th a,
+a:link,
+.glossary dt,
+.toc ul li a { /* HP Doc color for titles */
+  /* The original SFS color is blue rgb(0,123,153) or #007b99 */
+  /* The standard HP color is blue rgb(0,150,214) or #0096D6; (Was rgb(0,113,180) or #0071B4 in the past) */
+  /* For testing, use an orange like rgb(255,175,0) or #FFAF00 */
+  color: #0096D6;
+  background-color: transparent;
+}
+h1, h2, h3, h4,
+h5, h6 { /* Headers shifted left into the left margin */
+  margin: 0 0 0 -90px;
+  border: 0;
+  padding: 0;
+  font-weight: bold;
+  line-height: normal;
+  font-family: "Futura Bk", Arial, sans-serif; /* Slides use "HP Simplified", but manuals don't */
+  background-image: none;
+}
+h5, h6 { /* Except these smaller headers, which are not shifted left */
+  margin-left: 0;
+}
+.fullwidth { /* Allow using the full width of the page, like titles above */
+  margin-left: -90px;
+  margin-right: 0;
+}
+td h1, td h2, td h3,
+td h4, td h5, td h6,
+td .fullwidth {
+  margin-left: 0; /* Make them fully visible in sample tables */
+}
+h1 { /* Document title */
+  margin-top: 0;
+  font-size: 275%;
+  margin-bottom: 1em;
+}
+h2 { /* Header 2 = Chapter 1 title */
+  margin-top: 4em;
+  border-top: 4px solid #0096D6;
+  font-size: 220%;
+  margin-bottom: 1em;
+}
+h3 { /* Header 3 = Section 1.2 title */
+  margin-top: 2em;
+  font-size: 175%;
+  margin-bottom: 1em;
+}
+h4 { /* Header 4 = Section 1.2.3 title */
+  margin-top: 1em;
+  font-size: 155%;
+  margin-bottom: 0.8em;
+}
+h5 { /* Header 5 = Section 1.2.3.4 title */
+  margin-top: 0.8em;
+  font-size: 140%;
+  margin-bottom: 0.6em;
+}
+h6 { /* Header 6 = Section 1.2.3.4.5 title */
+  margin-top: 0.6em;
+  font-size: 125%;
+  margin-bottom: 0.5em;
+}
+.glossary dt,
+big, .big { /* Examples, etc */
+  font-size: 115%;
+}
+blockquote {
+  border: 0;
+  background-color: transparent;
+  padding: 0;
+  font-size: 100%;
+}
+a, a:hover {
+  font-size: 100%;
+  color: #0096D6;
+  background-color: transparent;
+}
+a:link {
+  border: 0 none; /* Avoid double underline in TWiki 4 */
+  text-decoration: underline;
+}
+th a:link {
+  text-decoration: none;
+}
+/* Lists */
+dl, blockquote, .indent, ol,
+ul, .toc ul {
+  margin-left: 1.5em; /* Set the list items and other blocks indentation level */
+  padding: 0;
+  font-size: 100%;
+}
+/* Force a hierarchy of ordered list style types */
+ol {
+  list-style-type: decimal;
+}
+ol ol { /* Workaround for lack of alphabetic list type in Twiki */
+  list-style-type: lower-alpha;
+}
+ol ol ol { /* Workaround for lack of roman list type in Twiki */
+  list-style-type: lower-roman;
+}
+ol ol ol ol {
+  list-style-type: upper-alpha;
+}
+ol ol ol ol ol {
+  list-style-type: upper-roman;
+}
+ol ol ol ol ol ol {
+  list-style-type: lower-greek;
+}
+/* Generate a hierarchy of coloured unordered list items bullets */
+/* 2015-02-17 JFL Removed the IE6 and IE7 specific methods */
+/* Method for Internet Explorer >= 8, and all non IE browsers: 
+   Use generated text instead of the default list-item bullet.
+   Advantages: Does not require loading bullet icons; prints well in high resolution. */
+html>/**/body ul>li.li,
+html>/**/body ul>li { /* html>/**\/body = Hack excluding IE7 or below */
+  display: block;	/* Don't display as a list-item, but as a plain block. */
+  list-style-type: none;/* Don't display a list-item bullet. */
+}
+ul>li.li:before,
+ul>li:before { /* :before not supported by IE7 or below */
+  /* I tried display: inline-block, which allows exact width setting at 1.5em,
+     but support is not as widespread as display: inline; and result is good enough. */
+  display: inline;	/* Generated characters are part of the list-item. */
+  margin-left: -1.8em;	/* But shift them 1.5em to the left. */
+  /* The difference with the theoretical 1.5em comes from the width of the
+     4-character content generated, plus the automatically generated space
+     that follows, which together are about 80% x 1.8em wide. */
+  color: #0096D6;/* Last but not least use the HP Doc color. */
+  font-size: 80%;
+  /* Nevetheless, for browsers that support it, use exact positioning. */
+  display: inline-block;
+  width: 1.8em; /* Again a slight difference, due to the added space? */ 
+}
+div.li {
+  display: inline;
+}
+/* Choose the same characters for the first 3 levels as the ul.li/li.li/div.li set above */
+/*
+HTML entity  CSS escape Character
+  &#9675;     \25CB	White disc
+  &#9679;     \25CF	Black disc
+  &#9632;     \25A0	Black square
+  &#9633;     \25A1	White square
+  &#9674;     \25CA	White diamond
+  &#9830;     \2666	Black diamond
+  &#9644;     \25AC	Rectangle
+  &#9658;     \25BA	Right-pointing triangle
+  &#8594;     \2192	Thin right arrow
+  &#9824;     \2660	Black spade
+  &#9827;     \2663	Black club
+  &#9828;     \2665	Black heart
+*/
+ul>li:before {
+  content: "\25CF   ";	/* Black disc + 3 &nbsp; */
+}
+ul ul>li:before {
+  content: "\25CB   ";	/* White disc + 3 &nbsp; */
+}
+ul ul ul>li:before {
+  content: "\25A0   ";	/* Black square + 3 &nbsp; */
+}
+ul ul ul ul>li:before {
+  content: "\25A1   ";	/* White square + 3 &nbsp; */
+}
+ul ul ul ul ul>li:before {
+  content: "\2666   ";	/* Black diamond + 3 &nbsp; */
+}
+ul ul ul ul ul ul>li:before {
+  content: "\25CA   ";	/* White diamond + 3 &nbsp; */
+}
+/* End of generated text section for list items for Internet Explorer >= 8, and all non IE browsers */
+/* Special lists */
+.loose ul li, .loose ol li {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  background-repeat: no-repeat; /* Necessary for TWiki 4's plain skin */
+}
+.toc ul ul li a { /* No HP Doc color for subsections */
+  color: black;
+}
+.tight ul li, .tight ol li,
+.toc ul,
+.toc ul li,
+.toc ol li { /* Inside TOCs and tables, use no inter-item spacing */
+  margin-top: 0;
+  margin-bottom: 0;
+  background-repeat: no-repeat; /* Necessary for TWiki 4's plain skin */
+}
+.toc0 ul,
+.toc0 ul li { /* For main TOCs, first level bullet has 1 line top margin */
+  margin-top: 1em;
+  margin-bottom: 0;
+}
+.toc0 ul ul, .toc0 .toc ul ul, ul.toc0 ul, /* The toc0 class may apply to an outside div, or to the outside ul itself */
+.toc0 ul ul li, .toc0 .toc ul ul li, ul.toc0 ul li { /* But all sub-level bullets have 0 line top margin */
+  margin-top: 0em;
+  margin-bottom: 0; /* For some reason, we don't always inherit it from the .toc0 ul li rule. */
+}
+/* Special case of notes within list items */
+li .tip, li .note, li .important, li .caution, li .warning {
+  margin-left: 0; /* Don't indent block logos in this case */
+}
+/* Tables */
+/* Default table, with no lines and some space between columns */
+table { /* Remove background color stripes and borders */
+  border: 0 none;
+  border-spacing: 0;
+  border-collapse: collapse;
+  border-color: #0096D6;
+  background-color: transparent;
+  font-size: 100%; /* Override the default font size for tables */
+}
+td,
+th {
+  margin: 0;
+  border: 0 none; /* none does not work here with Mozilla and border-collapse: collapse */
+  /* border: hidden; // Workaround: User hidden, which is not recognized by IE */
+  /* But none is recessive, whereas hidden is dominant, which breaks .hline and .vline, etc, below */
+  /* border-bottom: hidden; // This too breaks .hbar and .table */
+  padding: 0.2em;
+  background-color: transparent;
+  text-align: left;
+  vertical-align: top;
+  font-size: 100%; /* Override the default font size for table data */
+  line-height: normal;
+}
+td + td,
+th + td,
+th + th {
+  /* border-left: hidden; // Workaround for Mozilla left-over vertical lines */
+  padding-left: 2em; /* Add space between columns */
+}
+/* Optional property: Lines between every column */
+.vline td,
+.vline th {
+  /* Use on table to have a thin line between every column */
+  border-left: 1px solid #0096D6;
+  border-right: 1px solid #0096D6;
+}
+.vline td + td,
+.vline th + td,
+.vline th + th {
+  padding-left: 0.2em; /* Reset space between columns */
+}
+/* Optional property: Lines between every row */
+.hline td, .hline table td,
+.hline th, .hline table th {
+  /* Use on table to have a thin line between every row */
+  border-top: 1px solid #0096D6;
+  border-bottom: 1px solid #0096D6;
+}
+/* Optional property: Add a bar above one section (a row) */
+.hbar td,
+.hbar th { /* Use on tr to add a thick line above the row */
+  border-top: 3px solid #0096D6;
+}
+/* Optional property: Page-wide table with two even-sized columns */
+table.twocol,
+.twocol table { /* Define a two even-sized column table style */
+  width: 100%;
+}
+.twocol td {
+  width: 50%;
+}
+.twocol th {
+  background-color: rgb(246,251,252); /* Very light blue-green */
+  width: 50%;
+}
+.twocol td + td,
+.twocol th + th {
+  padding-left: 0.2em; /* Reset space between columns */
+}
+/* Optional property: Page-wide table, with two thick horizontal borders */
+table.table,
+.table table {
+  width: 100%;
+  border-top: 4px solid #0096D6;
+  border-bottom: 4px solid #0096D6;
+}
+.table th, .table table th  {
+  border-bottom: 2px solid #0096D6;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* Table for the glossary */
+.glossary td ,
+.glossary th {
+  padding-top: 0.5em;    /* Make it half of the p top/bottom _margins_ */
+  padding-bottom: 0.5em; /* Idem. (Note: td/th elements cannot have margins) */
+  margin-left: 1em;
+  color: black;
+}
+.glossary th strong, /* Twiki 3 */
+.glossary th font   /* Twiki 4 */ {
+  color: black;
+}
+/* Define a table style with solid borders.
+   Not HP Doc compliant, but useful to make HP Doc own documentation.
+   Using > selectors, to avoid inheritance by inner tables.
+   The * is for the implicit thead or tbody. */
+table.solid,
+.solid>table {
+  border: 2px solid #0096D6;
+  border-collapse: collapse;
+}
+table.solid>*>tr>td, table.solid>*>tr>th,
+.solid>table>*>tr>td, .solid>table>*>tr>th {
+  border: 2px solid #0096D6;
+}
+table.solid>*>tr>td + td,
+table.solid>*>tr>th + td,
+table.solid>*>tr>th + th,
+.solid>table>*>tr>td + td,
+.solid>table>*>tr>th + td,
+.solid>table>*>tr>th + th {
+  padding-left: 0.2em; /* Reset space between columns */
+}
+/* Other */
+.figure {
+  text-align: center;
+}
+.figure div {
+  margin: 1em 0;
+  text-align: left;
+}
+.key { /* Keyboard key */
+  font-family: Arial, sans-serif;
+  font-size: 10pt;
+  font-weight: 600;
+}
+/* Tip, Note, Important, Caution, Warning */
+.tip, .note, .important, .caution, .warning { /* Outer div defining the image in the margin */
+  border: none;
+  margin-left: -27px;
+  padding-left: 27px;
+  background-position: 0 6px;
+  background-repeat: no-repeat;
+}
+.tip div, .note div, .important div, .caution div, .warning div, .example div { /* Inner div defining the borders */
+  width: 100%;
+  border-top: 2px solid #0096D6;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #0096D6;
+}
+.tip big,  .note big,  .important big,  .caution big,  .warning big,
+.tip .big, .note .big, .important .big, .caution .big, .warning .big { /* Room between title and body */
+  margin-right: 1em;
+}
+/* NOTE: "Save as .MHT" does not save style images defined here.
+   To make sure they're saved, define an invisible div that loads them in the html body.
+   If any change is made here, make sure the new image is defined in that invisible div. */
+.tip {
+  /* background-image: v1="tip.png"; v2="check.gif" */
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAB3RJTUUH3wIDDx4WbAA1ZwAAAhhJREFUOMuN1E+IllUUBvDfNzMmYwkxOekmRImoFroVR1dBqzZFgptclKtsIURnkQRt2jybAQW3LWwTChqjbYLaNGCICxHyD5QKQvkXTdNg0GlzB15fv2+YCxfe95znPPfc55xzWcGqqhNVdWwl2LFO0CgymGp7OcyzhBivqtmq2tAFJYHfcaFPUFWbq+qrhgGD3kk3sQbrkvxXVWOYbLjFth8nWayq9fgbF5O8NSxD2IQ/saeqpvAz7uEBHuIWjlfVAF/jNLZ0CQYjNNmMP3AeB5LMVdUq7MY3eBXTSR6MLEpvncOpJFuSzDUtF5IcwUZcxy/DijkYkt0+BC9joSt4BzOFO9iZ5Neub6KqXsDa9v8PduHsKLIO7gI+qqrTraUWcX8Mn+J2259gAn8tQwZPcL/dYi9u4CbeH7QrrMbTJAtV9SNewTYs9ombZhO4iB+SfL5kTzJUww9xFC/h3xEabsRVvJnk0kra5je8iB24t0TasnutdcHJJHuWMhs5y1W1Bu9hPX7qgtv3GdzFZ1U1meSZ1umP3qZ2+gF821rjiyQHm/87bMfrzf8O3kjyaFiGk23sziY5lOQhDuPL5h/gAxxM8hQf41EbzeevnORxO/HdjgRXMN00PdMeimtNtyfYireHFqUvbrPtx2yvZruTfN9vpaXYsZ7g/XVliO1y39CNHV9uHObn5y/NzMxcbu1zo2U3v1zM/7RT5aoCKtMxAAAAAElFTkSuQmCC");
+}
+.note {
+  /* background-image: v1="pencil.png"; v2="information.gif" */
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAB3RJTUUH3wIDDx8DGMbgzQAAAZNJREFUOMud1D1oVUEQBeAvzycWQfCvEBEEC2NleisR1DpqoyGFrVhPJUQsIkxjZSFCFBsbsVC0MkW6INbBQrCTQKxEjfiTWDhPrvHe50tOM7M7O2eH2bMzBhExjp3YwDie4gqu4REm8BPvMIV5vEEvMz9FhMwEPb9xHytYRh+7sa9h92Av9jf2HmM1Is4OyJqEu7CKOaxXtV8whq/4ge9Yq5w13MPbyvmDfsN/n5l3yj9a9lLZF41zzwZOREzjSJOwZxMi4i/bhmGxfwgH/Wj2pevMSITDbh/lTL/t9oi4haslo81YyMwLIxMWbuNBR+xzR9WT+NBFeL4E3Fbha1xvtOxG+XdxrIvwW+mwKzbATRyMiGWcxES/reGZOV/fq/NR6qUP1TfdgeOZudTbiiSaZBExg+dFdjEzlyKi81GGajAiTuNhbZ3KzMVBbEuEpb8TWKitczU4uoX9v+pwuabSmRp1s9smLMxhMjNfYrrmZKuwN0as8uOwnAHhOg5ExNSQ39Omx8NdhLNYxJNttOBVc/ELr8R9N77SteMAAAAASUVORK5CYII=");
+}
+.important {
+  /* background-image: No v1; No v2 */
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAB3RJTUUH3wIDDx0nFvNmngAAAfhJREFUOMuF1E2ITmEUB/Dfexs2amrWIsnWgiyZ8jGFDbtZaGp8ZGZWdk/JRmksTpYS3llgUrYSJlNKYyXZSVHSKAsxNSx8ZLA5b13XnXf+devcnvP8n/PxP6ejhlKKiFBK2YA9OIbd2JIui3iK21iIiK8aqFrIRrGEh9iBqziQ32Vsx318KqWM9e720GmQXcEUbmI6It5oQSllK87hBLoRcbrHUTXIJnA0Isbxpv5yPRO8jYiTOIwTpZRuRPwT4SjuJNnd3iN5dgRn8CejftzI6mCW53hE3KiyAbdws0mW2IS92Jcf9MhExBxmcL2UMlhlN9djuoWsid/1nx4pprEOwwMpjZerNQC/avb35mEG8K6U8gJjVepstk9UH2v25z5+1zBSpWif93H8ULMX+/i9xlBlbbyv2a/Wcq7y1Z2rCBi+1Oq41KbNxDYsVzmbY20eWfBvOI+L+NFHBROYH8hBv5/j9LblQgfPMJDibstiM3bhQoUF/MS5mq7quIRHeJCd/G874SxW8KTKFXQqZ/JQC+nGxtQ0t9N+TGIqIparrNUsurhXSjnYIJ3EXEY51kI2l2PbbVtf3Yx2JhfBu1W6vznTnMxVN95rYqclhXFcz9l8kXV7XZPGRDZgJdPs1ndAZ5UIBjGcKY5gKI+WMZ+j+iQilpt3/wJuIe1Sy9RQ3AAAAABJRU5ErkJggg==");
+}
+.caution {
+  /* background-image: v1="warning.png"; v2="warning.gif" */
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAB3RJTUUH3wIDDxwzFTKDogAAAZBJREFUOMut0z2PzFEUBvDfzA5LCP1qlohGyZoPgGaJioJmWR9BcssNRkJONEIlER9gZxtRSUS1hUGpkWw0yiUREWZjreZMsv7mNeskNzf3vDznOSfPZQwrpdRLKfVxcmsjgGA33qfrODYiYmDN0K5Z+AhH8zwcBjYOwxN4i9/bCJyMiHcTMcxR4V7eD/LA3UrOeAxLKWfxAl0cTvdHTONMRLwcCzA778cnHMRSRLQytoRb+IpD+F7dab0KlglXE2wtIlqllF7sNtYydi0i/hm9H8M9+JHPS2j3WGTxRSxnfG9E/OwLmMk1PMN5dCKiOWC/HczhOS5gq9e0XtHcLObxC+eGKKqXM4/Z7XusymY1fe2IWO8njdzlOlYyd3XQyIt4gg0ciIjuCNFP4xt2YTEinlYZtvJeGAWWK+piIZ93/hq5lPIYM/iM9qBf0Eevy/iCmcRQK6UcwQdM4VREvDGBlVLm0MEmjjVS+VN4jX2llNMms82sbeJmA5cz0MQrO7MrDVzH/WRZ2wHYFm743/YH9CqNpkwYVlsAAAAASUVORK5CYII=");
+}
+.warning {
+  /* background-image: v1="stop.png"; v2="forbidden.gif" */
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAB3RJTUUH3wIDDx8mU8I0igAAAcNJREFUOMut1D9PFFEUBfDfwpqIsTIR0YLGRBr5BDRYmmip0BErEy3BZ/wCgLew00hjsFTssLBSm/0CNhqpjAmyJpZs/LPrWng3may7gISXTObNPfedOe+dM8MRj9peYCkFRvEKXVxGJyKGrhndi7DRaJiZmbmDmziP3YhoHEphqpvEp1TX65/E52EqR4aR5YKVLG3gRc5XIqL3wv9SOIUP6OBClrdSxFREfDwQYcWIbYxjPSJuJLaOBXzFuUEG1QZttZRyDc/wDWexit+4hyZOYS4iNirHM3zLpZRfqOM2nqbaWpIv4CHaEXFsX1NKKU+SbDsiHlWgLmRtG/XsHU5YShnHfD5eqhD9zKvbh83nmqEKNzGG19hKgzpoYRedrG3hTfZu/mNKNl2pgBMR0UxsFO/T+amIaGf9DHay/ypeRsRfhenScoKLEdGsBLeDaVxEu5KGJpayZ7nn9Eg2lFz0A2t9UTiZudvJucqXspZnO50caqWU0/iSW5qLiOd9Rp3Auzye6Yho9eHXM7MdTNRKKau4i7fpXn1ANI/n/fsArJ0GzeJ+HYsJzFZicdixVMcD3Dqin/XjXmzG9vt7H2REROsP0fqtBKFGAbQAAAAASUVORK5CYII=");
+}
+td .tip, td .note, td .important, td .caution, td .warning {
+  margin-left: 0; /* Make them fully visible in sample tables */
+  width: auto; /* IE7 behaves better this way, but still not OK */
+}
+/* Special case for Vertical Ellipsis, possibly inside notes, examples, etc. */
+div.vell { /* No margin nor border at any time */
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+/* Special case for tips, etc, inside a table, like the conventions table */
+.conventions, .conventions p, .conventions table, .conventions td {
+  margin-left: -27px;
+  padding-left: 27px;
+}
+.conventions .tip, .conventions .note, .conventions .important, .conventions .caution, .conventions .warning { /* Restore margin inside the conventions table */
+  margin-left: -27px;
+  padding-left: 27px;
+  width: auto;
+  background-position: 0 0px;
+}
+/* End of Tip, Note, Important, Caution, Warning definitions */
+.whitebg, .bgwhite {
+  background-color: #ffffff;
+}
+.colorbg, .bgcolor {
+  background-color: #0096D6;
+}
+/* The official HP palette of colors */
+.hpcolor, .hpblue {	   /* HP Blue */
+  color: rgb(0,150,214);   /* #0096D6 (Was rgb(0,113,180) or #0071B4 in the past) */
+}
+.white {		   /* White */
+  color: rgb(255,255,255); /* #FFFFFF */
+}
+.black {		   /* Black */
+  color: rgb(0,0,0);	   /* #000000 */
+}
+.hporange {		   /* HP Orange */
+  color: rgb(240,83,50);   /* #F05332 */
+}
+.hpgreen {	  	   /* HP Green */
+  color: rgb(0,139,43);    /* #008B2B */
+}
+.hppurple {	 	   /* HP Purple */
+  color: rgb(130,41,128);  /* #822980 */
+}
+.hpdarkergray {		   /* HP Darker Gray */
+  color: rgb(83,84,85);    /* #535455 */
+}
+.hpdarkgray {		   /* HP Gray */
+  color: rgb(135,137,139); /* #87898B */
+}
+.hpgray {		   /* HP Medium Gray */
+  color: rgb(185,184,187); /* #B9B8BB */
+}
+.hplightgray {		   /* HP Light Gray */
+  color: rgb(229,232,232); /* #E5E8E8 */
+}
+.hpblue65 {		   /* HP Blue 65% */
+  color: rgb(89,187,228);  /* #59BBE4 */
+}
+.hpblue40 {		   /* HP Blue 40% */
+  color: rgb(153,213,239); /* #99D5EF */
+}
+.hpblue15 {		   /* HP Blue 15% */
+  color: rgb(217,239,249); /* #D9EFF9 */
+}
+.hppurple50 {	 	   /* HP Purple 50% */
+  color: rgb(192,148,191); /* #C094BF */
+}
+.hporange75 {		   /* HP Orange 75% */
+  color: rgb(244,126,101); /* #F47E65 */
+}
+.hporange50 {		   /* HP Orange 50% */
+  color: rgb(247,169,152); /* #F7A998 */
+}
+.hporange25 {		   /* HP Orange */
+  color: rgb(251,212,192); /* #FBD4C0 */
+}
+.hpgreen75 {	  	   /* HP Green 75% */
+  color: rgb(64,168,96);   /* #40A860 */
+}
+.hpgreen50 {	  	   /* HP Green 50% */
+  color: rgb(127,197,149); /* #7FC595 */
+}
+.hpgreen25 {	  	   /* HP Green */
+  color: rgb(191,226,202); /* #BFE2CA */
+}
+/* The same official HP palette of colors, this time for backgrounds */
+.hpbluebg {		   /* HP Blue */
+  background-color: rgb(0,150,214);   /* #0096D6 (Was rgb(0,113,180) or #0071B4 in the past) */
+}
+.whitebg {		   /* White */
+  background-color: rgb(255,255,255); /* #FFFFFF */
+}
+.blackbg {		   /* Black */
+  background-color: rgb(0,0,0);	      /* #000000 */
+}
+.hporangebg {		   /* HP Orange */
+  background-color: rgb(240,83,50);   /* #F05332 */
+}
+.hpgreenbg {	  	   /* HP Green */
+  background-color: rgb(0,139,43);    /* #008B2B */
+}
+.hppurplebg {	 	   /* HP Purple */
+  background-color: rgb(130,41,128);  /* #822980 */
+}
+.hpdarkergraybg {	   /* HP Darker Gray */
+  background-color: rgb(83,84,85);    /* #535455 */
+}
+.hpdarkgraybg {		   /* HP Gray */
+  background-color: rgb(135,137,139); /* #87898B */
+}
+.hpgraybg {		   /* HP Medium Gray */
+  background-color: rgb(185,184,187); /* #B9B8BB */
+}
+.hplightgraybg {	   /* HP Light Gray */
+  background-color: rgb(229,232,232); /* #E5E8E8 */
+}
+.hpblue65bg {		   /* HP Blue 65% */
+  background-color: rgb(89,187,228);  /* #59BBE4 */
+}
+.hpblue40bg {		   /* HP Blue 40% */
+  background-color: rgb(153,213,239); /* #99D5EF */
+}
+.hpblue15bg {		   /* HP Blue 15% */
+  background-color: rgb(217,239,249); /* #D9EFF9 */
+}
+.hppurple50bg {	 	   /* HP Purple 50% */
+  background-color: rgb(192,148,191); /* #C094BF */
+}
+.hporange75bg {		   /* HP Orange 75% */
+  background-color: rgb(244,126,101); /* #F47E65 */
+}
+.hporange50bg {		   /* HP Orange 50% */
+  background-color: rgb(247,169,152); /* #F7A998 */
+}
+.hporange25bg {		   /* HP Orange */
+  background-color: rgb(251,212,192); /* #FBD4C0 */
+}
+.hpgreen75bg {	  	   /* HP Green 75% */
+  background-color: rgb(64,168,96);   /* #40A860 */
+}
+.hpgreen50bg {	  	   /* HP Green 50% */
+  background-color: rgb(127,197,149); /* #7FC595 */
+}
+.hpgreen25bg {	  	   /* HP Green */
+  background-color: rgb(191,226,202); /* #BFE2CA */
+}
+/* Scale an image, and an optional p outside it, to fit in the enclosing div */
+.setheight p, .fitheight {
+  height: 100%;
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+/* Make sure there's no top margin in anything within a table. */
+/* Place this in the end, to override earlier rules, whatever they are. */
+/* Note that this does not work in TWiki 3, which changes the > to > (Any workaround welcome!) */
+td>:first-child,
+td>:first-child>:first-child,
+td>:first-child>:first-child>li:first-child {
+  margin-top: 0;
+}
+/* Symmetric operation with CSS 3's last-child */
+td>:last-child,
+td>:last-child>:last-child,
+td>:last-child>:last-child>li:last-child {
+  margin-bottom: 0;
+}
+/* Special case for exported documents: Use standard bullets, colored with HP color. */
+/* For that, override lists style by changing ul/li to ul.li/li.li/div.li.
+   Idem for ol/li to ol.li/li.li.div.li.
+   The extra div.li level allows colouring the bullets differently from the content.
+   Also using native bullets or characters improves a lot the print quality */
+/* Surround with div.lili for testing, to force this type of bullet generation. */
+li.li {
+  display: list-item;
+  color: #0096D6;
+}
+div.li {
+  color: black;
+}
+ul.li>li.li { /* Override all style settings set in previous CSS above */
+  list-style: disc outside url();
+  background-image: none;
+  margin-left: -0.5em; /* Control the disc-li distance. */
+  padding-left: 0.5em; /* Margin-left and padding-left must total 0 here. */
+}
+ul ul.li>li.li { /* Second level lists use a circle */
+  list-style-type: circle;
+}
+ul ul ul.li>li.li { /* Third level lists use a square */
+  list-style-type: square; /* Note: The square looks bad in IE8... */
+}
+ul ul ul ul.li>li.li {
+  color: black;
+  list-style-type: circle;
+}
+ul ul ul ul ul.li>li.li {
+  list-style-type: square; /* Note: The square looks bad in IE8... */
+}
+ul ul ul ul ul ul.li>li.li {
+  list-style-type: disc;
+}
+/* Repeat the above settings that would be broken by the generated version further down. */
+/* This cannot be merged with the above rules, because of IE7 limitations:
+   The presence of unrecognized selectors html>/**\/body and :before prevents the rules
+   from firing, even for the recognized selectors above. */ 
+html>/**/body .lili ul.li>li.li {
+  display: list-item;
+  list-style: disc outside url();
+}
+.lili ul.li>li.li:before {
+  display: none;
+}
+html>/**/body .lili div.li {
+  display: block;
+}
+html>/**/body .lili ul ul.li>li.li {
+  list-style-type: circle;
+}
+html>/**/body .lili ul ul ul.li>li.li {
+  list-style-type: square; /* Note: The square looks bad in IE8... */
+}
+html>/**/body .lili ul ul ul ul.li>li.li {
+  list-style-type: circle;
+}
+html>/**/body .lili ul ul ul ul ul.li>li.li {
+  list-style-type: square; /* Note: The square looks bad in IE8... */
+}
+html>/**/body .lili ul ul ul ul ul ul.li>li.li {
+  list-style-type: disc;
+}
+/* Special styles for screen media only */
+@media screen {
+  .screen { /* Enable screen-specific output */
+    display: inherit;
+  }
+  .print { /* Disable print-specific output */
+    display: none;
+  }
+  .figure {
+    text-align: left;
+  }
+  .w3720 img {
+    width: 930px; /* 1/4 the initial 3720px width */
+  }
+}
+/* Special styles for print media only */
+@media print {
+  .screen { /* Disable screen-specific output */
+    display: none;
+  }
+  .print { /* Enable print-specific output */
+    display: inherit;
+  }
+  body { /* The topic contents area */
+    margin: 0;
+    font-size: 11pt;
+  }
+  h2 { /* Header 2 = Chapter 1 title */
+    margin-top: 0;
+    page-break-before: always;
+  }
+  a:link {
+    text-decoration: none;
+  }
+  .tip, .note, .important, .caution, .warning, .example, .figure, .table {
+    page-break-inside: avoid;
+  }
+  .w3720 img {
+    width: 6.2in; /* Actual width for 3720px at 600dpi */
+  }
+  td pre {
+    white-space: pre-wrap; /* Unfortunately not supported by IE 8 */
+  }
+  .pageBottom { /* Position a block at the bottom of a printed page */
+    position: fixed;
+    bottom: 0;
+  }
+  .newPage { /* Force a new page */
+    page-break-before: always;
+  }
+}
+
+/* End of hpdoc.css */
+</style>
+<!-- -=-=-=-=-=-=-=-=-=-=-=-=- End HPDocStyle -=-=-=-=-=-=-=-=-=-=-=-=-=- -->
+
+</head>
+
+<body>
+
+<h1>System Script Libraries Description</h1>
+<h2>Introduction</h2>
+<p>Over the years, I have developed a very large number of system management 
+scripts for Windows and Linux. Both for work projects, and for home projects. 
+Despite my growing experience, all non trivial scripts were difficult to develop 
+and debug. For many things I was doing, I could simply not find any existing 
+routines, and had to develop my own. And as soon as I tried something new, all 
+complex scripts tended to produce unexpected results, including possibly hanging 
+or crashing.</p>
+<p>Facing the same difficulties over and over again, I started to develop 
+assistance routines to help me debug my scripts. I reused these routines from 
+project to project, when I had a need, improving them a little bit every time.</p>
+<p>Eventually the proliferation of versions became a problem, and it proved 
+easier to regroup them in a dedicated module for each programming language, 
+which always contained the latest and greatest version.</p>
+<p>Sometimes a sorely needed improvement required a serious redesign. Sometimes, 
+a redesign proved so fruitful that I ported it to the other versions in other 
+programming languages, even if those did not immediately need it.</p>
+<p>This document explains the script design principles I matured over time, 
+their application to various scripting languages, and the usage of the libraries 
+for each language. The initial release supports 4 languages: Tcl/Tk, Bash, 
+Batch, PowerShell</p>
+<div class="note">
+				<div>
+								<big>Note:</big>
+								<p>All my system management scripts are 
+								command-line tools. These libraries assume a 
+								console or terminal is present. They can be used 
+								for debugging graphical scripts, but they will 
+								require a console or a terminal somewhere for 
+								the input and output.</p>
+				</div>
+</div>
+<p>All this is a work in progress. Some implementations lag behind others. Some 
+inconsistencies remain and should be cleaned up. I&#39;ll be happy to get feedback, 
+and improvement ideas.</p>
+<h3>Change log</h3>
+<table>
+				<tr>
+								<th>Date</th>
+								<th>Author</th>
+								<th>Changes</th>
+				</tr>
+				<tr>
+								<td>2013-12-11</td>
+								<td>Jean-François Larvoire</td>
+								<td>Initial release</td>
+				</tr>
+				<tr>
+								<td>2016-04-05&nbsp;</td>
+								<td>JFL</td>
+								<td>Updated the batch library section:<br />
+								- Major change&nbsp;to the %FUNCTION% and 
+								%RETURN% macros design and usage.<br />
+								- Added a section about user-defined macros.</td>
+				</tr>
+</table>
+<h2>Goals and design principles</h2>
+<p>The main goals of these libraries are:</p>
+<ul>
+				<li>Scripts should have built-in debugging capabilities.<br />
+				They should not rely on outside debuggers, which are not always 
+				available in the field, or too complex to use by end-users. (In 
+				the case of Windows&#39; batch language, there is simply no debugger 
+				available at all!)</li>
+				<li>Scripts should not have distinct &quot;normal&quot; and &quot;debug&quot; 
+				versions.<br />
+				They should work &quot;normally&quot; by default, and have standard 
+				options for enabling special modes:
+				<ul>
+								<li>The verbose mode, enabled by the -v option, 
+								displays more details than normal. This is to 
+								help users understand what is being done.</li>
+								<li>The debug mode, enabled by the -d option, 
+								displays intermediate variables values, traces 
+								code execution, etc. This is to help the script 
+								author fix bugs.</li>
+								<li>The no-execute mode, aka. WhatIf mode, 
+								enabled by the -X option, displays all 
+								&quot;dangerous&quot; commands that should run, without 
+								actually running them. This is to help cautious 
+								people (both the author and the users) forecast 
+								catastrophes that may or may not happen if you 
+								run the script.</li>
+				</ul>
+				</li>
+				<li>The debugging libraries should be as lightweight as 
+				possible.
+				<ul>
+								<li>This allows to leave them in permanently, 
+								with no performance penalty when debugging is 
+								disabled.</li>
+								<li>Adding one to a script should require as few 
+								changes as possible. (Ideally just one: 
+								Inserting the library in the beginning of the 
+								script! In reality, more or less depending on 
+								languages.)</li>
+								<li>Library functions should replace and extend 
+								existing language functions if possible. Else 
+								use a name almost identical to the library 
+								function it replaces. (To minimize changes, and 
+								if changes are required to minimize the apparent 
+								change (and memorization effort.). Ex: echo 
+								becomes Echo.</li>
+				</ul>
+				</li>
+				<li>The debugging libraries should use each language built-in 
+				debugging capabilities as much as possible.
+				<ul>
+								<li>No need to reinvent the wheel.</li>
+								<li>Being incompatible with the standard 
+								debugging functions would make it more difficult 
+								to retrofit our library into existing scripts.</li>
+				</ul>
+				</li>
+				<li>The debugging output should be reusable as input in other 
+				shell instances<br />
+				This allows to manually single-step through problematic 
+				operations.</li>
+				<li>Function call/return tracing is indented by call depth.<br />
+				This makes is considerably easier to browse the debug output of 
+				complex scripts with deep call trees.</li>
+</ul>
+<h3>Function naming conventions</h3>
+<h4>Extensions of standard functions</h4>
+<p>The debug libraries extend the features of some standard language functions.</p>
+<p>For example, all language have a function called &quot;echo&quot; to output a string. 
+(Or &quot;puts&quot; for Tcl/Tk). The debug libraries will define a new extended echo 
+function, that outputs a string exactly like the native function does, supports 
+all the same options, AND that logs it to the log file (if a log file is 
+defined), AND that indents the output by call depth when running in debug mode.</p>
+<p>This extended function has the same name as the native function when possible 
+(PowerShell) and a very similar name in other languages. For Batch, we define 
+macros that hide the function calls.</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Command</th>
+								<th>Notes</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%ECHO% Starting at %DATE% %TIME%</pre>
+								</td>
+								<td>Variable %ECHO% contains &quot;call :Echo&quot;.</td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>echo &quot;Starting at $(get-date)&quot;</pre>
+								</td>
+								<td>The standard Write-Output (alias echo) is 
+								redefined in our library. </td>
+				</tr>
+				<tr>
+								<td>bash</td>
+								<td>
+								<pre>Echo &quot;Starting at `date`&quot;</pre>
+								</td>
+								<td>Could we alias echo to our Echo? (without 
+								breaking Echo!)</td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>Puts &quot;Starting at [date]&quot;</pre>
+								</td>
+								<td>We should probably rename the original puts, 
+								and name ours puts also.</td>
+				</tr>
+</table>
+<div class="tip">
+				<div>
+								<big>Possible improvement:</big>
+								<p>It&#39;s probably possible to fully replace the 
+								native functions for bash and Tcl/Tk too. If 
+								anybody has time...</p>
+				</div>
+</div>
+<h4>Functions to do things in debug mode only</h4>
+<p>... or in verbose mode only, or in no-exec mode only:</p>
+<p>It is not efficient to have a test like (in pseudo code): <code>if (is_debug_mode()) 
+echo &quot;variable name = $name&quot;</code></p>
+<p>The reason is that many scripting languages evaluate all variables <u>before</u> 
+executing the instruction, and finding that the rest of the line needs not be 
+evaluated. This is particularly costly in Batch. Likewise, function calls are 
+costly in Batch.</p>
+<p>So instead, the library defines a derived routine that will fire in debug 
+mode only. And for Batch, the %macro% value will be &quot;rem&quot; in non debug mode, 
+ensuring a negligible cost.</p>
+<p>For example to output a debug message, the functions are:</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Command</th>
+								<th>Notes</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%ECHO.D% Running in debug mode</pre>
+								</td>
+								<td>&quot;.D&quot; suffix appended to the original macro 
+								name. </td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>Write-Debug &quot;Running in debug mode&quot;</pre>
+								</td>
+								<td>The standard Write-debug is also redefined 
+								in our library. </td>
+				</tr>
+				<tr>
+								<td>bbash</td>
+								<td>
+								<pre>EchoD &quot;Running in debug mode&quot;</pre>
+								</td>
+								<td>&quot;D&quot; suffix appended to the verb. </td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>DebugPuts &quot;Running in debug mode&quot;</pre>
+								</td>
+								<td>&quot;Debug&quot; prefix inserted before the original 
+								function name. </td>
+				</tr>
+</table>
+<div class="tip">
+				<div>
+								<big>Possible improvement:</big>
+								<p>The naming rules for that as consistent 
+								within a language, but not across languages. 
+								Laziness makes me prefer adding shorter strings. 
+								And experience shows that the simplest rule to 
+								remember is to have d, v, X suffixes 
+								corresponding to the -d, -v, -X command line 
+								options. Maybe change Batch, bash and Tcl/Tk 
+								rules to all use &quot;-d&quot;, &quot;-v&quot;, &quot;-X&quot; suffixes? </p>
+				</div>
+</div>
+<h4>Entirely new functions</h4>
+<p>Generally I try to stick to the naming conventions in the original language, 
+with suffixes to give them an object-oriented look and feel.<br />
+(Yes, I&#39;m talking about writing object-oriented batch scripts :-)</p>
+<p>For example, the functions to display the value of one or more variables are:</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Normal mode command</th>
+								<th>Debug mode command</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%ECHOVARS% USERNAME USERPROFILE</pre>
+								</td>
+								<td>
+								<pre>%ECHOVARS.D% USERNAME USERPROFILE</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>Write-Vars env:USERNAME env:USERPROFILE</pre>
+								</td>
+								<td>
+								<pre>Write-DebugVars env:USERNAME env:USERPROFILE</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>bash</td>
+								<td>
+								<pre>EchoVars USER HOME</pre>
+								</td>
+								<td>
+								<pre>EchoDVars USER HOME</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>PutVars user home</pre>
+								</td>
+								<td>
+								<pre>DebugVars user home</pre>
+								</td>
+				</tr>
+</table>
+<p>&nbsp;</p>
+<p>See each debugging library header command for a detailed list of functions, 
+and their usage.</p>
+<h3>Debug output formatted as language-specific input to another shell instance</h3>
+<p>This is a very important feature.</p>
+<p>This allows, when a script does not work as expected, to copy the debug 
+output from the shell window where the problem occurred into another window, and 
+easily reproduce the issue there. Then using previous commands look-up, and 
+making changes to the arguments, to quickly identify where the error is, and 
+verifying what change is needed.</p>
+<p>The consequence is that the debugging output syntax is 
+programming-language-specific. What is common across all our debugging libraries 
+is the principles, the general naming rules of debugging functions and their 
+arguments, and the structure of the output.</p>
+<h4>Variables</h4>
+<p>This implies for example that the functions for displaying variables output a 
+syntactically correct command for recreating that variable at the command 
+prompt.</p>
+<p>For example if a variable called &quot;username&quot; contains the value 
+&quot;Administrator&quot;, the output generated will be:</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Command</th>
+								<th>Output</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%ECHOVARS% username</pre>
+								</td>
+								<td>
+								<pre>set &quot;username=Administrator&quot;</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>Write-Vars username</pre>
+								</td>
+								<td>
+								<pre>$username = &quot;Administrator&quot;</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>bash</td>
+								<td>
+								<pre>EchoVars username</pre>
+								</td>
+								<td>
+								<pre>username=Administrator</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>PutVars username</pre>
+								</td>
+								<td>
+								<pre>set username Administrator</pre>
+								</td>
+				</tr>
+</table>
+<p>For PowerShell, which is a strongly typed language, the output will be very 
+different depending on the variable type! For example, the value of a list will 
+look like:</p>
+<pre>$Args = @(&quot;-UserName&quot;, &quot;Administrator&quot;, &quot;-Age&quot;, 50)</pre>
+<h4>Command calls</h4>
+<p>The libraries all include an exec function, for conditionally executing 
+commands. In normal mode, it just runs the command. In no-exec mode, it just 
+displays the command. In debug mode, it displays it, runs it, and displays the 
+exit code. </p>
+<p>Likewise, when displaying command calls in no-exec mode, or in debug mode, 
+the output format is a valid command for the language. Ex:</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Command</th>
+								<th>Output</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%EXEC% md tempdir</pre>
+								</td>
+								<td>
+								<pre>md tempdir</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>Exec md tempdir</pre>
+								</td>
+								<td>
+								<pre>md tempdir</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>bash</td>
+								<td>
+								<pre>Exec mkdir tempdir</pre>
+								</td>
+								<td>
+								<pre>mkdir tempdir</pre>
+								</td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>Exec mkdir tempdir</pre>
+								</td>
+								<td>
+								<pre>mkdir tempdir</pre>
+								</td>
+				</tr>
+</table>
+<p>Note that using Exec like this has multiple advantages:</p>
+<ul>
+				<li>It&#39;s very simple to use.</li>
+				<li>This guaranties that the command displayed in no-exec mode 
+				is exactly the right one. Experience shows that if the code 
+				includes a test like (in pseudo code): <code>if (is_no-exec_mode()) 
+				{echo command} else {execute command}</code> then sooner or 
+				later the two commands will get out-of-sync.</li>
+				<li>This avoids verbose nonsense like the output of PowerShell&#39;s 
+				mkdir -WhatIf option:<br />
+				<code>What if: Performing operation &quot;Create directory&quot; on Target 
+				&quot;Destination: C:\Users\Administrator\tempdir&quot;.</code></li>
+</ul>
+<p>Finally, resist the temptation to display English sentences describing the 
+operation. For example avoid outputting a message like:</p>
+<pre>Now creating directory tempdir.</pre>
+<p>If an explanation is needed, output a comment before the command, as 
+described in the next section.</p>
+<h4>Comments</h4>
+<p>Debug messages themselves should be written as valid comments. This is not 
+enforced by the framework, but strongly recommended:</p>
+<p>This allows to run a script in no-exec mode, and get as output as fully 
+functional script with comments!</p>
+<ul>
+				<li>This is very useful to explain to others what the script 
+				does in a particular case.</li>
+				<li>This is also very useful to generate a modified script for a 
+				particular case not managed by the original script.</li>
+</ul>
+<p>For example, the following commands will output a comment, that will also be 
+copied to the log file (if any). The output will also be indented depending of 
+the call depth in debug mode.</p>
+<table style="width: 100%">
+				<tr>
+								<th>Language</th>
+								<th>Command</th>
+								<th>Notes</th>
+				</tr>
+				<tr>
+								<td>Batch</td>
+								<td>
+								<pre>%ECHO% :# Temp dir for intermediate files</pre>
+								</td>
+								<td>Begin with the batch comment marker <code>:#</code> 
+								(more noticeable than the <code>::</code> used 
+								by many) </td>
+				</tr>
+				<tr>
+								<td>PowerShell</td>
+								<td>
+								<pre>echo &quot;# Temp dir for intermediate files&quot;</pre>
+								</td>
+								<td>Begin with the PowerShell comment marker
+								<code>#</code> </td>
+				</tr>
+				<tr>
+								<td>bash</td>
+								<td>
+								<pre>Echo &quot;# Temp dir for intermediate files&quot;</pre>
+								</td>
+								<td>Begin with the bash comment marker <code>#</code>
+								</td>
+				</tr>
+				<tr>
+								<td>Tcl/Tk</td>
+								<td>
+								<pre>Puts &quot;# Temp dir for intermediate files&quot;</pre>
+								</td>
+								<td>Begin with the Tcl/Tk comment marker <code>#</code>
+								</td>
+				</tr>
+</table>
+<p>&nbsp;</p>
+<h2>Libraries architecture and usage</h2>
+<p>All script debugging libraries share the same structure:</p>
+<ol>
+				<li>A header comment block, with the file name, description, 
+				general notes, and global change log.</li>
+				<li>A short library initialization: Defines a few important 
+				variables, and calls initialization routines for the core 
+				modules.</li>
+				<li>The debug library core module. Begins by a header block 
+				describing it in details, with a change log. (The header is 
+				still missing for some languages.) This module is required in 
+				all cases.</li>
+				<li>The execution tracing library module. Begins by a header 
+				describing it in details, with a change log. (The header is 
+				still missing for some languages.) This module is optional.</li>
+				<li>A banner showing the end of the core debug library modules.</li>
+				<li>An eclectic list of useful routines collected over time. 
+				(These should probably be moved to distinct files, and already 
+				have been for Tcl/Tk.)</li>
+				<li>Routines for debugging the debugging library itself. (Yes, 
+				debuggers may have bugs too :-)</li>
+				<li>The header comment block for the main routine</li>
+				<li>The Help routine</li>
+				<li>The main routine, beginning by command-line arguments 
+				parsing.</li>
+</ol>
+<h3>Creating new scripts with built-in debugging</h3>
+<p>The simplest is to copy the whole library into a new script file, then...</p>
+<ul>
+				<li>Update the name, description, notes, and change log in the 
+				file header.</li>
+				<li>Remove the unneeded sections. (Typically the sections #6 &amp; 
+				#7 above.) The core modules end banner should be easy to find, 
+				and so is the main routine banner in the end.</li>
+				<li>Remove the unnecessary options in the command-line 
+				processing loop in the main routine. (Those used for testing the 
+				library itself)</li>
+				<li>Update the help screen.</li>
+				<li>Replace the main routine content with your new code.</li>
+				<li>Prefix all &quot;dangerous&quot; commands with the Exec command. (The 
+				name varies depending on the language.) This automates the 
+				no-exec operation.</li>
+				<li>Add <code>Echo.Debug variable</code> for all intermediate 
+				variables that change value.</li>
+				<li>Surround your script-specific subroutines in an execution 
+				tracing block. (Language-specific, see the following chapters 
+				for details.)</li>
+</ul>
+<p>All this is actually easier to do than it sounds. Writing the main routine 
+has to be done anyway. Writing a good header and help screen is good practice. 
+And the time lost in deleting the unneeded sections is negligible, compared to 
+the time saved writing a command-line options processing loop.</p>
+<p>&nbsp;</p>
+<h3>Adding a debugging library to old scripts</h3>
+<p>Here the need arises when an old script with no debugging options 
+mysteriously fails. How to debug it, specially when you don&#39;t remember how it 
+works, or worse still if it was written by somebody else, unreachable now.</p>
+<p>The method is actually very similar to the case for new scripts:</p>
+<ul>
+				<li>Insert a copy of the library core sections (#2 to #5 above) 
+				immediately behind your script header comment.</li>
+				<li>Add to your command-line processing loop the management for 
+				options -d, and possibly -v and -X from the library.</li>
+				<li>Prefix all &quot;dangerous&quot; commands in the script with the Exec 
+				command. (Commands deleting files, writing data, etc.)</li>
+				<li>Insert Add Echo.Debug variable for all intermediate 
+				variables that change value.</li>
+				<li>Surround your script-specific subroutines in an execution 
+				tracing block. (Language-specific, see the following chapters 
+				for details.)</li>
+</ul>
+<p>Finally run the modified script with the -d option, to see what happens 
+internally before the problem occurs.</p>
+<h2>The Tcl/Tk library</h2>
+<p>Historically this is the first library I wrote, and it&#39;s still the most 
+sophisticated.</p>
+<p>It should work on all Tcl 8.x versions, although I&#39;ve not tested it in Tcl 
+8.4 and older versions for a long time.</p>
+<p>The debugging library is in a module called <code>DebugLib.tcl</code>. It is 
+the only language where the debugging library is in a standalone module, 
+distinct from all the other routines collected in the <code>Library.tcl</code> 
+file.</p>
+<h3>DebugLib.tcl</h3>
+<p>All debug library routines names are defined in the <code>::debug</code> 
+namespace. To duplicate names in the root namespace (which makes them more 
+convenient to use, but with a minor risk of collision with your own routines 
+names), add the following line immediately after the definitions:</p>
+<pre>debug::Import</pre>
+<p>The library can be used inline, as explained in the general usage chapter, or 
+can be left as an external file and sourced-in:</p>
+<pre>source DebugLib.tcl
+debug::Import</pre>
+<p>The library can also be used as a standalone test program for testing itself. 
+Use the -? option to display a help screen:</p>
+<pre>DebugLib.tcl -?</pre>
+<h4>Verbosity levels</h4>
+<p>Contrary to the Batch and PowerShell cases, Tcl/Tk&#39;s library does not have 
+independent verbose and debug modes. Instead it has 5 verbosity levels:</p>
+<table>
+				<tr>
+								<th>Level</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>0</td>
+								<td>Quiet mode. No output except critical 
+								messages.</td>
+				</tr>
+				<tr>
+								<td>1</td>
+								<td>Normal mode. The default when the library 
+								starts.</td>
+				</tr>
+				<tr>
+								<td>2</td>
+								<td>Verbose mode.</td>
+				</tr>
+				<tr>
+								<td>3</td>
+								<td>Debug mode.</td>
+				</tr>
+				<tr>
+								<td>4</td>
+								<td>eXtra debug mode.</td>
+				</tr>
+</table>
+<p>The -v option increases the level by 1; The -d option increases it by 2. So 
+-v -v is the same as -d.<br />
+Use -d -v to enabled the extra debug mode.</p>
+<h4>Debug output and logging routines&nbsp;</h4>
+<p>They output strings to a choice of stdout, private logs, the system log, 
+callbacks</p>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>LogString</td>
+								<td>Output a string into a private log file.</td>
+				</tr>
+				<tr>
+								<td>LogSystem</td>
+								<td>Output a string into the system event log.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Puts</td>
+								<td>Output a string and log it.</td>
+				</tr>
+				<tr>
+								<td>VerbosePuts</td>
+								<td>Output a string in verbose mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>DebugPuts</td>
+								<td>Output a string in debug mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>PutVars</td>
+								<td>Output variables names and values, and log 
+								it.</td>
+				</tr>
+				<tr>
+								<td>DebugVars</td>
+								<td>Output variables names and values in debug 
+								mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>DebugSVars</td>
+								<td>Output a string, then variables names and 
+								values in debug mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Indent</td>
+								<td>Indent the output of a command or a block of 
+								code.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Quiet</td>
+								<td>Check if the verbosity level is Quiet (0).</td>
+				</tr>
+				<tr>
+								<td>Normal</td>
+								<td>Check if the verbosity level is Normal (1) 
+								or higher.</td>
+				</tr>
+				<tr>
+								<td>Verbose</td>
+								<td>Check if the verbosity level is Verbose (2) 
+								or higher.</td>
+				</tr>
+				<tr>
+								<td>Debug</td>
+								<td>Check if the verbosity level is Debug (3) or 
+								higher.</td>
+				</tr>
+				<tr>
+								<td>XDebug</td>
+								<td>Check if the verbosity level is XDebug (4) 
+								or higher.&nbsp;</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>SetQuiet</td>
+								<td>Set the verbosity level to Quiet.</td>
+				</tr>
+				<tr>
+								<td>SetNormal</td>
+								<td>Set the verbosity level to Normal.</td>
+				</tr>
+				<tr>
+								<td>SetVerbose</td>
+								<td>Set the verbosity level to Verbose.</td>
+				</tr>
+				<tr>
+								<td>SetDebug</td>
+								<td>Set the verbosity level to Debug.</td>
+				</tr>
+</table>
+<h4>Namespace management routines<br />
+</h4>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>xproc</td>
+								<td>Define a public proc.</td>
+				</tr>
+				<tr>
+								<td>xvariable</td>
+								<td>Define a public variable.</td>
+				</tr>
+				<tr>
+								<td>xvars</td>
+								<td>Define multiple public variables.</td>
+				</tr>
+				<tr>
+								<td>Import</td>
+								<td>Import all public procs and variables.</td>
+				</tr>
+</table>
+<h4>General utility routines, used internally, and useful for more than debug</h4>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>PopArg</td>
+								<td>Pop an argument off the head of a variable 
+								argument list.</td>
+				</tr>
+				<tr>
+								<td>PeekArg</td>
+								<td>Get the first argument at the head of a 
+								variable argument list.</td>
+				</tr>
+				<tr>
+								<td>PopLast</td>
+								<td>Pop an argument off the tail of a variable 
+								argument list.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Now</td>
+								<td>Get a date/time stamp.</td>
+				</tr>
+				<tr>
+								<td>NowMS</td>
+								<td>Get a date/time stamp with millisecond 
+								resolution.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>IndentString</td>
+								<td>Indent a text string.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>VarsValue</td>
+								<td>Get the name and value of a set of 
+								variables.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Which</td>
+								<td>Find a program in the PATH.</td>
+				</tr>
+</table>
+<h4>Function call tracing</h4>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>TraceProcs</td>
+								<td>Trace entry into, and exit from, the 
+								routines defined in a block.</td>
+				</tr>
+				<tr>
+								<td>SkipTraceProcs&nbsp;</td>
+								<td>Skip tracing a sub-block inside a TraceProcs 
+								block.&nbsp;</td>
+				</tr>
+</table>
+<p>Surround the functions to trace in a TraceProcs block as follows:</p>
+<pre>TraceProcs { # Begin proc tracing
+# Put routines to trace here. No need to modify them.
+} ; # End proc tracing.</pre>
+<p>For example, in debug mode:</p>
+<pre>TraceProcs { # Begin proc tracing
+proc Fact {n} {</pre>
+<pre>  if {$n &lt;= 1} {</pre>
+<pre>    return 1</pre>
+<pre>  } else {</pre>
+<pre>    return [expr $n * [Fact [expr $n - 1]]]</pre>
+<pre>  }</pre>
+<pre>}
+} ; # End proc tracing.</pre>
+<pre> </pre>
+<pre>set n [Fact 5]</pre>
+<pre>puts &quot;result = $n&quot;</pre>
+<p>Outputs:</p>
+<pre>Fact 5
+  Fact 4
+    Fact 3
+      Fact 2
+        Fact 1
+          return 1 ; # (1ms)
+        return 2 ; # (1ms)
+      return 6 ; # (1ms)
+    return 24 ; # (1ms)
+  return 120 ; # (3ms)
+result = 120</pre>
+<p>A unique feature of the Tcl library can be seen here: Every return call has a 
+comment with the duration of the call.</p>
+<p>For more details and additional features, see the trace block header in <code>
+DebugLib.tcl</code>.</p>
+<h4>Command output logging</h4>
+<p>Our library defines an <code>Exec</code> function, that makes it very easy to 
+trace and log any command, and automatically handle the no-exec mode. Ex:</p>
+<pre>Exec rm -rf *</pre>
+<p>All combinations of redirections and pipes are supported. For example:</p>
+<pre>Exec grep error logfile.txt &gt;/dev/null</pre>
+<p>... runs and outputs in debug mode:</p>
+<pre>grep error logfile.txt &gt;/dev/null</pre>
+<h4>Logging options</h4>
+<p>The logging options are more sophisticated that in the other languages.</p>
+<p>In particular, there is an option to invoke a callback for every message to 
+log. This allows logging data on a remote system via network sockets, etc.</p>
+<p>See the logging module header comment for details.</p>
+<h3>Library.tcl</h3>
+<p>General purpose routines, grouped by category.</p>
+<p>To be documented.</p>
+<h3>Suspect.tcl</h3>
+<p>A poor man&#39;s emulation of Expect. </p>
+<p>Useful for systems that don&#39;t have Expect installed.</p>
+<p>Useful also in Windows 64-bits versions, which as of this writing (2013) do 
+not have a 64-bits version of Expect available.</p>
+<p>To be documented.</p>
+<h2>The Bash library</h2>
+<p>The second version I developed. Also by far the less sophisticated, as I&#39;ve 
+done little bash programming in the last couple of years.</p>
+<h3>Library.bash</h3>
+<p>The <code>Library.bash</code> file begins with the debug library, followed by 
+a few general purpose routines, then a few test routines, and finally the main 
+routine.</p>
+<p>The library can also be used as a standalone test program for itself. Use the 
+-? option to display a help screen:</p>
+<pre>Library.bash -?</pre>
+<h4>Verbosity levels</h4>
+<p>Like for Tcl/Tk, and contrary to the Batch and PowerShell cases, the Bash 
+library does not have independent verbose and debug modes. Instead it has 4 
+verbosity levels:</p>
+<table>
+				<tr>
+								<th>Level </th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>0</td>
+								<td>Quiet mode. No output except critical 
+								messages.</td>
+				</tr>
+				<tr>
+								<td>1</td>
+								<td>Normal mode. The default when the library 
+								starts.</td>
+				</tr>
+				<tr>
+								<td>2</td>
+								<td>Verbose mode.</td>
+				</tr>
+				<tr>
+								<td>3</td>
+								<td>Debug mode.</td>
+				</tr>
+</table>
+<p>The -v option increases the level by 1; The -d option increases it by 2. So 
+-v -v is the same as -d.</p>
+<h4>Debug output and logging routines</h4>
+<p>They output strings to a choice of stdout, stderr, a private log file.</p>
+<p>Call :Debug.Init once at the beginning of the script, before using them.&nbsp;</p>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>Log</td>
+								<td>Output a string into a private log file.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Echo</td>
+								<td>Output a string and log it.</td>
+				</tr>
+				<tr>
+								<td>EchoV</td>
+								<td>Output a string in verbose mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>EchoD</td>
+								<td>Output a string in debug mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>EchoVars</td>
+								<td>Output variables names and values, and log 
+								it.</td>
+				</tr>
+				<tr>
+								<td>EchoSVars</td>
+								<td>Output a string, then variables names and 
+								values, and log it.</td>
+				</tr>
+				<tr>
+								<td>EchoVVars</td>
+								<td>Output variables names and values in 
+								verbose, and log it.</td>
+				</tr>
+				<tr>
+								<td>EchoDVars</td>
+								<td>Output variables names and values in debug 
+								mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>EchoDSVars</td>
+								<td>Output a string, then variables names and 
+								values in debug mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>QuoteArg</td>
+								<td>Echo an argument with quotes and escapes if 
+								needed for reentry in bash.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Quiet</td>
+								<td>Check if the verbosity level is Quiet (0).</td>
+				</tr>
+				<tr>
+								<td>Normal</td>
+								<td>Check if the verbosity level is Normal (1) 
+								or higher.</td>
+				</tr>
+				<tr>
+								<td>Verbose</td>
+								<td>Check if the verbosity level is Verbose (2) 
+								or higher.</td>
+				</tr>
+				<tr>
+								<td>Debug</td>
+								<td>Check if the verbosity level is Debug (3) or 
+								higher.</td>
+				</tr>
+</table>
+<h4>Function call tracing</h4>
+<p>This one is a bit more complex to use than the others. It&#39;s necessary to add, 
+after the definition of every function that needs to be traced, a call to the 
+function <code>TraceProc</code>, passing it the function name in argument 1.</p>
+<p>Here&#39;s an example for the factorial function:</p>
+<pre>fact() {
+  local n=$1
+  local result=1
+  if [[ $n &gt; 1 ]] ; then
+    result=$(( $n * $(fact $(( $n - 1 )) ) ))
+  fi
+  EchoDVars result
+  echo $result
+}
+TraceProc fact
+</pre>
+<p>The output in debug mode is:</p>
+<pre>fact 5
+  fact 4
+    fact 3
+      fact 2
+        fact 1
+          result=1
+          return 0
+        result=2
+        return 0
+      result=6
+      return 0
+    result=24
+    return 0
+  result=120
+  return 0
+</pre>
+<div class="note">
+				<div>
+								<big>Note:</big>
+								<p>The return trace lists the function exit code 
+								(which is always 0 here), not the value it 
+								outputs on stdout.</p>
+								<p>For the functions that return results in 
+								environment variables, or output them to stdout 
+								(which is the case in this factorial example), 
+								it is necessary to add an EchoD or EchoDVars 
+								directive inside the function definition, as is 
+								done here.</p>
+				</div>
+</div>
+<h4>Command output logging</h4>
+<p>Our library defines an <code>Exec</code> function that makes it very easy to 
+trace and log any command, and automatically handle the no-exec mode. Ex:</p>
+<pre>Exec rm -rf *</pre>
+<p>It&#39;s possible to handle a command the redirects the output to a file, by 
+having the redirection as the last argument, enclosed in quotes. For example:</p>
+<pre>Exec grep error logfile.txt &quot;&gt;/dev/null&quot;</pre>
+<p>... runs and outputs in debug mode:</p>
+<pre>grep error logfile.txt &gt;/dev/null</pre>
+<p>Input redirections and pipes are not supported. (But nothing prevents for 
+redirecting input, of piping several Exec commands together. It&#39;s only the trace 
+and/or log file that will not show that these redirections and/or pipes 
+happened.)</p>
+<h4>General utility routines</h4>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>VarExists&nbsp;</td>
+								<td>Check if a variable exists.</td>
+				</tr>
+				<tr>
+								<td>VarValue</td>
+								<td>Get the value for a variable name.</td>
+				</tr>
+				<tr>
+								<td>IsInteger&nbsp;</td>
+								<td>Check if a value is an integer.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Now</td>
+								<td>Get an ISO 8601 date/time stamp.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>EchoSuccess</td>
+								<td>Output a distribution-specific colored 
+								[Success] status.</td>
+				</tr>
+				<tr>
+								<td>EchoPassed</td>
+								<td>Output a distribution-specific colored 
+								[Passed] status.</td>
+				</tr>
+				<tr>
+								<td>EchoWarning</td>
+								<td>Output a distribution-specific colored 
+								[Warning] status.</td>
+				</tr>
+				<tr>
+								<td>EchoFailure</td>
+								<td>Output a distribution-specific colored 
+								[Failure] status.</td>
+				</tr>
+</table>
+<h2>The Batch library</h2>
+<p>Windows cmd.exe batch language is particularly poorly designed, and some 
+people think it&#39;s too limited to be considered as a real programming language.</p>
+<p>Yet, by following good practices as described here, it&#39;s possible to do 
+surprisingly sophisticated things with it.</p>
+<p>And by using this <code>Library.bat</code> file, it&#39;s possible write clean 
+and powerful batch files, and to debug ugly plates of spaghettis that people 
+have written in the past, making them almost look good! :-)</p>
+<h3>Batch is not a real language, is it? </h3>
+<h4>It does not have functions</h4>
+<p>Well, yes and no:</p>
+<p>No it does not have native keywords for writing structured functions.</p>
+<p>But yes, it does have a call keyword. And in recent years, techniques have 
+been discovered, allowing to write decent approximation of structured functions 
+with local variables. These techniques are implemented in our Library.bat 
+module, which provides macros for easily doing it. Macros are batch variables 
+containing a (possibly complex) sequence of batch code, that is executed after 
+expanding the variable.</p>
+<p>Here&#39;s an example that shows the principle, for the proverbial factorial 
+function: </p>
+<pre>:# Factorial function. %1 = argument. Returns the result in variable RETVAL.
+:Fact
+%FUNCTION% enableextensions enabledelayedexpansion
+%UPVAR% RETVAL
+set N=%1
+if .%N%.==.0. (
+  set RETVAL=1
+) else (
+  set /A M=N-1
+  call :Fact !M!
+  set /A RETVAL=N*RETVAL
+)
+%RETURN%</pre>
+<p>Line-per-line explanations:
+<table style="width: 100%">
+				<tr>
+								<th>Line</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>:# ...</td>
+								<td>A comment. Most people use :: for comments. 
+								Actually :anything will work.<br />
+								:# stands out much better,
+								and is very similar to comments in all other 
+								scripting languages.<br />
+								Gotcha: It not possible to put a :# comment at 
+								the last line of a ( code ) block.</td>
+				</tr>
+				<tr>
+								<td>:Fact</td>
+								<td>The label defining the function entry point.</td>
+				</tr>
+				<tr>
+								<td>%FUNCTION% enableextensions 
+								enabledelayedexpansion</td>
+								<td>A Library.bat macro, that defines the 
+								function entry code, and traces it and its its parameters 
+								in debug mode.<br />
+								Semantically equivalent to setlocal, and using 
+								the same parameters as setlocal.<br />
+								Using parameters &quot;enableextensions enabledelayedexpansion&quot; 
+								makes sure extensions are enabled here, even if 
+								the caller has them disabled internally.</td>
+				</tr>
+				<tr>
+								<td>%UPVAR% RETVAL</td>
+								<td>A Library.bat macro, that grows a list of variable names, that will be 
+								passed back to the caller upon return.<br />
+								Like Tcl’s upvar, it can be invoked multiple times to declare multiple variables.<br />
+								Unlike Tcl’s upvar, you can’t define a different name for the local proxy and parent variables; But you can define several names 
+								in the same command.</td>
+				</tr>
+				<tr>
+								<td>...</td>
+								<td>A classic implementation of factorial using 
+								a recursive call</td>
+				</tr>
+				<tr>
+								<td>call :Fact !M!</td>
+								<td>The recursive call</td>
+				</tr>
+				<tr>
+								<td>...</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>%RETURN%</td>
+								<td>A Library.bat macro, that defines the 
+								function exit code. Semantically equivalent to &quot;endlocal &amp; exit /b&quot;.<br />
+								Its only argument is an optional exit code (a positive integer).</td>
+				</tr>
+</table>
+</p>
+<h4>It does not have arrays, lists, etc</h4>
+<p>Indeed not. All it has is environment variables. But it&#39;s easy to implement 
+efficient associative arrays using them:</p>
+<p>Environment variables names can be anything. It&#39;s possible to create 
+variables called &quot;NAME[1]&quot;, &quot;NAME[2]&quot;, etc. Or even &quot;NAME[captain]&quot;.</p>
+<p>And then, the set command allows to enumerate all variables beginning with 
+&quot;NAME[&quot;, which makes it easy to loop through the whole array.</p>
+<p>Likewise, it&#39;s possible to define pseudo structures, by naming variables like 
+&quot;BOOK.TITLE&quot;, &quot;BOOK.AUTHOR&quot;, &quot;BOOK.NUMPAGES&quot;, etc.</p>
+<h4>Some characters in variable values cause serious problems</h4>
+<p>For this one I do not have a solution. Any variable value containing the 
+characters &#39;%&#39;, &#39;!&#39;, &#39;^&#39; will cause problems, as (as far as I know) it&#39;s not 
+possible to prevent Batch from interpreting them before executing a script line. 
+Sometimes it&#39;ll work, sometimes not, depending on what follows. </p>
+<p>Workarounds:</p>
+<ul>
+				<li>Avoid such values if possible. If not possible, use another 
+				language.</li>
+				<li>Avoid creating files with these characters in their name.</li>
+				<li>Disabling delayed expansion solves the problem for the &#39;!&#39; 
+				character. But it&#39;s not always possible to do it, since delayed 
+				expansion may be required for loops to use local variables. Also 
+				having extra setlocal/endlocal pairs is costly, and complicates 
+				the update of local variables.</li>
+</ul>
+<h3>Library.bat</h3>
+<p>Everything is in a single module called <code>Library.bat</code>. The debug 
+library is at the beginning of this file, followed by a large number of useful 
+routines.</p>
+<p><code>Library.bat</code> uses the technique described above to approximate 
+function definitions.</p>
+<p>And function calls can be approximated by defining macros (i.e. variables) 
+the call the target functions. </p>
+<p>For example macro <code>%EXEC%</code> does: <code>call :Exec</code></p>
+<p>The debug routines themselves do not use the <code>%FUNCTION%</code> and
+<code>%RETURN%</code> macros, to avoid infinite loops!</p>
+<p>The library can also be used as a standalone test program. Use the -? option 
+to display a help screen:</p>
+<pre>Library.bat -?</pre>
+<h4>Debug output and logging routines</h4>
+<p>They output strings to a choice of stdout, stderr, a private log file.</p>
+<p>Call :Debug.Init once at the beginning of the script, before using them.&nbsp;</p>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>%LOG%</td>
+								<td>Output a string into a private log file.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>%ECHO%</td>
+								<td>Output a string and log it.</td>
+				</tr>
+				<tr>
+								<td>%ECHO.V%</td>
+								<td>Output a string in verbose mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>%ECHO.D%</td>
+								<td>Output a string in debug mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>%ECHO.X%</td>
+								<td>Output a string in noexec mode and log it 
+								always.</td>
+				</tr>
+				<tr>
+								<td>%ECHO.XVD%</td>
+								<td>Output a string in noexec or verbose or 
+								debug mode and log it always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>%ECHOVARS%</td>
+								<td>Output variables names and values, and log 
+								it.</td>
+				</tr>
+				<tr>
+								<td>%ECHOVARS.V%</td>
+								<td>Output variables names and values in verbose 
+								mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>%ECHOVARS.D%</td>
+								<td>Output variables names and values in debug 
+								mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>%IF_VERBOSE%</td>
+								<td>Execute a command in verbose mode only.</td>
+				</tr>
+				<tr>
+								<td>%IF_DEBUG%</td>
+								<td>Execute a command in debug mode only.</td>
+				</tr>
+				<tr>
+								<td>%IF_NOEXEC%</td>
+								<td>Execute a command in noexec mode only.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>:Verbose.On</td>
+								<td>Enable the verbose mode.</td>
+				</tr>
+				<tr>
+								<td>:Verbose.Off</td>
+								<td>Disable the verbose mode.</td>
+				</tr>
+				<tr>
+								<td>:Debug.On</td>
+								<td>Enable the debug mode.</td>
+				</tr>
+				<tr>
+								<td>:Debug.Off</td>
+								<td>Disable the debug mode.</td>
+				</tr>
+				<tr>
+								<td>:NoExec.On</td>
+								<td>Enable the noexec mode.</td>
+				</tr>
+				<tr>
+								<td>:NoExec.Off</td>
+								<td>Disable the noexec mode.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>:Debug.SetLog</td>
+								<td>Set the log file name. Use NUL to disable 
+								logging.</td>
+				</tr>
+				<tr>
+								<td>SetDebug</td>
+								<td>Set the verbosity level to Debug.</td>
+				</tr>
+</table>
+<h4>Function call tracing</h4>
+<p>Function call/return tracing is enabled by using the <code>%FUNCTION%</code> 
+and <code>%RETURN%</code> macros.</p>
+<p>For example, given the factorial function definition:</p>
+<pre>:# Factorial function. %1 = argument. Returns the result in variable RETVAL.
+:Fact
+%FUNCTION% enableextensions enabledelayedexpansion
+%UPVAR% RETVAL
+set N=%1
+if .%N%.==.0. (
+  set RETVAL=1
+) else (
+  set /A M=N-1
+  call :Fact !M!
+  set /A RETVAL=N*RETVAL
+)
+%RETURN%</pre>
+<p>In debug mode, calling the above factorial function:</p>
+<pre>call :Fact 5</pre>
+<p>Outputs:</p>
+<pre>call :fact 5
+  call :Fact 4
+    call :Fact 3
+      call :Fact 2
+        call :Fact 1
+          call :Fact 0
+            return 0 &amp; set &quot;RETVAL=1&quot;
+          return 0 &amp; set &quot;RETVAL=1&quot;
+        return 0 &amp; set &quot;RETVAL=2&quot;
+      return 0 &amp; set &quot;RETVAL=6&quot;
+    return 0 &amp; set &quot;RETVAL=24&quot;
+  return 0 &amp; set &quot;RETVAL=120&quot;</pre>
+<p>Note that the return line shows the value of the 
+%ERRORLEVEL% (always 0 since we don&#39;t change it here), then of the %UPVAR% 
+returned variables.<br />
+The returned variables are set <span class="style1">after </span>the return instruction, 
+reflecting the fact that they are defined in the caller&#39;s scope.</p>
+<p>For more details and additional features, see the trace block header in <code>
+Library.bat</code>. </p>
+<h4>Command output logging</h4>
+<p>Our library defines a <code>%EXEC%</code> macro that makes it very easy to 
+trace any command, and automatically handle the no-exec mode.</p>
+<p>Call :Exec.Init once at the beginning of the script, before using it.&nbsp;</p>
+<p>Ex:</p>
+<pre>%EXEC% del *.*</pre>
+<p>But there&#39;s a catch. Windows does not have a native tee command. (Although 
+it&#39;s easy to write one, and WIN32 ports of the Unix tee are easy to find on the 
+Internet). So we can&#39;t reliably log the output of a command AND display it at 
+the same time.</p>
+<p>If a tee.exe program is available in the path, the library may use it using
+<code>%EXEC% -t</code>. But again there&#39;s a (minor) catch: In that case, the 
+exit code reported by <code>%EXEC%</code> will be that of tee.exe, not that of 
+the command. It&#39;s likely to be 0 even if the target command failed. Conclusion: 
+Don&#39;t use <code>%EXEC% -t</code> if the exit code is important for you.</p>
+<h5>Command output redirections and command pipelines</h5>
+<p>A unique feature of the batch library is that %EXEC% supports displaying and 
+executing command output redirections and command pipelines.</p>
+<p>To use it, enclose the redirection or pipe operator in double quotes. For 
+example...</p>
+<pre>%EXEC% find /I &quot;error&quot; &quot;&lt;&quot;logfile.txt &quot;&gt;&quot;NUL</pre>
+<p>... runs and outputs in debug mode:</p>
+<pre>find /I &quot;error&quot; &lt;logfile.txt &gt;NUL</pre>
+<h4>General purpose routines</h4>
+<p><code>Library.bat</code> contains a large number of unique functions, that 
+make it easy to write powerful and reliable batch files.</p>
+<p>These routines are implemented in pure batch language, using only external 
+programs guarantied to be installed on all Windows machines.</p>
+<p>Here&#39;s a partial selection. For details about each function usage, see its 
+header comment.</p>
+<table style="width: 100%">
+				<tr>
+								<th>Function Name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>:Echo-n</td>
+								<td>Output a string with no new line in the end. 
+								(Like bash echo -n)</td>
+				</tr>
+				<tr>
+								<td>:Echo.Color</td>
+								<td>Output a string in a given color.</td>
+				</tr>
+				<tr>
+								<td>:Echo.Success</td>
+								<td>Output a green [Success] message.</td>
+				</tr>
+				<tr>
+								<td>:Echo.Warning</td>
+								<td>Output an orange [Warning] message.</td>
+				</tr>
+				<tr>
+								<td>:Echo.Failure</td>
+								<td>Output a red [Failure] message.</td>
+				</tr>
+				<tr>
+								<td>:EchoF</td>
+								<td>Output a formatted string, with multiple 
+								fields of constant width.</td>
+				</tr>
+				<tr>
+								<td>:strlen</td>
+								<td>Get the length of a variable value.</td>
+				</tr>
+				<tr>
+								<td>:strcpy</td>
+								<td>Copy a variable into another one.</td>
+				</tr>
+				<tr>
+								<td>:strlwr</td>
+								<td>Convert a variable to lower case.</td>
+				</tr>
+				<tr>
+								<td>:trim</td>
+								<td>Trim spaces at the ends of a variable. Also 
+								:trimright and :trimleft.</td>
+				</tr>
+				<tr>
+								<td>:condquote</td>
+								<td>Add quotes around a variable value, if it 
+								contains spaces or special characters.</td>
+				</tr>
+				<tr>
+								<td>:sleep</td>
+								<td>Pause for N seconds.</td>
+				</tr>
+				<tr>
+								<td>:GetPid</td>
+								<td>Get the process ID of the current shell.</td>
+				</tr>
+				<tr>
+								<td>:IsAdmin</td>
+								<td>Test if the current user has administrator 
+								rights.</td>
+				</tr>
+				<tr>
+								<td>%FOREACHLINE%</td>
+								<td>Repeat a block for each line output by a 
+								command.</td>
+				</tr>
+				<tr>
+								<td>:is_dir</td>
+								<td>Check if a pathname refers to a directory.</td>
+				</tr>
+				<tr>
+								<td>:basename</td>
+								<td>Get the base directory of a pathname.</td>
+				</tr>
+				<tr>
+								<td>:check_exts</td>
+								<td>Check if command extensions are enabled.</td>
+				</tr>
+				<tr>
+								<td>:get_IP_address</td>
+								<td>Get the current IP address.</td>
+				</tr>
+				<tr>
+								<td>:Now</td>
+								<td>Return %YEAR%, %MONTH%, %DAY%, %HOUR%, 
+								%MINUTE%, %SECOND%, %MS%</td>
+				</tr>
+				<tr>
+								<td>:Time.Delta</td>
+								<td>Compute the difference between two times.</td>
+				</tr>
+				<tr>
+								<td>:WinVer</td>
+								<td>Get Windows version.</td>
+				</tr>
+				<tr>
+								<td>:FireWall.GetRules</td>
+								<td>Get and parse firewall rules with a given 
+								name.</td>
+				</tr>
+</table>
+<h4>Special variables</h4>
+<p><code>Library.bat</code> also defines a number of special variables, 
+containing values that are difficult to generate using documented commands.</p>
+<table style="width: 100%">
+				<tr>
+								<th>Variable Name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>%CR%</td>
+								<td>Contains one carrier return character 
+								(&#39;\x0D&#39;)</td>
+				</tr>
+				<tr>
+								<td>%LF%</td>
+								<td>Contains one line feed character (&#39;\x0A&#39;)</td>
+				</tr>
+				<tr>
+								<td>%BS%&nbsp;</td>
+								<td>Contains one backspace character (&#39;\x08&#39;)&nbsp;</td>
+				</tr>
+</table>
+<h4>Code macros</h4>
+<p><code>Library.bat</code> defines and uses a number of special variables, 
+containing complex sequences of batch instructions. These are called macros, by 
+analogy with the C macros. Ex: The %FUNCTION% and 
+%RETURN% macros.</p>
+<p>The most powerful macros use a technique published on the dostips.com web 
+site, allowing to define macros that have arguments, just like native keywords or 
+function calls. This is the case for the %FUNCTION% and %RETURN% macros.</p>
+<p><code>Library.bat</code> even provides macros for generating your own macros. 
+Example:</p>
+<pre>set MYMACRO=%MACRO% ( %\n%
+  % Define the body of your macro here. Ex: % %\n%
+  echo Macro call trace: MYMACRO %!%MACRO.ARGS%!% %\n%
+  % Optionally, return results to the caller. Ex: % %\n%
+  %ON_MACRO_EXIT% set "RETVAL=%'!%RETVAL%'!%" %/ON_MACRO_EXIT% %\n%
+) %/MACRO%</pre>
+<p>Macro rules:</p>
+<ul>
+				<li>Begin the macro definition by &quot;%MACRO% (&quot;, and end it by &quot;) 
+				%/MACRO%&quot;.</li>
+				<li>If the macro spans several lines, every intermediate line MUST end with the %\n% macro, immediately 
+				followed by a new line. (Make sure there&#39;re no hidden space or 
+				tab trailing there.)</li>
+				<li>Local variables must be referenced as %!%VARNAME%!%. That is 
+				use macro %!% to generate a ! in a macro.<br />
+				But local variables <span class="style1">within quoted strings</span> 
+				must be referenced as %&#39;!%VARNAME%&#39;!%. That is use macro %&#39;!% to 
+				generate a ! inside a string in a macro. </li>
+				<li>The macro arguments (recorded by %/MACRO%) are available in 
+				variable MACRO.ARGS.</li>
+				<li>Surround comments with a % at the beginning and at the end. 
+				This will reference an inexistent variable, and will expand to 
+				nothing.</li>
+				<li>Surround instructions that define results to set in the 
+				caller&#39;s scope with macros %ON_MACRO_EXIT% and %/ON_MACRO_EXIT%.<br />
+				(TO DO: Create %MACRO.UPVAR% and %MACRO.RETURN% macros, to make 
+				macros easier to use and more similar to functions.)</li>
+</ul>
+<p>Limitation: A macro cannot call another macro, unless that second macro has 
+been specifically designed for that. (This would require escaping all special characters in 
+ the sub-macro, so that they survive an additional level of expansion.)</p>
+<h2>The PowerShell library</h2>
+<p>This is the last library I wrote.</p>
+<h3>Library.ps1</h3>
+<p>The debug library is in the beginning of the <code>Library.ps1</code> file.</p>
+<p>Its specificity is that PowerShell itself already has a rich set of built-in 
+functions for managing verbose, debug and no-exec (called What if) modes.</p>
+<p>So instead of defining new functions for displaying and logging data, the 
+library redefines and extends the standard PowerShell functions:</p>
+<ul>
+				<li>Out-Default (which post-processes output from both 
+				Write-Output and Write-Error)</li>
+				<li>Write-Host</li>
+				<li>Write-Verbose</li>
+				<li>Write-Debug</li>
+				<li>Write-Warning</li>
+				<li>Write-Error</li>
+</ul>
+<p>Any script that uses these standard routines, either explicitly or 
+implicitly, will automatically support logging, and can be easily adapted to 
+support function tracing.</p>
+<p>As&nbsp; for the other languages, the library can be used as a standalone 
+test program of itself. Invoke it with option -? for a help screen.</p>
+<h4>Debug output and logging routines&nbsp;</h4>
+<p>They output strings to a choice of stdout, private logs, the system log, 
+callbacks</p>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>Write-LogFile</td>
+								<td>Output a string into a private log file. 
+								Alias log.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Write-Vars</td>
+								<td>Output variables names and values, and log 
+								it.</td>
+				</tr>
+				<tr>
+								<td>Write-DebugVars</td>
+								<td>Output variables names and values in debug 
+								mode, and log it always.</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Quote</td>
+								<td>Convert a variable to a string that can be 
+								evaluated to recreate the original variable.</td>
+				</tr>
+				<tr>
+								<td>LimitQuote</td>
+								<td>Idem, but limit the size of the output 
+								string, to avoid flooding the debug output.</td>
+				</tr>
+				<tr>
+								<td>Join-Command</td>
+								<td>Convert a command and arguments into a 
+								command string.</td>
+				</tr>
+</table>
+<h4>General utility routines, used internally, and useful for more than debug</h4>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>Pop-Arg</td>
+								<td>Pop an argument off the head of a variable 
+								argument list.</td>
+				</tr>
+</table>
+<h4>Function call tracing</h4>
+<p>Enclose the functions that should be traced in a . TraceProcs block. Caution: 
+TraceProcs must be dot-invoked. (Else the functions inside would not be defined 
+in the script scope.)</p>
+<pre>. TraceProcs {</pre>
+<pre>  # script block with functions definitions</pre>
+<pre>}</pre>
+<p>Example:</p>
+<pre>. TraceProcs {
+  Function Fact ([int]$n) {
+    if ($n -le 1) {
+      1
+    } else {
+      $n * (Fact($n-1))
+    }
+  }
+}
+Fact 5  # Invoke the factorial function defined above</pre>
+<p>outputs in debug mode:</p>
+<pre>DEBUG: Fact 5
+DEBUG:   Fact 4
+DEBUG:     Fact 3
+DEBUG:       Fact 2
+DEBUG:         Fact 1
+DEBUG:           return 1
+DEBUG:         return 2
+DEBUG:       return 6
+DEBUG:     return 24
+DEBUG:   return 120
+120</pre>
+<h4>Command output logging</h4>
+<p>Our library defines an <code>Exec</code> function that makes it very easy to 
+trace any command, and automatically handle the no-exec mode. Ex:</p>
+<pre>Exec del *.*</pre>
+<div class="note">
+				<div>
+								<big>Note:</big>
+								<p>Using Exec makes the output considerably more 
+								readable in -WhatIf mode. I recommend using 
+								Exec, even for functions that support a -WhatIf 
+								option.</p>
+				</div>
+</div>
+<p>&nbsp;</p>
+<h4>General purpose routines</h4>
+<p><code>Library.ps1</code> contains a large number of other functions. Partial 
+list:</p>
+<table>
+				<tr>
+								<th>Function name</th>
+								<th>Description</th>
+				</tr>
+				<tr>
+								<td>Write-Stdout&nbsp;</td>
+								<td>Write directly to the stdout stream.</td>
+				</tr>
+				<tr>
+								<td>Write-Stderr&nbsp;</td>
+								<td>Write directly to the stderr stream.</td>
+				</tr>
+				<tr>
+								<td></td>
+								<td></td>
+				</tr>
+				<tr>
+								<td>Get-WmiPhysicalNetworkAdapters</td>
+								<td>Get the list of physical network adapters</td>
+				</tr>
+				<tr>
+								<td>Get-WmiVirtualNetworkAdapters</td>
+								<td>Get the list of virtual physical network 
+								adapters</td>
+				</tr>
+				<tr>
+								<td>Get-WmiLogicalNetworkAdapters</td>
+								<td>Get the list of logical network adapters</td>
+				</tr>
+				<tr>
+								<td>Get-WmiPhysicalMacAddresses</td>
+								<td>Get the list of physical network adapters 
+								MAC addresses</td>
+				</tr>
+				<tr>
+								<td>Set-IPAddress</td>
+								<td>Set a network adapter IP address</td>
+				</tr>
+				<tr>
+								<td>&nbsp;</td>
+								<td>&nbsp;</td>
+				</tr>
+				<tr>
+								<td>Get-IPAddress</td>
+								<td>Resolve an IPV4 address from a name</td>
+				</tr>
+				<tr>
+								<td></td>
+								<td></td>
+				</tr>
+				<tr>
+								<td>Get-SMBiosStructures</td>
+								<td>Get an array of SMBIOS structures from the 
+								BIOS</td>
+				</tr>
+				<tr>
+								<td></td>
+								<td></td>
+				</tr>
+				<tr>
+								<td>Test-Administrator</td>
+								<td>Check if the user has administration rights</td>
+				</tr>
+</table>
+<p>More to be documented.</p>
+
+</body>
+
+</html>
