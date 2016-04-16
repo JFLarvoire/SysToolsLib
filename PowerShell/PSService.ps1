@@ -4,7 +4,13 @@
 #                                                                             #
 #   Description     A sample service in a standalone PowerShell script        #
 #                                                                             #
-#   Notes           Dynamically generates a small PSService.exe wrapper       #
+#   Notes           The latest PSService.ps1 version will be available in     #
+#                   https://github.com/JFLarvoire/SysToolsLib/ , in the       #
+#                   PowerShell subdirectory.                                  #
+#                   Please report any problem in the Issues tab in that       #
+#                   GitHub repository.                                        #
+#                                                                             #
+#                   Dynamically generates a small PSService.exe wrapper       #
 #                   application, that in turn invokes this PowerShell script. #
 #                                                                             #
 #                   Some arguments are inspired by Linux' service management  #
@@ -28,13 +34,14 @@
 #                   section below, or run: help .\PSService.ps1 -Detailed     #
 #                                                                             #
 #   History                                                                   #
-#    2015-07-10 JFL Created this script.                                      #
+#    2015-07-10 JFL jf.larvoire@hpe.com created this script.                  #
 #    2015-10-13 JFL Made this script completely generic, and added comments   #
 #                   in the header above.                                      #
 #    2016-01-02 JFL Moved the Event Log name into new variable $logName.      #
 #                   Improved comments.                                        #
 #    2016-01-05 JFL Fixed the StartPending state reporting.                   #
 #    2016-03-17 JFL Removed aliases. Added missing explicit argument names.   #
+#    2016-04-16 JFL Moved the official repository on GitHub.                                                            #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
