@@ -14,7 +14,6 @@ Batch\echoargs.bat
 Batch\ERRORLEV.BAT
 Batch\flvcache.bat
 Batch\gccache.bat
-Batch\get.bat
 Batch\hosts.bat
 Batch\ie.bat
 Batch\iecache.bat
@@ -22,6 +21,7 @@ Batch\IPcfg.bat
 Batch\MakeZip.bat
 Batch\MCD.BAT
 Batch\n.bat
+Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat
 Batch\-rhs.bat
@@ -40,12 +40,14 @@ PowerShell\Get-ProductKey.ps1
 PowerShell\IESec.ps1
 PowerShell\Is-WindowsActivated.ps1
 PowerShell\Out-ByHost.ps1
+PowerShell\Reconnect.ps1
 PowerShell\Test-IPv6Components.ps1
 PowerShell\Window.ps1
 Tcl\cascade.tcl
 Tcl\cfdt.tcl
 Tcl\fixmht.tcl
 Tcl\FlipMails.tcl
+Tcl\get.tcl
 Tcl\rxrename.tcl
 Tcl\show.tcl
 Tcl\sml.tcl
