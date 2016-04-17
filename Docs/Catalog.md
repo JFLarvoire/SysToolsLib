@@ -48,7 +48,7 @@ Name		| OS	| Description																							| Example
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip | sort`
 2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir | 2clip`
 
-## Data conversion
+## Convert data
 
 There tools are useful on their own, and even more so when combined in a command pipeline with the clipboard management tools above.
 
@@ -63,12 +63,12 @@ deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
 dump.exe	| DWL	| Hexadecimal dump.									| 
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| 
-remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip |remplace "; " \\r\\n | sort` &:# Sort an email distribution list alphabetically
+remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip | remplace "; " \r\n | sort` &:# Sort an email distribution list alphabetically
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
 u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			|
 w2u.bat		| -W-	| Convert Windows End-Of-Lines (CR LF) to Unix End-Of-Lines (LF).			|
 
-## Windows system management
+## Manage the Windows system
 
 Name				| OS	|Description										| Example
 --------------------------------|-------|---------------------------------------------------------------------------------------|-------------
@@ -91,7 +91,7 @@ regx.bat			| -W-	| Manage the registry as if it were a file system. Output forma
 Test-IPv6Components.ps1		| -W-	| Test if Windows IPv6 component are enabled or disabled. Useful for diagnosing networking issues.	|
 Window.ps1			| -W-	| Move and resize windows.								| `Window "Server Manager" -MoveTo 150,150 -Resize 1000,750 -OnTop`
 
-## Structured trees manipulation
+## Manipulate structured trees
 
 XML is good for programs, but hard to read for humans.
 JSON is easier to read, but not as powerful as XML.
