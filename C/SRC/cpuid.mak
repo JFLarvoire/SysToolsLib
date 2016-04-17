@@ -8,8 +8,17 @@
 #                                                                             #
 #   History:                                                                  #
 #    2012-10-18 JFL jf.larvoire@hp.com created this file.                     #
+#    2016-04-17 JFL Avoid building the DOS version if missing required libs.  #
 #                                                                             #
 ###############################################################################
+
+!IF "$(T)"=="DOS" && ("$(HAS_BIOSLIB)"!="1" || "$(HAS_LODOSLIB)"!="1" || "$(HAS_PMODE)"!="1")
+complain:
+	@echo>con The DOS version of this program requires the BIOSLIB, LODOSLIB, and PMODE libraries.
+
+dirs $(O)\cpuid.obj $(B)\cpuid.exe: complain
+	@rem Do nothing as we don't have the necessary libraries
+!ENDIF
 
 !IF "$(T)"=="WIN64"
 complain:
