@@ -14,6 +14,7 @@
 #    2009-10-20 JFL Adapted to TWAPI 2.1.                                     #
 #    2012-09-26 JFL Use GetSystemMetrics available in TWAPI 2.2.2.            #
 #                   Tested from Windows XP to Windows 8. (Win8 misaligned)    #
+#    2016-04-17 JFL Added option -x to force the X indent.                    #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -1479,6 +1480,7 @@ set y 0
 set dx 0
 set dy 0
 set noexec 0        ; # 1=Do not execute the changes
+set dxForce 0
 
 set usage [subst -nobackslashes -nocommands {
 Cascade all instance windows of a given application.
@@ -1490,6 +1492,7 @@ Options:
   -h, --help, -?    Display this help screen.
   -s, --step DX DY  Increment step. Default: $dx $dy
   -v, --verbose     Verbose attributes
+  -x, --xindent     Horizontal indentation. Default: Width of the system button
 
 Program:            Program name. Default: putty.exe. Default extension: .exe
 }]
@@ -1520,6 +1523,9 @@ while {"$args" != ""} {
     }
     "-X" - "--noexec" {
       set noexec 1
+    }
+    "-x" - "--xindent" {
+      set dxForce [PopArg]
     }
     "-v" - "--verbose" { # Verbose flag.
       incr ::debug::verbosity
@@ -1561,6 +1567,10 @@ if {$dx == 0 && $dy == 0} {
   } else {
     incr dy [expr -1 * $yBorder]
   }
+}
+
+if $dxForce {
+  set dx $dxForce
 }
 
 if [Verbose] {
