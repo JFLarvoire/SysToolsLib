@@ -41,7 +41,8 @@
 #                   Improved comments.                                        #
 #    2016-01-05 JFL Fixed the StartPending state reporting.                   #
 #    2016-03-17 JFL Removed aliases. Added missing explicit argument names.   #
-#    2016-04-16 JFL Moved the official repository on GitHub.                                                            #
+#    2016-04-16 JFL Moved the official repository on GitHub.                  #
+#    2016-04-21 JFL Minor bug fix: New-EventLog did not use variable $logName.#
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -132,7 +133,7 @@ Param(
   [Switch]$Version      # Get this script version
 )
 
-$scriptVersion = "2016-03-17"
+$scriptVersion = "2016-04-21"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -399,7 +400,7 @@ $isSystem = ($userName -eq "NT AUTHORITY\SYSTEM")
 Log $MyInvocation.Line # The exact command line that was used to start us
 
 # The following commands write to the event log, but we need to make sure the PSService source is defined.
-New-EventLog -LogName Application -Source $serviceName -ea SilentlyContinue
+New-EventLog -LogName $logName -Source $serviceName -ea SilentlyContinue
 
 if ($Start) {                   # Start the service
   if ($isSystem) { # If running as SYSTEM, ie. invoked as a service

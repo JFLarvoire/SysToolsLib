@@ -41,6 +41,7 @@ PowerShell\IESec.ps1
 PowerShell\Is-WindowsActivated.ps1
 PowerShell\Out-ByHost.ps1
 PowerShell\Reconnect.ps1
+PowerShell\ShadowCopy.ps1
 PowerShell\Test-IPv6Components.ps1
 PowerShell\Window.ps1
 Tcl\cascade.tcl

@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-04-21
+### Added
+- PowerShell/ShadowCopy.ps1: A script for managing Volume Shadow Copies.
+
+### Changed
+- Tcl/Cascade.tcl: Added option -x to force the horizontal indent.
+
 ## [1.4.1] 2016-04-17
 ### Added
 - Docs/Catalog.md: A list of all released files.
