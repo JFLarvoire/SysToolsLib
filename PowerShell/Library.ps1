@@ -324,7 +324,7 @@ Function Write-LogFile {
   }
 }
 
-Set-Alias log Write-LogFile
+Set-Alias log Write-LogFile -Confirm:$false -WhatIf:$false
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
@@ -426,7 +426,7 @@ Function Write-Host  {
   }
 }
 
-Set-Alias msg Write-Host
+Set-Alias msg Write-Host -Confirm:$false -WhatIf:$false
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
