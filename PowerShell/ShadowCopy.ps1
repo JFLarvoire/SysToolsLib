@@ -13,7 +13,8 @@
 #                                                                             #
 #                   Possible improvements to do:                              #
 #                   * Allow inputing WMI Win32_ShadowCopy objects.            #
-#                   * Add -Mount, -Unmount, -Restore options.                 #
+#                   * Output a new type, instead of a generic PSObject.       #
+#                   * Add -Mount, -Dismount, -Restore commands.               #
 #                   * Change Days,Weeks,...,Years to ScriptProperties,        #
 #                     dynamically recomputed?                                 #
 #                                                                             #
@@ -24,8 +25,13 @@
 #    2016-04-21 JFL Added the -New option to create new shadow copies.        #
 #                   Merged all input specification args into one InputObject. #
 #		    Added steppable pipelining abilities for deletions.       #
+#    2016-04-22 JFL Do not complain when enumerating from an inexistent drive.#
+#                   Fixed the -Version option, broken by the step. pipeline.  #
+#                   Make sure that we're running as administrator.            #
+#                   Fixed $NextTrim calculation.                              #
 #                                                                             #
 ###############################################################################
+#Requires -Version 2
 
 <#
   .SYNOPSIS
@@ -49,15 +55,19 @@
   the shadow copies are lost at the same time.
   Do make shadow copies AND backups.
 
+  This script has an object-oriented command interface: Instead of having
+  multiple Verb-Noun scripts, we have a single Noun script with multiple -Verb
+  commands. Ex: Use (ShadowCopy -Get) instead of (Get-ShadowCopy).
+
   .PARAMETER Get
-  Action switch: Output a list of ShadowCopy description objects,
+  Command switch: Output a list of ShadowCopy description objects,
   specified by the InputObject list: IDs, DateTimes, or Drives.
   If no InputObject is specified, outputs the list of all shadow copies. 
-  Default action if no other action switch is specified.
+  Default command if no other command switch is specified.
   Alias: -List
 
   .PARAMETER Remove
-  Action switch: Remove shadow copies, specified by the InputParameters:
+  Command switch: Remove shadow copies, specified by the InputParameters:
   ShadowCopies, IDs, DateTimes, or Drives.
   If no InputObject is specified, removes nothing. 
   Warning: There is no way to recover deleted shadow copies. It is recommended
@@ -65,7 +75,7 @@
   Alias: -Delete
 
   .PARAMETER Prune
-  Action switch: Remove shadow copies that have fallen outside of the cyclic
+  Command switch: Remove shadow copies that have fallen outside of the cyclic
   preservation policy. (Inspired by typical tape rotation policies.)
   - Keep all copies less than 7 days old. Ex: 2/day * 5 days = 10 copies.
   - Keep the last copy each week in the last 3 months. + 12 copies.
@@ -77,7 +87,7 @@
   Alias: -Recycle
 
   .PARAMETER New
-  Action switch: Create a new shadow copy on a given drive.
+  Command switch: Create a new shadow copy on a given drive.
   Alias: -Add
 
   .PARAMETER InputObject
@@ -193,10 +203,10 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-04-21"
+$scriptVersion = "2016-04-22"
 if ($Version) {
   echo $scriptVersion
-  return
+  exit 0
 }
 
 # This script name, with various levels of details
@@ -1241,6 +1251,26 @@ Function Stop-TraceProcs ([string[]]$names) {
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
+#   Function        Test-Administrator                                        #
+#                                                                             #
+#   Description     Check if the user has administration rights               #
+#                                                                             #
+#   Arguments       $user	WindowsIdentity object. Default: Current user #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2012-01-31 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+function Test-Administrator ($user=$null) {
+  if (!$user) {$user = [Security.Principal.WindowsIdentity]::GetCurrent()}
+  ([Security.Principal.WindowsPrincipal]$user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
 #   Function        Get-ShadowCopy                                            #
 #                                                                             #
 #   Description     Get a list of existing shadow copies                      #
@@ -1273,8 +1303,11 @@ Function Get-ShadowCopy() {
   if (($Drive -ne $null) -and ($Drive -ne "")) { # If we got a request for a particular drive
     $DriveLetter = $Drive[0]
     $Volume = Get-Volume $DriveLetter -ea SilentlyContinue # Identify the corresponding volume object
-    if (!$Volume) {
-      throw "No volume ${DriveLetter}: found on this system"
+    if (!$Volume) { # Undefined drive letter
+      # Do not throw an error: This allows running -Prune on both nodes of a cluster, 
+      # only one of which having access to the target volume. 
+      Write-Verbose "No volume ${DriveLetter}: found on this system"
+      return # Just return nothing.
     }
     $VolumeName = $Volume.ObjectId
     $Volumes[$VolumeName] = $Volume
@@ -1619,6 +1652,11 @@ Function New-ShadowCopy {
 
   Write-Debug "ShadowCopy.Begin()"
 
+  # Check prerequisite: All operations below require running as Administrator
+  if (!(Test-Administrator)) {
+    throw "Must be running as Administrator for this operation to work."
+  }
+
   # Reference dates used by -Get and -Prune
   $now = Get-Date
   $Today = Get-Date -Hour 0 -Minute 0 -Second 0
@@ -1628,7 +1666,7 @@ Function New-ShadowCopy {
   $ThisMonth = $Today.AddDays(1-$now.Day)
   $NextMonth = $ThisMonth.AddMonths(1)
   $ThisTrim = $ThisMonth.AddMonths(-(($ThisMonth.Month - 1) % 3))
-  $NextTrim = $ThisTrim.AddMonths(1)
+  $NextTrim = $ThisTrim.AddMonths(3)
   Write-DebugVars today tomorrow ThisWeek NextWeek ThisMonth NextMonth ThisTrim NextTrim
 
   $nInputObjects = 0 # Number of InputObjects passed in
