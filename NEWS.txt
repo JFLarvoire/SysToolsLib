@@ -32,7 +32,7 @@ Publicly released on github.com
 - Merged Tools.zip and Scripts.zip into a single SysTools.zip available in the release area.
 - Minor updates to various scripts and C tools.
 
-## [] - 2015-12-16
+## [Unreleased] - 2015-12-16
 ### Changed
 - Scripts: Minor improvements.
 - C Tools: Major rewrite of the configure.bat/make.bat scripts, and associated make files.
