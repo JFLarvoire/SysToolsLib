@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-05-11
+### Changed
+- C/SRC/update.c: Added option -F/--force to overwrite read-only files. Version 3.5.
+
+### Fixed
+- PowerShell/ShadowCopy.ps1: Fixed the number of trimesters calculation.
+
+## [unreleased] 2016-05-02
+### Changed
+- Tcl/flipmails: Improved support for French and Asian mail headers with Unicode chars.
+
+### Fixed
+- Tcl/Library.bat: Fixed routines ReadHosts and EtcHosts2IPs.
+
 ## [unreleased] 2016-04-21
 ### Added
 - PowerShell/ShadowCopy.ps1: A script for managing Volume Shadow Copies.
