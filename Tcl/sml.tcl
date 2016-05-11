@@ -50,6 +50,8 @@
 #                     This breaks binary compatibility with files coming from #
 #                     another OS. But this does not break XML compatibility,  #
 #                     as the XML spec says all line endings become \n.        #
+#                   - SML does not support attributes without values.         #
+#                     Ex: <script async src="http://my/script.js"></script>   #
 #                                                                             #
 #                   Refer any problem or feedback to jf.larvoire@free.fr,     #
 #                   with [SML] in the email subject.                          #
