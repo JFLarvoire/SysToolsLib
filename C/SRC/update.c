@@ -40,6 +40,10 @@
 *		    this common mistake, and changes back a trailing " into   *
 *                   a trailing \.                                             *
 *		    							      *
+*		    TO DO: Change copy(), update(), etc, return type to a     *
+*		    string pointer, and return NULL for success or a          *
+*		    dynamically created error message in case of error.	      *
+*		    							      *
 *   History:								      *
 *    1986-04-01 JFL jf.larvoire@hp.com created this program.		      *
 *    1987-05-07 JFL Adapted to Lattice 3.10				      *
@@ -113,11 +117,13 @@
 *		    Version 3.3.6.  					      *
 *    2016-04-12 JFL Added option -S to show destination names.                *
 *		    Version 3.4.    					      *
+*    2016-05-10 JFL Added option -F/--force to overwrite read-only files.     *
+*		    Version 3.5.    					      *
 *                                                                             *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.4"
-#define PROGRAM_DATE    "2016-04-12"
+#define PROGRAM_VERSION "3.5"
+#define PROGRAM_DATE    "2016-05-10"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -281,6 +287,7 @@ char *buffer;       /* Pointer on the intermediate copy buffer */
 static int test = 0;			/* Flag indicating Test mode */
 static int show = 0;			/* 0=Show source; 1=Show dest */
 static int fresh = 0;			/* Flag indicating freshen mode */
+static int force = 0;			/* Flag indicating force mode */
 static int iVerbose = FALSE;		/* Flag for displaying verbose information */
 static int copyempty = TRUE;		/* Flag for copying empty file */
 static int iPause = 0;			/* Flag for stop before exit */
@@ -299,6 +306,7 @@ static int iRecur = 0;			/* Recursive update */
 
 char *version(void);			/* Build this program version string */
 void usage(void);			/* Display usage */
+int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
 int update(char *, char *);		/* Copy a file if newer */
 #if defined(S_ISLNK)
@@ -362,16 +370,13 @@ int main(int argc, char *argv[])
     int nErrors = 0;
     int iExit = 0;
 
-    for (argn = 1, arg=argv[argn];
-         ( (argn<argc) && ((arg[0]=='-')
-#ifndef __unix__
-                           || (arg[0]=='/')
-#endif
-                           ) );
-         argn += 1, arg=argv[argn])
+    for (argn = 1; ((argn<argc) && IsSwitch(argv[argn])); argn += 1)
         {
+        arg = argv[argn];
 	DEBUG_PRINTF(("Arg = %s\n", arg));
+#ifndef __unix__
         arg[0] = '-';
+#endif
 	if (   streq(arg, "-h")	    /* Display usage */
 	    || streq(arg, "-help")	/* The historical name of that switch */
 	    || streq(arg, "--help")
@@ -380,7 +385,8 @@ int main(int argc, char *argv[])
 	    usage();
             }
 #ifdef _WIN32
-	if (streq(arg+1, "A")) {	/* Force encoding output with the ANSI code page */
+	if (   streq(arg, "-A")
+	    || streq(arg, "--ansi")) {	/* Force encoding output with the ANSI code page */
 	    cp = CP_ACP;
 	    continue;
 	}
@@ -411,6 +417,13 @@ int main(int argc, char *argv[])
 	    if (iVerbose) printf("Freshen mode on.\n");
 	    continue;
             }
+	if (   streq(arg, "-F")	    /* Force mode on */
+	    || streq(arg, "--force"))
+            {
+            force = 1;
+	    if (iVerbose) printf("Force mode on.\n");
+	    continue;
+            }
 	if (   streq(arg, "-i")	    /* Case-insensitive pattern matching */
 	    || streq(arg, "--ignorecase"))
             {
@@ -426,7 +439,8 @@ int main(int argc, char *argv[])
 	    continue;
             }
 #ifdef _WIN32
-	if (streq(arg+1, "O")) {	/* Force encoding output with the OEM code page */
+	if (   streq(arg, "-O")
+	    || streq(arg, "--oem")) {	/* Force encoding output with the OEM code page */
 	    cp = CP_OEMCP;
 	    continue;
 	}
@@ -460,7 +474,8 @@ int main(int argc, char *argv[])
 	    continue;
             }
 #ifdef _WIN32
-	if (streq(arg+1, "U")) {	/* Force encoding output with the UTF-8 code page */
+	if (   streq(arg, "-U")
+	    || streq(arg, "--utf8")) {	/* Force encoding output with the UTF-8 code page */
 	    cp = CP_UTF8;
 	    continue;
 	}
@@ -561,7 +576,7 @@ Files:          FILE1 [FILE2 ...]\n\
 Switches:\n"
 #ifdef _WIN32
 "\
-  -A            Force encoding the output using the ANSI character set.\n"
+  -A|--ansi     Force encoding the output using the ANSI character set.\n"
 #endif
 #ifdef _DEBUG
 "\
@@ -569,6 +584,7 @@ Switches:\n"
 #endif
 "\
   -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\
+  -F|--force    Force mode. Overwrite read-only files.\n\
 ", version());
 
     printf("\
@@ -578,7 +594,7 @@ Switches:\n"
   -k|--casesensitive Case-sensitive pattern matching. Default for Unix.\n"
 #ifdef _WIN32
 "\
-  -O            Force encoding the output using the OEM character set.\n"
+  -O|--oem      Force encoding the output using the OEM character set.\n"
 #endif
 "\
   -p|--pause    Pause before exit.\n\
@@ -587,7 +603,7 @@ Switches:\n"
   -S|--showdest Show the destination files names. Default: The sources names.\n"
 #ifdef _WIN32
 "\
-  -U            Force encoding the output using the UTF-8 character encoding.\n"
+  -U|--utf8     Force encoding the output using the UTF-8 character encoding.\n"
 #endif
 "\
   -v|--verbose  Verbose node. Display extra status information.\n\
@@ -608,8 +624,49 @@ Switches:\n"
     do_exit(0);
     }
 
-/* Copy files p1 into directory p2, except if a newer version is already there. */
-/* 2011-09-06 JFL Added the ability to update to a file with a different name */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    IsSwitch						      |
+|                                                                             |
+|   Description:    Test if an argument is a command-line switch.             |
+|                                                                             |
+|   Parameters:     char *pszArg	    Would-be argument		      |
+|                                                                             |
+|   Return value:   TRUE or FALSE					      |
+|                                                                             |
+|   Notes:								      |
+|                                                                             |
+|   History:								      |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg)
+    {
+    return (   (*pszArg == '-')
+#ifndef __unix__
+            || (*pszArg == '/')
+#endif
+           ); /* It's a switch */
+    }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    updateall						      |
+|                                                                             |
+|   Description:    Update all files from source dir to dest dir              |
+|                                                                             |
+|   Parameters:     char *p1	    Source path. Wildcards allowed for files. |
+|                   char *p2	    Destination directory		      |
+|                                                                             |
+|   Return value:   The number of errors encountered. 0=Success               |
+|                                                                             |
+|   Notes:	    Copy files, except if a newer version is already there.   |
+|                                                                             |
+|   History:								      |
+|    2011-09-06 JFL Added the ability to update to a file with a differ. name.|
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
 #ifdef _MSC_VER
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
@@ -821,7 +878,25 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 #pragma warning(default:4706)
 #endif
 
-/* Copy file p1 onto file p2, if and only if p1 is newer. */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    update						      |
+|                                                                             |
+|   Description:    Update one file					      |
+|                                                                             |
+|   Parameters:     char *p1	    Source file pathname                      |
+|                   char *p2	    Destination file pathname		      |
+|                                                                             |
+|   Return value:   0 = Success, else Error				      |
+|                                                                             |
+|   Notes:	    Copy the file, except if a newer version is already there.|
+|                                                                             |
+|   History:								      |
+|    2016-05-10 JFL Updated the test mode support, and fixed a bug when       |
+|                   using both the test mode and the showdest mode.           |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
 int update(char *p1,	/* Both names must be complete, without wildcards */
            char *p2)
     {
@@ -831,6 +906,10 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     char *p;
 
     DEBUG_ENTER(("update(\"%s\", \"%s\");\n", p1, p2));
+
+    /* Get the pathname to display, before p2 is possibly modified by the test mode */
+    p = p1;		/* By default, show the source file name */
+    if (show) p = p2;	/* But in showdest mode, show the destination file name */
 
     /* In freshen mode, don't copy if the destination does not exist. */
     if (fresh && !exist_file(p2)) RETURN_CONST(0);
@@ -842,23 +921,25 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     e = lstat(p2, &sP2stat); /* Use lstat to avoid following links */
     if (e == 0) {
       if (S_ISDIR(sP2stat.st_mode)) {	/* If the target is a directory */
-	if (!test) e = rmdir(p2);		/* Then remove it */
-	else {
+	if (!test) {
+	  e = rmdir(p2);		/* Then remove it */
+	} else {
 	  if (iVerbose) {
 	    DEBUG_PRINTF(("// "));
 	    printf("Would delete directory %s\n", p2);
 	  }
-	  p2 = "NUL"; /* Trick older() to think the target is deleted */
+	  p2 = ""; /* Trick older() to think the target is deleted */
 	}
 #if defined(S_ISLNK)
       } else if (S_ISLNK(sP2stat.st_mode)) { /* Else if it's a link */
-	if (!test) e = unlink(p2); /* Then deletes the link, not its target. */
-	else {
+	if (!test) {
+	  e = unlink(p2); /* Then deletes the link, not its target. */
+	} else {
 	  if (iVerbose) {
 	    DEBUG_PRINTF(("// "));
 	    printf("Would delete link %s\n", p2);
 	  }
-	  p2 = "NUL"; /* Trick older() to think the target is deleted */
+	  p2 = ""; /* Trick older() to think the target is deleted */
 	}
 #endif /* defined(S_ISLNK) */
       } /* Else the target is a plain file */
@@ -871,8 +952,6 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (older(p1, p2)) RETURN_CONST(0);
 
-    p = p1;		/* By default, show the source file name */
-    if (show) p = p2;	/* But in showdest mode, show the destination file name */
     _fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
     if (test == 1)
         {
@@ -890,6 +969,24 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 
     RETURN_INT_COMMENT(e, (e?"Error\n":"Success\n"));
     }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    update_link						      |
+|                                                                             |
+|   Description:    Update one symbolic link				      |
+|                                                                             |
+|   Parameters:     char *p1	    Source link pathname                      |
+|                   char *p2	    Destination link pathname		      |
+|                                                                             |
+|   Return value:   0 = Success, else Error				      |
+|                                                                             |
+|   Notes:	    Copy the link, except if a newer version is already there.|
+|                                                                             |
+|   History:								      |
+|    2016-05-10 JFL Added support for the --force option.                     |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
 
 int exists(char *name) {
     int result;
@@ -962,6 +1059,12 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     if (!iVerbose) printf("%s\n", name);
 
     if (bP2Exists) { // Then the target has to be removed, even if it's a link
+      // First, in force mode, prevent failures if the target is read-only
+      if (force && !(sP2stat.st_mode & S_IWRITE)) {
+      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", p2, _S_IWRITE));
+      	err = chmod(p2, _S_IWRITE); /* Try making the target file writable */
+      	DEBUG_PRINTF(("  return %d; // errno = %d\n", err, errno));
+      }
       if (S_ISDIR(sP2stat.st_mode)) {
 	if (!test) err = rmdir(p2);		/* Then remove it */
 	else {
@@ -1015,10 +1118,29 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 
 #endif // !defined(S_ISLNK)
 
-/* Copy 1 file. Both names must be correct */
-/*   2013-03-15 JFL Added resiliency:
-                    When reading fails to start, avoid deleting the target.
-                    In case of error later on, delete incomplete copies.     */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    copyf						      |
+|                                                                             |
+|   Description:    Copy one file					      |
+|                                                                             |
+|   Parameters:     char *name1	    Source file pathname                      |
+|                   char *name2	    Destination file pathname		      |
+|                                                                             |
+|   Return value:   0 = Success						      |
+|                   1 = Read error					      |
+|                   2 = Write error					      |
+|                                                                             |
+|   Notes:	    Both names must be correct, and paths must exist.	      |
+|                                                                             |
+|   History:								      |
+|    2013-03-15 JFL Added resiliency:					      |
+|                   When reading fails to start, avoid deleting the target.   |
+|                   In case of error later on, delete incomplete copies.      |
+|    2016-05-10 JFL Added support for the --force option.                     |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
 int copyf(char *name1,		    /* Source file to copy from */
           char *name2)		    /* Destination file to copy to */
     {
@@ -1027,8 +1149,9 @@ int copyf(char *name1,		    /* Source file to copy from */
     off_t lon;		    /* File length */
     size_t tocopy;	    /* Number of bytes to copy in one pass */
     int iShowCopying = FALSE;
+    int nAttempt = 1;	    /* Force mode allows retrying a second time */
 
-    DEBUG_ENTER(("copy(\"%s\", \"%s\");\n", name1, name2));
+    DEBUG_ENTER(("copyf(\"%s\", \"%s\");\n", name1, name2));
     if (iVerbose
 #ifdef _DEBUG
         && !iDebug
@@ -1053,9 +1176,18 @@ int copyf(char *name1,		    /* Source file to copy from */
       RETURN_INT_COMMENT(1, ("Can't read the input file\n"));
     }
     fseek(pfs, 0, SEEK_SET);
-
+retry_open_targetfile:
     pfd = fopen(name2, "wb");
     if (!pfd) {
+      if ((errno == EACCES) && (nAttempt == 1) && force) {
+      	int iErr = chmod(name2, _S_IWRITE); /* Try making the target file writable */
+      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", name2, _S_IWRITE));
+      	DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+      	if (!iErr) {
+	  nAttempt += 1;
+	  goto retry_open_targetfile;
+	}
+      }
       if (iShowCopying) printf("\n");
       fclose(pfs);
       RETURN_INT_COMMENT(2, ("Can't open the output file\n"));
@@ -1094,7 +1226,27 @@ int copyf(char *name1,		    /* Source file to copy from */
     RETURN_INT_COMMENT(0, ("File copy complete.\n"));
     }
 
-/* Copy a file to another file */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    copy						      |
+|                                                                             |
+|   Description:    Copy one file, creating the target directory if needed    |
+|                                                                             |
+|   Parameters:     char *name1	    Source file pathname                      |
+|                   char *name2	    Destination file pathname		      |
+|                                                                             |
+|   Return value:   0 = Success, else error and errno set		      |
+|                                                                             |
+|   Notes:	    Both names must be correct, and paths must exist.	      |
+|                                                                             |
+|   History:								      |
+|    2016-05-10 JFL Compiled-out the error messages output. Another error     |
+|                   message is displayed by the caller, and having both is    |
+|                   confusing. To do: Build an error message string, and      |
+|                   pass it back to the caller.                               |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
 int copy(char *name1, char *name2)
     {
     int e;
@@ -1110,6 +1262,7 @@ int copy(char *name1, char *name2)
     }
 
     e = copyf(name1, name2);
+#if NEEDED
     switch (e)
         {
         case 0:
@@ -1123,6 +1276,7 @@ int copy(char *name1, char *name2)
         default:
             break;
         }
+#endif
     return(e);
     }
 
@@ -1212,36 +1366,20 @@ int older(char *p1, char *p2)	/* Is file p1 older than file p2? */
 
 #define CAST_WORD(u) (*(WORD *)&(u))
 
-time_t getmodified(char *name)
-    {
-    int err;
-    struct stat sstat;
-    time_t result;
-#if 0
-    FILE *pf;
+time_t getmodified(char *name) {
+  int err;
+  struct stat sstat;
+  time_t result = 0L; /* Return 0 = invalid time for missing file */
 
-    pf = fopen(name, "r");
-    if (!pf)
-	{
-	DEBUG_PRINTF(("// File %s not readable. Date/time = 0.\n", name));
-	return 0L;
-	}
-
-    err = fstat(fileno(pf), &sstat);
-
-    fclose(pf);
-#else
+  if (name && *name) {
     err = lstat(name, &sstat);
-#endif
-    if (err)
-	result = 0L;
-    else
-	result = sstat.st_mtime;
+    if (!err) result = sstat.st_mtime;
+  }
 
-    DEBUG_PRINTF(("// File %s date/time = %lX\n", name, (long)result));
+  DEBUG_PRINTF(("// File \"%s\" date/time = %lX\n", name, (long)result));
 
-    return result;
-    }
+  return result;
+}
 
 /* Create a directory, and all parent directories as needed. Same as mkdir -p */
 #ifdef _MSDOS
@@ -1387,7 +1525,7 @@ void strsfp(const char *pathname, char *path, char *name)   /* Split file pathna
 |   Parameters:     char *pszToFile	Destination file		      |
 |		    char *pszFromFile	Source file			      |
 |									      |
-|   Returns:	    None						      |
+|   Returns:	    0 = Success, else error and errno set		      |
 |									      |
 |   Notes:	    This operation is useless if the destination file is      |
 |		    written to again. So it's necessary to flush it before    |
