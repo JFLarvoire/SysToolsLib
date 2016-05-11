@@ -14,11 +14,12 @@
 #    2015-06-22 JFL Removed all debug code, and use DebugLib.tcl.             #
 #                   Fixed bugs in routines TrueName, GetPassword.             #
 #                   Added routines PackageRequire, DnsSearchList.	      #
+#    2016-05-02 JFL Fixed ReadHosts and EtcHosts2IPs.                         #
 #                                                                             #
 ###############################################################################
 
 # Set defaults
-set version "2015-06-22"
+set version "2016-05-02"
 
 source "[file dirname $argv0]/debuglib.tcl"	;# Include the debug library
 ::debug::Import
@@ -1122,7 +1123,7 @@ proc Ip2Names {ip} {
 # Read the OS-specific hosts file
 proc ReadHosts {} {
   if {"$::tcl_platform(platform)" == "windows"} {
-    set hosts "$::env(windir)\System32\Drivers\etc\hosts"
+    set hosts "$::env(windir)\\System32\\Drivers\\etc\\hosts"
   } else { # Unix
     set hosts "/etc/hosts"
   }
@@ -1135,16 +1136,18 @@ proc ReadHosts {} {
 # Get the IP address of a host from /etc/hosts. Return "" if not found.
 proc EtcHosts2IPs {host} {
   set hosts [ReadHosts]
-  set rx {([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)([ \t]+\S*)*[ \t]}
+  set rx {([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)([ \t]+\S+)*[ \t]+}
   append rx "$host" {[ \t\r\n]}
   set ips {}
-  foreach {- ip -} [regexp -all -inline $rx "$hosts "] {
+  # Ignore case as Windows does not care. As for Unix, having homonym systems
+  # differing only by case is definitely bad practice, so assuming there's none.
+  foreach {- ip -} [regexp -all -nocase -inline $rx "$hosts "] {
     lappend ips $ip
   }
   return $ips
 }
 proc EtcHosts2IP {host} {
-  lindex [EtcHosts2IPs $host]
+  lindex [EtcHosts2IPs $host] 0
 }
 
 # Get the host address directly or indirectly. Return "" if not found.
