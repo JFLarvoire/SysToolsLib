@@ -26,11 +26,13 @@
 #    2015-03-24 JFL Changed several DebugPuts showing variables to DebugVars. #
 #                   Bug fix: Do not merge lines with just spaces with the     #
 #		    next one. Leave an empty line instead.		      #
+#    2016-02-25 JFL Added support for Asian mail headers with Unicode chars.  #
+#    2016-04-17 JFL Improved French headers recognition.                      #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2015-03-24"
+set version "2016-02-25"
 
 ###############################################################################
 #                 Output, logging and debug library routines                  #
@@ -1573,10 +1575,11 @@ set rxSeparator "$rxSeparator1|$rxSeparator2|$rxSeparator3|\r?\n"
 # Regognize mail header lines
 # A header line begins with a tag, followed by a colon, then an optional value. Ex: "From: Your boss"
 # The tag is usually a capitalized word. Ex: From, To, De, À, Von, An, ...
-# But there are cases when the tab contains 2 words. Ex: "Signed By: A cautious person"
+# But there are cases when the tab contains 2 words. Ex: "Signed By: A cautious person" or "Envoyé le: Di, 17 Avr 2016 11:05"
 # Some translations add a space before the colon. Ex: "Envoyé : mercredi 17 septembre 2014 11:25"
 # Some versions insert a special space \xA0 before the colon. This matches [[:space:]], but not [[:blank:]].
-set rxHeaderLine1 {[[:blank:]]*[[:upper:]][[:lower:]]*(?: [[:upper:]][[:lower:]]*)?[[:blank:]\xA0]?:[[:print:]\t]*}
+# Asian languages use ideograms that end up as ? in the code page 1252.
+set rxHeaderLine1 {[[:blank:]]*[?[:upper:]][?[:lower:]]*(?: [?[:upper:][:lower:]][?[:lower:]]*)?[[:blank:]\xA0]?:[[:print:]\t]*}
 set rxHeaderLineContinued {[[:graph:]][[:print:]\t]*}
 # A header line is anything beginning with a header line 1, following by any non-blank lines that is NOT a header line 1.
 set rxHeaderLine "${rxHeaderLine1}(?:\r?\n(?!${rxHeaderLine1})$rxHeaderLineContinued)*"
