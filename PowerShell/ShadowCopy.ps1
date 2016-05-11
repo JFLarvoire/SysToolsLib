@@ -7,6 +7,9 @@
 #   Notes           References:						      #
 #		    https://en.wikipedia.org/wiki/Shadow_Copy                 #
 #                                                                             #
+#                   Best Practices for Shadow Copies of Shared Folders        #
+#                   https://technet.microsoft.com/library/cc753975.aspx       #
+#                                                                             #
 #                   Uses JFL's SysToolsLib debugging library for PowerShell.  #
 #                   More information in the Docs directory in:                #
 #                   https://github.com/JFLarvoire/SysToolsLib                 #
@@ -29,6 +32,7 @@
 #                   Fixed the -Version option, broken by the step. pipeline.  #
 #                   Make sure that we're running as administrator.            #
 #                   Fixed $NextTrim calculation.                              #
+#    2016-05-11 JFL Fixed the number of trimesters calculation.               #
 #                                                                             #
 ###############################################################################
 #Requires -Version 2
@@ -203,7 +207,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-04-22"
+$scriptVersion = "2016-05-11"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -1360,7 +1364,7 @@ Function Get-ShadowCopy() {
       Days = ($tomorrow - $ShadowDate).Days
       Weeks = [Math]::Floor(($NextWeek - $ShadowDate).Days / 7)
       Months = ($ThisMonth.Year - $ShadowDate.Year) * 12 + ($ThisMonth.Month - $ShadowDate.Month)
-      Trims = [Math]::Floor((($ThisTrim.Year - $ShadowDate.Year) * 12 + ($ThisTrim.Month - $ShadowDate.Month)) / 3)
+      Trims = [Math]::Floor((($ThisTrim.Year - $ShadowDate.Year) * 12 + ($ThisTrim.Month + 2 - $ShadowDate.Month)) / 3)
       Years = ($ThisMonth.Year - $ShadowDate.Year)
     }
     # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
