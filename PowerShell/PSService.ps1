@@ -10,6 +10,21 @@
 #                   Please report any problem in the Issues tab in that       #
 #                   GitHub repository.                                        #
 #                                                                             #
+#                   The initial version of this script was described in an    #
+#                   article published in the May 2016 issue of MSDN Magazine. #
+#                   https://msdn.microsoft.com/en-us/magazine/mt703436.aspx   #
+#                   This updated version has one major change:                #
+#                   The -Service handler in the end has been rewritten to be  #
+#                   event-driven, with a second thread waiting for control    #
+#                   messages coming in via a named pipe.                      #
+#                   This allows fixing a bug of the original version, that    #
+#                   did not stop properly, and left a zombie process behind.  #
+#                   The drawback is that the new code is significantly longer,#
+#                   due to the added PowerShell thread management routines.   #
+#                   On the other hand, these thread management routines are   #
+#                   reusable, and will allow building much more powerful      #
+#                   services.                                                 #
+#                                                                             #
 #                   Dynamically generates a small PSService.exe wrapper       #
 #                   application, that in turn invokes this PowerShell script. #
 #                                                                             #
@@ -43,6 +58,15 @@
 #    2016-03-17 JFL Removed aliases. Added missing explicit argument names.   #
 #    2016-04-16 JFL Moved the official repository on GitHub.                  #
 #    2016-04-21 JFL Minor bug fix: New-EventLog did not use variable $logName.#
+#    2016-05-25 JFL Bug fix: The service task was not properly stopped; Its   #
+#                   finally block was not executed, and a zombie task often   #
+#                   remained. Fixed by using a named pipe to send messages    #
+#                   to the service task.                                      #
+#    2016-06-05 JFL Finalized the event-driven service handler.               #
+#                   Fixed the default command setting in PowerShell v2.       #
+#                   Added a sample -Control option using the new pipe.        #
+#    2016-06-08 JFL Rewrote the pipe handler using PSThreads instead of Jobs. #
+#    2016-06-09 JFL Finalized the PSThread management routines error handling.#
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -78,6 +102,9 @@
     Run the service in the background. Used internally by the script.
     Do not use, except for test purposes.
 
+  .PARAMETER Control
+    Send a control message to the service thread.
+
   .PARAMETER Version
     Display this script version and exit.
 
@@ -104,36 +131,45 @@
     C:\PS># At this stage, no copy of PSService.ps1 is present in the path anymore
     C:\PS>.\PSService.ps1 -Status
     Not installed
+
+  .EXAMPLE
+    # Send a control message to the service, and verify that it received it.
+    C:\PS>PSService -Control Hello
+    C:\PS>Notepad C:\Windows\Logs\PSService.log
+    # The last lines should contain a trace of the reception of this Hello message
 #>
 
 [CmdletBinding(DefaultParameterSetName='Status')]
 Param(
   [Parameter(ParameterSetName='Start', Mandatory=$true)]
-  [Switch]$Start,       # Start the service
+  [Switch]$Start,               # Start the service
 
   [Parameter(ParameterSetName='Stop', Mandatory=$true)]
-  [Switch]$Stop,        # Stop the service
+  [Switch]$Stop,                # Stop the service
 
   [Parameter(ParameterSetName='Restart', Mandatory=$true)]
-  [Switch]$Restart,     # Restart the service
+  [Switch]$Restart,             # Restart the service
 
   [Parameter(ParameterSetName='Status', Mandatory=$false)]
   [Switch]$Status = $($PSCmdlet.ParameterSetName -eq 'Status'), # Get the current service status
 
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
-  [Switch]$Setup,       # Install the service
+  [Switch]$Setup,               # Install the service
 
   [Parameter(ParameterSetName='Remove', Mandatory=$true)]
-  [Switch]$Remove,      # Uninstall the service
+  [Switch]$Remove,              # Uninstall the service
 
   [Parameter(ParameterSetName='Service', Mandatory=$true)]
-  [Switch]$Service,     # Run the service
+  [Switch]$Service,             # Run the service
+
+  [Parameter(ParameterSetName='Control', Mandatory=$true)]
+  [String]$Control = $null,     # Control message to send to the service
 
   [Parameter(ParameterSetName='Version', Mandatory=$true)]
-  [Switch]$Version      # Get this script version
+  [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-04-21"
+$scriptVersion = "2016-06-09"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -144,6 +180,7 @@ $scriptFullName = $argv0.fullname       # Ex: C:\Temp\PSService.ps1
 # Global settings
 $serviceName = $script                  # A one-word name used for net start commands
 $serviceDisplayName = "A Sample PowerShell Service"
+$pipeName = "Service_$serviceName"      # Named pipe name. Used for sending messages to the service task
 # $installDir = "${ENV:ProgramFiles}\$serviceName" # Where to install the service files
 $installDir = "${ENV:windir}\System32"  # Where to install the service files
 $scriptCopy = "$installDir\$scriptName"
@@ -208,16 +245,337 @@ Function Now {
 #   Arguments       A string                                                  #
 #                                                                             #
 #   Notes           Prefixes the string with a timestamp and the user name.   #
+#                   (Except if the string is empty: Then output a blank line.)#
 #                                                                             #
 #   History                                                                   #
+#    2016-06-05 JFL Also prepend the Process ID.                              #
+#    2016-06-08 JFL Allow outputing blank lines.                              #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
-Function Log ([String]$string) {
+Function Log () {
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [String]$string
+  )
   if (!(Test-Path $logDir)) {
     New-Item -ItemType directory -Name $logDir
   }
-  "$(Now) $userName $string" | Out-File -Encoding ASCII -Append "$logFile"
+  if ($String.length) {
+    $string = "$(Now) $pid $userName $string"
+  }
+  $string | Out-File -Encoding ASCII -Append "$logFile"
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Start-PSThread                                            #
+#                                                                             #
+#   Description     Start a new PowerShell thread                             #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes           Returns a thread description object.                      #
+#                   The completion can be tested in $_.Handle.IsCompleted     #
+#                   Alternative: Use a thread completion event.               #
+#                                                                             #
+#   References                                                                #
+#    https://learn-powershell.net/tag/runspace/                               #
+#    https://learn-powershell.net/2013/04/19/sharing-variables-and-live-objects-between-powershell-runspaces/
+#    http://www.codeproject.com/Tips/895840/Multi-Threaded-PowerShell-Cookbook
+#                                                                             #
+#   History                                                                   #
+#    2016-06-08 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+$PSThreadCount = 0              # Counter of PSThread IDs generated so far
+$PSThreadList = @{}             # Existing PSThreads indexed by Id
+
+Function Get-PSThread () {
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [int[]]$Id = $PSThreadList.Keys     # List of thread IDs
+  )
+  $Id | % { $PSThreadList.$_ }
+}
+
+Function Start-PSThread () {
+  Param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [ScriptBlock]$ScriptBlock,          # The script block to run in a new thread
+    [Parameter(Mandatory=$false)]
+    [String]$Name = "",                 # Optional thread name. Default: "PSThread$Id"
+    [Parameter(Mandatory=$false)]
+    [String]$Event = "",                # Optional thread completion event name. Default: None
+    [Parameter(Mandatory=$false)]
+    [Hashtable]$Variables = @{},        # Optional variables to copy into the script context.
+    [Parameter(Mandatory=$false)]
+    [String[]]$Functions = @(),         # Optional functions to copy into the script context.
+    [Parameter(Mandatory=$false)]
+    [Object[]]$Arguments = @()          # Optional arguments to pass to the script.
+  )
+
+  $Id = $script:PSThreadCount
+  $script:PSThreadCount += 1
+  if (!$Name.Length) {
+    $Name = "PSThread$Id"
+  }
+  $InitialSessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+  foreach ($VarName in $Variables.Keys) { # Copy the specified variables into the script initial context
+    $value = $Variables.$VarName
+    Write-Debug "Adding variable $VarName=[$($Value.GetType())]$Value"
+    $var = New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry($VarName, $value, "")
+    $InitialSessionState.Variables.Add($var)
+  }
+  foreach ($FuncName in $Functions) { # Copy the specified functions into the script initial context
+    $Body = Get-Content function:$FuncName
+    Write-Debug "Adding function $FuncName () {$Body}"
+    $func = New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($FuncName, $Body)
+    $InitialSessionState.Commands.Add($func)
+  }
+  $RunSpace = [RunspaceFactory]::CreateRunspace($InitialSessionState)
+  $RunSpace.Open()
+  $PSPipeline = [powershell]::Create()
+  $PSPipeline.Runspace = $RunSpace
+  $PSPipeline.AddScript($ScriptBlock) | Out-Null
+  $Arguments | % {
+    Write-Debug "Adding argument [$($_.GetType())]'$_'"
+    $PSPipeline.AddArgument($_) | Out-Null
+  }
+  $Handle = $PSPipeline.BeginInvoke() # Start executing the script
+  if ($Event.Length) { # Do this after BeginInvoke(), to avoid getting the start event.
+    Register-ObjectEvent $PSPipeline -EventName InvocationStateChanged -SourceIdentifier $Name -MessageData $Event
+  }
+  $PSThread = New-Object PSObject -Property @{
+    Id = $Id
+    Name = $Name
+    Event = $Event
+    RunSpace = $RunSpace
+    PSPipeline = $PSPipeline
+    Handle = $Handle
+  }     # Return the thread description variables
+  $script:PSThreadList[$Id] = $PSThread
+  $PSThread
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Receive-PSThread                                          #
+#                                                                             #
+#   Description     Get the result of a thread, and optionally clean it up    #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2016-06-08 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Receive-PSThread () {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [PSObject]$PSThread,                # Thread descriptor object
+    [Parameter(Mandatory=$false)]
+    [Switch]$AutoRemove                 # If $True, remove the PSThread object
+  )
+  Process {
+    if ($PSThread.Event -and $AutoRemove) {
+      Unregister-Event -SourceIdentifier $PSThread.Name
+      Get-Event -SourceIdentifier $PSThread.Name | Remove-Event # Flush remaining events
+    }
+    try {
+      $PSThread.PSPipeline.EndInvoke($PSThread.Handle) # Output the thread pipeline output
+    } catch {
+      $_ # Output the thread pipeline error
+    }
+    if ($AutoRemove) {
+      $PSThread.RunSpace.Close()
+      $PSThread.PSPipeline.Dispose()
+      $PSThreadList.Remove($PSThread.Id)
+    }
+  }
+}
+
+Function Remove-PSThread () {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [PSObject]$PSThread                 # Thread descriptor object
+  )
+  Process {
+    $_ | Receive-PSThread -AutoRemove | Out-Null
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Send-PipeMessage                                          #
+#                                                                             #
+#   Description     Send a message to a named pipe                            #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2016-05-25 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Send-PipeMessage () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [String]$PipeName,          # Named pipe name
+    [Parameter(Mandatory=$true)]
+    [String]$Message            # Message string
+  )
+  $PipeDir  = [System.IO.Pipes.PipeDirection]::Out
+  $PipeOpt  = [System.IO.Pipes.PipeOptions]::Asynchronous
+
+  $pipe = $null # Named pipe stream
+  $sw = $null   # Stream Writer
+  try {
+    $pipe = new-object System.IO.Pipes.NamedPipeClientStream(".", $PipeName, $PipeDir, $PipeOpt)
+    $sw = new-object System.IO.StreamWriter($pipe)
+    $pipe.Connect(1000)
+    if (!$pipe.IsConnected) {
+      throw "Failed to connect client to pipe $pipeName"
+    }
+    $sw.AutoFlush = $true
+    $sw.WriteLine($Message)
+  } catch {
+    Log "Error sending pipe $pipeName message: $_"
+  } finally {
+    if ($sw) {
+      $sw.Dispose() # Release resources
+      $sw = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+    if ($pipe) {
+      $pipe.Dispose() # Release resources
+      $pipe = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Receive-PipeMessage                                       #
+#                                                                             #
+#   Description     Wait for a message from a named pipe                      #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes           I tried keeping the pipe open between client connections, #
+#                   but for some reason everytime the client closes his end   #
+#                   of the pipe, this closes the server end as well.          #
+#                   Any solution on how to fix this would make the code       #
+#                   more efficient.                                           #
+#                                                                             #
+#   History                                                                   #
+#    2016-05-25 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Receive-PipeMessage () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [String]$PipeName           # Named pipe name
+  )
+  $PipeDir  = [System.IO.Pipes.PipeDirection]::In
+  $PipeOpt  = [System.IO.Pipes.PipeOptions]::Asynchronous
+  $PipeMode = [System.IO.Pipes.PipeTransmissionMode]::Message
+
+  try {
+    $pipe = $null       # Named pipe stream
+    $pipe = New-Object system.IO.Pipes.NamedPipeServerStream($PipeName, $PipeDir, 1, $PipeMode, $PipeOpt)
+    $sr = $null         # Stream Reader
+    $sr = new-object System.IO.StreamReader($pipe)
+    $pipe.WaitForConnection()
+    $Message = $sr.Readline()
+    $Message
+  } catch {
+    Log "Error receiving pipe message: $_"
+  } finally {
+    if ($sr) {
+      $sr.Dispose() # Release resources
+      $sr = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+    if ($pipe) {
+      $pipe.Dispose() # Release resources
+      $pipe = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Start-PipeHandlerThread                                   #
+#                                                                             #
+#   Description     Start a new thread waiting for control messages on a pipe #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes           The pipe handler script uses function Receive-PipeMessage.#
+#                   This function must be copied into the thread context.     #
+#                                                                             #
+#                   The other functions and variables copied into that thread #
+#                   context are not strictly necessary, but are useful for    #
+#                   debugging possible issues.                                #
+#                                                                             #
+#   History                                                                   #
+#    2016-06-07 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+$pipeThreadName = "Control Pipe Handler"
+
+Function Start-PipeHandlerThread () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [String]$pipeName,                  # Named pipe name
+    [Parameter(Mandatory=$false)]
+    [String]$Event = "ControlMessage"   # Event message
+  )
+  Start-PSThread -Variables @{  # Copy variables required by function Log() into the thread context
+    logDir = $logDir
+    logFile = $logFile
+    userName = $userName
+  } -Functions Now, Log, Receive-PipeMessage -ScriptBlock {
+    Param($pipeName, $pipeThreadName)
+    try {
+      Receive-PipeMessage "$pipeName" # Blocks the thread until the next message is received from the pipe
+    } catch {
+      Log "$pipeThreadName # Error: $_"
+      throw $_ # Push the error back to the main thread
+    }
+  } -Name $pipeThreadName -Event $Event -Arguments $pipeName, $pipeThreadName
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Receive-PipeHandlerThread                                 #
+#                                                                             #
+#   Description     Get what the pipe handler thread received                 #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2016-06-07 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Receive-PipeHandlerThread () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [PSObject]$pipeThread               # Thread descriptor
+  )
+  Receive-PSThread -PSThread $pipeThread -AutoRemove
 }
 
 #-----------------------------------------------------------------------------#
@@ -397,10 +755,14 @@ $authority,$name = $username -split "\\"
 $isSystem = ($userName -eq "NT AUTHORITY\SYSTEM")
 # Log "# `$userName = `"$userName`" ; `$isSystem = $isSystem"
 
+if ($Setup) {Log ""}    # Insert one blank line to separate test sessions logs
 Log $MyInvocation.Line # The exact command line that was used to start us
 
 # The following commands write to the event log, but we need to make sure the PSService source is defined.
 New-EventLog -LogName $logName -Source $serviceName -ea SilentlyContinue
+
+# Workaround for PowerShell v2 bug: $PSCmdlet Not yet defined in Param() block
+$Status = ($PSCmdlet.ParameterSetName -eq 'Status')
 
 if ($Start) {                   # Start the service
   if ($isSystem) { # If running as SYSTEM, ie. invoked as a service
@@ -421,16 +783,8 @@ if ($Stop) {                    # Stop the service
     # Do whatever is necessary to stop the service script instance
     Write-EventLog -LogName $logName -Source $serviceName -EventId 1003 -EntryType Information -Message "$scriptName -Stop: Stopping script $scriptName -Service"
     Log "$scriptName -Stop: Stopping script $scriptName -Service"
-    # Find the service script instance task and stop it.
-    # Log (gwmi Win32_Process -filter "Name = 'powershell.exe'" | select ProcessId, CommandLine | ft -auto | Out-String -width 255)
-    $scriptFullCname = $scriptFullName -replace "\\", "\\" # $scriptCopyCname is invalid when invoked as SYSTEM
-    $processes = @(Get-WmiObject Win32_Process -filter "Name = 'powershell.exe'" | Get-WmiObject {
-      $_.CommandLine -match ".*$scriptFullCname.*-Service"
-    })
-    foreach ($process in $processes) { # There should be just one, but be prepared for surprises.
-      Log "$scriptName -Stop: Stopping PID $($process.ProcessId)"
-      Stop-Process -Id $process.ProcessId -Force
-    }
+    # Send an exit message to the service instance
+    Send-PipeMessage $pipeName "exit" 
   } else {
     Write-Verbose "Stopping service $serviceName"
     Write-EventLog -LogName $logName -Source $serviceName -EventId 1004 -EntryType Information -Message "$scriptName -Stop: Stopping service $serviceName"
@@ -546,24 +900,78 @@ if ($Remove) {                  # Uninstall the service
   return
 }
 
+if ($Control) {                 # Send a control message to the service
+  Send-PipeMessage $pipeName $control
+}
+
 if ($Service) {                 # Run the service
   Write-EventLog -LogName $logName -Source $serviceName -EventId 1005 -EntryType Information -Message "$scriptName -Service # Beginning background job"
-  Log "$scriptName -Service # Beginning background job"
   # Do the service background job
   try {
-    while ($true) { # Keep running until killed by the -Stop handler
-      ######### TO DO: Implement your own service code here. ##########
-      ###### Example that wakes up and logs a line every 10 sec: ######
-      Start-Sleep 10
-      Log "$script -Service # Awaken after 10s"
-    }
+    # Start the control pipe handler thread
+    $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage"
+    ######### TO DO: Implement your own service code here. ##########
+    ###### Example that wakes up and logs a line every 10 sec: ######
+    # Start a periodic timer
+    $timerName = "Sample service timer"
+    $period = 10 # seconds
+    $timer = new-object System.Timers.Timer
+    $timer.Interval = ($period * 1000) # Milliseconds
+    $timer.AutoReset = $true # Make it fire repeatedly
+    Register-ObjectEvent $timer -EventName Elapsed -SourceIdentifier $timerName -MessageData "TimerTick"
+    $timer.start() # Must be stopped in the finally block
+    # Now enter the main service event loop
+    do { # Keep running until told to exit by the -Stop handler
+      $event = Wait-Event # Wait for the next incoming event
+      $source = $event.SourceIdentifier
+      $message = $event.MessageData
+      $eventTime = $event.TimeGenerated.TimeofDay
+      Write-Debug "Event at $eventTime from ${source}: $message"
+      $event | Remove-Event # Flush the event from the queue
+      switch ($message) {
+        "ControlMessage" { # Required. Message received by the control pipe thread
+          $state = $event.SourceEventArgs.InvocationStateInfo.state
+          Write-Debug "$script -Service # Thread $source state changed to $state"
+          switch ($state) {
+            "Completed" {
+              $message = Receive-PipeHandlerThread $pipeThread
+              Log "$scriptName -Service # Received control message: $Message"
+              if ($message -ne "exit") { # Start another thread waiting for control messages
+                $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage"
+              }
+            }
+            "Failed" {
+              $error = Receive-PipeHandlerThread $pipeThread
+              Log "$scriptName -Service # $source thread failed: $error"
+              Start-Sleep 1 # Avoid getting too many errors
+              $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage" # Retry
+            }
+          }
+        }
+        "TimerTick" { # Example. Periodic event generated for this example
+          Log "$scriptName -Service # Timer ticked"
+        }
+        default { # Should not happen
+          Log "$scriptName -Service # Unexpected event from ${source}: $Message"
+        }
+      }
+    } while ($message -ne "exit")
   } catch { # An exception occurred while runnning the service
     $msg = $_.Exception.Message
-    Log "$script -Service # Error: $msg"
-  } finally { # Invoked in all cases: Exception or killing by -Stop
-    # Record a termination event, no matter what the cause is.
+    $line = $_.InvocationInfo.ScriptLineNumber
+    Log "$scriptName -Service # Error at line ${line}: $msg"
+  } finally { # Invoked in all cases: Exception or normally by -Stop
+    # Cleanup the periodic timer used in the above example
+    Unregister-Event –SourceIdentifier $timerName
+    $timer.stop()
+    ############### End of the service code example. ################
+    # Terminate the control pipe handler thread
+    Get-PSThread | Remove-PSThread # Remove all remaining threads
+    # Flush all leftover events (There may be some that arrived after we exited the while event loop, but before we unregistered the events)
+    $events = Get-Event | Remove-Event
+    # Log a termination event, no matter what the cause is.
     Write-EventLog -LogName $logName -Source $serviceName -EventId 1006 -EntryType Information -Message "$script -Service # Exiting"
-    Log "$script -Service # Exiting"
+    Log "$scriptName -Service # Exiting"
   }
   return
 }
