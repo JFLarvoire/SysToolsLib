@@ -33,6 +33,7 @@
 #                   Make sure that we're running as administrator.            #
 #                   Fixed $NextTrim calculation.                              #
 #    2016-05-11 JFL Fixed the number of trimesters calculation.               #
+#    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
 #                                                                             #
 ###############################################################################
 #Requires -Version 2
@@ -82,10 +83,11 @@
   Command switch: Remove shadow copies that have fallen outside of the cyclic
   preservation policy. (Inspired by typical tape rotation policies.)
   - Keep all copies less than 7 days old. Ex: 2/day * 5 days = 10 copies.
+  - Keep the last copy in each 2-day period in the next 2 weeks. Ex: + 6 copies.
   - Keep the last copy each week in the last 3 months. + 12 copies.
   - Keep the last copy each month in the last 12 months. + 9 copies.
   - Keep the last copy each trimester in the last 4 years. + 12 copies.
-  - Keep the last copy each year before that. => More than 20 years to reach 64.
+  - Keep the last copy each year before that. => 15 more years to reach 64.
   Warning: There is no way to recover deleted shadow copies. It is recommended
   to check what the command would do with the -X (alias -WhatIf) parameter first.
   Alias: -Recycle
@@ -207,7 +209,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-05-11"
+$scriptVersion = "2016-05-26"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -1465,6 +1467,7 @@ Function Remove-ShadowCopy() {
 #                                                                             #
 #   History                                                                   #
 #    2016-04-18 JFL Created this routine.                                     #
+#    2016-05-26 JFL Added 2-day preservation periods for the next N weeks.    #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -1483,6 +1486,30 @@ Function Set-ShadowCopyFate() {
       $_.Fate = "Keep"
     }
   }
+  # Then eliminate all but the last entry in every two days period in the last N weeks
+  # Assumes that there's a gap in the week-end, where no shadow copy is created.
+  # So align these 2-day periods based on the last shadow copy each week.
+  # Ex: (M13h T01h T13h W01h W13h T01h T13h F01h F13h S01h) -> (T01h T01h S01h)
+  $nWeeks = 3
+  $nWeeksAgo = $today.AddDays(-7 * $nWeeks)
+  for ($week=1; $week -le $nWeeks; $week++) { # These days are in weeks #1 to #N. Those in week #0 are already all preserved.
+    # Repeat for each of these N weeks, starting from the end of each week
+    $selection = @($ShadowCopies | where { $_.Weeks -eq $week } | sort -Descending Date)
+    if (!$selection.count) {continue}
+    $baseDate = ($selection[0]).Date.AddHours(1) # Add some margin due to the varying duration of shadow copy creations
+    $selection | % {
+      if ($_.Date -lt $baseDate) { # We entered another 2-day period
+      	$baseDate = $baseDate.AddDays(-2) # Move the threshold by 2 days
+      	if (($_.Fate -eq "Unknown") -and ($_.Date -gt $nWeeksAgo)) {
+	  $_.Fate = "Keep"
+	}
+      } else { # Another older shadow copy in the same 2-day period
+      	if (($_.Fate -eq "Unknown") -and ($_.Date -gt $nWeeksAgo)) {
+	  $_.Fate = "Remove"
+	}
+      }
+    }
+  }
   # Then eliminate all but the last entry in every prior calendar week
   $lastWeek = -1
   $ShadowCopies | sort -Descending Date | % {
@@ -1495,8 +1522,8 @@ Function Set-ShadowCopyFate() {
       }
     }
   }
-  # Keep all weekly copies less than 3 months old (3 months = 13 weeks)
-  $ThreeMonthsAgo = $today.AddDays(-7*13)
+  # Keep all weekly copies less than 3 months old
+  $ThreeMonthsAgo = $today.AddMonths(-3)
   $ShadowCopies | % {
     if ($_.Date -gt $ThreeMonthsAgo) {
       if ($_.Fate -eq "Unknown") {
