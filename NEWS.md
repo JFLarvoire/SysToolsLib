@@ -4,6 +4,41 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-06-09
+### Changed
+- PowerShell/Library.ps1:
+   - Added Test-TCPPort routine.
+   - Added PSThread management routines.
+   - Added Named Pipe management routines.
+   - Added Using and New sample routines.
+
+- PowerShell/PSService.ps1
+   - Added PSThread management routines.
+   - Added Named Pipe management routines.
+   - The -Service handler in the end has been rewritten to be event-driven, with a second thread waiting for control messages coming in via a named pipe.                    
+
+- PowerShell/ShadowCopy.ps1
+   - Added 2-day preservation periods for the 2nd & 3rd week.
+
+- PowerShell/Window.ps1
+   - Made -Get the default command switch.
+   - Allow passing in Window objects via the input pipe.
+   - Added the -Step switch to all spacing windows regularly.
+   - Added the -WhatIf switch to allow testing moves.
+   - Added the -Capture command switch.
+   - Added limited support for PowerShell v2.
+   - Added the -Children switch to enumerate immediate children.
+   - Added the -All switch to enumerate all windows.
+   - Get the Program name for all windows in the -All case.
+   - Added fields PID and Class to the window objects.
+   - Also enumerate popup windows by default.
+   - Added a 100ms delay before screen captures, to give time to the system to redraw all fields that are reactivated.
+
+### Fixed
+- PowerShell/PSService.ps1:
+   - Fixed the -Service finally clause not getting called when stopping the service.
+   - Fixed the remaining zombie task when stopping the service.
+
 ## [unreleased] 2016-05-11
 ### Changed
 - C/SRC/update.c: Added option -F/--force to overwrite read-only files. Version 3.5.
