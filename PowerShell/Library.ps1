@@ -2045,6 +2045,289 @@ Function Format-ListSorted {
 
 Set-Alias fls Format-ListSorted
 
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Start-PSThread		                              #
+#                                                                             #
+#   Description     Start a new PowerShell thread                             #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes           Returns a thread description object.                      #
+#                   The completion can be tested in $_.Handle.IsCompleted     #
+#                   Alternative: Use a thread completion event.               #
+#                                                                             #
+#   References                                                                #
+#    https://learn-powershell.net/tag/runspace/                               #
+#    https://learn-powershell.net/2013/04/19/sharing-variables-and-live-objects-between-powershell-runspaces/
+#    http://www.codeproject.com/Tips/895840/Multi-Threaded-PowerShell-Cookbook
+#                                                                             #
+#   History                                                                   #
+#    2016-06-08 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+$PSThreadCount = 0		# Counter of PSThread IDs generated so far
+$PSThreadList = @{}		# Existing PSThreads indexed by Id
+
+Function Get-PSThread () {
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [int[]]$Id = $PSThreadList.Keys	# List of thread IDs
+  )
+  $Id | % { $PSThreadList.$_ }
+}
+
+Function Start-PSThread () {
+  Param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [ScriptBlock]$ScriptBlock,		# The script block to run in a new thread
+    [Parameter(Mandatory=$false)]
+    [String]$Name = "",			# Optional thread name. Default: "PSThread$Id"
+    [Parameter(Mandatory=$false)]
+    [String]$Event = "",		# Optional thread completion event name. Default: None
+    [Parameter(Mandatory=$false)]
+    [Hashtable]$Variables = @{},	# Optional variables to copy into the script context.
+    [Parameter(Mandatory=$false)]
+    [String[]]$Functions = @(),		# Optional functions to copy into the script context.
+    [Parameter(Mandatory=$false)]
+    [Object[]]$Arguments = @()		# Optional arguments to pass to the script.
+  )
+
+  $Id = $script:PSThreadCount
+  $script:PSThreadCount += 1
+  if (!$Name.Length) {
+    $Name = "PSThread$Id"
+  }
+  $InitialSessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+  foreach ($VarName in $Variables.Keys) { # Copy the specified variables into the script initial context
+    $value = $Variables.$VarName
+    Write-Debug "Adding variable $VarName=[$($Value.GetType())]$Value"
+    $var = New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry($VarName, $value, "")
+    $InitialSessionState.Variables.Add($var)
+  }
+  foreach ($FuncName in $Functions) { # Copy the specified functions into the script initial context
+    $Body = Get-Content function:$FuncName
+    Write-Debug "Adding function $FuncName () {$Body}"
+    $func = New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($FuncName, $Body)
+    $InitialSessionState.Commands.Add($func)
+  }
+  $RunSpace = [RunspaceFactory]::CreateRunspace($InitialSessionState)
+  $RunSpace.Open()
+  $PSPipeline = [powershell]::Create()
+  $PSPipeline.Runspace = $RunSpace
+  $PSPipeline.AddScript($ScriptBlock) | Out-Null
+  $Arguments | % {
+    Write-Debug "Adding argument [$($_.GetType())]'$_'"
+    $PSPipeline.AddArgument($_) | Out-Null
+  }
+  $Handle = $PSPipeline.BeginInvoke() # Start executing the script
+  if ($Event.Length) { # Do this after BeginInvoke(), to avoid getting the start event.
+    Register-ObjectEvent $PSPipeline -EventName InvocationStateChanged -SourceIdentifier $Name -MessageData $Event
+  }
+  $PSThread = New-Object PSObject -Property @{
+    Id = $Id
+    Name = $Name
+    Event = $Event
+    RunSpace = $RunSpace
+    PSPipeline = $PSPipeline
+    Handle = $Handle
+  }	# Return the thread description variables
+  $script:PSThreadList[$Id] = $PSThread
+  $PSThread
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Receive-PSThread		                              #
+#                                                                             #
+#   Description     Get the result of a thread, and optionally clean it up    #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2016-06-08 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Receive-PSThread () {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [PSObject]$PSThread,		# Thread descriptor object
+    [Parameter(Mandatory=$false)]
+    [Switch]$AutoRemove			# If $True, remove the PSThread object
+  )
+  Process {
+    if ($PSThread.Event -and $AutoRemove) {
+      Unregister-Event -SourceIdentifier $PSThread.Name
+      Get-Event -SourceIdentifier $PSThread.Name | Remove-Event # Flush remaining events
+    }
+    try {
+      $PSThread.PSPipeline.EndInvoke($PSThread.Handle) # Output the thread pipeline output
+    } catch {
+      $_ # Output the thread pipeline error
+    }
+    if ($AutoRemove) {
+      $PSThread.RunSpace.Close()
+      $PSThread.PSPipeline.Dispose()
+      $PSThreadList.Remove($PSThread.Id)
+    }
+  }
+}
+
+Function Remove-PSThread () {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [PSObject]$PSThread			# Thread descriptor object
+  )
+  Process {
+    $_ | Receive-PSThread -AutoRemove | Out-Null
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Using			                              #
+#                                                                             #
+#   Description     A Using mechanism for PowerShell analog to that of C#     #
+#                                                                             #
+#   Notes           Caution:                                                  #
+#		    PowerShell v5 has its own 'using namespace' keywords      #
+#                                                                             #
+#                   Example:                                                  #
+#		    using System.Windows.Forms                                #
+#		    using FooCompany.Bar.Qux.Assembly.With.Ridiculous.Long.Namespace.I.Really.Mean.It
+#		    $a = new button                                           #
+#		    $b = new Thingamabob                                      #
+#                                                                             #
+#   History                                                                   #
+#    2016-06-09 JFL Adapted from http://stackoverflow.com/questions/1048954/equivalent-to-cs-using-keyword-in-powershell
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+$fullnames = New-Object ( [System.Collections.Generic.List``1].MakeGenericType( [String]) );
+
+function using ($name) { 
+  foreach ($type in [Reflection.Assembly]::LoadWithPartialName($name).GetTypes()) {
+    $fullnames.Add($type.fullname);
+  }
+}
+
+function new ($name) {
+  $fullname = $fullnames -like "*.$name";
+  return , (New-Object $fullname[0]);
+}
+
+###############################################################################
+#                                                                             #
+#                                 Named Pipes                                 #
+#                                                                             #
+###############################################################################
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Send-PipeMessage                                          #
+#                                                                             #
+#   Description     Send a message to a named pipe                            #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2016-05-25 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Send-PipeMessage () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [String]$PipeName,          # Named pipe name
+    [Parameter(Mandatory=$true)]
+    [String]$Message            # Message string
+  )
+  $PipeDir  = [System.IO.Pipes.PipeDirection]::Out
+  $PipeOpt  = [System.IO.Pipes.PipeOptions]::Asynchronous
+
+  $pipe = $null # Named pipe stream
+  $sw = $null   # Stream Writer
+  try {
+    $pipe = new-object System.IO.Pipes.NamedPipeClientStream(".", $PipeName, $PipeDir, $PipeOpt)
+    $sw = new-object System.IO.StreamWriter($pipe)
+    $pipe.Connect(1000)
+    if (!$pipe.IsConnected) {
+      throw "Failed to connect client to pipe $pipeName"
+    }
+    $sw.AutoFlush = $true
+    $sw.WriteLine($Message)
+  } catch {
+    Log "Error sending pipe $pipeName message: $_"
+  } finally {
+    if ($sw) {
+      $sw.Dispose() # Release resources
+      $sw = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+    if ($pipe) {
+      $pipe.Dispose() # Release resources
+      $pipe = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Receive-PipeMessage                                       #
+#                                                                             #
+#   Description     Wait for a message from a named pipe                      #
+#                                                                             #
+#   Arguments       See the Param() block                                     #
+#                                                                             #
+#   Notes           I tried keeping the pipe open between client connections, #
+#                   but for some reason everytime the client closes his end   #
+#                   of the pipe, this closes the server end as well.          #
+#                   Any solution on how to fix this would make the code       #
+#                   more efficient.                                           #
+#                                                                             #
+#   History                                                                   #
+#    2016-05-25 JFL Created this function                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Receive-PipeMessage () {
+  Param(
+    [Parameter(Mandatory=$true)]
+    [String]$PipeName           # Named pipe name
+  )
+  $PipeDir  = [System.IO.Pipes.PipeDirection]::In
+  $PipeOpt  = [System.IO.Pipes.PipeOptions]::Asynchronous
+  $PipeMode = [System.IO.Pipes.PipeTransmissionMode]::Message
+
+  try {
+    $pipe = $null       # Named pipe stream
+    $pipe = New-Object system.IO.Pipes.NamedPipeServerStream($PipeName, $PipeDir, 1, $PipeMode, $PipeOpt)
+    $sr = $null         # Stream Reader
+    $sr = new-object System.IO.StreamReader($pipe)
+    $pipe.WaitForConnection()
+    $Message = $sr.Readline()
+    $Message
+  } catch {
+    Log "Error receiving pipe message: $_"
+  } finally {
+    if ($sr) {
+      $sr.Dispose() # Release resources
+      $sr = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+    if ($pipe) {
+      $pipe.Dispose() # Release resources
+      $pipe = $null   # Force the PowerShell garbage collector to delete the .net object
+    }
+  }
+}
+
 ###############################################################################
 #                                                                             #
 #                                 Networking                                  #
@@ -2328,6 +2611,46 @@ Function Get-IPAddress($name) {
   }
   return $adr
 }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Test-TCPPort                                              #
+#                                                                             #
+#   Description     Test if a TCP Port is open or not	                      #
+#                                                                             #
+#   Notes           Adapted from sample at http://poshcode.org/6280           #
+#                   Author: Christophe Cremon                                 #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Test-TCPPort {
+  param (
+    [ValidateNotNullOrEmpty()]
+    [string] $EndPoint = $(throw "Please specify an EndPoint (Host or IP Address)"),
+    [string] $Port = $(throw "Please specify a Port")
+  )
+
+  $TimeOut = 1000
+  $IP = [System.Net.Dns]::GetHostAddresses($EndPoint)
+  $Address = [System.Net.IPAddress]::Parse($IP)
+  $Socket = New-Object System.Net.Sockets.TCPClient
+  $Connect = $Socket.BeginConnect($Address,$Port,$null,$null)
+  if ($Connect.IsCompleted) {
+    $Wait = $Connect.AsyncWaitHandle.WaitOne($TimeOut,$false)                      
+    if (!$Wait) {
+      $Socket.Close()
+      return $false
+    } else {
+      $Socket.EndConnect($Connect)
+      $Socket.Close()
+      return $true
+    }
+  } else {
+    return $false
+  }
 }
 
 #-----------------------------------------------------------------------------#
