@@ -101,11 +101,12 @@
 *		    Version 2.4.5.					      *
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.4.6.  					      *
+*    2016-06-21 JFL Added regular expression ranges, like [a-z].              *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.4.6"
-#define PROGRAM_DATE    "2016-01-07"
+#define PROGRAM_VERSION "2.5"
+#define PROGRAM_DATE    "2016-06-21"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -811,6 +812,7 @@ Regular expressions subset for the old_string:\r\n\
   c*    Matches 0 or plus occurences of c.\r\n\
   c+    Matches 1 or plus occurences of c.\r\n\
   [abc] Matches any of the enumerated characters. Use [[] to match one [.\r\n\
+  [a-z] Matches any character in the specified range.\r\n\
   [^ab] Matches all but the enumerated characters.\r\n"
 #if defined _MSDOS || defined _WIN32
 "        Warning: ^ is cmd prompt escape character. Double it if needed.\r\n"
@@ -961,12 +963,20 @@ int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat)
 		negative = 0; // 1=This is a negative set, like [^abc]
 		if (*pszOld == '^') { negative = 1; pszOld += 1; }
 		if (*pszOld == ']') { cSet[(unsigned char)']'] = 1; pszOld += 1; }
-		while ((c = *pszOld))
-		    {
-		    pszOld += GetEscChar(pszOld, &c);
-		    if (c == ']') break;
-		    cSet[(unsigned char)c] = 1;
+		while ((c = *pszOld)) {
+		  pszOld += GetEscChar(pszOld, &c);
+		  if (c == ']') break;
+		  cSet[(unsigned char)c] = 1;
+		  if (*pszOld == '-') { // If this is the beginning of a range
+		    char cLast = c; // Avoid problem if there's no end.
+		    pszOld += 1; // Skip the -
+		    pszOld += GetEscChar(pszOld, &cLast);
+		    if (cLast < c) cLast = c; // Avoid problem if ends are reversed.
+		    for (c++ ; c <= cLast; c++) {
+		      cSet[(unsigned char)c] = 1;
 		    }
+		  }
+		}
 		if (negative) for (i=0; i<256; i++) cSet[i] = (char)!cSet[i];
 		hasNul = cSet[0];
 		for (i=1, n=0; i<256; i++) if (cSet[i]) cSet[n++] = (char)i;
