@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-06-27
+### Changed
+- PowerShell/ShadowCopy.ps1
+   - Extended the 2-day preservation periods for a 4th week.
+- C/SRC/remplace.c:
+   - Added regular expression ranges, like [a-z]. Version 2.5.
+- Added HPE copyright string in every source file.
+
 ## [unreleased] 2016-06-09
 ### Changed
 - PowerShell/Library.ps1:
