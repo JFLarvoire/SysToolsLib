@@ -16,6 +16,7 @@
 #  History:                                                                   #
 #    2013-12-16 JFL Added support for MinGW64.				      #
 #    2015-12-12 JFL Help now displays the output directory name.              #
+#    2016-01-07 JFL Added compilation option -Wall.                           #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -64,7 +65,7 @@ esac
 PROGRAM=$1
 shift
 SOURCES=`FileNoCase ${PROGRAM}.c`
-CFLAGS="-std=c99" # Force compilation in C, even if there are // comments.
+CFLAGS="-std=c99 -Wall" # Force compilation in C, even if there are // comments.
 if [[ "${SOURCES}" == "" ]] ; then
   SOURCES=`FileNoCase ${PROGRAM}.cpp`
   CFLAGS="-std=gnu++98 -lstdc++"  # Force compilation in C++, even if plain C.

@@ -29,6 +29,8 @@
 #    2016-02-25 JFL Added support for Asian mail headers with Unicode chars.  #
 #    2016-04-17 JFL Improved French headers recognition.                      #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults

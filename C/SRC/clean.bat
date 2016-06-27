@@ -15,6 +15,8 @@
 :#   2015-10-27 JFL Added the BIOS and WIN95 target dirs.                     #
 :#   2015-12-09 JFL Added support for a config.bat file defining an %OUTDIR%. #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion

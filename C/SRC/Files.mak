@@ -9,6 +9,8 @@
 #   History								      #
 #    2014-12-03 JFL Initial version                                           #
 #                   							      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # List of programs to rebuild for distribution in Tools.zip

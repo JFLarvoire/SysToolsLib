@@ -11,6 +11,8 @@
 :#   2014-05-12 JFL Created this script.          			      *
 :#   2014-12-05 JFL Added the ability to specify the input file name.	      *
 :#                                                                            *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion

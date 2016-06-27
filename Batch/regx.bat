@@ -20,6 +20,8 @@
 :#   2011-12-01 JFL Restructured.                  			      #
 :#   2011-12-12 JFL Finalized change and fixed bugs.			      #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion

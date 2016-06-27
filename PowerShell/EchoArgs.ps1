@@ -1,4 +1,17 @@
-# EchoArgs.ps1 - Echo all command line arguments.
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   File name       EchoArgs.ps1		                              #
+#                                                                             #
+#   Description     Echo all command line arguments		              #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2013-12-04 JFL Created this script.				      #
+#                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+#-----------------------------------------------------------------------------#
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
@@ -139,7 +152,7 @@ Function Quote(
 #                                                                             #
 #   Arguments                                                                 #
 #                                                                             #
-#   Notes                                                                   #
+#   Notes                                                                     #
 #                                                                             #
 #   History                                                                   #
 #                                                                             #

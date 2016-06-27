@@ -33,6 +33,8 @@
 :#   2015-01-13 JFL Find setx.exe wherever it is in the PATH.                 #
 :#                  Bug fix: reg.exe option /f works only if it comes first.  #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion

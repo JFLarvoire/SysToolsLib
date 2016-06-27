@@ -10,6 +10,8 @@
 #   History                                                                   #
 #    2009/12/17 JFL Created this script.                                      #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 set script [file tail $::argv0]         ; # This script name

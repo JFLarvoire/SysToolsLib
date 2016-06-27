@@ -23,6 +23,8 @@
 #                   Added an optional Reconnect.ini file to set the password. #
 #    2016-02-23 JFL Tweaked debug messages.                                   #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # If the -V switch is specified, display the script version and exit.

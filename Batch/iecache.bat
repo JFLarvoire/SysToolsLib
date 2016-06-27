@@ -16,6 +16,8 @@
 :#   2010-09-04 JFL Added options for customizing search.                     #
 :#   2010-09-07 JFL Added support for IE6/IE7/IE8 in XP/Vista/W7.             #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 :# Make sure environment variables used here are local

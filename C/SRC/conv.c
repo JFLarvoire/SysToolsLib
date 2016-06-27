@@ -19,6 +19,8 @@
 *    2012-10-18 JFL Added my name in the help. Version 1.2.3.                 *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.2.3"

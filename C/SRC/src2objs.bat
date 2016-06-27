@@ -10,6 +10,8 @@
 :*  History:                                                                  *
 :*   2010-04-07 JFL Created this batch.                                       *
 :*                                                                            *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :******************************************************************************
 
 setlocal 2>NUL

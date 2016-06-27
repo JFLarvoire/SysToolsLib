@@ -16,6 +16,8 @@
 #                   Added routines PackageRequire, DnsSearchList.	      #
 #    2016-05-02 JFL Fixed ReadHosts and EtcHosts2IPs.                         #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Set defaults

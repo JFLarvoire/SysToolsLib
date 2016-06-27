@@ -21,6 +21,8 @@
 :#   2015-11-12 JFL Get the drive list from the registry.                     #
 :#                  Removed all JFL-specific drive definitions.               #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal enableextensions enabledelayedexpansion

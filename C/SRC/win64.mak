@@ -94,6 +94,8 @@
 #    2015-12-10 JFL Keep win64-specific definitions, and include win32.mak.   #
 #    2016-01-07 JFL Do not use /Zp to avoid alignment issues.                 #
 #									      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 T=WIN64				# Target OS

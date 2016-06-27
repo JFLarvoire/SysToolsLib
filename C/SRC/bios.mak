@@ -101,6 +101,8 @@
 #    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              #
 #    2016-04-14 JFL Forward HAS_<lib> flags to the C compiler.		      #
 #									      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.

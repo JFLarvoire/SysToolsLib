@@ -32,6 +32,8 @@
 #    2015-10-15 JFL Added option --f2d to set dir times from files times.     #
 #    2015-10-29 JFL Added options -z and --z2m to manage 7-Zip archive times. #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 set version "2015-10-29"

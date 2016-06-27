@@ -1,3 +1,18 @@
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   File name       Is-WindowsActivated.ps1	                              #
+#                                                                             #
+#   Description     Check if Windows is activated		              #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2012-08-23 JFL Created this script.				      #
+#                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+#-----------------------------------------------------------------------------#
+
 # Script to check the Windows activation status
 Function ActivationStatus($code) {
   switch($code) {

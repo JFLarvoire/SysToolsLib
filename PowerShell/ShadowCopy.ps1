@@ -42,6 +42,8 @@
 #    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
 #    2016-06-20 JFL Increase that to a 4th week, to get a more regular scale. #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 #Requires -Version 2
 

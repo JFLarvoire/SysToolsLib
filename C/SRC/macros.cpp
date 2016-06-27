@@ -14,6 +14,8 @@
 *                   Fixed the command-line argument parsing.		      *
 *    2014-04-22 JFL Added processor types _M_X64, _M_ARM, _M_ARM64.	      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
 
 #ifdef _MSC_VER

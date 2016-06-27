@@ -20,6 +20,8 @@
 *    2014-12-04 JFL Corrected several warnings. Version 1.3.2.		      *
 *    2016-01-08 JFL Fixed all warnings in Linux. Version 1.3.3. 	      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.3.3"
@@ -335,7 +337,7 @@ Default input_file = stdin\n\
 #ifndef __unix__
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-François Larvoire"
+"Author: Jean-FranÃ§ois Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

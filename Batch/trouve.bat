@@ -30,6 +30,8 @@
 :#                  Added option -v.                                          #
 :#   2013-04-05 JFL Added support for the gnuwin32 and mingw ports.           #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion

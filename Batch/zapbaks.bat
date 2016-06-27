@@ -1,21 +1,23 @@
 @echo off
-:******************************************************************************
-:*                                                                            *
-:*  Filename:	    zapbaks.bat						      *
-:*                                                                            *
-:*  Description:    Delete all *.bak and *~ and #*# backup files.	      *
-:*                                                                            *
-:*  Notes:          Uses GNU find.                                            *
-:*                                                                            *
-:*  History:                                                                  *
-:*   2010-03-24 JFL Added options -i, -q, -R, and -X.			      *
-:*   2011-01-04 JFL Fixed bug with parenthesis passed to xfind.bat.           *
-:*   2013-05-16 JFL Added option -v.                                          *
-:*                  Fixed compatibility with the ezWinPorts of Unix find.     *
-:*   2014-04-22 JFL Also delete files like #*#.                               *
-:*                  Fixed the -q option.                                      *
-:*                                                                            *
-:******************************************************************************
+:#****************************************************************************#
+:#                                                                            #
+:#  Filename:	    zapbaks.bat						      #
+:#                                                                            #
+:#  Description:    Delete all *.bak and *~ and #*# backup files.	      #
+:#                                                                            #
+:#  Notes:          Uses GNU find.                                            #
+:#                                                                            #
+:#  History:                                                                  #
+:#   2010-03-24 JFL Added options -i, -q, -R, and -X.			      #
+:#   2011-01-04 JFL Fixed bug with parenthesis passed to xfind.bat.           #
+:#   2013-05-16 JFL Added option -v.                                          #
+:#                  Fixed compatibility with the ezWinPorts of Unix find.     #
+:#   2014-04-22 JFL Also delete files like #*#.                               #
+:#                  Fixed the -q option.                                      #
+:#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
+:#****************************************************************************#
 
 setlocal enableextensions enabledelayedexpansion
 set "VERSION=2014-04-22"

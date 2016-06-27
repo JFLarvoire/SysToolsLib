@@ -19,6 +19,8 @@
 *                   Renamed some options, and added code page opts -A, -O, -U.*
 *		    Version 1.1.					      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.1"
@@ -287,7 +289,7 @@ Switches:\n\
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-François Larvoire"
+"Author: Jean-FranÃ§ois Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

@@ -16,6 +16,8 @@
 #                   Tested from Windows XP to Windows 8. (Win8 misaligned)    #
 #    2016-04-17 JFL Added option -x to force the X indent.                    #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 set err [catch {

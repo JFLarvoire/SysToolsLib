@@ -36,6 +36,8 @@
 *		    Version 3.0.1.					      *
 *    2016-01-08 JFL Fixed all warnings in Linux. Version 3.0.2.		      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.0.2"

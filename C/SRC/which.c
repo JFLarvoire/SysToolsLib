@@ -65,6 +65,8 @@
 *    2014-12-04 JFL Rebuilt with MsvcLibX support for WIN32 paths > 260 chars.*
 *		    Version 1.7.1.					      *
 *		    							      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.7.1"
@@ -403,7 +405,7 @@ Notes:\n\
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-François Larvoire"
+"Author: Jean-FranÃ§ois Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

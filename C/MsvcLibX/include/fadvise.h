@@ -2,9 +2,10 @@
 *                                                                             *
 *   Filename:	    fadvise.h						      *
 *                                                                             *
-*   Description:    Give hints to the kernel about future uses of a file.     *
+*   Description:    WIN32 makeshift version of Coreutils' fadvise.h.          *
 *                                                                             *
-*   Notes:	    Define constants, and replace functions by void macros.   *
+*   Notes:	    Gives hints to the kernel about future uses of a file.    *
+*                   Define constants, and replace functions by void macros.   *
 *									      *
 *   History:								      *
 *    2012-10-17 JFL Created this file.                                        *

@@ -14,6 +14,8 @@
 :#  History                                                                   #
 :#   2014-12-02 JFL Created this script, reusing my Library.bat routines.     #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion

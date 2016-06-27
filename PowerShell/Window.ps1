@@ -29,6 +29,8 @@
 #                   Added a 100ms delay before screen captures, to give time  #
 #                   to the system to redraw all fields that are reactivated.  #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 #Requires -version 2
 

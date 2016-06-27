@@ -20,6 +20,8 @@
 *		    Version 1.3.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -218,7 +220,7 @@ Options:\n\
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-François Larvoire"
+"Author: Jean-FranÃ§ois Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

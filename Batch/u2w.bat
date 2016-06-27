@@ -1,20 +1,22 @@
 @echo off
-:******************************************************************************
-:*									      *
-:*  File name	    u2w.bat						      *
-:*									      *
-:*  Description	    Unix to Windows text converter		              *
-:*									      *
-:*  History								      *
-:*   2004-10-18 JFL Use .%1. instead of "%1" to detect empty arguments.	      *
-:*		    Allows to support long file names within quotes.          *
-:*   2006-04-03 JFL Allow not passing any argument, for full piping support.  *
-:*   2009-09-21 JFL Preserve the file time stamp, if modifying the same file. *
-:*   2010-10-14 JFL Added the -q option.				      *
-:*   2011-01-10 JFL Preserve the file time stamp using remplace new -t option.*
-:*   2011-01-11 JFL Added the -X option.				      *
-:*									      *
-:******************************************************************************
+:#****************************************************************************#
+:#									      #
+:#  File name	    u2w.bat						      #
+:#									      #
+:#  Description	    Unix to Windows text converter		              #
+:#									      #
+:#  History								      #
+:#   2004-10-18 JFL Use .%1. instead of "%1" to detect empty arguments.	      #
+:#		    Allows to support long file names within quotes.          #
+:#   2006-04-03 JFL Allow not passing any argument, for full piping support.  #
+:#   2009-09-21 JFL Preserve the file time stamp, if modifying the same file. #
+:#   2010-10-14 JFL Added the -q option.				      #
+:#   2011-01-10 JFL Preserve the file time stamp using remplace new -t option.#
+:#   2011-01-11 JFL Added the -X option.				      #
+:#									      #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
+:#****************************************************************************#
 
 setlocal
 goto main

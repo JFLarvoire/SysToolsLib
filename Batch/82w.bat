@@ -14,6 +14,8 @@
 :#   2008-12-10 JFL The non-standard \xC3\x20 is now managed in conv.exe.     #
 :#   2012-03-01 JFL Cleanup up obsolete features.			      #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal

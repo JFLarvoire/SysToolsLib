@@ -39,6 +39,8 @@
 #    2015-09-11 JFL Fixed bug in Format-ListSorted.                           #
 #    2015-10-14 JFL Define PS v3's $PSCommandPath and $PSScriptRoot in PS v2. #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 #Requires -Version 2
 

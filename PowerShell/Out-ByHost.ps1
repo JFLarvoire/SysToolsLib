@@ -10,6 +10,8 @@
 #    2013-10-14 JFL Created this script.                                      #
 #    2013-12-16 JFL Added the ability to run remote scripts using it.         #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 <#

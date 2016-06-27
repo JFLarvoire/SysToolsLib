@@ -16,6 +16,8 @@
 #    2011-03-16 JFL Added routines to automatically download missing packages.#
 #    2013-05-28 JFL Make sure progress dots are displayed in real time.       #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults

@@ -31,6 +31,8 @@
 *    2016-01-08 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.2.2.  					      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "2.2.2"

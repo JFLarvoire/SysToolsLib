@@ -51,6 +51,8 @@
 :#   2015-02-24 JFL Fixed the -i option for VPN interfaces without a MAC@.    #
 :#                  Updated -i to display all interfaces by default.          #
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion

@@ -15,6 +15,8 @@
 #                   Renamed a few functions for consistency with other langs. #
 #    2013-12-16 JFL One minor tweak in test routine fact().		      #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables

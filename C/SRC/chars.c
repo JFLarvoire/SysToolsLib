@@ -12,6 +12,8 @@
 *    2015-01-08 JFL Fix output for Linux, including when encoding is UTF-8.   *
 *		    Version 1.1.					      *
 *		    							      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.1"

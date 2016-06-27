@@ -120,6 +120,8 @@
 *    2016-05-10 JFL Added option -F/--force to overwrite read-only files.     *
 *		    Version 3.5.    					      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.5"

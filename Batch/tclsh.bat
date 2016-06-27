@@ -26,6 +26,8 @@
 :#   2014-06-23 JFL Make sure the local path includes the Tcl's bin directory.#
 :#                  Bug fix: Avoid adding trailing spaces to variable PATHEXT.#
 :#                                                                            #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 :init_batch

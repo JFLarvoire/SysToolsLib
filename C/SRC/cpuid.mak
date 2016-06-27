@@ -10,6 +10,8 @@
 #    2012-10-18 JFL jf.larvoire@hp.com created this file.                     #
 #    2016-04-17 JFL Avoid building the DOS version if missing required libs.  #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 !IF "$(T)"=="DOS" && ("$(HAS_BIOSLIB)"!="1" || "$(HAS_LODOSLIB)"!="1" || "$(HAS_PMODE)"!="1")

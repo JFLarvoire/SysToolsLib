@@ -12,6 +12,8 @@
 #    2013-08-01 JFL Created this script, to allow undoing what                #
 #                   "Disable-IPv6Components.ps1" did.                         #
 #                                                                             #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 <#
