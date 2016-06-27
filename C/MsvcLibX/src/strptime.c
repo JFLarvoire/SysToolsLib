@@ -1,7 +1,19 @@
+/*****************************************************************************\
+*                                                                             *
+*   Filename	    strptime.c						      *
+*									      *
+*   Description:    WIN32 port of standard C library's strptime()	      *
+*                                                                             *
+*   Notes:	    							      *
+*		    							      *
+*   History:								      *
+*    2014-02-17 JFL Created this module.				      *
+*                                                                             *
+\*****************************************************************************/
+
 #include <ctype.h>
 #include <string.h>
 #include <time.h>
- 
  
 /*
  * We do not implement alternate representations. However, we always

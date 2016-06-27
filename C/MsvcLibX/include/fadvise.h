@@ -1,5 +1,17 @@
-/* Give hints to the kernel about future uses of a file */
-/* msvclibx: Define constants, and replace functions by void macros */
+/*****************************************************************************\
+*                                                                             *
+*   Filename:	    fadvise.h						      *
+*                                                                             *
+*   Description:    Give hints to the kernel about future uses of a file.     *
+*                                                                             *
+*   Notes:	    Define constants, and replace functions by void macros.   *
+*									      *
+*   History:								      *
+*    2012-10-17 JFL Created this file.                                        *
+*									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*****************************************************************************/
 
 enum fadvice_t { 
   FADVISE_NORMAL,

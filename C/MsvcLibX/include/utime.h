@@ -1,5 +1,19 @@
-/* The Unix standard now standardizes utime.h location in the include directory itself.
-   Microsoft put it in the include/sys subdirectory */
+/*****************************************************************************\
+*                                                                             *
+*   Filename:	    utime.h						      *
+*                                                                             *
+*   Description:    DOS/WIN32 adaptation of standard C library's utime.h.     *
+*                                                                             *
+*   Notes:	    The Unix standard now standardizes utime.h location in    *
+*		    the include directory itself.			      *
+*                   Microsoft put it in the include/sys subdirectory.         *
+*                                                                             *
+*   History:								      *
+*    2014-12-13 JFL Created this file.					      *
+*									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*****************************************************************************/
 
 #ifndef _MSVXLIBX_UTIME_H
 #define _MSVXLIBX_UTIME_H

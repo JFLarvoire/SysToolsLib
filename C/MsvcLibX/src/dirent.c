@@ -28,8 +28,10 @@
 *		    Ansi versions to macros.				      *
 *    2014-03-24 JFL Renamed "statx.h" as the standard <sys/stat.h>.	      *
 *    2015-12-14 JFL Bug fix: WIN32 readdirW always read the root on "D:".     *
-*		    Bug fix: DOS opendir failed on root dirs, like "D:\".							      *
+*		    Bug fix: DOS opendir failed on root dirs, like "D:\".     *
 *		    							      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ security warnings */

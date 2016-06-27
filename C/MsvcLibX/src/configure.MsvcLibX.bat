@@ -1,4 +1,20 @@
-:# Special make actions for rebuilding the MsvcLibX library
+@echo off
+:#*****************************************************************************
+:#                                                                            *
+:#  Filename:	    configure.MsvcLibX.bat				      *
+:#                                                                            *
+:#  Description:    Special make actions for rebuilding the MsvcLibX library  *
+:#                                                                            *
+:#  Notes:	                                                              *
+:#                                                                            *
+:#  History:                                                                  *
+:#   2015-11-06 JFL Created this script.				      *
+:#                                                                            *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
+
+:#*****************************************************************************
 
 :# Get the full pathname of the MsvcLibX library base directory
 for /f "delims=" %%d in ('"pushd .. & cd & popd"') do SET MSVCLIBX=%%d

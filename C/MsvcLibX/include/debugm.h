@@ -39,6 +39,8 @@
 *		    new macro RETURN() to return nothing.		      *
 *		    Idem for RETURN_COMMENT() as RETURN_CONST_COMMENT().      *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #ifndef	_DEBUGM_H

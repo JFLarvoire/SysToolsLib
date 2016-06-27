@@ -17,6 +17,9 @@
 :#   2014-03-27 JFL Changed option -f to use nmake option /A.                 *
 :#		    Added option -r for completeness.                         *
 :#			                                                      *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
+
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion

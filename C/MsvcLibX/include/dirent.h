@@ -24,6 +24,8 @@
 *    2015-12-07 JFL Added the conditional definition of symlink constants, so *
 *		    that our code builds even in XP and older Windows SDKs.   *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #ifndef	_DIRENT_H

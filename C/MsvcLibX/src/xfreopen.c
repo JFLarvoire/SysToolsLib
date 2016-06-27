@@ -1,5 +1,16 @@
-/* The GNU CoreUtils library extends the freopen function */
-/* msvclibx: Use the standard freopen, or _setmode */
+/*****************************************************************************\
+*                                                                             *
+*   Filename	    xfreopen.c						      *
+*									      *
+*   Description:    WIN32 port of GNU CoreUtils library's xfreopen()	      *
+*                                                                             *
+*   Notes:	    The GNU CoreUtils library extends the freopen function.   *
+*		    msvclibx: Use the standard freopen, or _setmode.	      *
+*		    							      *
+*   History:								      *
+*    2014-03-03 JFL Created this module.				      *
+*                                                                             *
+\*****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ security warnings */
 

@@ -20,6 +20,8 @@
 *    2014-06-03 JFL Moved struct timespec definition from sys/stat.h.         *
 *		    Added macros TIMEVAL_TO_TIMESPEC & TIMESPEC_TO_TIMEVAL.   *
 *		    							      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #include <time.h> /* for time_t definition */

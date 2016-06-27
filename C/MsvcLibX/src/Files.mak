@@ -27,6 +27,10 @@
 #    2014-06-24 JFL Added fstat64.obj and fstat64i32.obj.                     #
 #    2014-07-01 JFL Added mb2wpath.obj.			                      #
 #                   							      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+
 ###############################################################################
 
 # List of object files to build and include in the MsvcLibX library

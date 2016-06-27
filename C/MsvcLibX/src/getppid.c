@@ -17,6 +17,8 @@
 *   History:								      *
 *    2013-03-27 JFL Created this module.				      *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #include <unistd.h>

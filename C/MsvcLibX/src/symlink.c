@@ -18,6 +18,8 @@
 *                   in all apps, even when targeting XP or older systems that *
 *                   do not support symlinks.                                  *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ security warnings */

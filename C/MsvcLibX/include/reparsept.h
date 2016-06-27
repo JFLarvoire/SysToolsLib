@@ -9,6 +9,8 @@
 *   History:								      *
 *    2014-02-28 JFL Created this file.                                        *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 /* Reparse point iocontrol data buffer */

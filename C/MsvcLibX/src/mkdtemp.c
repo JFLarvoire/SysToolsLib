@@ -1,3 +1,18 @@
+/*****************************************************************************\
+*                                                                             *
+*   Filename	    mkdtemp.c						      *
+*									      *
+*   Description:    WIN32 port of standard C library's mkdtemp()	      *
+*                                                                             *
+*   Notes:	    							      *
+*		    							      *
+*   History:								      *
+*    2014-02-13 JFL Created this module.				      *
+*                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*****************************************************************************/
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>

@@ -112,6 +112,10 @@
 #    2016-04-01 JFL Do not change the PROGRAM value, once it has been set.    #
 #		    Added an inference rule for compiling resident C modules. #
 #		    							      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.

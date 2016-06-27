@@ -95,6 +95,10 @@
 #    2016-01-07 JFL Correctly process predefined CFLAGS.                      #
 #    2016-04-13 JFL Forward library detections to the C compiler.	      #
 #									      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.

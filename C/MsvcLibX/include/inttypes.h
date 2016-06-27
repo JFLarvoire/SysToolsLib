@@ -10,6 +10,8 @@
 *    2014-02-07 JFL Added definitions for PRIdMAX and PRIiMAX.                *
 *    2016-01-07 JFL Restructured and improved support for MS-DOS.             *
 *                                                                             *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #ifndef _MSC_VER

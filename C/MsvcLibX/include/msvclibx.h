@@ -11,6 +11,8 @@
 *    2014-05-30 JFL Added macros to work around the lack of a #include_next.  *
 *    2015-11-15 JFL Added macro UCRT_INCLUDE_FILE for Visual Studio 2015.     *
 *									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 /* Generate a library search record to load MsvcLibX.lib */

@@ -1,5 +1,17 @@
-/* Standard boolean definitions */
-/* msvclibx: Set standard values. May need to be adapted for C++? */
+/*****************************************************************************\
+*                                                                             *
+*   Filename:	    stdbool.h						      *
+*                                                                             *
+*   Description:    Standard boolean definitions			      *
+*                                                                             *
+*   Notes:	    Set standard values. May need to be adapted for C++?      *
+*                                                                             *
+*   History:								      *
+*    2012-10-17 JFL Created this file.					      *
+*									      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*****************************************************************************/
 
 #ifndef _STDBOOL_H
 #define _STDBOOL_H
