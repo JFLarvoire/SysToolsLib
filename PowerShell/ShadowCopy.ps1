@@ -4,7 +4,13 @@
 #                                                                             #
 #   Description     Manage volume shadow copies                               #
 #                                                                             #
-#   Notes           References:						      #
+#   Notes           The legacy application for managing volume shadow copies  #
+#		    is vssadmin.exe.                                          #
+#                   ShadowCopy.ps1 allows manipulating shadow copies in a     #
+#		    more object oriented way. It is compatible with all       #
+#		    PowerShell object selection and iteration commands.       #
+#                                                                             #
+#                   References:						      #
 #		    https://en.wikipedia.org/wiki/Shadow_Copy                 #
 #                                                                             #
 #                   Best Practices for Shadow Copies of Shared Folders        #
@@ -34,6 +40,7 @@
 #                   Fixed $NextTrim calculation.                              #
 #    2016-05-11 JFL Fixed the number of trimesters calculation.               #
 #    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
+#    2016-06-20 JFL Increase that to a 4th week, to get a more regular scale. #
 #                                                                             #
 ###############################################################################
 #Requires -Version 2
@@ -209,7 +216,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-05-26"
+$scriptVersion = "2016-06-20"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -1490,7 +1497,7 @@ Function Set-ShadowCopyFate() {
   # Assumes that there's a gap in the week-end, where no shadow copy is created.
   # So align these 2-day periods based on the last shadow copy each week.
   # Ex: (M13h T01h T13h W01h W13h T01h T13h F01h F13h S01h) -> (T01h T01h S01h)
-  $nWeeks = 3
+  $nWeeks = 4
   $nWeeksAgo = $today.AddDays(-7 * $nWeeks)
   for ($week=1; $week -le $nWeeks; $week++) { # These days are in weeks #1 to #N. Those in week #0 are already all preserved.
     # Repeat for each of these N weeks, starting from the end of each week
