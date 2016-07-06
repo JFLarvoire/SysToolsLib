@@ -102,13 +102,16 @@
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.4.6.  					      *
 *    2016-06-21 JFL Added regular expression ranges, like [a-z].              *
+*		    Version 2.5.  					      *
+*    2016-07-04 JFL Fixed an error in MSDOS help.			      *
+*		    Version 2.5.1.  					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.5"
-#define PROGRAM_DATE    "2016-06-21"
+#define PROGRAM_VERSION "2.5.1"
+#define PROGRAM_DATE    "2016-07-04"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -783,6 +786,8 @@ switches:\r\n\
   -v      Verbose mode.\r\n\
 \r\n\
 Examples:\r\n"
+);
+    fprintf(f,
 #if defined _MSDOS || defined _WIN32
 "  remplace \\n \\r\\n <unixfile >dosfile\r\n\
   remplace -t \\n \\r\\n unixfile -same\r\n\
