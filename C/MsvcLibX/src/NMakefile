@@ -14,11 +14,10 @@
 #    2014-12-03 JFL Fixed the zip target creation.                            #
 #    2015-11-06 JFL Added support for a Win95 version.                        #
 #    2016-01-11 JFL Added a rule to create the common ..\lib directory.       #
+#    2016-07-05 JFL Fixed a typo preventing the build of DOS S Debug version. #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
-
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
-
 ###############################################################################
 
 !IF DEFINED(OUTDIR)
@@ -117,7 +116,7 @@ $(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib: ..\lib NUL
 $(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib: ..\lib NUL
     echo>con Building MS-DOS small debug version
     set OBJECTS=$(OBJECTS)
-    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS%:+=+$(OD)DOS\DEBUG\OBJ\S\" "MEM=S" dirs $@
+    $(MAKE) /$(MAKEFLAGS) /f DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\S\%" "MEM=S" dirs $@
     if exist $@ copy $@ ..\lib\MsvcLibXdsd.lib
 
 $(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib: ..\lib NUL
