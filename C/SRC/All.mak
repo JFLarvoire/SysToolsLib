@@ -113,6 +113,7 @@
 #		    Renamed as All.mak to reflect new generic capabilities.   #
 #    2015-12-15 JFL Added dynamic checking of prerequisites set in Files.mak. #
 #    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              #
+#    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -464,10 +465,10 @@ LoDosLib_library:
     if not exist %LODOSLIB%\lodos.h echo>con Error: The LoDosLib library is not configured correctly & exit /b 1
     if not exist %LODOSLIB%\lodos.lib echo>con Error: The LoDosLib library must be built first & exit /b 1
 
-MultiOS_library:
-    if not defined MULTIOS echo>con Error: The MultiOS library is not configured & exit /b 1
-    if not exist %MULTIOS%\oprintf.h echo>con Error: The MultiOS library is not configured correctly & exit /b 1
-    if not exist %MULTIOS%\lib\*.lib echo>con Error: The MultiOS library must be built first & exit /b 1
+SysLib_library:
+    if not defined SYSLIB echo>con Error: The SysLib library is not configured & exit /b 1
+    if not exist %SYSLIB%\oprintf.h echo>con Error: The SysLib library is not configured correctly & exit /b 1
+    if not exist %SYSLIB%\lib\*.lib echo>con Error: The SysLib library must be built first & exit /b 1
 
 MsvcLibX_library:
     if not defined MSVCLIBX echo>con Error: The MsvcLibX library is not configured & exit /b 1

@@ -39,7 +39,7 @@
 :#                  Will also add include paths and library paths if these    *
 :#                  variables are declared using a %USE_SDK% macro:           *
 :#                  MSVCLIBX	        JFL's Microsoft C library extensions  *
-:#                  MULTIOS 	        JFL's Multi OS library                *
+:#                  SYSLIB 	        JFL's System library                  *
 :#                  98DDK               Windows 98 DDK                        *
 :#                  BOOST               Boost C++ library   www.boost.org     *
 :#                  PTHREADS            www.sourceware.org/pthreads-win32     *
@@ -120,13 +120,14 @@
 :#   2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              *
 :#   2016-04-13 JFL Display libraries found in the output summary.            *
 :#                  Generate a list of HAS_<lib> flags for the C compiler.    *
+:#   2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 :#                                                                            *
-:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
+:#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-04-13"
+set "VERSION=2016-04-22"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1362,8 +1363,8 @@ set "SDK.LODOSLIB.FILE=dosdrv.h"
 set "SDK.PMODE.NAME=Protected Mode library"
 set "SDK.PMODE.FILE=pmode.h"
 
-set "SDK.MULTIOS.NAME=Multi OS library"
-set "SDK.MULTIOS.FILE=oprintf.h"
+set "SDK.SYSLIB.NAME=System Library"
+set "SDK.SYSLIB.FILE=oprintf.h"
 
 set "SDK.MSVCLIBX.NAME=MSVC Library eXtensions library"
 set "SDK.MSVCLIBX.FILE=include\msvclibx.h"
@@ -1429,9 +1430,9 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
 for %%v in (VC16) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     :# Do not configure BIOSLIB, LODOSLIB, PMODE variables at this stage, as they'll be needed for BIOS builds only
-    if "%%k"=="MULTIOS" ( :# MultiOS library
-      SET "%%v.INCPATH=!%%v.INCPATH!;%MULTIOS%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%MULTIOS%\$(B)"
+    if "%%k"=="SYSLIB" ( :# System library
+      SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
@@ -1467,9 +1468,9 @@ for %%v in (VC16) do if defined %%v (
 :# Update x86 include and library paths for well-known libraries
 for %%v in (VC95 VC32) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
-    if "%%k"=="MULTIOS" ( :# MultiOS library
-      SET "%%v.INCPATH=!%%v.INCPATH!;%MULTIOS%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%MULTIOS%\$(B)"
+    if "%%k"=="SYSLIB" ( :# System library
+      SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
@@ -1498,9 +1499,9 @@ for %%v in (VC95 VC32) do if defined %%v (
 :# Update other processors include and library paths for well-known libraries
 for %%v in (VCIA64 VC64 VCARM VCARM64) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
-    if "%%k"=="MULTIOS" ( :# MultiOS library
-      SET "%%v.INCPATH=!%%v.INCPATH!;%MULTIOS%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%MULTIOS%\$(B)"
+    if "%%k"=="SYSLIB" ( :# System library
+      SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files

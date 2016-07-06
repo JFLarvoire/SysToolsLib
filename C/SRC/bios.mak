@@ -26,7 +26,7 @@
 #		    The PMode library allows building BIOS & DOS programs     #
 #		    that switch between the x86 real, v86, and protected mode.#
 #		    							      #
-#		    The MultiOS library defines a set of utility routines     #
+#		    The SysLib library defines a set of utility routines      #
 #		    usable in all environments.				      #
 #		    							      #
 #		    Targets:						      #
@@ -100,6 +100,7 @@
 #		    Added an inference rule for compiling resident C modules. #
 #    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              #
 #    2016-04-14 JFL Forward HAS_<lib> flags to the C compiler.		      #
+#    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -238,10 +239,13 @@ INCPATH=$(INCPATH);$(PMODE)
 LIBPATH=$(LIBPATH);$(PMODE)
 LIBS=$(LIBS) + pmode.lib
 !ENDIF
-!IF DEFINED(MULTIOS)
-INCPATH=$(INCPATH);$(MULTIOS)
-LIBPATH=$(LIBPATH);$(MULTIOS)\$(B)
-LIBS=$(LIBS) + multios.lib
+!IF DEFINED(SYSLIB)
+INCPATH=$(INCPATH);$(SYSLIB)
+LIBPATH=$(LIBPATH);$(SYSLIB)\$(B)
+LIBS=$(LIBS) + syslib.lib
+!ENDIF
+!IF DEFINED(GNUEFI)
+INCPATH=$(INCPATH);$(GNUEFI)\INC
 !ENDIF
 
 PATH=$(DOS_PATH)
