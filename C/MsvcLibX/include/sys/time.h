@@ -19,6 +19,7 @@
 *    2014-05-30 JFL Added the workaround for the conflict with <winsock.h>.   *
 *    2014-06-03 JFL Moved struct timespec definition from sys/stat.h.         *
 *		    Added macros TIMEVAL_TO_TIMESPEC & TIMESPEC_TO_TIMEVAL.   *
+*    2016-07-06 JFL Avoid error if winsocks2.h has been previously included.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -49,11 +50,13 @@
 #ifndef _STRUCT_TIMEVAL
 #define _STRUCT_TIMEVAL       1
 
+#ifndef _WINSOCK2API_	/* Prevent compilation errors if winsocks2.h has been previously included */
 /* A time value with microsecond precision */
 struct timeval {
   time_t tv_sec;	/* Seconds */
   int tv_usec;		/* Signed count of microseconds */
 };
+#endif /* _WINSOCK2API */
 
 #endif /* !defined(_STRUCT_TIMEVAL) */
 
