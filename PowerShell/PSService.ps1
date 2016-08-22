@@ -67,6 +67,7 @@
 #                   Added a sample -Control option using the new pipe.        #
 #    2016-06-08 JFL Rewrote the pipe handler using PSThreads instead of Jobs. #
 #    2016-06-09 JFL Finalized the PSThread management routines error handling.#
+#    2016-08-22 JFL Fixed log and install dir creations - Thanks Nischl.      #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -169,7 +170,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-06-09"
+$scriptVersion = "2016-08-22"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -259,7 +260,7 @@ Function Log () {
     [String]$string
   )
   if (!(Test-Path $logDir)) {
-    New-Item -ItemType directory -Name $logDir
+    New-Item -ItemType directory -Path $logDir | Out-Null
   }
   if ($String.length) {
     $string = "$(Now) $pid $userName $string"
@@ -842,7 +843,7 @@ if ($Setup) {                   # Install the service
     # And continue with the installation.
   }
   if (!(Test-Path $installDir)) {
-    New-Item -ItemType directory -Name $installDir | Out-Null
+    New-Item -ItemType directory -Path $installDir | Out-Null
   }
   # Copy the service script into the installation directory
   if ($ScriptFullName -ne $scriptCopy) {
