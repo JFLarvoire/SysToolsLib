@@ -17,6 +17,7 @@
 *    2015-12-14 JFL Added a workaround allowing to link support for symlinks  *
 *                   in all apps, even when targeting XP or older systems that *
 *                   do not support symlinks.                                  *
+*    2016-08-25 JFL Fixed two warnings.                                       *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -269,19 +270,21 @@ int junctionM(const char *targetName, const char *junctionName, UINT cp) {
 typedef BOOLEAN (WINAPI *LPCREATESYMBOLICLINK)(LPCWSTR lpSymlinkName, LPCWSTR lpTargetName, DWORD dwFlags);
 
 /* Default routine to use if Windows does not have CreateSymbolicLinkW */
+#pragma warning(disable:4100) /* 'dwFlags' : unreferenced formal parameter */
 BOOLEAN WINAPI DefaultCreateSymbolicLinkW(LPCWSTR lpSymlinkName, LPCWSTR lpTargetName, DWORD dwFlags) {
   DWORD dwAttr = GetFileAttributesW(lpTargetName);
   if (dwAttr != INVALID_FILE_ATTRIBUTES) { /* If the target exists */
     if (dwAttr & FILE_ATTRIBUTE_DIRECTORY) { /* And if the target is a directory */
       /* Try creating a junction as a workaround */
       int iRet = junctionW(lpTargetName, lpSymlinkName);	/* 0=Success, -1=Failure */
-      return (BOOL)(iRet + 1);					/* 1=Success,  0=Failure */
+      return (BOOLEAN)(iRet + 1);				/* 1=Success,  0=Failure */
     }
   }
   /* Else fail, as symlinks to files aren't supported by this Windows version */
   SetLastError(ERROR_NOT_SUPPORTED);
   return FALSE;
 }
+#pragma warning(default:4105)
 
 /* Initialization routine. Tries using Windows' CreateSymbolicLinkW if present, else uses our default above */
 BOOLEAN WINAPI InitCreateSymbolicLink(LPCWSTR lpSymlinkName, LPCWSTR lpTargetName, DWORD dwFlags) {
