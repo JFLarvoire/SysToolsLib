@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-09-05
+### Changed
+- Added support for C source files encoded as UTF-8 with BOM.  
+  This removes a serious weakness in the previous design, where many C/SRC files contained UTF-8 characters, but no BOM.  
+  Several Windows tools like Notepad incorrectly identified the encoding, and sometimes corrupted the UTF-8 characters.  
+  The change was not trivial, because MS C compilers do react incorrectly when they encounter a UTF-8 BOM:  
+   - MSVC 1.5 for DOS fails with an invalid character error.
+   - Visual C++ for Win32 switches to a 16-bits character mode that we do _not_ want to use.
+- Reencoded many sources as fully UTF-8 with BOM:  
+  backnum.c, dirc.c, dirsize.c, driver.c, dump.c, lessive.c, redo.c, remplace.c, truename.c, update.c, which.c, whichinc.c
+- Significantly improved conv.c. It's options now on par with that of remplace.c.
+- Fixed several bugs in make.bat and configure.bat.
+
 ## [unreleased] 2016-06-27
 ### Changed
 - PowerShell/ShadowCopy.ps1
@@ -92,7 +105,7 @@ Publicly released on github.com
 ## [Unreleased] - 2015-12-16
 ### Changed
 - Scripts: Minor improvements.
-- C Tools: Major rewrite of the configure.bat/make.bat scripts, and associated make files.
+- C Tools: Major rewrite of the configure.bat/make.bat scripts, and associated make files.   
 	   C tools can now target other Microsoft OS/processor targets, like WIN95, IA64 or ARM.
 
 ## [1.3] - 2015-09-24
