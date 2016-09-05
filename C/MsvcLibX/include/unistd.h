@@ -16,6 +16,7 @@
 *		    and MultiByte versions, and changed the Unicode and Ansi  *
 *		    versions to macros.					      *
 *    2014-06-30 JFL Moved PATH_MAX definition to limits.h.		      *
+*    2016-08-25 JFL Implemented ResolveLinksA().			      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -151,7 +152,7 @@ DWORD GetReparseTagW(const WCHAR *path);				    /* MsvcLibX Get a Repase Point t
 DWORD GetReparseTagM(const char *path, UINT cp);			    /* MsvcLibX Get a Repase Point tag - MultiByte char version */
 #define GetReparseTagA(path) GetReparseTagM(path, CP_ACP)		    /* MsvcLibX Get a Repase Point tag - ANSI version */
 #define GetReparseTagU(path) GetReparseTagM(path, CP_UTF8)		    /* MsvcLibX Get a Repase Point tag - ANSI version */
-/* int ResolveLinksA(const char *path, char *buf, size_t bufsize);	/* Resolve pathnames with symlinks, symlinkds, and junctions */
+int ResolveLinksA(const char *path, char *buf, size_t bufsize);	/* Resolve pathnames with symlinks, symlinkds, and junctions */
 int ResolveLinksU(const char *path, char *buf, size_t bufsize);	/* Resolve pathnames with symlinks, symlinkds, and junctions */
 #ifndef ELOOP
 /*
