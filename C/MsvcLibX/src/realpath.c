@@ -16,6 +16,7 @@
 *    2014-02-20 JFL Implemented realpath() for both DOS and Windows.	      *
 *    2014-03-06 JFL Check for buffer overflows, and return ENAMETOOLONG.      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
+*    2016-08-25 JFL Added routine ResolveLinksA().			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -515,6 +516,40 @@ char *realpathU(const char *path, char *outbuf) {
   }
   DEBUG_LEAVE(("return 0x%p; // \"%s\"\n", pOutbuf, pOutbuf));
   return pOutbuf;
+}
+
+/* ANSI version of the same, built upon the UTF-8 version */
+int ResolveLinksA(const char *path, char *buf, size_t bufsize) {
+  char pathU[UTF8_PATH_MAX];
+  char pathU2[UTF8_PATH_MAX];
+  WCHAR wszPath[PATH_MAX];
+  int n;
+  int iErr;
+
+  /* Convert the pathname to a unicode string */
+  n = MultiByteToWideChar(CP_ACP, 0, path, (int)strlen(path) + 1, wszPath, PATH_MAX);
+  /* Convert it back to UTF-8 characters */
+  if (n) n = WideCharToMultiByte(CP_UTF8, 0, wszPath, n, pathU, UTF8_PATH_MAX, NULL, NULL);
+  /* Check (unlikely) conversion errors */
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    RETURN_INT_COMMENT(-1, ("errno=%d - %s\n", errno, strerror(errno)));
+  }
+
+  /* Resolve the links */
+  iErr = ResolveLinksU(pathU, pathU2, UTF8_PATH_MAX);
+
+  /* Convert the result back to ANSI */
+  if (!iErr) {
+    n = MultiByteToWideChar(CP_UTF8, 0, pathU2, (int)strlen(pathU2) + 1, wszPath, PATH_MAX);
+    if (n) n = WideCharToMultiByte(CP_ACP, 0, wszPath, n, buf, (int)bufsize, NULL, NULL);
+    if (!n) {
+      errno = Win32ErrorToErrno();
+      RETURN_INT_COMMENT(-1, ("errno=%d - %s\n", errno, strerror(errno)));
+    }
+  }
+
+  return iErr;
 }
 
 #endif /* defined(_WIN32) */
