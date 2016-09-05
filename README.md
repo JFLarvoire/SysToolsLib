@@ -1,4 +1,4 @@
-# System Tools Library
+﻿# System Tools Library
 
 ## Project Description
 
@@ -11,7 +11,7 @@ Some of these tools have unique capabilities, that I hope Windows and Linux powe
 Major highlights:
 
 - Directory management tools, to search, compare, weight, update, recurse, etc.  
-  They all support Unicode names, paths > 260 characters, junctions, file & directory symlinks.
+  They all support Unicode names in any code page, paths > 260 characters, junctions, file & directory symlinks.
 - Windows clipboard content filtering tools. They bring the power of the command line to all GUI apps!
 - System management tools. Manage the hardware, BIOS, hard disks, drivers, etc.
 
@@ -31,6 +31,7 @@ Major highlights:
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
   with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM. More details in the MsvcLibX documentation.
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.
+  It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.
   This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.txt).
 
 Programming languages:
@@ -40,7 +41,7 @@ Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Li
 
 Jean-François Larvoire
 jf.larvoire@hpe.com
-2016-04-17
+2016-09-05
 
 
 ## Installation
