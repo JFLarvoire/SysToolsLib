@@ -153,6 +153,8 @@
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Rewrote :extensions.get and :extensions.show.             #
 :#                  Fixed a bug in the %FUNCTION% macro.                      #
+:#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
+:#                  Added registry access routines.			      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -436,6 +438,10 @@ goto :eof
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
 :#                                                                            #
+:#                  %FUNCTION0%	    Weak functions with no local variables.   #
+:#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
+:#                  %RETURN#%       Idem, with comments after the return      #
+:#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
 :#                  %DEBUG%         Debug mode. 0=Off; 1=On. Use functions    #
@@ -494,6 +500,7 @@ goto :eof
 :#                  delayed expansion enabled. This fixes issues with CR & LF.#
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
+:#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -538,13 +545,15 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
   set "DEBUG.SETARGS=" %\n%
   for %%v in (%!%DEBUG.RETVARS%!%) do ( %\n%
     set "DEBUG.VALUE=%'!%%%v%'!%" %# We must remove problematic characters in that value #% %\n%
-    set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Remove percent #% %\n%
-    for %%e in (sp tab cr lf quot) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Remove named character entities #% %\n%
-      set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+    if defined DEBUG.VALUE ( %# Else the following lines will generate phantom characters #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Encode percent #% %\n%
+      for %%e in (sp tab cr lf quot) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Encode named character entities #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+      ) %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
+      call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
     ) %\n%
-    set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Remove carets #% %\n%
-    call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Remove exclamation points #% %\n%
-    set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Remove exclamation points #% %\n%
     set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%" %\n%
   ) %\n%
   if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
@@ -661,7 +670,7 @@ set "RETURN0=call :Debug.Return0 & exit /b"
 :# Macro for displaying comments on the return log line
 set RETURN#=set "RETURN#ERR=%'!%ERRORLEVEL%'!%" %&% %MACRO% ( %\n%
   set RETVAL=%!%MACRO.ARGS:~1%!%%\n%
-  call :Debug.Return %!%RETURN#ERR%!% %\n%
+  call :Debug.Return0 %!%RETURN#ERR%!% %\n%
   %ON_MACRO_EXIT% set "INDENT=%'!%INDENT%'!%" %/ON_MACRO_EXIT% %&% set "RETURN#ERR=" %&% exit /b %\n%
 ) %/MACRO%
 set "EXEC.ARGS= %EXEC.ARGS%"
@@ -2774,6 +2783,181 @@ set "%RETVAR%=%ADDRESS%"
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        GetKeys						      #
+:#                                                                            #
+:#  Description     Get sub-keys of a Registry key                            #
+:#                                                                            #
+:#  Arguments       [-c]	  Case sensitive. Default: Insensitive        #
+:#                  [-f PATTERN]  Pattern to search for. Default: *           #
+:#                  KEY           Parent key name                             #
+:#                  [OUTVAR]      Output list name. Default: KEYS             #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# List registry sub-keys. Args: [-c] [-f PATTERN] KEY [OUTVAR]
+:GetKeys
+%FUNCTION% enableextensions enabledelayedexpansion
+set "PATTERN=*"
+set "OPTS=/k"
+set "KEY="
+set "OUTVAR="
+:get_keys_args
+if "%~1"=="" goto got_keys_args
+if "%~1"=="-c" shift & set "OPTS=%OPTS% /c" & goto get_keys_args
+if "%~1"=="-f" shift & set "PATTERN=%~1" & shift & goto get_keys_args
+if not defined KEY set "KEY=%~1" & shift & goto get_keys_args
+if not defined OUTVAR set "OUTVAR=%~1" & shift & goto get_keys_args
+:got_keys_args
+if not defined OUTVAR set "OUTVAR=KEYS"
+set "%OUTVAR%="
+%ECHOVARS.D% KEY OUTVAR
+%UPVAR% %OUTVAR%
+set "BEFORE="
+if "%FULLPATH%"=="1" set "BEFORE=%KEY%\"
+:# Use reg.exe to get the key information
+set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
+%ECHO.D% %CMD%
+:# For each line in CMD output...
+set "SEPARATOR="
+%FOREACHLINE% %%l in ('%CMD%') do (
+  set "LINE=%%l"
+  set "HEAD=!LINE:~0,2!"
+  if "!HEAD!"=="HK" (
+    set "NAME=%%~nxl"
+    if "!NAME!"=="(Default)" set "NAME="
+    set "NAME=!BEFORE!!NAME!"
+    call :CondQuote NAME
+    set %OUTVAR%=!%OUTVAR%!!SEPARATOR!!NAME!
+    set "SEPARATOR= "
+  )
+)
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+
+:# List registry values. Args: [-/] [-c] [-f PATTERN] KEY [OUTVAR]
+:GetValues
+%FUNCTION% enableextensions enabledelayedexpansion
+set "DETAILS=0"
+set "PATTERN=*"
+set "OPTS=/v"
+set "KEY="
+set "OUTVAR="
+:get_values_args
+if "%~1"=="" goto got_values_args
+if "%~1"=="-/" shift & set "DETAILS=1" & goto get_values_args
+if "%~1"=="-c" shift & set "OPTS=%OPTS% /c" & goto get_values_args
+if "%~1"=="-f" shift & set "PATTERN=%~1" & shift & goto get_values_args
+if not defined KEY set "KEY=%~1" & shift & goto get_values_args
+if not defined OUTVAR set "OUTVAR=%~1" & shift & goto get_values_args
+:got_values_args
+if not defined OUTVAR set "OUTVAR=VALUES"
+set "%OUTVAR%="
+%ECHOVARS.D% KEY OUTVAR
+%UPVAR% %OUTVAR%
+set BEFORE=
+if "%FULLPATH%"=="1" set "BEFORE=%KEY%\"
+:# Use reg.exe to get the key information
+set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
+%ECHO.D% %CMD%
+:# For each line in CMD output... 
+set "SEPARATOR="
+%FOREACHLINE% %%i in ('%CMD%') do (
+  set "LINE=%%i"
+  %ECHOVARS.D% LINE
+  :# Values are indented by 4 spaces.
+  set "HEAD=!LINE:~0,4!"
+  set "LINE=!LINE:~4!"
+  :# But extra lines of multi-lined values are indented by >20 spaces.
+  set "HEAD2=!LINE:~0,4!"
+  if "!HEAD!"=="    " if not "!HEAD2!"=="    " (
+    :# Some versions of reg.exe use 4 spaces as field separator; others use a TAB. 
+    :# Change the 4-spaces around the REG_XX type word to a TAB.
+    set "TOKENS=!LINE:    =	!"
+    %ECHOVARS.D% TOKENS
+    :# Extract the value name as the first item before the first TAB.
+    :# Names can contain spaces, but assume they don't contain TABs.
+    for /f "tokens=1,2* delims=	" %%j in ("!TOKENS!") do (
+      set "NAME=%%j"
+      if "!NAME!"=="(Default)" set "NAME="
+      set "TYPE=%%k"
+      set "VALUE=%%l"
+      %ECHOVARS.D% NAME TYPE VALUE
+      if %DETAILS%==0 (
+	set "NAME=!BEFORE!!NAME!"
+	call :CondQuote NAME
+	set %OUTVAR%=!%OUTVAR%!!SEPARATOR!!NAME!
+	set "SEPARATOR= "
+      ) else (
+      	echo !NAME!/!TYPE!/!VALUE!
+      )
+    )
+  )
+)
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+
+:# Get a registry value content. Args: KEY NAME [VALUEVAR [TYPEVAR]]
+:GetValue
+%FUNCTION% enableextensions enabledelayedexpansion
+set "KEY="
+set "NAME="
+set "VALUEVAR="
+set "TYPEVAR="
+:get_value_args
+if "%~1"=="" goto got_value_args
+if not defined KEY set "KEY=%~1" & shift & goto get_value_args
+if not defined NAME set "NAME=%~1" & shift & goto get_value_args
+if not defined VALUEVAR set "VALUEVAR=%~1" & shift & goto get_value_args
+if not defined TYPEVAR set "TYPEVAR=%~1" & shift & goto get_value_args
+:got_value_args
+if not defined VALUEVAR set "VALUEVAR=VALUE"
+set "%VALUEVAR%="
+:# Returning the type is optional. Do not define a default for TYPEVAR.
+%ECHOVARS.D% KEY NAME VALUEVAR TYPEVAR
+%UPVAR% %VALUEVAR%
+if defined TYPEVAR %UPVAR% %TYPEVAR%
+if "%NAME%"=="" (
+  set CMD=reg query "%KEY%" /ve
+) else (
+  set CMD=reg query "%KEY%" /v "%NAME%"
+)
+%ECHO.D% %CMD%
+:# For each line in CMD output...
+%FOREACHLINE% %%i in ('%CMD%') do (
+  set "LINE=%%i"
+  %ECHOVARS.D% LINE
+  :# Values are indented by 4 spaces.
+  set "HEAD=!LINE:~0,4!"
+  set "LINE=!LINE:~4!"
+  :# But extra lines of multi-lined values are indented by >20 spaces.
+  set "HEAD2=!LINE:~0,4!"
+  if "!HEAD!"=="    " if not "!HEAD2!"=="    " (
+    :# Some versions of reg.exe use 4 spaces as field separator; others use a TAB. 
+    :# Change the 4-spaces around the REG_XX type word to a TAB.
+    set "TOKENS=!LINE:    =	!"
+    %ECHOVARS.D% TOKENS
+    :# Extract the value name as the first item before the first TAB.
+    :# Names can contain spaces, but assume they don't contain TABs.
+    for /f "tokens=1,2* delims=	" %%j in ("!TOKENS!") do (
+      set "NAME=%%j"
+      set "TYPE=%%k"
+      set "VALUE=%%l"
+      %ECHOVARS.D% NAME TYPE VALUE
+    )
+  )
+)
+set %VALUEVAR%=!VALUE!
+if defined TYPEVAR set %TYPEVAR%=%TYPE%
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        Test*                                                     #
 :#                                                                            #
 :#  Description     Misc test routines for testing the debug library itself   #
@@ -3057,6 +3241,31 @@ goto :eof
 :DDX
 setlocal DisableDelayedExpansion
 goto :eof
+
+:#----------------------------------------------------------------------------#
+:# Test %FUNCTION0% / %RETURN0%
+
+:Func0
+%FUNCTION0%
+%ECHO% This is function 0
+call :Func1
+%RETURN0%
+
+:Func1
+%FUNCTION0%
+%ECHO% This is function 1
+%RETURN0%
+
+:Func#0
+%FUNCTION0%
+%ECHO% This is function #0
+call :Func#1
+%RETURN#% Returning from function #0
+
+:Func#1
+%FUNCTION0%
+%ECHO% This is function #1
+%RETURN0% Returning from function #1
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
