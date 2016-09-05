@@ -4,10 +4,17 @@
 *									      *
 *   Contents	    Convert characters using Windows' conversion functions    *
 *									      *
-*   Notes:	    Build with command: "make win32\conv.exe"		      *
-*									      *
+*   Notes:	    This file must be encoded with the Windows 1252 code page,*
+*		    due to the presence of non-ASCII characters in the help.  *
+*		    This allows building it without needing itself for	      *
+*		    converting UTF-8 back to CP 1252.			      *
+*		    							      *
+*		    The default character sets (w for input, . for output)    *		    							      *
+*		    are chosen to allow typing a Windows file on the console, *
+*		    by running: type WINDOWS_FILE | conv		      *
+*		    or simply: conv <WINDOWS_FILE			      *
+*		    							      *
 *   History								      *
-*									      *
 *    2006-09-10 JFL Created this program.                                     *
 *    2007-11-07 JFL Fixed a bug if more than 4096 bytes were read. V 1.01.    *
 *    2007-11-10 JFL Added the ability to decode Mime encoded words. V 1.1.    *
@@ -18,26 +25,33 @@
 *    2009-06-22 JFL Added decoding of base64 headers. V1.22.                  *
 *    2012-10-18 JFL Added my name in the help. Version 1.2.3.                 *
 *    2014-12-04 JFL Added my name and email in the help.                      *
-*									      *
+*    2016-08-23 JFL Added support for UTF-16.				      *
+*		    Added . to specify the current code page.		      *
+*    2016-08-24 JFL Added support for BOM addition/removal.                   *
+*		    Added support for any code page number.		      *
+*    2016-08-25 JFL Added the ability to convert a file in place.             *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.2.3"
-#define PROGRAM_DATE    "2012-10-18"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2016-08-25"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <utime.h>
 
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32		// Automatically defined when targeting a Win32 applic.
 
 #define TARGET_WIN32
-
-#define WINVER 0x0500
 
 // if defined, the following flags inhibit the definitions in windows.h
 #define NOGDICAPMASKS	  // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
@@ -81,6 +95,8 @@
 #define NOMCX		  // Modem Configuration Extensions
 #include <windows.h>
 
+#include <io.h>
+
 #if defined(__MINGW64__)
 #define OS_NAME "MinGW64"
 #elif defined(__MINGW32__)
@@ -90,9 +106,6 @@
 #else
 #define OS_NAME "Win32"
 #endif
-
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE 32				/* Should be 255, but OK & conserves memory */
 
 // Define WIN32 replacements for common Standard C library functions.
 #define malloc(size) (void *)LocalAlloc(LMEM_FIXED, size)
@@ -122,7 +135,7 @@ int fail(char *pszFormat, ...)
     exit(1); \
     }
 #define FAIL(msg) fail("%s", msg);
-#define WIN32FAIL(msg) fail("[%d]: %s", GetLastError(), msg)
+#define WIN32FAIL(msg) fail("Error %d: %s", GetLastError(), msg)
 
 #endif
 
@@ -132,9 +145,9 @@ int fail(char *pszFormat, ...)
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 #define streqi(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
-#define message(msg) fprintf(stderr, "%s", msg)
-#define verbose(args) if (iVerbose) fprintf args
-#define debug(args) if (iVerbose > 1) fprintf args
+#define message(msg) do {fprintf(stderr, "%s", msg); fflush(stderr);} while (0)
+#define verbose(args) if (iVerbose) do {fprintf args; fflush(stderr);} while (0)
+#define debug(args) if (iVerbose > 1) do {fprintf args; fflush(stderr);} while (0)
 
 #define BLOCKSIZE (4096)	// Number of characters that will be allocated in each loop.
 
@@ -147,7 +160,8 @@ int iVerbose = 0;
 int IsSwitch(char *pszArg);
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszOutput, size_t nOutputSize,
-			char *pszInputSet, char *pszOutputSet);
+			char *pszInputSet, char *pszOutputSet,
+			int iBOM);
 size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc);
 
 /*---------------------------------------------------------------------------*\
@@ -165,8 +179,7 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc);
 |		    processed.						      |
 |									      |
 |   History:								      |
-|									      |
-|    2006/09/10 JFL Created this routine.				      |
+|    2006-09-10 JFL Created this routine.				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -178,160 +191,283 @@ Convert characters from various character sets.\n\
 \n\
 Usage:\n\
 \n\
-    conv [options] [ics [ocs]] <inputfile >outputfile\n\
+    conv [options] [ics [ocs [inputfile [outputfile]]]]\n\
 \n\
 Options:\n\
   -?        This help\n\
+  -b        Add Byte Order Mark if needed\n\
+  -B        Remove Byte Order Mark if present\n\
+  -bak      When used with -same, create a backup file of the input file\n\
+  -same     Convert a file in place\n\
   -v        Display verbose information\n\
 \n\
-ics = Input Character Set\n\
-ocs = Output Character Set\n\
-  w         Windows (default for input)\n\
-  d         MS-DOS (default for output)\n\
-  m         Mactintosh\n\
-  7         UTF-7\n\
-  8         UTF-8\n\
-  u         UTF-8\n\
-  s         Symbol\n\
+ics = Input Character Set, or code page number. Default = Windows code page\n\
+ocs = Output Character Set, or code page number. Default = cmd.exe code page\n\
+inputfile = Input file pathname. Default or - = Read from stdin\n\
+outputfile = Output file pathname. Default or - = Write to stdout\n\
+\n\
+Character Sets:\n\
+  .         The current cmd.exe Code Page (default)\n\
+  w         Windows   (CP 1252 for the en-us version of Windows)\n\
+  d         DOS       (CP 437 for the en-us version of Windows)\n\
+  m         Macintosh (CP 10000)\n\
+  7         UTF-7     (CP 65000)\n\
+  8         UTF-8     (CP 65001)\n\
+  16        UTF-16    (CP 1200)\n\
+  s         Symbol    (CP 42)\n\
+\n\
+If one of the symbolic character sets above is specified, also decodes the\n\
+mime encoded strings in the input stream. Not done if using numeric CP numbers.\n\
 \n"
-"Author: Jean-Francois Larvoire"
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+"Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+/* Note: The ç above is OK, as we'll use our own conversion routine to display this help. */
 ;
 
-int __cdecl main(int argc, char *argv[])
-    {
-    size_t  nRead = 0;		// Number of characters read in one loop.
-    size_t  nTotal = 0;		// Total number of characters read.
-    size_t  nBufSize = BLOCKSIZE;
-    char   *pszBuffer = (char*)malloc(BLOCKSIZE);
-    int     i;
-    char   *pszInType = NULL;   // Input character set Windows/Mac/DOS/UTF-8
-    char   *pszOutType = NULL;  // Output character set Windows/Mac/DOS/UTF-8
+void usage(int iRet) {
+  size_t  nBufSize = strlen(szUsage) + 1;
+  char *pszBuffer = (char*)malloc(2*nBufSize);
 
-    if (!pszBuffer) FAIL("Not enough memory.");
+  // Convert the help message to the console code page.
+  ConvertCharacterSet(szUsage, nBufSize, pszBuffer, 2*nBufSize, "w", ".", 0);
+  message(pszBuffer);             /* Display help */
+  exit(iRet);
+}
 
-    /* Process arguments */
+int __cdecl main(int argc, char *argv[]) {
+  size_t  nRead = 0;		// Number of characters read in one loop.
+  size_t  nTotal = 0;		// Total number of characters read.
+  size_t  nBufSize = BLOCKSIZE;
+  char   *pszBuffer = (char*)malloc(BLOCKSIZE);
+  int     i;
+  char   *pszInType = NULL;	// Input character set Windows/Mac/DOS/UTF-8
+  char   *pszOutType = NULL;	// Output character set Windows/Mac/DOS/UTF-8
+  int     iBOM = 0;		// 1=Output BOM; -1=Output NO BOM; 0=unchanged
+  FILE *sf = NULL;		// Source file handle
+  FILE *df = NULL;		// Destination file handle
+  char *pszInName = NULL;	// Source file name
+  char *pszOutName = NULL;	// Destination file name
+  char szBakName[FILENAME_MAX+1];
+  int iSameFile = FALSE;	// Modify the input file in place.
+  int iBackup = FALSE;		// With iSameFile, back it up first.
+  int iKeepTime = TRUE;		// If true, set the out file time = in file time.
+  struct stat sInTime = {0};
 
-    for (i=1; i<argc; i++)
-        {
-	if (IsSwitch(argv[i]))		    /* It's a switch */
-            {
-            strlwr(argv[i]);
-	    if (streq(argv[i]+1, "?"))		/* -?: Help */
-                {
-		// Convert the help message to the MS-DOS code page.
-		nBufSize = strlen(szUsage) + 1;
-		pszBuffer = (char*)malloc(2*nBufSize);
-		ConvertCharacterSet(szUsage, nBufSize, pszBuffer, 2*nBufSize, "w", "d");
-                message(pszBuffer);             /* Display help */
-                return 0;
-		}
-	    if (streq(argv[i]+1, "d"))		/* -d: Debug */
-                {
-                iVerbose += 2;
-                continue;
-		}
-	    if (streq(argv[i]+1, "v"))		/* -v: Verbose */
-                {
-                iVerbose += 1;
-                continue;
-		}
-	    // Unsupported switches are ignored
-            continue;
-            }
-	if (!pszInType)
-	    {
-	    pszInType = argv[i];
-	    continue;
-	    }
-	if (!pszOutType)
-	    {
-	    pszOutType = argv[i];
-	    continue;
-	    }
-        // Unexpected arguments are ignored
-	}
+  if (!pszBuffer) FAIL("Not enough memory.");
 
-    if (!pszInType)
-	{
-	pszInType = "Windows";
-	}
-    if (!pszOutType)
-	{
-	pszOutType = "DOS";
-	}
-    verbose((stderr,"Input character set: %s\n", pszInType));
-    verbose((stderr,"Output character set: %s\n", pszOutType));
+    /* Force stdin and stdout to untranslated */
+#if defined(_MSDOS) || defined(_WIN32)
+    _setmode( _fileno( stdin ), _O_BINARY );
+    _setmode( _fileno( stdout ), _O_BINARY );
+    _setmode( _fileno( stderr ), _O_BINARY );
+#endif
 
-    /* Go for it */
+  /* Process arguments */
 
-    while (!feof(stdin))
-	{
-	nRead = fread(pszBuffer+nTotal, 1, BLOCKSIZE, stdin);
-	verbose((stderr,"Read %d input bytes.\n", (int)nRead));
-	nTotal += nRead;
-	if ((nTotal+BLOCKSIZE)>nBufSize)
-	    {
-	    if (!(pszBuffer = (char*)realloc(pszBuffer, nTotal + BLOCKSIZE)))
-		{
-		FAIL("Not enough memory.");
-		}
-	    nBufSize += BLOCKSIZE;
-	    }
-	Sleep(0);	    // Release end of time-slice
-	}
-    if (nTotal > 0)
-	{
-	size_t nOutBufSize = 2*nTotal;	// Size may double for ansi -> utf8 cases
-	size_t nOutputSize;		// Size actually used in the out. buf.
-	char *pszOutBuf = (char*)malloc(nOutBufSize);
-	char *pszCharEnc = NULL;	// Character encoding
-
-	if (!pszOutBuf) FAIL("Not enough memory.");
-
-	// Optionally decode mime encoded words left in
-	switch (tolower(*pszInType))
-	{
-	case 'd':
-	  pszCharEnc = "ms-dos";
-	  break;
-	case '7':
-	  pszCharEnc = "utf-7";
-	  break;
-	case '8':
-	case 'u':
-	  pszCharEnc = "utf-8";
-	  { // Workaround for the unknown \xC3\x20 sequence: Use \xC3\xA0 instead.
-	    size_t n;
-	    for (n=0; n<(nTotal-1); n++)
-		if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) pszBuffer[++n] = '\xA0';
-	  }
-	  break;
-	case 's':
-	  pszCharEnc = "symbol";
-	  break;
-	case 'w':
-	  pszCharEnc = "windows-1252";
-	  break;
-	default:
-	  break;
-	}
-	if (pszCharEnc)
-	{
-	  nTotal = MimeWordDecode(pszBuffer, nTotal, pszCharEnc);
-	}
-
-	// Use Windows' character set conversion routine.
-	nOutputSize = ConvertCharacterSet(pszBuffer, nTotal, pszOutBuf, nOutBufSize,
-						pszInType, pszOutType);
-
-	if (!fwrite(pszOutBuf, nOutputSize, 1, stdout))
-	    WIN32FAIL("Cannot write to the output file.");
-	}
-
-    verbose((stderr,"Exiting\n"));
-    return 0;
+  for (i=1; i<argc; i++) {
+    if (IsSwitch(argv[i])) {	    /* It's a switch */
+      char *pszOpt = argv[i]+1;
+      if (streq(pszOpt, "?")) {		/* -?: Help */
+      	usage(0);
+      }
+      if (streq(pszOpt, "b")) {		/* -b: Output a BOM */
+	iBOM = 1;
+	continue;
+      }
+      if (streq(pszOpt, "B")) {		/* -B: Output no BOM */
+	iBOM = -1;
+	continue;
+      }
+      if (streq(pszOpt, "bak")) {	/* -bak: Backup the input file */
+	iBackup = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "d")) {		/* -d: Debug */
+	iVerbose += 2;
+	continue;
+      }
+      if (streq(pszOpt, "same")) {	/* -same: Output to the input file */
+	iSameFile = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "v")) {		/* -v: Verbose */
+	iVerbose += 1;
+	continue;
+      }
+      // Unsupported switches are ignored
+      continue;
     }
+    if (!pszInType) {
+	pszInType = argv[i];
+	continue;
+    }
+    if (!pszOutType) {
+	pszOutType = argv[i];
+	continue;
+    }
+    if (!pszInName) {
+	pszInName = argv[i];
+	continue;
+    }
+    if (!pszOutName) {
+	pszOutName = argv[i];
+	continue;
+    }
+    // Unexpected arguments are ignored
+  }
+
+  if (!pszInType) {
+      pszInType = "w";
+  }
+  if (!pszOutType) {
+      pszOutType = ".";
+  }
+  verbose((stderr, "Input character set: %s\n", pszInType));
+  verbose((stderr, "Output character set: %s\n", pszOutType));
+
+  if ((!pszInName) || streq(pszInName, "-")) {
+    sf = stdin;
+    iSameFile = FALSE;	// Meaningless in this case. Avoid issues below.
+  } else {
+    sf = fopen(pszInName, "rb");
+    if (!sf) fail("Can't open file %s\r\n", pszInName);
+    stat(pszInName, &sInTime);
+  }
+  if ((!pszOutName) || streq(pszOutName, "-")) {
+    if (!iSameFile) df = stdout;
+  } else {
+    iSameFile = streqi(pszOutName, pszInName); // Ignore the -iSameFile argument
+  }
+  if (iSameFile) {
+    char *pc;
+
+    fclose(sf);		/* We've got to move it or back it up first */
+
+    if (iBackup) {	/* Create an *.bak file in the same directory */
+      strcpy(szBakName, pszInName);
+      pc = strrchr(szBakName, '.');
+      if (pc && !strchr(pc, '\\'))	/* If extension in name & not in path */
+	  strcpy(pc, ".bak"); 		/* Change extension to .bak */
+      else
+	  strcat(szBakName, ".bak");	/* Set extension to .bak */
+      unlink(szBakName); 		/* Remove the .bak if already there */
+      debug((stderr, "Rename \"%s\" \"%s\"\n", pszInName, szBakName));
+      rename(pszInName, szBakName);	/* Rename the source as .bak */
+    } else {		/* Move the source file to the %TEMP% directory */
+      /* TO DO: Manage possible errors in the operations below */
+      strcpy(szBakName, getenv("TEMP"));
+      strcat(szBakName, "\\");
+      pc = strrchr(pszInName, '\\');	/* Find the last path separator */
+      if (pc) pc += 1; else pc = pszInName; /* Locate the file name */
+      if (pc[0] && (pc[1]==':')) pc += 2;   /* Skip the drive letter, if any */
+      strcat(szBakName, pc);
+      unlink(szBakName); 		/* Remove the .bak if already there */
+      debug((stderr, "Move \"%s\" \"%s\"\n", pszInName, szBakName));
+#ifdef _WIN32
+      MoveFile(pszInName, szBakName);
+#else
+      system("move /Y \"pszInName\" \"szBakName\");
+#endif
+    }
+
+    sf = fopen(szBakName, "rb");
+    if (!sf) fail("Can't open file %s\r\n", szBakName);
+    pszOutName = pszInName;
+  }
+  if (!df) {
+    df = fopen(pszOutName, "wb");
+    if (!df) {
+      if (sf != stdout) fclose(sf);
+      fail("Can't open file %s\r\n", pszOutName);
+    }
+  }
+
+  /* Go for it */
+
+  while (!feof(sf)) {
+    nRead = fread(pszBuffer+nTotal, 1, BLOCKSIZE, sf);
+    verbose((stderr, "Read %d input bytes.\n", (int)nRead));
+    nTotal += nRead;
+    if ((nTotal+BLOCKSIZE)>nBufSize) {
+      if (!((pszBuffer = (char*)realloc(pszBuffer, nTotal + BLOCKSIZE)))) {
+	FAIL("Not enough memory.");
+      }
+      nBufSize += BLOCKSIZE;
+    }
+    Sleep(0);	    // Release end of time-slice
+  }
+  if (nTotal > 0) {
+    size_t nOutBufSize = 2*nTotal + 4;	// Size may double for ansi -> utf8 cases
+    size_t nOutputSize;		// Size actually used in the out. buf.
+    char *pszOutBuf = (char*)malloc(nOutBufSize);
+    char *pszCharEnc = NULL;	// Character encoding
+
+    if (!pszOutBuf) FAIL("Not enough memory.");
+
+    // Optionally decode mime encoded words left in
+    switch (tolower(*pszInType)) {
+      case 'd':
+	pszCharEnc = "ms-dos";
+	break;
+      case 'm':
+	pszCharEnc = "macintosh";
+	break;
+      case 's':
+	pszCharEnc = "symbol";
+	break;
+      case 'w':
+	pszCharEnc = "windows-1252";
+	break;
+      default:
+	if (sscanf(pszInType, "%d", &i)) {
+	  switch (i) {
+	    case 7:
+	      pszCharEnc = "utf-7";
+	      break;
+	    case 8:
+	      pszCharEnc = "utf-8";
+	      { // Workaround for the unknown \xC3\x20 sequence: Use \xC3\xA0 instead.
+		size_t n;
+		for (n=0; n<(nTotal-1); n++)
+		    if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) pszBuffer[++n] = '\xA0';
+	      }
+	      break;
+	    case 16:
+	      pszCharEnc = "utf-16";
+	      break;
+	    default:
+	      break;
+	  }
+	}
+	break;
+    }
+    if (pszCharEnc) {
+      nTotal = MimeWordDecode(pszBuffer, nTotal, pszCharEnc);
+    }
+
+    // Use Windows' character set conversion routine.
+    nOutputSize = ConvertCharacterSet(pszBuffer, nTotal, pszOutBuf, nOutBufSize,
+					    pszInType, pszOutType, iBOM);
+
+    if (!fwrite(pszOutBuf, nOutputSize, 1, df)) {
+      WIN32FAIL("Cannot write to the output file.");
+    }
+  }
+
+  if (sf != stdin) fclose(sf);
+  if (df != stdout) fclose(df);
+
+  // if (iSameFile && !iBackup) unlink(szBakName);     /* Don't keep the %TEMP% copy */
+
+  if ((sf != stdin) && (df != stdout) && iKeepTime) {
+    struct utimbuf sOutTime = {0};
+    sOutTime.actime = sInTime.st_atime;
+    sOutTime.modtime = sInTime.st_mtime;
+    utime(pszOutName, &sOutTime);
+  }
+
+  verbose((stderr, "Exiting\n"));
+  return 0;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -346,8 +482,8 @@ int __cdecl main(int argc, char *argv[])
 |   Notes:								      |
 |									      |
 |   History:								      |
-|									      |
-|    1997/03/04 JFL Created this routine				      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -356,8 +492,10 @@ int IsSwitch(char *pszArg)
     switch (*pszArg)
 	{
 	case '-':
+#if defined(_WIN32) || defined(_MSDOS)
 	case '/':
-	    return TRUE;
+#endif
+	    return (pszArg[1] != '\0');
 	default:
 	    return FALSE;
 	}
@@ -440,91 +578,167 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...) {
 |   Notes:								      |
 |                                                                             |
 |   History:								      |
-|    2006/09/10 jfl Created this routine.				      |
+|    2006-09-10 JFL Created this routine.				      |
+|    2016-08-23	JFL Added support for UTF-16.				      |
+|		    Added . to specify the current code page.		      |
+|    2016-08-24 JFL Added support for BOM addition/removal.                   |
+|		    Added support for any code page number.		      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
 #ifdef _WIN32		// Automatically defined when targeting a Win32 applic.
 
+#ifndef CP_UTF16	// Not defined in WinNls.h for Windows SDK 8.1
+#define CP_UTF16 1200	// "Unicode UTF-16, little endian byte order (BMP of ISO 10646); available only to managed applications"
+#endif
+
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszOutput, size_t nOutputSize,
-			char *pszInputSet, char *pszOutputSet)
+			char *pszInputSet, char *pszOutputSet,
+			int iBOM)
     {
     wchar_t *pszWideBuf;             // Intermediate buffer for wide characters.
-    size_t nWideSize = 2*nInputSize; // Size in bytes of that wide buffer.
+    size_t nWideSize = (2*nInputSize) + 4; // Size in bytes of that wide buffer.
     UINT uCPin=0, uCPout=0;
-    int i;
-    debug((stderr,"ConvertCharacterSet(pszIn, %ld, pszOut, %ld, ...)\n", (long)nInputSize, (long)nOutputSize));
+    int nWide, nOut;
 
-    switch (tolower(*pszInputSet))
-	{
-	case 'w':
-	    uCPin = CP_ACP;    // ANSI
+    debug((stderr, "ConvertCharacterSet(pszIn, %ld, pszOut, %ld, %s, %s, %d)\n", \
+           (long)nInputSize, (long)nOutputSize, pszInputSet, pszOutputSet, iBOM));
+
+    switch (tolower(*pszInputSet)) {
+      case '.':
+	uCPin = GetConsoleOutputCP();
+	break;
+      case 'w':
+	uCPin = CP_ACP;		// ANSI
+	break;
+      case 'm':
+	uCPin = CP_MACCP;		// Mac
+	break;
+      case 'd':
+	uCPin = CP_OEMCP;		// DOS
+	break;
+      case 's':
+	uCPin = CP_SYMBOL;	// Symbol
+	break;
+      default:
+	if (!sscanf(pszInputSet, "%u", &uCPin)) {
+	  FAIL("Unknown input character set");
+	}
+	switch (uCPin) {
+	  case 7:
+	    uCPin = CP_UTF7;	// UTF-7
 	    break;
-	case 'm':
-	    uCPin = CP_MACCP;  // Mac
+	  case 8:
+	    uCPin = CP_UTF8;	// UTF-8
 	    break;
-	case 'd':
-	    uCPin = CP_OEMCP;  // DOS
+	  case 16:
+	    uCPin = CP_UTF16;	// UTF-16
 	    break;
-	case '7':
-	    uCPin = CP_UTF7;   // UTF-7
-	    break;
-	case '8':
-	case 'u':
-	    uCPin = CP_UTF8;   // UTF-8
-	    break;
-	case 's':
-	    uCPin = CP_SYMBOL; // Symbol
-	    break;
-	default:
-	    FAIL("Unknown input character set");
+	  default:
 	    break;
 	}
-    switch (tolower(*pszOutputSet))
-	{
-	case 'w':
-	    uCPout = CP_ACP;    // ANSI
+	break;
+    }
+    switch (tolower(*pszOutputSet)) {
+      case '.':
+	uCPout = GetConsoleOutputCP();
+	break;
+      case 'w':
+	uCPout = CP_ACP;	// ANSI
+	break;
+      case 'm':
+	uCPout = CP_MACCP;	// Mac
+	break;
+      case 'd':
+	uCPout = CP_OEMCP;	// DOS
+	break;
+      case 's':
+	uCPout = CP_SYMBOL;	// Symbol
+	break;
+      default:
+	if (!sscanf(pszOutputSet, "%u", &uCPout)) {
+	  FAIL("Unknown output character set");
+	}
+	switch (uCPout) {
+	  case 7:
+	    uCPout = CP_UTF7;	// UTF-7
 	    break;
-	case 'm':
-	    uCPout = CP_MACCP;  // Mac
+	  case 8:
+	    uCPout = CP_UTF8;	// UTF-8
 	    break;
-	case 'd':
-	    uCPout = CP_OEMCP;  // DOS
+	  case 16:
+	    uCPout = CP_UTF16;	// UTF-16
 	    break;
-	case '7':
-	    uCPout = CP_UTF7;   // UTF-7
-	    break;
-	case '8':
-	case 'u':
-	    uCPout = CP_UTF8;   // UTF-8
-	    break;
-	case 's':
-	    uCPout = CP_SYMBOL; // Symbol
-	    break;
-	default:
-	    FAIL("Unknown output character set");
+	  default:
 	    break;
 	}
+	break;
+    }
 
-    verbose((stderr,"uCPin = %d , uCPout = %d\n", (int)uCPin, (int)uCPout));
+    verbose((stderr, "uCPin = %d , uCPout = %d\n", (int)uCPin, (int)uCPout));
+
+    /* Allocate a buffer for an intermediate UTF-16 string */
+    pszWideBuf = (wchar_t *)malloc(nWideSize);
+    pszWideBuf += 1;	// Leave room for adding a BOM if needed
+    nWideSize -= 2;
 
     /* Convert to intermediate wide characters */
-    pszWideBuf = (wchar_t *)malloc(nWideSize);
-    i = MultiByteToWideChar(uCPin, 0, pszInput, (int)nInputSize, pszWideBuf, (int)nWideSize);
-    if (i == 0)
+    if (uCPin != CP_UTF16) {
+      nWide = MultiByteToWideChar(uCPin, 0, pszInput, (int)nInputSize, pszWideBuf, (int)nWideSize);
+      if (nWide == 0)
 	WIN32FAIL("Cannot convert the input!");
-    else if (i == ERROR_NO_UNICODE_TRANSLATION)
+      else if (nWide == ERROR_NO_UNICODE_TRANSLATION)
 	WIN32FAIL("Invalid UTF-8 input!");
-    else verbose((stderr,"Input conversion to Unicode returned %d wide characters.\n", i));
-    
-    /* Convert back to ANSI characters */
-    i = WideCharToMultiByte(uCPout, 0, pszWideBuf, i, pszOutput, (int)nOutputSize, NULL, NULL);
-    if (i == 0)
-	WIN32FAIL("Cannot convert the output!");
-    else verbose((stderr,"Output conversion from Unicode returned %d bytes.\n", i));
+      else verbose((stderr, "Input conversion to Unicode returned %d wide characters.\n", nWide));
+    } else {
+      memcpy((char *)pszWideBuf, pszInput, nInputSize);
+      nWide = nInputSize / 2;
+    }
 
-    return i;
+    /* Add or remove the BOM if requested or needed */
+    switch (uCPout) {
+    case CP_UTF7:
+    case CP_UTF8:
+    case CP_UTF16:
+      break;	// Apply the user request for all Unicode encodings
+    default:	// Any other code page requires removing the BOM, if any
+      iBOM = -1;
+      break;
+    }
+    switch (iBOM) {
+    case -1:
+      if (*pszWideBuf == L'\uFEFF') {	// If there's a BOM, then remove it
+      	pszWideBuf += 1;
+      	nWideSize -= 2;
+      	nWide -= 1;
+      }
+      break;
+    case 1:
+      if (*pszWideBuf != L'\uFEFF') {	// If there's no BOM, then add one
+      	pszWideBuf -= 1;
+      	nWideSize += 2;
+      	*pszWideBuf = L'\uFEFF';
+      	nWide += 1;
+      }
+      break;
+    case 0:				// Leave the BOM (if present) unchanged
+    default:
+      break;
+    }
+
+    /* Convert back to ANSI characters */
+    if (uCPout != CP_UTF16) {
+      nOut = WideCharToMultiByte(uCPout, 0, pszWideBuf, nWide, pszOutput, (int)nOutputSize, NULL, NULL);
+      if (nOut == 0)
+	  WIN32FAIL("Cannot convert the output!");
+      else verbose((stderr, "Output conversion from Unicode returned %d bytes.\n", nOut));
+    } else {
+      nOut = nWide * 2;
+      memcpy(pszOutput, (char *)pszWideBuf, nOut);
+    }
+
+    return nOut;
     }
 
 #endif
@@ -656,7 +870,7 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
   size_t n;
   int i;
 
-  debug((stderr,"MimeWordDecode(0x%p, %lu, \"%s\").\n", pszBuf, (unsigned long)nBufSize, pszCharEnc));
+  debug((stderr, "MimeWordDecode(0x%p, %lu, \"%s\").\n", pszBuf, (unsigned long)nBufSize, pszCharEnc));
 
   if (!pszBuf2 || !pszHeader) FAIL("Not enough memory for Mime word decoding!");
   nHeader = sprintf(pszHeader, "=?%s?", pszCharEnc);
