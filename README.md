@@ -26,12 +26,12 @@ The common code is now in libraries, which can be reused in new programs and scr
 Major highlights:
 
 - A set of powerful script debugging and logging libraries for (in chronologic creation order) Tcl, Batch, Bash, PowerShell.  
-  They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts. 
+  They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts.  
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
   with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM. More details in the MsvcLibX documentation.
-- MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.
-  It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.
+- MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
+  It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.  
   This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.txt).
 
 Programming languages:
@@ -64,7 +64,7 @@ As for scripts, only the Tcl directory contains useful scripts for Linux.
 * Extract files from that archive, and put them in a new work directory.
 * Make sure the scripts in the Bash and Tcl subdirectories are executable, using the chmod +x command.
 * Copy the Tcl scripts into a directory in your PATH. For example in /usr/local/bin.
-* Remove the .tcl extension on all these tcl scripts, so that they can be invoked with just their base name.
+* Remove the .tcl extension on all these tcl scripts (except Library.tcl), so that they can be invoked with just their base name.
 * Go to the C/SRC subdirectory, and run the following commands to rebuild the C programs:
 
         cd $WORKDIR/C/SRC
