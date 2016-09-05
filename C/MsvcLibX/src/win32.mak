@@ -94,6 +94,7 @@
 #    2015-12-07 JFL Added support for a base output directory other than .\   #
 #    2016-01-07 JFL Correctly process predefined CFLAGS.                      #
 #    2016-04-13 JFL Forward library detections to the C compiler.	      #
+#    2016-08-24 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -119,6 +120,8 @@ MAKEDEFS=
 !IF DEFINED(WINVER)	# Windows target version. 4.0=Win95/NT4 5.1=XP 6.0=Vista ...
 MAKEDEFS=$(MAKEDEFS) "WINVER=$(WINVER)"
 !ENDIF
+
+MAKEFILE=win32.mak		# This make file name
 
 # Debug-mode-specific definitions
 !IF DEFINED(_DEBUG) || "$(DEBUG)"=="1"
@@ -232,11 +235,19 @@ CFLAGS=$(CFLAGS) "/D_USING_V110_SDK71_=1" # Workaround for VisualStudio2012/WinS
 SUBSYSTEM=CONSOLE,$(WINVER:.=.0) # Link.exe SUBSYSTEM version format is M.mm, with M the major version, and mm the minor version
 !ENDIF
 
-INCLUDE=$(INCLUDE);$(USER_INCLUDE)
+INCLUDE=$(S);$(INCLUDE);$(USER_INCLUDE)
 LIBS=$(LIBS) $(USER_LIBS)
 
 # Forward library detections by configure.bat to the C compiler
 CFLAGS=$(CFLAGS) $(HAS_SDK_FLAGS)
+
+# Files and scripts used for compilation
+UTF8_BOM_FILE=$(O)\UTF8_BOM	# A file containing the UTF-8 Byte-Order Mark
+REMOVE_UTF8_BOM=$(O)\RemBOM.bat	# Script for conditionally removing the UTF-8 BOM
+CONV_SCRIPT=$(O)\MiniConv.bat	# Script emulating what conv.exe would do for us
+!IF !DEFINED(CONV)
+CONV=$(COMSPEC) /c $(CONV_SCRIPT)
+!ENDIF
 
 # Report start options
 !MESSAGE PROGRAM="$(PROGRAM)" Mode=$(DM).
@@ -368,7 +379,8 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(CC) $(CFLAGS) /c $(TC) $<
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -377,7 +389,8 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(CC) $(CFLAGS) /c $(TC) $<
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -518,7 +531,64 @@ $(L):
     if not exist $(L) $(MSG) Creating directory $(L)
     if not exist $(L) mkdir $(L)
 
-dirs: $(B) $(O) $(L)
+dirs: $(B) $(O) $(L) files
+
+files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT)
+
+$(UTF8_BOM_FILE): $(MAKEFILE)
+    $(MSG) Generating file $@
+    cscript //E:JScript //nologo << $@
+	var args = WScript.Arguments;
+	var fso = new ActiveXObject("Scripting.FileSystemObject");
+	var WriteBinaryFile = function(fileName, data) {
+	  var df = fso.OpenTextFile(fileName, 2, true, 0); // ForWriting, ASCII
+	  df.write(data);
+	  df.Close();
+	}
+	var szBOM = "\xEF\xBB\xBF";
+	WriteBinaryFile(args(0), szBOM);
+	WScript.Quit(0);
+<<NOKEEP
+
+$(REMOVE_UTF8_BOM): $(MAKEFILE)
+    $(MSG) Generating script $@
+    copy <<$@ NUL
+	findstr /B /G:$(UTF8_BOM_FILE) <"%~1" >NUL
+	if errorlevel 1 (
+	  echo No UTF-8 BOM in "%~1". Copying the file.
+	  copy /y "%~1" "%~2"
+	) else ( rem :# Remove the BOM before compiling the source
+	  echo UTF-8 BOM found in "%~1". Converting the file.
+	  :# Must be compatible both with conv.exe and $(CONV_SCRIPT)
+	  $(CONV) 8 8 "%~1" "%~2" -B 
+	)
+<<KEEP
+
+$(CONV_SCRIPT): $(MAKEFILE)	# Poor man's version of conv.exe, limited to what this make file needs
+    $(MSG) Generating script $@
+    copy <<$@ NUL
+	@if (@Language == @Batch) @then /* NOOP for Batch; Begins a comment for JScript.
+	@echo off & cscript //E:JScript //nologo "%~f0" %* & exit /b
+	:# End of the Batch section, and beginning of the JScript section */ @end
+	var args = WScript.Arguments;
+	var fso = new ActiveXObject("Scripting.FileSystemObject");
+	var ReadBinaryFile = function(fileName) {
+	  var sf = fso.OpenTextFile(fileName, 1, false, 0); // ForReading, ASCII
+	  var data = sf.ReadAll();
+	  sf.Close()
+	  return data;
+	}
+	var WriteBinaryFile = function(fileName, data) {
+	  var df = fso.OpenTextFile(fileName, 2, true, 0); // ForWriting, ASCII
+	  df.write(data);
+	  df.Close();
+	}
+	var szBOM = "\xEF\xBB\xBF";
+	text = ReadBinaryFile(args(2));
+	text = text.replace(szBOM, "");
+	WriteBinaryFile(args(3), text);
+	WScript.Quit(0);
+<<KEEP
 
 # Erase all output files
 clean:
