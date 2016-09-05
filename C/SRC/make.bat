@@ -52,13 +52,15 @@
 :#   2015-10-30 JFL Added option -o to select which nmake to use.             *
 :#                  Added option -L to avoid logging the output. This allows  *
 :#                  running make.bat recursively.                             *
+:#   2016-07-12 JFL Store the log file in %OUTDIR% if defined.		      *
+:#   2016-09-02 JFL Fixed the -f option. (Likely broken by 2015-01-09 changes)*
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2015-11-09"
+set "VERSION=2016-09-02"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -799,7 +801,8 @@ set "MAKEDEFS="
 set "MAKEGOALS="
 set "MAKEORIGIN=WIN32"
 
-set "LOGFILE=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal. 
+set "LOGFILE=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal.
+if not "%OUTDIR%"=="" set "LOGFILE=%OUTDIR%\%LOGFILE%"
 
 :next_arg
 %POPARG%
@@ -850,6 +853,7 @@ if /i not .%LOGFILE%.==.NUL. (
 set "LASTGOAL="
 set "MAKEARGS=/x -"
 set "NEEDMAKEFILE="
+if defined MAKEFILE set "NEEDMAKEFILE=1"
 goto :get_ra
 :next_ra
 %POPARG%
@@ -967,9 +971,10 @@ if "%GOAL%"=="" (
 if "%GOAL%"=="" goto SkipRename
 :# Normal goal. Rename %LOGFILE%, and display the build log.
 if not "%GOAL%"=="" set LOGFILE2=%GOAL%.log
+if not "%OUTDIR%"=="" set "LOGFILE2=%OUTDIR%\%LOGFILE2%"
 if not "%LOGFILE2%"=="%LOGFILE%" (
   if exist "%LOGFILE2%" del "%LOGFILE2%"
-  ren "%LOGFILE%" "%LOGFILE2%" >nul
+  move "%LOGFILE%" "%LOGFILE2%" >nul
   set "LOGFILE=%LOGFILE2%"
 )
 :SkipRename
