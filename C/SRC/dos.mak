@@ -112,6 +112,7 @@
 #    2016-04-01 JFL Do not change the PROGRAM value, once it has been set.    #
 #		    Added an inference rule for compiling resident C modules. #
 #    2016-04-14 JFL Forward HAS_<lib> flags to the C compiler.		      #
+#    2016-08-24 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -137,6 +138,8 @@ MAKEDEFS=
 !IF DEFINED(MEM)	# Memory model for 16-bits compilation. T|S|C|D|L|H.
 MAKEDEFS=$(MAKEDEFS) "MEM=$(MEM)"
 !ENDIF
+
+MAKEFILE=dos.mak		# This make file name
 
 # Debug-mode-specific definitions
 !IF DEFINED(_DEBUG) || "$(DEBUG)"=="1"
@@ -241,7 +244,7 @@ RFLAGS=$(DD)
 PATH=$(DOS_PATH)
 CC=$(DOS_CC)
 AS=$(DOS_AS)
-INCLUDE=$(DOS_INCPATH);$(USER_INCLUDE)
+INCLUDE=$(S);$(DOS_INCPATH);$(USER_INCLUDE)
 LK=$(DOS_LK)
 LIBS=$(DOS_LIBS) $(USER_LIBS)
 LIB=$(DOS_LIBPATH)
@@ -254,6 +257,14 @@ STARTEXE=
 
 # Forward library detections by configure.bat to the C compiler
 CFLAGS=$(CFLAGS) $(HAS_SDK_FLAGS)
+
+# Files and scripts used for compilation
+UTF8_BOM_FILE=$(O)\UTF8_BOM	# A file containing the UTF-8 Byte-Order Mark
+REMOVE_UTF8_BOM=$(O)\RemBOM.bat	# Tool for conditionally removing the UTF-8 BOM
+CONV_SCRIPT=$(O)\MiniConv.bat	# Script emulating what conv.exe would do for us
+!IF !DEFINED(CONV)
+CONV=$(COMSPEC) /c $(CONV_SCRIPT)
+!ENDIF
 
 # Report start options
 !MESSAGE PROGRAM="$(PROGRAM)" Mode=$(DM).
@@ -674,7 +685,8 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(CC) $(CFLAGS) /c $(TC) $<
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -683,7 +695,8 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(CC) $(CFLAGS) /c $(TC) $<
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
     $(MSG) ... done.
 
 # Inference rule for C compilation of resident modules
@@ -692,7 +705,8 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(CC) $(CFLAGS) /NTRESID /c $(TC) $<
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(CC) $(CFLAGS) /NTRESID /c $(TC) $(O)\$(<F)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -844,7 +858,72 @@ $(L):
     if not exist $(L) $(MSG) Creating directory $(L)
     if not exist $(L) mkdir $(L)
 
-dirs: $(B) $(O) $(L)
+dirs: $(B) $(O) $(L) files
+
+files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT)
+
+$(UTF8_BOM_FILE): $(MAKEFILE)
+    $(MSG) Generating file $@
+    cscript //E:JScript //nologo << $@
+	var args = WScript.Arguments;
+	var fso = new ActiveXObject("Scripting.FileSystemObject");
+	var WriteBinaryFile = function(fileName, data) {
+	  var df = fso.OpenTextFile(fileName, 2, true, 0); // ForWriting, ASCII
+	  df.write(data);
+	  df.Close();
+	}
+	var szBOM = "\xEF\xBB\xBF";
+	WriteBinaryFile(args(0), szBOM);
+	WScript.Quit(0);
+<<NOKEEP
+
+$(REMOVE_UTF8_BOM): $(MAKEFILE)
+    $(MSG) Generating script $@
+    copy <<$@ NUL
+	findstr /B /G:$(UTF8_BOM_FILE) <"%~1" >NUL
+	if errorlevel 1 (
+	  echo No UTF-8 BOM in "%~1". Copying the file.
+	  copy /y "%~1" "%~2"
+	) else ( rem :# Remove the BOM before compiling the source
+	  echo UTF-8 BOM found in "%~1". Converting the file.
+	  :# Must be compatible both with conv.exe and $(CONV_SCRIPT)
+	  $(CONV) 8 d "%~1" "%~2" -B 
+	)
+<<KEEP
+
+$(CONV_SCRIPT): $(MAKEFILE)	# Poor man's version of conv.exe, limited to what this make file needs
+    $(MSG) Generating script $@
+    copy <<$@ NUL
+	@if (@Language == @Batch) @then /* NOOP for Batch; Begins a comment for JScript.
+	@echo off & cscript //E:JScript //nologo "%~f0" %* & exit /b
+	:# End of the Batch section, and beginning of the JScript section */ @end
+	var args = WScript.Arguments;
+	// Use text streams: https://msdn.microsoft.com/en-us/library/ms675032(v=vs.85).aspx
+	var adTypeText = 2;
+	var adSaveCreateOverWrite = 2;
+	var ReadTextFile = function(fileName, encoding) {
+	  var inStream  = WScript.CreateObject("adodb.stream");
+	  inStream.type = adTypeText;
+	  inStream.charset = encoding;
+	  inStream.open();
+	  inStream.LoadFromFile(fileName);
+	  var text = inStream.ReadText()
+	  inStream.Close();
+	  return text;
+	}
+	var WriteTextFile = function(fileName, encoding, text) {
+	  var outStream  = WScript.CreateObject("adodb.stream");
+	  outStream.type = adTypeText;
+	  outStream.charset = encoding;
+	  outStream.open();
+	  outStream.WriteText(text);
+	  outStream.SaveToFile(fileName, adSaveCreateOverWrite);
+	  outStream.Close();
+	}
+	text = ReadTextFile(args(2), "utf-8");
+	WriteTextFile(args(3), "$(DOS_CS)", text);
+	WScript.Quit(0);
+<<KEEP
 
 # Erase all output files
 clean:
