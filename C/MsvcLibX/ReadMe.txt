@@ -355,17 +355,24 @@ The most common code pages are:
 Important: Changing the code page will only work correctly if cmd.exe is using
 a TrueType font. The default "Raster" font supports code page 437 only.
 
-To enable that UTF-8 support, define one of the following constants in the .c
-source, _before_ including any .h include files:
+To enable that UTF-8 support:
+1) Set the C or C++ source encoding to UTF-8 with BOM. (BOM = Byte-Order Mark)
+Having a BOM is important, as without it some Windows editors will incorrectly
+detect the encoding, and then sometimes corrupt the source.
+2) Define one of the following constants in the .c source, _before_ including
+any .h include files:
 #define _BSD_SOURCE  1	/* Defined by many standard BSD-Unix programs */
 #define _GNU_SOURCE  1	/* Defined by many standard GNU-Unix/Linux programs */
 #define _UTF8_SOURCE 1	/* MsvcLibX-specific */
 
+Note that most modern Linux compilers do expect C sources encoded as UTF-8,
+and will silently ignore the UTF-8 BOM if present.
+
 Internally, MsvcLibX extends Microsoft's convention of having two ANSI and Wide
 versions of each routine, respectively with an 'A' and a 'W' suffix. Ex:
 FindFirstFile() being an alias to either FindFirstFileA() or FindFirstFileW().
-MsvcLibX uses two additional suffixes: 'U' for UTF-8 version, and 'M' for the
-common MultiByte subroutine used by both the 'A' and 'U' versions. Ex:
+MsvcLibX uses two additional suffixes: 'U' for the UTF-8 version, and 'M' for
+the common MultiByte subroutine used by both the 'A' and 'U' versions. Ex:
 readlinkW	Posix routine readlink - Wide char version
 readlinkM	MultiByte char sub-routine, used by the next two routines.
 readlinkA	Posix routine readlink - ANSI version
@@ -376,7 +383,7 @@ converting strings to and from Unicode. In that sense, it's not Posix-compliant.
 
 Gotcha: As of 2014-03-25, most file I/O and enumeration routines have been
 restructured this way, but a few have not yet been:
-scandir() and lstat() only support UTF-8 file names.
+scandir() and lstat() only support UTF-8 file names, not ANSI names.
 
 Gotcha: As of 2014-03-25, there's a potential issue with the C main() routine:
 Supporting UTF-8 file names is not just supporting UTF-8 strings in library
@@ -643,9 +650,15 @@ _______
      And of course there were also issues with MsvcLibX recent improvements,
      like Unicode support and symlink support, which had never been tested,
      and of course did not work, in Windows 95 and XP.
-     Finally one last new feature worth mentioning:
+     Finally one last new feature worth mentioning: (Only partially implemented)
      - All make files now optionally create output files in an %OUTDIR% direct.
        This is intended for testing builds with VMs, with shared sources on the
        host, but the output locally in the VM, avoiding to overwrite the main
        version on the host. IF %OUTDIR% is not defined, the default output 
        still goes below the source directory as before.
+
+2016 Changed the UTF-8 C source support to require a UTF-8 BOM.
+     This is to prevent problems with Windows tools that tend to corrupt files
+     without a UTF-8 BOM, but with other UTF-8 characters.
+     This required changing all C/C++ compilation rules to first remove the
+     UTF-8 BOM, as MS compilers do not react correctly when they find one.
