@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   File name:	    lessive.c				                      *
 *                                                                             *
@@ -337,7 +337,7 @@ Default input_file = stdin\n\
 #ifndef __unix__
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-FranÃ§ois Larvoire"
+"Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *  Filename:	    whichinc.c						      *
 *									      *
@@ -54,7 +54,6 @@ char szNewIncludeList[4*1024] = "INCLUDE="; /* All include paths */
 #define strlwr _strlwr
 
 /* Forward references */
-
 void usage(int iRetCode);
 StringList *WhichInc(char *pszName, int iShift, StringList *psl, void *pRef);
 
@@ -220,7 +219,7 @@ Options:\n\
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-FranÃ§ois Larvoire"
+"Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

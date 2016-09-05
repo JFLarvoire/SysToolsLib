@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *		    							      *
 *   Filename	    remplace.c						      *
 *		    							      *
@@ -105,13 +105,15 @@
 *		    Version 2.5.  					      *
 *    2016-07-04 JFL Fixed an error in MSDOS help.			      *
 *		    Version 2.5.1.  					      *
+*    2016-09-02 JFL Minor change to the "Replacing xxx with yyy" message.     *
+*		    Version 2.5.2.  					      *
 *		    							      *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "2.5.1"
-#define PROGRAM_DATE    "2016-07-04"
+#define PROGRAM_DATE    "2016-09-02"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -529,9 +531,11 @@ is_arg:
 	if (demime && !iQuiet) fprintf(mf, "Replacing Mime %cXX codes.\r\n", demime);
 	if (old[0] && !iQuiet) 
 	    {
-	    fprintf(mf, "Replacing \"%s\" with \"", old);
+	    fprintf(mf, "Replacing \"%s\" (\"", old);
+	    PrintEscapeString(mf, old);
+	    fprintf(mf, "\") with \"%s\" (\"", new);
 	    PrintEscapeString(mf, new);
-	    fprintf(mf, "\".\r\n");
+	    fprintf(mf, "\").\r\n");
 	    }
 	}
 

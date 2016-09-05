@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   File name:	    driver.c						      *
 *									      *
@@ -45,7 +45,7 @@
 *		    Bug fix: Convert2Utf8() could overflow its buffers.	      *
 *		    Version 2.1.					      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -1318,7 +1318,7 @@ BOOL InstallVxd(char *pszServiceName, char *pszFileName)
     if (iVerbose) oemprintf("Installing %s as driver %s\n", szCanonicName, pszServiceName);
 
     // ~~jfl 1998/04/10 Added workaround for Win95/98 bug:
-    // Win95 cannot start a VxD located in a directory with an é in its name,
+    // Win95 cannot start a VxD located in a directory with an Ã© in its name,
     //	using the CreateFile() function. Note: This works using the 16-bits
     //	int 2F interface to VPOWERD.VxD :-).
     // A workaround for the bug is to find the full path for the VxD, and to
@@ -1360,7 +1360,7 @@ BOOL InstallVxd(char *pszServiceName, char *pszFileName)
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    LoadVxd							|
+|   Function:	    LoadVxd						      |
 |									      |
 |   Description:    Load a VxD in memory				      |
 |									      |

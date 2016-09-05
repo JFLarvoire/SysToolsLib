@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename:       backnum.c                                                 *
 *                                                                             *
@@ -481,7 +481,7 @@ Switches:\n\
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
-"Author: Jean-FranÃ§ois Larvoire"
+"Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__

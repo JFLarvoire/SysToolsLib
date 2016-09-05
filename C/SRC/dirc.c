@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *		    							      *
 *   Filename:	    dirc.c						      *
 *		    							      *
@@ -205,7 +205,7 @@
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 3.0.5.  					      *
 *		    							      *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

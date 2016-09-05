@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   Filename:	    redo.c						      *
 *									      *
@@ -36,7 +36,7 @@
 *		    Version 3.0.1.					      *
 *    2016-01-08 JFL Fixed all warnings in Linux. Version 3.0.2.		      *
 *                                                                             *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -728,7 +728,7 @@ void DoPerPath(void)
 	fprintf(stderr, "Redo: Can't execute the command.\n");
         finis(1);
     }
-    if (err) printf("\nRedo: %s returns error nø %d.\n", command2[0], err);
+    if (err) printf("\nRedo: %s returns error # %d.\n", command2[0], err);
 
     for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
 
