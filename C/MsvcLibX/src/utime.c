@@ -11,6 +11,7 @@
 *    2014-02-12 JFL Created this module.				      *
 *    2014-06-04 JFL Fixed minors issues in debugging code.		      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
+*    2016-08-25 JFL Added missing routine utimeA().                	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -173,6 +174,24 @@ int lutimeU(const char *path, const struct utimbuf *times) {
 /* Same as 'utime', but takes an open file descriptor instead of a name. */
 int futime(int fd, const struct utimbuf *times) {
   return hutime((HANDLE)_get_osfhandle(fd), times);
+}
+
+/* Change the file access time to times->actime and its modification time to times->modtime. */
+int utimeA(const char *file, const struct utimbuf *times) {
+  char buf[PATH_MAX];
+  int iErr;
+
+  DEBUG_CODE({
+    char buf[100];
+    Utimbuf2String(buf, sizeof(buf), times);
+    DEBUG_ENTER(("utime(\"%s\", %s);\n", file, buf));
+  });
+
+  iErr = ResolveLinksA(file, buf, sizeof(buf));
+  if (iErr) RETURN_INT_COMMENT(iErr, ("Cannot resolve the link\n"));
+
+  iErr = lutimeA(buf, times);
+  RETURN_INT_COMMENT(iErr, ("errno = %d\n", iErr ? errno : 0));
 }
 
 /* Change the file access time to times->actime and its modification time to times->modtime. */
