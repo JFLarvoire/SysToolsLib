@@ -8,7 +8,8 @@
 #                   https://github.com/JFLarvoire/SysToolsLib/ , in the       #
 #                   PowerShell subdirectory.                                  #
 #                   Please report any problem in the Issues tab in that       #
-#                   GitHub repository.                                        #
+#                   GitHub repository in                                      #
+#                   https://github.com/JFLarvoire/SysToolsLib/issues	      #
 #                                                                             #
 #                   The initial version of this script was described in an    #
 #                   article published in the May 2016 issue of MSDN Magazine. #
@@ -67,7 +68,11 @@
 #                   Added a sample -Control option using the new pipe.        #
 #    2016-06-08 JFL Rewrote the pipe handler using PSThreads instead of Jobs. #
 #    2016-06-09 JFL Finalized the PSThread management routines error handling.#
-#    2016-08-22 JFL Fixed log and install dir creations - Thanks Nischl.      #
+#                   This finally fixes issue #1.                              #
+#    2016-08-22 JFL Fixed issue #3 creating the log and install directories.  #
+#		    Thanks Nischl.					      #
+#    2016-09-06 JFL Fixed issue #4 detecting the System account. Now done in  #
+#		    a language-independent way. Thanks A Gonzalez.	      #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -170,7 +175,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-08-22"
+$scriptVersion = "2016-09-06"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -753,7 +758,7 @@ $source = @"
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $userName = $identity.Name      # Ex: "NT AUTHORITY\SYSTEM" or "Domain\Administrator"
 $authority,$name = $username -split "\\"
-$isSystem = ($userName -eq "NT AUTHORITY\SYSTEM")
+$isSystem = $identity.IsSystem	# Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
 # Log "# `$userName = `"$userName`" ; `$isSystem = $isSystem"
 
 if ($Setup) {Log ""}    # Insert one blank line to separate test sessions logs
