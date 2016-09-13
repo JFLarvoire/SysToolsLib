@@ -26,6 +26,8 @@
 #    2014-06-04 JFL Added clock_gettime.obj and gettimeofday.obj.             #
 #    2014-06-24 JFL Added fstat64.obj and fstat64i32.obj.                     #
 #    2014-07-01 JFL Added mb2wpath.obj.			                      #
+#    2016-09-08 JFL Added basename.obj and dirname.obj.		 	      #
+#    2016-09-12 JFL Added WIN32_OBJECTS, and several WIN32 UTF-8 routines.    #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -35,43 +37,52 @@
 # IMPORTANT NOTE: Every time you add an object file in the list here, also
 #                 store its specific source file dependancies below.
 OBJECTS = \
-    +access.obj        \
-    +chdir.obj         \
-    +clock_gettime.obj \
-    +debugv.obj        \
-    +dirent.obj        \
-    +err2errno.obj     \
-    +filetime.obj      \
-    +fnmatch.obj       \
-    +fopen.obj         \
-    +fstat64i32.obj    \
-    +fstat64.obj       \
-    +getcwd.obj        \
-    +getopt.obj        \
-    +getppid.obj       \
-    +gettimeofday.obj  \
-    +iconv.obj         \
-    +lstat64i32.obj    \
-    +lstat64.obj       \
-    +main.obj          \
-    +mb2wpath.obj      \
-    +mkdir.obj         \
-    +mkdtemp.obj       \
-    +mkstemp.obj       \
-    +readlink.obj      \
-    +realpath.obj      \
-    +spawn.obj         \
-    +strerror.obj      \
-    +strndup.obj       \
-    +strptime.obj      \
-    +symlink.obj       \
-    +uname.obj         \
-    +utime.obj         \
-    +utimes.obj        \
-    +xfreopen.obj      \
-#    +lstat32.obj       \
-#    +lstat32i64.obj    \
+    +access.obj			\
+    +basename.obj		\
+    +chdir.obj			\
+    +clock_gettime.obj		\
+    +debugv.obj			\
+    +dirent.obj			\
+    +dirname.obj		\
+    +err2errno.obj		\
+    +filetime.obj		\
+    +fnmatch.obj		\
+    +fopen.obj			\
+    +fstat64i32.obj		\
+    +fstat64.obj		\
+    +getcwd.obj			\
+    +getopt.obj			\
+    +getppid.obj		\
+    +gettimeofday.obj		\
+    +iconv.obj			\
+    +lstat64i32.obj		\
+    +lstat64.obj		\
+    +main.obj			\
+    +mb2wpath.obj		\
+    +mkdir.obj			\
+    +mkdtemp.obj		\
+    +mkstemp.obj		\
+    +readlink.obj		\
+    +realpath.obj		\
+    +spawn.obj			\
+    +strerror.obj		\
+    +strndup.obj		\
+    +strptime.obj		\
+    +symlink.obj		\
+    +uname.obj			\
+    +utime.obj			\
+    +utimes.obj			\
+    +xfreopen.obj		\
+#    +lstat32.obj		\
+#    +lstat32i64.obj		\
 
+# WIN32 UTF-8 extension routines, used for implementing UTF-8 support for WIN32 libc.  
+WIN32_OBJECTS = \
+    +GetFileAttributes.obj	\
+    +GetFileAttributesEx.obj	\
+    +GetFullPathName.obj	\
+    +GetLongPathName.obj	\
+    +fullpath.obj		\
 
 # GnuLib routines that I mistakenly defined here
 REMOVED_OBJECTS = \
@@ -123,13 +134,19 @@ $(I)\sys\stat.h: $(I)\msvclibx.h $(I)\sys\types.h
 
 # $(I)\stdint.h: 
 
+$(I)\stdio.h: $(I)\msvclibx.h 
+
 # $(I)\stdio--.h: 
+
+$(I)\stdlib.h: $(I)\msvclibx.h 
 
 # $(I)\system.h: 
 
 $(I)\unistd.h: $(I)\msvclibx.h $(I)\dirent.h
 
 # $(I)\utime.h:  
+
+$(I)\windowsU.h: $(I)\msvclibx.h 
 
 $(I)\xfreopen.h: $(I)\msvclibx.h 
 
@@ -142,6 +159,8 @@ $(I)\sys\types.h: $(I)\msvclibx.h
 
 access.c: $(I)\MsvcLibX.h $(I)\debugm.h
 
+basename.c: $(I)\libgen.h
+
 chdir.c: $(I)\debugm.h $(I)\iconv.h $(I)\unistd.h
 
 clock_gettime.c: $(I)\MsvcLibX.h $(I)\time.h $(I)\sys\stat.h
@@ -149,6 +168,8 @@ clock_gettime.c: $(I)\MsvcLibX.h $(I)\time.h $(I)\sys\stat.h
 debugv.c: $(I)\debugm.h
 
 dirent.c: $(I)\debugm.h $(I)\dirent.h $(I)\sys\stat.h $(I)\unistd.h
+
+dirname.c: $(I)\libgen.h
 
 err2errno.c: $(I)\MsvcLibX.h $(I)\debugm.h
 
@@ -164,7 +185,17 @@ fstat64.c: fstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $
 
 fstat64i32.c: fstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
 
+fullpath.c: $(I)\stdlib.h $(I)\limits.h
+
 getcwd.c: $(I)\debugm.h $(I)\unistd.h
+
+GetFileAttributesU.c: $(I)\windowsU.h $(I)\limits.h
+
+GetFileAttributesExU.c: $(I)\windowsU.h $(I)\limits.h
+
+GetFullPathNameU.c: $(I)\windowsU.h $(I)\limits.h
+
+GetLongPathNameU.c: $(I)\windowsU.h $(I)\limits.h
 
 getopt.c: $(I)\getopt.h
 
@@ -219,5 +250,4 @@ utime.c: $(I)\debugm.h $(I)\unistd.h $(I)\utime.h $(I)\sys\time.h
 xfreopen.c: $(I)\xfreopen.h
 
 xnmalloc.c: $(I)\config.h
-
 
