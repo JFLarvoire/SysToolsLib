@@ -38,6 +38,8 @@
 *    2014-07-02 JFL renamed macro RETURN() as RETURN_CONST(), and defined     *
 *		    new macro RETURN() to return nothing.		      *
 *		    Idem for RETURN_COMMENT() as RETURN_CONST_COMMENT().      *
+*    2016-09-09 JFL Flush every DEBUG_PRINTF output, to make sure to see      *
+*		    every debug string printed before a program crash.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -84,8 +86,8 @@ extern int iIndent;		/* Debug messages indentation */
 /* The enter and leave variants print, then respectively increase or decrease indentation,
    to make recursive calls easier to review. */
 #define DEBUG_FPRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); fprintf args;})
-#define DEBUG_PRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args;})
-#define XDEBUG_PRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args;})
+#define DEBUG_PRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
+#define XDEBUG_PRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
 #define DEBUG_ENTER(args)  DEBUG_DO(DEBUG_PRINTF(args); iIndent += DEBUG_INDENT_STEP;)
 #define DEBUG_LEAVE(args)  DEBUG_DO(DEBUG_PRINTF(args); iIndent -= DEBUG_INDENT_STEP;)
 
