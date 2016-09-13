@@ -119,13 +119,14 @@
 *		    Version 3.4.    					      *
 *    2016-05-10 JFL Added option -F/--force to overwrite read-only files.     *
 *		    Version 3.5.    					      *
+*    2016-09-13 JFL Minor tweaks to fix compilation in Linux.                 *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.5"
-#define PROGRAM_DATE    "2016-05-10"
+#define PROGRAM_DATE    "2016-09-13"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -251,6 +252,16 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define _MAX_DIR   FILENAME_MAX
 #define _MAX_FNAME FILENAME_MAX
 #define _MAX_EXT   FILENAME_MAX
+
+#ifndef _S_IREAD
+#define _S_IREAD __S_IREAD
+#endif
+#ifndef _S_IWRITE
+#define _S_IWRITE __S_IWRITE
+#endif
+#ifndef _S_IEXEC
+#define _S_IEXEC __S_IEXEC
+#endif
 
 #define _stricmp strcasecmp
 
