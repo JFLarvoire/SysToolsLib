@@ -40,6 +40,7 @@
 *		    Idem for RETURN_COMMENT() as RETURN_CONST_COMMENT().      *
 *    2016-09-09 JFL Flush every DEBUG_PRINTF output, to make sure to see      *
 *		    every debug string printed before a program crash.	      *
+*    2016-09-13 JFL Added macros DEBUG_WSTR2NEWUTF8() and DEBUG_FREEUTF8().   *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -168,9 +169,29 @@ extern int iIndent;		/* Debug messages indentation */
   } \
 )
 
+#ifdef _WIN32
+
+/* Helper macros for displaying Unicode strings */
 #define DEBUG_WSTR2UTF8(from, to, toSize) DEBUG_CODE( \
   WideCharToMultiByte(CP_UTF8, 0, from, lstrlenW(from)+1, to, toSize, NULL, NULL); \
 )
+
+/* Dynamically allocate a new buffer, then convert a Unicode string to UTF-8 */
+/* The dynamic allocation is useful in modules using lots of UTF-16 pathnames.
+   This avoids having many local buffers of length UTF8_PATH_MAX, which may
+   make the stack grow too large and overflow. */
+#define DEBUG_WSTR2NEWUTF8(pwStr, pUtf8)	\
+  DEBUG_CODE(					\
+    do {					\
+      int nUtf8 = (int)lstrlenW(pwStr) * 2 + 1;	\
+      pUtf8 = malloc(nUtf8);			\
+      DEBUG_WSTR2UTF8(pwStr, pUtf8, nUtf8);	\
+    } while (0);				\
+  ) /* DEBUG_FREE(pUtf8) MUST be used to free the UTF-8 string after use, else there will be a memory leak */
+
+#define DEBUG_FREEUTF8(pUtf8) DEBUG_CODE(free(pUtf8))
+
+#endif /* defined(_WIN32) */
 
 #endif /* !defined(_DEBUGM_H) */
 
