@@ -17,6 +17,7 @@
 #    2013-12-16 JFL Added support for MinGW64.				      #
 #    2015-12-12 JFL Help now displays the output directory name.              #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
+#    2016-09-13 JFL Bug fix: FileNoCase() must search only in the . directory.#
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -24,7 +25,7 @@
 
 FileNoCase() # Case-independant search for a file.
 {
-  find . -type f | grep -i -E "./$1$" | sed s=./==
+  find . -maxdepth 1 -type f | grep -i -E "./$1$" | sed s=./==
 }
 
 # Identify the OS
