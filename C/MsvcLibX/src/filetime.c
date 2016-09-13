@@ -10,6 +10,7 @@
 *    2014-02-26 JFL Created this module.				      *
 *    2014-03-24 JFL Renamed "statx.h" as the standard <sys/stat.h>.	      *
 *    2014-07-03 JFL Filetime2String: Output time with µs precision if possib. *
+*    2016-09-13 JFL Fixed a warning.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -204,7 +205,7 @@ void Filetime2Timespec(const FILETIME *pFT, struct timespec *pTS) {
   ull.LowPart = pFT->dwLowDateTime;
   ull.HighPart = pFT->dwHighDateTime;
   pTS->tv_sec = (time_t)(ull.QuadPart / 10000000ULL - 11644473600ULL);
-  pTS->tv_nsec = (ull.QuadPart % 10000000ULL) * 100;
+  pTS->tv_nsec = (int)(ull.QuadPart % 10000000ULL) * 100;
   return;
 }
 
