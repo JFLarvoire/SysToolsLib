@@ -10,6 +10,7 @@
 *   History:								      *
 *    2014-02-27 JFL Created this module.				      *
 *    2015-12-09 JFL Added routines fputsU and vfprintfU.		      *
+*    2016-09-13 JFL Fixed warnings in fputsU. Do not change the input buffer. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -157,6 +158,8 @@ UINT codePage = 0;
 |   History:								      |
 |    2014-02-27 JFL Created fprintfU and printfU.                	      |
 |    2015-12-09 JFL Restructured them over vfprintfU, itself over fputsU.     |
+|    2016-09-13 JFL Fixed warnings.					      |
+|		    Do not change the input buffer.                           |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -167,16 +170,23 @@ UINT codePage = 0;
 #undef fputs
 
 int fputsU(const char *buf, FILE *f) { /* fputs a UTF-8 string */
-  int n;
+  int iRet;
+  char *pBuf = NULL;
 
   if (!codePage) codePage = GetConsoleOutputCP();
-  if (codePage != CP_UTF8) n = ConvertString(buf, strlen(buf)+1, CP_UTF8, codePage, NULL);
-  if (n > 0) { /* If no error, and something to output */
-    int iErr = fputs(buf, f);
-    if ((iErr >= 0) && DEBUG_IS_ON()) fflush(f); /* Slower, but ensures we get everything before crashes! */
-    if (iErr < 0) n = iErr;
+  if (codePage != CP_UTF8) {
+    pBuf = DupAndConvert(buf, CP_UTF8, codePage, NULL);
+  } else {
+    pBuf = (char *)buf;
   }
-  return n; /* Return the error (n<0) or success (n>=0) */
+  if (pBuf) { /* If no error, and something to output */
+    iRet = fputs(pBuf, f);
+    if ((iRet >= 0) && DEBUG_IS_ON()) fflush(f); /* Slower, but ensures we get everything before crashes! */
+    if (pBuf != buf) free(pBuf);
+  } else {
+    iRet = -1; /* Could not convert the string to output */
+  }
+  return iRet; /* Return the error (n<0) or success (n>=0) */
 }
 
 int vfprintfU(FILE *f, const char *pszFormat, va_list vl) { /* vfprintf UTF-8 strings */
