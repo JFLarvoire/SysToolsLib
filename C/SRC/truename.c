@@ -18,24 +18,27 @@
 *    2015-12-18 JFL Convert the short names to long names.		      *
 *                   Renamed some options, and added code page opts -A, -O, -U.*
 *		    Version 1.1.					      *
+*    2016-09-12 JFL Moved WIN32 UTF-8 routines to the MsvcLibX library.       *
+*                   Minor tweaks to fix compilation in Linux.                 *
+*		    Version 1.1.1.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2015-12-18"
+#define PROGRAM_VERSION "1.1.1"
+#define PROGRAM_DATE    "2016-09-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
-#define _GNU_SOURCE	/* Include extra BSD-specific functions. Implied by _GNU_SOURCE. */
+#define _GNU_SOURCE	/* Include extra GNU-specific functions */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>	// For the symlink and readlink functions
+#include <unistd.h>	/* For the symlink and readlink functions */
 
 /* MsvcLibX debugging macros */
 #include "debugm.h"
@@ -56,12 +59,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define OS_NAME "Win32"
 #endif
 
-DWORD GetFullPathNameU(LPCTSTR lpFileName, DWORD nBufferLength, LPTSTR lpBuffer, LPTSTR *lpFilePart);
-char *_fullpathU(char *absPath, const char *relPath, size_t maxLength);
-int FixNameCase(char *pszPathname);
-DWORD GetLongPathNameU(LPCTSTR lpShortName, LPTSTR lpBuf, DWORD nBufferLength);
+#include <windowsU.h>		/* Include MsvcLibX' WIN32 UTF-8 extensions */
 
-#define cp codePage			/* Initial console code page in iconv.c */
+#define cp codePage		/* Initial console code page in iconv.c */
 
 #endif
 
@@ -170,6 +170,12 @@ int main(int argc, char *argv[]) {
 	printf("%s\n", version());
 	exit(0);
       }
+      DEBUG_CODE(
+	if (streq(arg+1, "xd")) {
+	  XDEBUG_ON();
+	  continue;
+	}
+      )
       printf("Unrecognized switch %s. Ignored.\n", arg);
       continue;
     } /* End if it's a switch */
@@ -197,11 +203,8 @@ int main(int argc, char *argv[]) {
     }
     DEBUG_PRINTF(("absName = \"%s\"\n", absName));
     pszPath = absName;
-    strcpy(buf, absName); // In case we use option -L to NOT resolve links
+    strcpy(buf, absName); /* In case we use option -L to NOT resolve links */
   }
-
-  DEBUG_PRINTF(("Size of WCHAR = %d bits\n", 8*sizeof(WCHAR)));
-  DEBUG_PRINTF(("Size of wchar_t = %d bits\n", 8*sizeof(wchar_t)));
 
   if (bResolveLinks) n = ResolveLinks(pszPath, buf, sizeof(buf));
 
@@ -215,7 +218,7 @@ int main(int argc, char *argv[]) {
     /* Correct the pathname case.
        This is necessary because both command line arguments, and link targets,
        may not match the actual targets names case */
-    FixNameCase(buf); 
+    /* FixNameCase(buf); /* Already done by GetLongPathName() */ */
     printf("%s\n", buf);
   } else {
 report_err:
@@ -286,12 +289,7 @@ Switches:\n\
 "\
   -V          Display this program version and exit.\n\
 \n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+"Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
 "\n"
 #endif
@@ -302,123 +300,32 @@ Switches:\n\
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
 \*---------------------------------------------------------------------------*/
 
 int IsSwitch(char *pszArg) {
-  return (   (*pszArg == '-')
-#ifndef __unix__
-	  || (*pszArg == '/')
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
 #endif
-         ); /* It's a switch */
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    GetFullPathNameU					      |
-|                                                                             |
-|   Description:    Get the absolute pathname for a relative UTF-8 path.      |
-|                                                                             |
-|   Parameters:     See WIN32's GetFullPathName()			      |
-|                                                                             |
-|   Return value:   The length of the full pathname, or 0 if error	      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-|    2014-02-07 JFL Created this routine.				      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-DWORD GetFullPathNameU(LPCTSTR lpName, DWORD nBufferLength, LPTSTR lpBuf, LPTSTR *lpFilePart) {
-  WCHAR wszName[MAX_PATH];
-  WCHAR wszBuf[MAX_PATH];
-  char szName[MAX_PATH*4]; /* Worst case for UTF-8 is 4 bytes/Unicode character */
-  int n;
-  DWORD dwResult;
-  WCHAR *wlpFilePart;
-
-  DEBUG_ENTER(("GetFullPathNameU(\"%s\", %d, %p, %p);\n", lpName, nBufferLength, lpBuf, lpFilePart));
-
-  n = MultiByteToWideChar(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			  0,			/* dwFlags, */
-			  lpName,		/* lpMultiByteStr, */
-			  lstrlen(lpName)+1,	/* cbMultiByte, */
-			  wszName,		/* lpWideCharStr, */
-			  MAX_PATH		/* cchWideChar, */
-			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the name to Unicode\n"));
-
-  dwResult = GetFullPathNameW(wszName, MAX_PATH, wszBuf, &wlpFilePart);
-  if (!dwResult) RETURN_INT_COMMENT(0, ("GetFullPathNameW() failed\n"));
-
-  /* nRead = UnicodeToBytes(pwStr, len, buf, bufsize); */
-  n = WideCharToMultiByte(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			  0,			/* dwFlags, */
-			  wszBuf,		/* lpWideCharStr, */
-			  (int)dwResult + 1,	/* cchWideChar, */
-			  lpBuf,		/* lpMultiByteStr, */
-			  (int)nBufferLength,	/* cbMultiByte, */
-			  NULL,			/* lpDefaultChar, */
-			  NULL			/* lpUsedDefaultChar */
-			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the full name from Unicode\n"));
-
-  if (lpFilePart) { /* Convert the file part, and get the length of the converted string */
-    int m;	/* Length of the converted string */
-    m = WideCharToMultiByte(CP_UTF8,			/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			    0,				/* dwFlags, */
-			    wlpFilePart,		/* lpWideCharStr, */
-			    lstrlenW(wlpFilePart),	/* cchWideChar, */
-			    szName,			/* lpMultiByteStr, */
-			    sizeof(szName),		/* cbMultiByte, */
-			    NULL,			/* lpDefaultChar, */
-			    NULL			/* lpUsedDefaultChar */
-			    );
-    /* (n-1) is the length of the full UTF-8 pathname */
-    /* So ((n-1) - m) is the offset of the file part in the full UTF-8 pathname */
-    *lpFilePart = lpBuf + (n - 1) - m;
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
   }
-
-  RETURN_INT_COMMENT(n-1, ("\"%s\" \"%s\"\n", lpBuf, lpFilePart?*lpFilePart:"(NULL)"));
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    _fullpathU						      |
-|                                                                             |
-|   Description:    Get the absolute pathname for a relative UTF-8 path.      |
-|                                                                             |
-|   Parameters:     See MSVC's _fullpath() in stdlib.h			      |
-|                                                                             |
-|   Return value:   Pointer to the full pathname, or NULL if error	      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-|    2014-03-25 JFL Created this routine.				      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-char *_fullpathU(char *absPath, const char *relPath, size_t maxLength) {
-  DWORD n;
-  if (!absPath) {
-    absPath = malloc(MAX_PATH*4); /* Worst case for UTF-8 is 4 bytes/Unicode character */
-    if (!absPath) return NULL;
-  }
-  n = GetFullPathNameU(relPath, (DWORD)maxLength, absPath, NULL);
-  return n ? absPath : NULL;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -440,6 +347,8 @@ char *_fullpathU(char *absPath, const char *relPath, size_t maxLength) {
 |		    Bug fix: Avoid an unnecessary search if the path is empty.|
 *									      *
 \*---------------------------------------------------------------------------*/
+
+#if 0 /* We actually don't need this, because GetLongPathName() does it already */
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
@@ -472,7 +381,7 @@ int FixNameCase(char *pszPathname) {
       iModified |= FixNameCase(pszPathname); /* Recursively fix the parent pathname */
     } else { /* Possibly a drive letter, then a root directory name */
       if (lDrive) { /* A drive letter, then a root directory name */
-	pszPath = szRootDir; // Use the "C:\\" copy on the stack to make sure the routine is reentrant
+	pszPath = szRootDir; /* Use the "C:\\" copy on the stack to make sure the routine is reentrant */
 	pszPath[0] = pszPathname[0];
       } else { /* Just a root directory name */
 	pszPath = "\\";
@@ -482,7 +391,7 @@ int FixNameCase(char *pszPathname) {
   } else { /* No path separator */
     pszName = pszPathname;
     if (lDrive) { /* A drive letter, then a file name */
-      pszPath = szDriveCurDir; // Use the "C:." copy on the stack to make sure the routine is reentrant
+      pszPath = szDriveCurDir; /* Use the "C:." copy on the stack to make sure the routine is reentrant */
       pszPath[0] = pszPathname[0];
       pszName += 2;  /* Skip the drive letter */
     } else {	  /* Just the file name */
@@ -511,55 +420,4 @@ int FixNameCase(char *pszPathname) {
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
 
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    GetLongPathNameU					      |
-|                                                                             |
-|   Description:    Get the long pathname for a short UTF-8 path.	      |
-|                                                                             |
-|   Parameters:     See WIN32's GetLongPathName()			      |
-|                                                                             |
-|   Return value:   The length of the full pathname, or 0 if error	      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-|    2015-12-18 JFL Created this routine.				      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-DWORD GetLongPathNameU(LPCTSTR lpShortName, LPTSTR lpBuf, DWORD nBufferLength) {
-  WCHAR wszShortName[MAX_PATH];
-  WCHAR wszBuf[MAX_PATH];
-  int n;
-  DWORD dwResult;
-
-  DEBUG_ENTER(("GetLongPathNameU(\"%s\", %p, %d);\n", lpShortName, lpBuf, nBufferLength));
-
-  n = MultiByteToWideChar(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			  0,			/* dwFlags, */
-			  lpShortName,		/* lpMultiByteStr, */
-			  lstrlen(lpShortName)+1,  /* cbMultiByte, */
-			  wszShortName,		/* lpWideCharStr, */
-			  MAX_PATH		/* cchWideChar, */
-			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the short name to Unicode\n"));
-
-  dwResult = GetLongPathNameW(wszShortName, wszBuf, MAX_PATH);
-  if (!dwResult) RETURN_INT_COMMENT(0, ("GetLongPathNameW() failed\n"));
-
-  /* nRead = UnicodeToBytes(pwStr, len, buf, bufsize); */
-  n = WideCharToMultiByte(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			  0,			/* dwFlags, */
-			  wszBuf,		/* lpWideCharStr, */
-			  (int)dwResult + 1,	/* cchWideChar, */
-			  lpBuf,		/* lpMultiByteStr, */
-			  (int)nBufferLength,	/* cbMultiByte, */
-			  NULL,			/* lpDefaultChar, */
-			  NULL			/* lpUsedDefaultChar */
-			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the Long name from Unicode\n"));
-
-  RETURN_INT_COMMENT(n-1, ("\"%s\"\n", lpBuf));
-}
-
+#endif
