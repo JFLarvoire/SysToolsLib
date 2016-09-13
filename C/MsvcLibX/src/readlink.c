@@ -17,6 +17,7 @@
 *		    MultiByte versions, and changed the Unicode and Ansi      *
 *		    versions to macros.					      *
 *    2014-07-03 JFL Added support for pathnames >= 260 characters. 	      *
+*    2016-09-09 JFL Fixed a crash in debug mode, due to stack overflows.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -132,11 +133,12 @@ DWORD ReadReparsePointW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   PSYMLINK_READ_BUFFER pSymlinkBuf;
   unsigned short offset, len = 0;
   DEBUG_CODE(
-  char szUtf8[UTF8_PATH_MAX];
+  char *pszUtf8;
   )
 
-  DEBUG_WSTR2UTF8(path, szUtf8, sizeof(szUtf8));
-  DEBUG_ENTER(("ReadReparsePointW(\"%s\", 0x%p, %d);\n", szUtf8, buf, bufsize));
+  DEBUG_WSTR2NEWUTF8(path, pszUtf8);
+  DEBUG_ENTER(("ReadReparsePointW(\"%s\", 0x%p, %d);\n", pszUtf8, buf, bufsize));
+  DEBUG_FREEUTF8(pszUtf8);
 
   dwAttr = GetFileAttributesW(path);
   XDEBUG_PRINTF(("GetFileAttributes() = 0x%lX\n", dwAttr));
@@ -256,8 +258,9 @@ DWORD ReadReparsePointW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   }
   buf[len] = L'\0';
 
-  DEBUG_WSTR2UTF8(buf, szUtf8, sizeof(szUtf8));
-  DEBUG_LEAVE(("return 0x%X; // \"%s\"\n", dwTag, szUtf8));
+  DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+  DEBUG_LEAVE(("return 0x%X; // \"%s\"\n", dwTag, pszUtf8));
+  DEBUG_FREEUTF8(pszUtf8);
   return dwTag;
 }
 
@@ -267,11 +270,12 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   UINT drvType;
   DWORD dwTag;
   DEBUG_CODE(
-  char szUtf8[UTF8_PATH_MAX];
+  char *pszUtf8;
   )
 
-  DEBUG_WSTR2UTF8(path, szUtf8, sizeof(szUtf8));
-  DEBUG_ENTER(("readlink(\"%s\", 0x%p, %d);\n", szUtf8, buf, bufsize));
+  DEBUG_WSTR2NEWUTF8(path, pszUtf8);
+  DEBUG_ENTER(("readlink(\"%s\", 0x%p, %d);\n", pszUtf8, buf, bufsize));
+  DEBUG_FREEUTF8(pszUtf8);
 
   dwTag = ReadReparsePointW(path, buf, bufsize);
   if (!dwTag) {
@@ -289,10 +293,15 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
     if (!strncmpW(buf+5, L":\\", 2)) {
       nRead -= 4;
       CopyMemory(buf, buf+4, (nRead+1)*sizeof(WCHAR));
+      DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+      XDEBUG_PRINTF(("buf = \"%s\"; // Removed '\\\\?\\': \n", pszUtf8));
+      DEBUG_FREEUTF8(pszUtf8);
     } else { /* Return an error for other types, as Posix SW cannot handle them successfully. */
       errno = EINVAL;
-      DEBUG_WSTR2UTF8(buf+4, szUtf8, sizeof(szUtf8));
-      RETURN_INT_COMMENT(-1, ("Unsupported mount point type: %s\n", szUtf8));
+      DEBUG_WSTR2NEWUTF8(buf+4, pszUtf8);
+      DEBUG_LEAVE(("return -1; // Unsupported mount point type: %s\n", pszUtf8));
+      DEBUG_FREEUTF8(pszUtf8);
+      return -1;
     }
   }
 
@@ -308,8 +317,9 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
     WCHAR *pc1 = L"A";
     WCHAR *pc2 = L"a";
 
-    DEBUG_WSTR2UTF8(buf, szUtf8, sizeof(szUtf8));
-    XDEBUG_PRINTF(("rawJunctionTarget = \"%s\"\n", szUtf8));
+    DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+    XDEBUG_PRINTF(("rawJunctionTarget = \"%s\"\n", pszUtf8));
+    DEBUG_FREEUTF8(pszUtf8);
 
     GetFullPathNameW(path, PATH_MAX, wszAbsPath, NULL); /* Get the drive letter in the full path */
     szRootDir[0] = (char)(wszAbsPath[0]); /* Copy the drive letter */
@@ -330,11 +340,9 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 	dwErr = WNetGetConnectionW(wszLocalName, wszRemoteName, &dwLength);
 	if (dwErr == NO_ERROR) {
 	  WCHAR *pwsz;
-	  DEBUG_CODE(
-	  char szRemote8[UTF8_PATH_MAX];
-	  )
-	  DEBUG_WSTR2UTF8(wszRemoteName, szRemote8, sizeof(szRemote8));
-	  XDEBUG_PRINTF(("net use %c: %s\n", (char)(wszLocalName[0]), szRemote8));
+	  DEBUG_WSTR2NEWUTF8(wszRemoteName, pszUtf8);
+	  XDEBUG_PRINTF(("net use %c: %s\n", (char)(wszLocalName[0]), pszUtf8));
+	  DEBUG_FREEUTF8(pszUtf8);
 	  if ((wszRemoteName[0] == L'\\') && (wszRemoteName[1] == L'\\')) {
 	    pwsz = wcschr(wszRemoteName+2, L'\\');
 	    if (pwsz) {
@@ -353,8 +361,9 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 		XDEBUG_PRINTF(("// Checking if it's an alias of the root of the shared drive\n"));
 		buf[0] = wszAbsPath[0];
 		dwAttr = GetFileAttributesW(buf);
-		DEBUG_WSTR2UTF8(buf, szUtf8, sizeof(szUtf8));
-		XDEBUG_PRINTF(("GetFileAttributes(\"%s\") = 0x%lX\n", szUtf8, dwAttr));
+		DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+		XDEBUG_PRINTF(("GetFileAttributes(\"%s\") = 0x%lX\n", pszUtf8, dwAttr));
+		DEBUG_FREEUTF8(pszUtf8);
 		if (dwAttr != INVALID_FILE_ATTRIBUTES) {
 		  iTargetFound = TRUE;
 		  XDEBUG_PRINTF(("// Confirmed it's an alias of the root of the shared drive\n"));
@@ -365,8 +374,9 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 		  if (pwsz2) {
 		    CopyMemory(buf+2, pwsz2, (lstrlenW(pwsz2)+1)*sizeof(WCHAR));
 		    dwAttr = GetFileAttributesW(buf);
-		    DEBUG_WSTR2UTF8(buf, szUtf8, sizeof(szUtf8));
-		    XDEBUG_PRINTF(("GetFileAttributes(\"%s\") = 0x%lX\n", szUtf8, dwAttr));
+		    DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+		    XDEBUG_PRINTF(("GetFileAttributes(\"%s\") = 0x%lX\n", pszUtf8, dwAttr));
+		    DEBUG_FREEUTF8(pszUtf8);
 		    if (dwAttr != INVALID_FILE_ATTRIBUTES) {
 		      iTargetFound = TRUE;
 		      XDEBUG_PRINTF(("// Confirmed it's a first level shared directory\n"));
@@ -409,10 +419,12 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
           for symlinkds. But Windows always records absolute target paths,
           even when relative paths were used for creating them. */
     GetFullPathNameW(buf, PATH_MAX, wszAbsPath2, NULL);
-    DEBUG_WSTR2UTF8(wszAbsPath, szUtf8, sizeof(szUtf8));
-    XDEBUG_PRINTF(("szAbsPath = \"%s\"\n", szUtf8));
-    DEBUG_WSTR2UTF8(wszAbsPath2, szUtf8, sizeof(szUtf8));
-    XDEBUG_PRINTF(("szAbsPath2 = \"%s\"\n", szUtf8));
+    DEBUG_WSTR2NEWUTF8(wszAbsPath, pszUtf8);
+    XDEBUG_PRINTF(("szAbsPath = \"%s\"\n", pszUtf8));
+    DEBUG_FREEUTF8(pszUtf8);
+    DEBUG_WSTR2NEWUTF8(wszAbsPath2, pszUtf8);
+    XDEBUG_PRINTF(("szAbsPath2 = \"%s\"\n", pszUtf8));
+    DEBUG_FREEUTF8(pszUtf8);
     /* Find the first (case insensitive) difference */
     for (p1=wszAbsPath, p2=wszAbsPath2; (*pc1 = *p1) && (*pc2 = *p2); p1++, p2++) {
       CharLowerW(pc1);
@@ -423,10 +435,12 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       WCHAR *pc;
       /* Backtrack to the last \ */
       for ( ; *(p1-1) != L'\\'; p1--, p2--) ;
-      DEBUG_WSTR2UTF8(p1, szUtf8, sizeof(szUtf8));
-      XDEBUG_PRINTF(("szRelPath1 = \"%s\"\n", szUtf8));
-      DEBUG_WSTR2UTF8(p2, szUtf8, sizeof(szUtf8));
-      XDEBUG_PRINTF(("szRelPath2 = \"%s\"\n", szUtf8));
+      DEBUG_WSTR2NEWUTF8(p1, pszUtf8);
+      XDEBUG_PRINTF(("szRelPath1 = \"%s\"\n", pszUtf8));
+      DEBUG_FREEUTF8(pszUtf8);
+      DEBUG_WSTR2NEWUTF8(p2, pszUtf8);
+      XDEBUG_PRINTF(("szRelPath2 = \"%s\"\n", pszUtf8));
+      DEBUG_FREEUTF8(pszUtf8);
       buf[0] = '\0';
       /* Count the # of parent directories that remain in path 1 */
       for (pc=p1; *pc; pc++) if (*pc == L'\\') lstrcatW(buf, L"..\\");
@@ -437,8 +451,10 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
     } /* Else the drives differ. Paths cannot be relative. Don't change buf. */
   }
 
-  DEBUG_WSTR2UTF8(buf, szUtf8, sizeof(szUtf8));
-  RETURN_INT_COMMENT((int)nRead, ("\"%s\"\n", szUtf8));
+  DEBUG_WSTR2NEWUTF8(buf, pszUtf8);
+  DEBUG_LEAVE(("return %d; // \"%s\"\n", (int)nRead, pszUtf8));
+  DEBUG_FREEUTF8(pszUtf8);
+  return (int)nRead;
 }
 
 #pragma warning(default:4706)
