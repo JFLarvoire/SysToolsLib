@@ -17,6 +17,11 @@
 *    2014-03-06 JFL Check for buffer overflows, and return ENAMETOOLONG.      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
 *    2016-08-25 JFL Added routine ResolveLinksA().			      *
+*    2016-09-12 JFL Moved GetFileAttributesU() to its own module.	      *
+*                   Bug fix: Add the drive letter if it's not specified.      *
+*                   Bug fix: Detect and report output buffer overflows.       *
+*                   Convert short WIN32 paths to long paths.                  *
+*    2016-09-13 JFL Resize output buffers, to avoid wasting lots of memory.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -63,7 +68,7 @@ int CompactPath(const char *path, char *outbuf, size_t bufsize) {
   int i, j, inSize, outSize;
   char c = '\0';
   char lastc = '\0';
-#define MAX_SUBDIRS (PATH_MAX / 2) /* Worst case is: \1\2\3\4\5\6... */
+#define MAX_SUBDIRS (PATH_MAX / 2) /* Worst case is: \1\1\1\1\1\1... */
   const char *pParts[MAX_SUBDIRS];
   int lParts[MAX_SUBDIRS];
   int lPart = 0;
@@ -207,20 +212,37 @@ char *realpath(const char *path, char *outbuf) {
       iDrive = _toupper(path[0]) - '@'; /* A=1, B=2, ... */
     }
     _getdcwd(iDrive, pOutbuf, PATH_MAX);
+    if ((strlen(pOutbuf) + strlen(pc) + 2) > PATH_MAX) {
+realpath_failed:
+      errno = ENAMETOOLONG;
+      if (!outbuf) free(pOutbuf);
+      return NULL;
+    }
     strcat(pOutbuf, "\\");
     strcat(pOutbuf, pc);
     path = pOutbuf;
+  } else if (pc == path) { /* This is an absolute path without a drive letter */
+    pOutbuf[0] = (char)(_getdrive() + 0x40);
+    pOutbuf[1] = ':';
+    if ((strlen(path) + 3) > PATH_MAX) goto realpath_failed;
+    strcpy(pOutbuf+2, path);
+    path = pOutbuf;
   }
 
-  /* Resolve links in the absolute path */
+  /* TO DO: Resolve substituted drives */  
+
+  /* TO DO: Convert short paths to long paths, and correct the name case */  
+
+  /* Remove useless parts in the absolute path */
   iErr = CompactPath(path, pOutbuf, PATH_MAX);
-  if (iErr == -1) {
+  if (iErr == -1) { /* CompactPath() sets errno */
     if (!outbuf) free(pOutbuf);
     return NULL;
   }
+
+  if (!outbuf) pOutbuf = realloc(pOutbuf, strlen(pOutbuf) + 1);
   return pOutbuf;
 }
-
 
 #endif
 
@@ -228,6 +250,7 @@ char *realpath(const char *path, char *outbuf) {
 #ifdef _WIN32
 
 #include <windows.h>
+#include <windowsU.h>		/* Include MsvcLibX' WIN32 UTF-8 extensions */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -259,23 +282,6 @@ typedef struct _NAMELIST {
   struct _NAMELIST *prev;
   char *path;
 } NAMELIST;
-
-DWORD GetFileAttributesU(LPCTSTR lpFileName) {
-  WCHAR wszPath[PATH_MAX];
-  int n;
-
-  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
-  n = MultiByteToWidePath(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-    			  lpFileName,		/* lpMultiByteStr, */
-			  wszPath,		/* lpWideCharStr, */
-			  COUNTOF(wszPath)	/* cchWideChar, */
-			  );
-  if (!n) {
-    errno = Win32ErrorToErrno();
-    RETURN_INT_COMMENT(INVALID_FILE_ATTRIBUTES, ("errno=%d - %s\n", errno, strerror(errno)));
-  }
-  return GetFileAttributesW(wszPath);
-}
 
 /* Get the canonic name of a file, after resolving all links in its pathname */
 int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
@@ -473,51 +479,6 @@ int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
   RETURN_INT_COMMENT(iErr, ("\"%s\"\n", buf));
 }
 
-/* Normally defined in stdlib.h. Output buf must contain PATH_MAX bytes */
-char *realpathU(const char *path, char *outbuf) {
-  char *pOutbuf = outbuf;
-  int iErr;
-  char path1[UTF8_PATH_MAX];
-  const char *pc;
-  size_t nSize;
-
-  DEBUG_ENTER(("realpath(\"%s\", 0x%p);\n", path, outbuf));
-
-  if (!pOutbuf) pOutbuf = malloc(PATH_MAX);
-  if (!pOutbuf) {
-    errno = ENOMEM;
-    RETURN_CONST_COMMENT(NULL, ("Out of memory\n"));
-  }
-
-  /* Convert relative paths to absolute paths */
-  pc = path;
-  if (pc[0] && (pc[1] == ':')) pc += 2; /* Skip the drive letter, if any */
-  if ((*pc != '/') && (*pc != '\\')) { /* This is a relative path */
-    int iDrive = 0;
-    if (pc != path) { /* A drive was specified */
-      iDrive = toupper(path[0]) - '@'; /* A=1, B=2, ... */
-    }
-    _getdcwdU(iDrive, path1, sizeof(path1));
-    nSize = sizeof(path1) - lstrlen(path1);
-    if ((lstrlen(pc) + 2U) > nSize) {
-      errno = ENAMETOOLONG;
-      RETURN_CONST_COMMENT(NULL, ("Path too long after concatenation\n"));
-    }
-    strcat(path1, "\\");
-    strcat(path1, pc);
-    path = path1;
-  }
-
-  /* Resolve links in the absolute path */
-  iErr = ResolveLinksU(path, pOutbuf, PATH_MAX);
-  if (iErr == -1) {
-    if (!outbuf) free(pOutbuf);
-    RETURN_CONST_COMMENT(NULL, ("Resolution failed\n"));
-  }
-  DEBUG_LEAVE(("return 0x%p; // \"%s\"\n", pOutbuf, pOutbuf));
-  return pOutbuf;
-}
-
 /* ANSI version of the same, built upon the UTF-8 version */
 int ResolveLinksA(const char *path, char *buf, size_t bufsize) {
   char pathU[UTF8_PATH_MAX];
@@ -550,6 +511,88 @@ int ResolveLinksA(const char *path, char *buf, size_t bufsize) {
   }
 
   return iErr;
+}
+
+/* Normally defined in stdlib.h. Output buf must contain PATH_MAX bytes */
+char *realpathU(const char *path, char *outbuf) {
+  char *pOutbuf = outbuf;
+  char *pPath1 = NULL;
+  char *pPath2 = NULL;
+  int iErr;
+  const char *pc;
+  size_t nSize;
+  DEBUG_CODE(
+  char *pszCause = "Out of memory";
+  )
+  int n;
+
+  DEBUG_ENTER(("realpath(\"%s\", 0x%p);\n", path, outbuf));
+
+  if (!pOutbuf) pOutbuf = malloc(UTF8_PATH_MAX);
+  if (!pOutbuf) {
+realpathU_failed:
+    if (!outbuf) free(pOutbuf);
+    free(pPath1);
+    free(pPath2);
+    errno = ENOMEM;
+    RETURN_CONST_COMMENT(NULL, ("%s\n", pszCause));
+  }
+
+  pPath1 = malloc(UTF8_PATH_MAX);
+  if (!pPath1) goto realpathU_failed;
+
+  pPath2 = malloc(UTF8_PATH_MAX);
+  if (!pPath2) goto realpathU_failed;
+
+  /* Convert relative paths to absolute paths */
+  pc = path;
+  if (pc[0] && (pc[1] == ':')) pc += 2; /* Skip the drive letter, if any */
+  if ((*pc != '/') && (*pc != '\\')) { /* This is a relative path */
+    int iDrive = 0;
+    if (pc != path) { /* A drive was specified */
+      iDrive = toupper(path[0]) - '@'; /* A=1, B=2, ... */
+    }
+    _getdcwdU(iDrive, pPath1, UTF8_PATH_MAX);
+    nSize = UTF8_PATH_MAX - lstrlen(pPath1);
+    if ((lstrlen(pc) + 2U) > nSize) {
+      errno = ENAMETOOLONG;
+      DEBUG_CODE(pszCause = "Path too long after concatenating current dir");
+      goto realpathU_failed; 
+    }
+    strcat(pPath1, "\\");
+    strcat(pPath1, pc);
+    path = pPath1;
+  } else if (pc == path) { /* This is an absolute path without a drive letter */
+    pPath1[0] = (char)(_getdrive() + 0x40);
+    pPath1[1] = ':';
+    if (strlen(path) > (UTF8_PATH_MAX-3)) {
+      errno = ENAMETOOLONG;
+      DEBUG_CODE(pszCause = "Path too long after adding drive");
+      goto realpathU_failed;
+    }
+    strcpy(pPath1+2, path);
+    path = pPath1;
+  }    
+
+  /* Resolve links in the absolute path */
+  iErr = ResolveLinksU(path, pPath2, UTF8_PATH_MAX);
+  if (iErr == -1) {
+    DEBUG_CODE(pszCause = "Resolution failed");
+    goto realpathU_failed;
+  }
+
+  /* Change short names to long names, and correct the name case */
+  n = GetLongPathNameU(pPath2, pOutbuf, UTF8_PATH_MAX); /* This will NOT correct long names case */
+  if (!n) {
+    DEBUG_CODE(pszCause = "Can't get long pathnames";)
+    goto realpathU_failed;
+  }
+
+  DEBUG_LEAVE(("return 0x%p; // \"%s\"\n", pOutbuf, pOutbuf));
+  if (!outbuf) pOutbuf = realloc(pOutbuf, strlen(pOutbuf) + 1);
+  free(pPath1);
+  free(pPath2);
+  return pOutbuf;
 }
 
 #endif /* defined(_WIN32) */
