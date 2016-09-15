@@ -4,6 +4,30 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.5] 2016-09-15
+Publicly released on github.com
+
+### Changed
+- C/MsvcLibX/*: Added a windows.h include file, that includes the Windows SDK's own Windows.h, then add its own UTF-8
+  extensions. This minimizes changes when converting a Windows ANSI console application to support UTF-8.   
+  Moved several internal derived Windows functions with UTF-8 support to their own module, and made them public
+  in the new windows.h.
+- C/SRC/conv.c:
+   - Added the ability to convert a file in-place.
+   - Automatically detect if the output file is the same as the input file.
+   - Added several options: -same, -bak, -st
+   - The help screen now displays the current code pages used in the system.
+
+### Fixed
+- C/SRC/*: Fixed several issues that caused build failures in Linux.
+- C/SRC/detab.c, lessive.c, remplace.c: Fixed a serious bug that caused a file to be trunctated to 0-length if the output
+  file was the same as the input file. Al three now use the same in-place conversion features created for conv.c.
+- C/MsvcLibX/src/realpath.c, C/SRC/truename.c:  
+   - Bug fix: Add the drive letter if it's not specified.
+   - Bug fix: Detect and report output buffer overflows.
+   - Convert short WIN32 paths to long paths.
+   - Resize output buffers, to avoid wasting lots of memory.
+
 ## [unreleased] 2016-09-05
 ### Changed
 - Added support for C source files encoded as UTF-8 with BOM.  
