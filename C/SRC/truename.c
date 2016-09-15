@@ -27,7 +27,7 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2016-09-12"
+#define PROGRAM_DATE    "2016-09-15"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -59,7 +59,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define OS_NAME "Win32"
 #endif
 
-#include <windowsU.h>		/* Include MsvcLibX' WIN32 UTF-8 extensions */
+#include <windows.h>		/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 
 #define cp codePage		/* Initial console code page in iconv.c */
 
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
     /* Correct the pathname case.
        This is necessary because both command line arguments, and link targets,
        may not match the actual targets names case */
-    /* FixNameCase(buf); /* Already done by GetLongPathName() */ */
+    /* FixNameCase(buf); /* Already done by GetLongPathName() */
     printf("%s\n", buf);
   } else {
 report_err:
