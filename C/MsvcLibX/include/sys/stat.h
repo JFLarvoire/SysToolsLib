@@ -17,6 +17,7 @@
 *		    Moved fseeko* & ftello* functions definitions to stdio.h. *
 *    2014-06-24 JFL Added fstat and fstat64 external references.	      *
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
+*    2016-09-15 JFL Fixed a warning in Visual Studio 2015.		      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -155,7 +156,7 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
   #define _LIBX_stat64 _CONCAT(_MSVC_stat64,_ns)
 #include "debugm.h"
 #pragma message("Defining type struct " VALUEIZE(_LIBX_stat))
-  typedef struct _LIBX_stat {
+  struct _LIBX_stat {
     /* MSVC standard stat structure fields */
     _dev_t          st_dev;
     _ino_t          st_ino;
@@ -183,7 +184,7 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
 
   #if (_STAT_FILE_SIZE != 64) /* Else it's the same as struct stat */
 #pragma message("Defining type struct " VALUEIZE(_LIBX_stat64))
-    typedef struct _LIBX_stat64 {
+    struct _LIBX_stat64 {
       /* MSVC standard stat structure fields */
       _dev_t          st_dev;
       _ino_t          st_ino;
