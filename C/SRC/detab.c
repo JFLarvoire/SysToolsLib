@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename	    detab.c                                                   *
 *                                                                             *
@@ -10,7 +10,7 @@
 *    1984-01-14 MB  Written by Michael Burton. Last Update: 14 Jan 1984       *
 *    1984-07    JW  Converted to Microsoft C, debugged and improved by        *
 *		    Jack Wright  7/84	                                      *
-*    1986-12=15 JFL Default spacing of 4 for .C files                         *
+*    1986-12-15 JFL Default spacing of 4 for .C files                         *
 *    1987-01-26 JFL Possibility to append to the dest. file                   *
 *    2010-11-22 JFL Changed back to 8 spaces per tab for all files.           *
 *		    Updated for modern C compilers.                           *
@@ -21,21 +21,57 @@
 *                   Version 2.1.                                              *
 *    2012-10-18 JFL Added build for Unix.                                     *
 *                   Version 2.1.1.                                            *
+*    2016-09-09 JFL Restructured to fix a serious issue: Data was lost        *
+*                   when the output file was the same as the input file.      *
+*                   Added options -same, -bak, -st.                           *
+*                   Now a UTF-8 app, that can process any Unicode pathname.   *
+*                   Nothing remains of the original authors' code.            *
+*    2016-09-13 JFL Added new routine IsSameFile to detect equiv. pathnames.  *
+*    2016-09-14 JFL Make sure the debug stream is always in text mode.	      *
+*                   Version 3.0.                                              *
 *                                                                             *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.1.1"
-#define PROGRAM_DATE    "2014-12-05"
+#define PROGRAM_VERSION "3.0"
+#define PROGRAM_DATE    "2016-09-14"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent security warnings for old routines */
+
+#define _POSIX_SOURCE /* Force Linux to define fileno in stdio.h */
+#define _XOPEN_SOURCE /* Force Linux to define tempnam in stdio.h */
+#define _BSD_SOURCE /* Force Linux to define S_IFREG in sys/stat.h */
+#define _LARGEFILE_SOURCE64 1 /* Force using 64-bits file sizes if possible */
+#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <utime.h>
+#include <libgen.h>
+#include <unistd.h>
+
+/* Use MsvcLibX Library's debugging macros */
+#include "debugm.h"
+DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
+
+/************************** OS-specific definitions **************************/
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 #define OS_NAME "DOS"
+#include <direct.h>
+#include <io.h>
+
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
+
+#define SAMENAME strieq		/* File name comparison routine */
+
 #endif /* defined(_MSDOS) */
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
@@ -48,9 +84,24 @@
 #else
 #define OS_NAME "Win32"
 #endif
+#include <direct.h>
+#include <io.h>
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
+
+#define SAMENAME strieq		/* File name comparison routine */
+
+/*  Avoid deprecation warnings */
+#define tempnam _tempnam
+#define strdup _strdup
+#define stricmp _stricmp
+#define dup	_dup
+#define fdopen	_fdopen
+#define fileno	_fileno
+
 #endif /* defined(_WIN32) */
 
-#ifdef __unix__     // Unix
+#ifdef __unix__     /* Unix */
 #if defined(__CYGWIN64__)
 #define OS_NAME "Cygwin64"
 #elif defined(__CYGWIN32__)
@@ -60,146 +111,449 @@
 #else
 #define OS_NAME "Unix"
 #endif
+
+#define stricmp strcasecmp
+
+#define DIRSEPARATOR_CHAR '/'
+#define DIRSEPARATOR_STRING "/"
+
+#define SAMENAME streq		/* File name comparison routine */
+
 #endif /* defined(__unix__) */
 
+/********************** End of OS-specific definitions ***********************/
+
+#define TRUE 1
+#define FALSE 0
+
+#define streq(string1, string2) (strcmp(string1, string2) == 0)
+#define strieq(string1, string2) (stricmp(string1, string2) == 0)
+
+void fail(char *pszFormat, ...) {
+  va_list vl;
+  int n = 0;
+
+  va_start(vl, pszFormat);
+  n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
+  va_end(vl);
+  fprintf(stderr, "\n");
+
+  exit(2);
+}
+#define FAIL(msg) fail("%s", msg);
+
+/* Forward definitions */
+char *version(void);		    /* Build the version string */
+int IsSwitch(char *pszArg);
+int is_redirected(FILE *f);
+int IsSameFile(char *pszPathname1, char *pszPathname2);
+
 /* Global variables */
-char *mode = "w";		/* Destination file access mode */
-char usage[] = "\
-detab version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME " - Convert tabs to spaces\n\
+int iVerbose = FALSE;
+FILE *mf;			    /* Message output file */
+char usage[] = "\n\
+detab version %s - Convert tabs to spaces\n\
 \n\
-Usage: detab [OPTIONS] [INFILE [OUTFILE [N]]]\n\
+Usage: detab [OPTIONS] [INFILE [OUTFILE|-same [N]]]\n\
 \n\
 Options:\n\
-  -a        Append a form feed and the output to the destination file.\n\
-  -t N      Number of columns between tab stops. Default: 8\n\
+  -a      Append a form feed and the output to the destination file.\n\
+  -bak    When used with -same, create a backup file of the input file\n"
+#ifdef _DEBUG
+"  -d      Output debug information\n"
+#endif
+"\
+  -same   Modify the input file in place. (Default: Automatically detected)\n\
+  -st     Set the output file time to the same time as the input file.\n\
+  -t N    Number of columns between tab stops. Default: 8\n\
 \n\
 Arguments:\n\
-  INFILE    Input file. Default or -: stdin\n\
-  OUTFILE   Output file. Default or -: stdout\n\
-  N         Number of columns between tab stops. Default: 8\n\
+  INFILE  Input file pathname. Default or \"-\": stdin\n\
+  OUTFILE Output file pathname. Default or \"-\": stdout\n\
+  N       Number of columns between tab stops. Default: 8\n\
 \n\
-Authors: Michael Burton, Jack Wright, Jean-Francois Larvoire\n\
-";
+Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n\
+"
+#ifdef __unix__
+"\n"
+#endif
+;
 
 int main(int argc, char *argv[])
   {
   int col=1, n=8;
   int c;
-  FILE *hFrom = stdin;
-  FILE *hTo = stdout;
-  int narg;			/* Argument scanned number (1 to x) */
-  int nargl;			/* Logical argument number (1 to 3) */
-  char *arg;			/* Argument scanned */
+  char *mode = "w";		/* Destination file access mode */
+  FILE *sf = NULL;		/* Source file handle */
+  FILE *df = NULL;		/* Destination file handle */
+  int i;
+  char *pszInName = NULL;
+  char *pszOutName = NULL;
+  char szBakName[FILENAME_MAX+1];
+  int iBackup = FALSE;
+  int iSameFile = FALSE;	/* Backup the input file, and modify it in place. */
+  int iCopyTime = FALSE;	/* If true, set the out file time = in file time. */
+  struct stat sInTime = {0};
+  char *pszPathCopy = NULL;
+  char *pszDirName = NULL;	/* Output file directory */
 
-  for (narg = 1, nargl = 1; narg < argc; narg++)
-    {
-    arg = argv[narg];
-    if ((arg[0] == '-') || (arg[0] == '/'))
-      {					/* It's a switch */
-      switch (arg[1])
-	{
-	case '\0':			/* Use - for stdin or stdout */
-	  switch (nargl) {
-	  case 1: hFrom = stdin; nargl += 1; break;
-	  case 2: hTo = stdout; nargl += 1; break;
-	  default: break;
-	  }
-	  break;
-	case '?':
-	  fputs(usage, stdout);
-	  return 0;
-	case 'a':			/* Use append mode */
-	case 'A':
-	  mode = "a";
-	  break;
-	case 't':			/* Set tab width */
-	case 'T':
-	  n = atoi(arg);
-	  break;
-	default:
-	  fprintf(stdout, "Invalid switch %s\x07\n", arg);
-	  break;
-	}
+  /* Open a new message file stream for debug and verbose messages */
+  if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
+    /* Then use stderr to make sure they're visible. */
+    /* Drawback: Some scripting shells (Ex: tclsh) will think our program has failed. */
+    mf = stderr;
+  } else {
+    /* Else use stdout to avoid the above drawback. */
+    /* This requires duplicating the handle, to make sure it remains in text mode,
+       as stdout may be switched to binary mode further down */
+    mf = fdopen(dup(fileno(stdout)), "wt");
+    /* Disable buffering in both files, else the output may not appear in the programmed order */
+    setvbuf(stdout, NULL, _IONBF, 0); /* Disable buffering for stdio */
+    setvbuf(mf, NULL, _IONBF, 0); /* Disable buffering for dup of stdio */
+  }
+
+  /* Process arguments */
+
+  for (i=1; i<argc; i++) {
+    char *pszArg = argv[i];
+    if (IsSwitch(pszArg)) {		/* It's a switch */
+      char *pszOpt = pszArg+1;
+      if (   strieq(pszOpt, "?")
+	  || strieq(pszOpt, "h")
+	  || strieq(pszOpt, "-help")) {
+	printf(usage, version());
+	return 0;
       }
-    else				/* It's not a switch */
-      {
-      switch (nargl)
-	{
-	case 1:				/* Open first file in read mode */
-	  if ((hFrom = fopen(arg, "r")) == 0)
-	    {
-	    fprintf(stdout, "%s not found\x07\n", arg);
-	    return 1;
-	    }
-#if 0	  /* JFL 2010-11-22 Removed as modern editors don't require changing tab width to adjust indent width. */
-	  l = strlen(arg);		/* If it's a .C file ... */
-	  if ( (arg[l-2] == '.') && (tolower(arg[l-1]) == 'c') )
-	    n = 4;				/* ... default tab interval = 4 */
+      if (strieq(pszOpt, "a")) {	/* Use append mode */
+	mode = "a";
+	continue;
+      }
+      if (strieq(pszOpt, "bak")) {
+	iBackup = TRUE;
+	continue;
+      }
+#ifdef _DEBUG
+      if (streq(pszOpt, "d")) {
+	DEBUG_ON();
+	iVerbose = TRUE;
+	continue;
+      }
 #endif
-	  nargl += 1;			/* The first argument is valid */
-	  break;
-
-	case 2:				/* Open the second file in "mode" mode */
-	  if ((hTo = fopen(arg, mode)) == 0)
-	    {
-	    fprintf(stdout, "Unable to open %s\x07\n", arg);
-	    return 1;
-	    }
-	  nargl += 1;			/* The second argument is valid */
-	  break;
-
-	case 3:				/* Change the default tab interval */
-	  n = atoi(arg);
-	  nargl += 1;			/* The third argument is valid */
-	  break;
-
-	default:
-	  break;			/* Ignore extra arguments */
-	} /* End switch */
-      } /* End else */
-    } /* End for */
-
-  if (n < 1 || n > 32)
-    {
-    fputs("Tabs < 1 or > 32\x07\n", stdout);
-    return 1;
-    }
-
-  if (mode[0] == 'a') fputs("\x0C", hTo); /* In append mode, add a form feed */
-
-  while ((c = fgetc(hFrom)) != EOF)   	/*  c MUST be int!  */
-    {
-    switch (c)
-      {
-      case '\t':
-	do
-	  {
-	  fputc(' ',hTo);
-	  col++;
-	  }
-	  while (((col-1) % n) != 0);
-	  /* Must subtr. 1 since col++ is done BEFORE this check.  */
-	break;
-      case '\n':
-	fputc('\n',hTo);
-	col = 1;
-	break;
-      default:
-	fputc(c,hTo);
-	col++;
+      if (strieq(pszOpt, "same")) {
+	iSameFile = TRUE;
+	continue;
       }
+      if (strieq(pszOpt, "st")) {	/* Same Time */
+	iCopyTime = TRUE;
+	continue;
+      }
+      if (strieq(pszOpt, "t")) {	/* Set Tab width */
+      	if ((i+1) < argc) n = atoi(argv[++i]);
+	continue;
+      }
+      if (streq(pszOpt, "v")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "V")) {
+	printf("%s\n", version());
+	exit(0);
+      }
+      fprintf(stderr, "Invalid switch %s\x07\n", pszArg);
+      continue;
     }
+    /* It's not a switch, it's an argument */
+    if (!pszInName) {
+      pszInName = pszArg;
+      continue;
+    }
+    if (!pszOutName) {
+      pszOutName = pszArg;
+      continue;
+    }
+    n = atoi(pszArg);
+  }
+
+  if (n < 1 || n > 32) {
+    fputs("Tabs < 1 or > 32\x07\n", stderr);
+    return 1;
+  }
+
+  /* Force stdin and stdout to untranslated */
+#if defined(_MSDOS) || defined(_WIN32)
+  _setmode( _fileno( stdin ), _O_BINARY );
+  fflush(stdout); /* Make sure any previous output is done in text mode */
+  _setmode( _fileno( stdout ), _O_BINARY );
+#endif
+
+  if ((!pszInName) || streq(pszInName, "-")) {
+    sf = stdin;
+    iSameFile = FALSE;	/*  Meaningless in this case. Avoid issues below. */
+  } else {
+    sf = fopen(pszInName, "rb");
+    if (!sf) fail("Can't open file %s\n", pszInName);
+    stat(pszInName, &sInTime);
+  }
+  if ((!pszOutName) || streq(pszOutName, "-")) {
+    if (!iSameFile) df = stdout;
+  } else { /*  Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
+    iSameFile = IsSameFile(pszInName, pszOutName);
+  }
+  if (iSameFile) {
+    DEBUG_FPRINTF((mf, "// In and out files are the same. Writing to a temp file.\n"));
+    pszPathCopy = strdup(pszInName);
+    if (!pszPathCopy) goto fail_no_mem;
+    pszDirName = dirname(pszPathCopy);
+    pszOutName = tempnam(pszDirName, "conv.");
+    DEBUG_FPRINTF((mf, "tempnam(\"%s\", \"conv.\"); // \"%s\"\n", pszDirName, pszOutName));
+    if (iBackup) {	/* Create an *.bak file in the same directory */
+      char *pszNameCopy = strdup(pszInName);
+      char *pszBaseName = basename(pszNameCopy);
+      char *pc;
+      if (!pszNameCopy) goto fail_no_mem;
+      strcpy(szBakName, pszDirName);
+      strcat(szBakName, DIRSEPARATOR_STRING);
+      pc = strrchr(pszBaseName, '.');
+      if (pc) {
+	if (SAMENAME(pc, ".bak")) {
+	  fail("Can't backup file %s\n", pszInName);
+	}
+	*pc = '\0';			/* Remove the extension */
+      }
+      strcat(szBakName, pszBaseName);	/* Copy the base name without the extension */
+      strcat(szBakName, ".bak");	/* Set extension to .bak */
+      free(pszNameCopy);		/* We don't need that copy anymore */
+    }
+  } else {
+    DEBUG_FPRINTF((mf, "// In and out files are distinct. Writing directly to the out file.\n"));
+  }
+  if (!df) {
+    df = fopen(pszOutName, "wb");
+    if (!df) {
+      if (sf != stdout) fclose(sf);
+      fail("Can't open file %s\n", pszOutName);
+
+    }
+  }
+
+  if (mode[0] == 'a') fputs("\x0C", df); /* In append mode, add a form feed */
+
+  while ((c = fgetc(sf)) != EOF) {  	/*  c MUST be int!  */
+    switch (c) {
+    case '\t':
+      do {
+	fputc(' ', df);
+	col++;
+      } while (((col-1) % n) != 0);
+      /* Must subtr. 1 since col++ is done BEFORE this check.  */
+      break;
+    case '\n':
+      fputc('\n', df);
+      col = 1;
+      break;
+    default:
+      fputc(c, df);
+      col++;
+    }
+  }
+
+  if (sf != stdin) fclose(sf);
+  if (df != stdout) fclose(df);
+
+  if (iSameFile) {
+    if (iBackup) {	/* Create an *.bak file in the same directory */
+      unlink(szBakName); 		/* Remove the .bak if already there */
+      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      rename(pszInName, szBakName);	/* Rename the source as .bak */
+    } else {		/* Don't keep a backup of the input file */
+      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
+      unlink(pszInName); 		/* Remove the original file */
+    }
+    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    pszOutName = pszInName;
+  }
+
+  if ((sf != stdin) && (df != stdout) && iCopyTime) {
+    struct utimbuf sOutTime = {0};
+    sOutTime.actime = sInTime.st_atime;
+    sOutTime.modtime = sInTime.st_mtime;
+    utime(pszOutName, &sOutTime);
+  }
 
   return 0;
+
+fail_no_mem:
+  fail("Out of memory");
+  return 1;
+}
+
+char *version(void) {
+  return (PROGRAM_VERSION
+	  " " PROGRAM_DATE
+	  " " OS_NAME
+	  DEBUG_VERSION
+	  );
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    is_redirected					      |
+|									      |
+|   Description:    Check if a FILE is a device or a disk file. 	      |
+|									      |
+|   Parameters:     FILE *f		    The file to test		      |
+|									      |
+|   Returns:	    TRUE if the FILE is a disk file			      |
+|									      |
+|   Notes:	    Designed for use with the stdin and stdout FILEs. If this |
+|		    routine returns TRUE, then they've been redirected.       |
+|									      |
+|   History:								      |
+|    2004-04-05 JFL Added a test of the S_IFIFO flag, for pipes under Windows.|
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifndef S_IFIFO
+#define S_IFIFO         0010000         /* pipe */
+#endif
+
+int is_redirected(FILE *f)
+    {
+    int err;
+    struct stat buf;			/* Use MSC 6.0 compatible names */
+    int h;
+
+    h = fileno(f);			/* Get the file handle */
+    err = fstat(h, &buf);		/* Get information on that handle */
+    if (err) return FALSE;		/* Cannot tell more if error */
+    return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
+            || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
+	   );
+    }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSameFile						      |
+|									      |
+|   Description     Check if two pathnames refer to the same file	      |
+|									      |
+|   Parameters:     char *pszPathname1	    The first pathname to check	      |
+|                   char *pszPathname2	    The second pathname to check      |
+|                   							      |
+|   Returns	    1 = Same file; 0 = Different files			      |
+|									      |
+|   Notes	    Constraints:					      |
+|		    - Do not change the files.				      |
+|		    - Fast => Avoid resolving links when not necessary.	      |
+|		    - Works even if the files do not exist yet.		      |
+|		    							      |
+|		    Must define a SAMENAME constant, that refers to a file    |
+|		    name comparison routine. This routine is OS-dependant,    |
+|		    as comparisons are case-dependant in Unix, but not in     |
+|		    Windows.						      |
+|		    							      |
+|   History								      |
+|    2016-09-12 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSameFile(char *pszPathname1, char *pszPathname2) {
+  int iSameFile;
+  char *pszBuf1 = NULL;
+  char *pszBuf2 = NULL;
+#if defined _WIN32
+  WIN32_FILE_ATTRIBUTE_DATA attr1;
+  WIN32_FILE_ATTRIBUTE_DATA attr2;
+#else
+  struct stat attr1;
+  struct stat attr2;
+#endif /* defined _WIN32 */
+  int bDone1;
+  int bDone2;
+  DEBUG_CODE(
+  char *pszReason;
+  )
+
+  DEBUG_ENTER(("IsSameFile(\"%s\", \"%s\");\n", pszPathname1, pszPathname2));
+
+  /* First try the obvious: Compare the input arguments */
+  if (streq(pszPathname1, pszPathname2)) {
+    DEBUG_CODE(pszReason = "Exact same pathnames";)
+    iSameFile = TRUE;
+IsSameFile_done:
+    free(pszBuf1);
+    free(pszBuf2);
+    RETURN_INT_COMMENT(iSameFile, ("%s\n", pszReason));
   }
 
-#if 0	/* JFL 2010-11-22 Modern C libraries all have this function built-in. */
-int atoi(char s[])   /* convert s to integer */
-  {
-  int i,n;
-  n=0;
-  for (i=0;s[i] >= '0' && s[i] <= '9'; ++i) n=10*n+s[i]-'0';
-  return(n);
+  /* Then try a simple attributes comparison, to quickly detect different files */
+#if defined _WIN32
+  bDone1 = (int)GetFileAttributesEx(pszPathname1, GetFileExInfoStandard, &attr1);
+  bDone2 = (int)GetFileAttributesEx(pszPathname2, GetFileExInfoStandard, &attr2);
+#else
+  bDone1 = stat(pszPathname1, &attr1) + 1;
+  bDone2 = stat(pszPathname2, &attr2) + 1;
+#endif /* defined _WIN32 */
+  if (bDone1 != bDone2) {
+    DEBUG_CODE(pszReason = "One exists and the other does not";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
   }
-#endif
+  if ((!bDone1) && SAMENAME(pszPathname1, pszPathname2)) {
+    DEBUG_CODE(pszReason = "They will be the same";)
+    iSameFile = TRUE;
+    goto IsSameFile_done;
+  }
+  if ((bDone1) && memcmp(&attr1, &attr2, sizeof(attr1))) {
+    DEBUG_CODE(pszReason = "They're different sizes, times, etc";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
+  }
+  /* They look very similar now: Names differ, but same size, same dates, same attributes */
+
+  /* Get the canonic names, with links resolved, to see if they're actually the same or not */
+  pszBuf1 = realpath(pszPathname1, NULL);
+  pszBuf2 = realpath(pszPathname2, NULL);
+  if ((!pszBuf1) || (!pszBuf2)) {
+    DEBUG_CODE(pszReason = "Not enough memory for temp buffers";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
+  }
+  iSameFile = SAMENAME(pszBuf1, pszBuf2);
+  DEBUG_LEAVE(("return %d; // \"%s\" %c= \"%s\";\n", iSameFile, pszBuf1, iSameFile ? '=' : '!', pszBuf2));
+  free(pszBuf1);
+  free(pszBuf2);
+  return iSameFile; 
+}
 
