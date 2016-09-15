@@ -107,28 +107,40 @@
 *		    Version 2.5.1.  					      *
 *    2016-09-02 JFL Minor change to the "Replacing xxx with yyy" message.     *
 *		    Version 2.5.2.  					      *
+*    2016-09-09 JFL Bug fix: An error while replacing a file in place caused  *
+*		    it to be truncated to size 0.			      *
+*                   Added options -same, -bak, -st. Version 2.5.3.            *
+*    2016-09-13 JFL Added new routine IsSameFile to detect equiv. pathnames.  *
+*                   Minor tweaks to fix compilation in Linux.                 *
+*    2016-09-14 JFL Make sure the debug stream is always in text mode.        *
+*		    Version 2.5.4.  					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.5.1"
-#define PROGRAM_DATE    "2016-09-02"
+#define PROGRAM_VERSION "2.5.4"
+#define PROGRAM_DATE    "2016-09-14"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
 #define _POSIX_SOURCE /* Force Linux to define fileno in stdio.h */
-#define _BSD_SOURCE /* Force Linux to define S_IFREG in sys/stat.h */
-#define _LARGEFILE_SOURCE64 1 /* Force using 64-bits file sizes if possible */
+#define _XOPEN_SOURCE /* Force Linux to define tempnam in stdio.h */
+#define _BSD_SOURCE   /* Force Linux to define S_IFREG in sys/stat.h */
+#define _LARGEFILE_SOURCE64 1   /* Force using 64-bits file sizes if possible */
+#define _GNU_SOURCE		/* Replaces nicely all the above */
 #define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <utime.h>
+#include <libgen.h>
+#include <unistd.h>
 
 #define SZ 80               /* Strings size */
 
@@ -138,7 +150,7 @@
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strieq(string1, string2) (stricmp(string1, string2) == 0)
 
-/* Our house debugging macros */
+/* Use MsvcLibX Library's debugging macros */
 #include "debugm.h"
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
@@ -159,11 +171,22 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #include <direct.h>
 #include <io.h>
 
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
+
 #define DEVNUL "NUL"
 
-#define stricmp _stricmp
+#define SAMENAME strieq		/* File name comparison routine */
 
-#endif
+/*  Avoid deprecation warnings */
+#define tempnam	_tempnam
+#define strdup	_strdup
+#define stricmp	_stricmp
+#define dup	_dup
+#define fdopen	_fdopen
+#define fileno	_fileno
+
+#endif /* defined(_WIN32) */
 
 /************************ MS-DOS-specific definitions ************************/
 
@@ -173,11 +196,14 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define OS_NAME "DOS"
 
 #include <direct.h>
-#include <sys\types.h>
-#include <sys\stat.h>
 #include <io.h>
 
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
+
 #define DEVNUL "NUL"
+
+#define SAMENAME strieq		/* File name comparison routine */
 
 /* Workaround for a linker bug in DOS, which is case independant.
    So for DOS, FGetC is the same as fgetc. */
@@ -186,7 +212,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define FSeek FSeek1
 #define FWrite FWrite1
 
-#endif
+#endif /* defined(_MSDOS) */
 
 /************************* Unix-specific definitions *************************/
 
@@ -211,9 +237,14 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define max(x,y) (((x)>(y))?(x):(y))
 #endif
 
+#define DIRSEPARATOR_CHAR '/'
+#define DIRSEPARATOR_STRING "/"
+
 #define DEVNUL "/dev/nul"
 
-#endif
+#define SAMENAME streq		/* File name comparison routine */
+
+#endif /* defined(__unix__) */
 
 /************************* MinGW-specific definitions ************************/
 
@@ -231,6 +262,19 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #pragma warning(disable:4001) /* Ignore the "nonstandard extension 'single line comment' was used" warning */
 #endif
 
+void fail(char *pszFormat, ...) {
+  va_list vl;
+  int n = 0;
+
+  va_start(vl, pszFormat);
+  n += vfprintf(stderr, pszFormat, vl);    /*  Not thread-safe on WIN32 ?!? */
+  va_end(vl);
+  fprintf(stderr, "\n");
+
+  exit(2);
+}
+#define FAIL(msg) fail("%s", msg);
+
 /* Global variables */
 
 int iVerbose = FALSE;
@@ -240,11 +284,12 @@ FILE *mf;			    /* Message output file */
 
 char *version(void);		    /* Build the version string */
 void usage(int);
+int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
 int GetEscChar(char *pszIn, char *pc); /* Get one escaped character */
 int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat);
 int GetEscChars(char *pBuf, char *pszFrom, size_t iSize);
-void InitBackBuf(char *psz0);
+int InitBackBuf(char *psz0);
 int FGetC(FILE *f);
 int FSeek(FILE *f, long lOffset, int iOrigin);
 int FPutC(int c, FILE *f);
@@ -254,6 +299,7 @@ int PrintEscapeChar(FILE *f, char c);
 int PrintEscapeString(FILE *f, char *pc);
 void MakeRoom(char **ppOut, int *piSize, int iNeeded);
 int MergeMatches(char *new, int iNewSize, char *match, int nMatch, char **ppOut);
+int IsSameFile(char *pszPathname1, char *pszPathname2);
 
 /*****************************************************************************/
 
@@ -266,7 +312,7 @@ int MergeMatches(char *new, int iNewSize, char *match, int nMatch, char **ppOut)
 |   Parameters:     int argc		    Number of arguments 	      |
 |		    char *argv[]	    List of arguments		      |
 |									      |
-|   Returns:	    The return code to pass to the BIOS, if run from ROM.     |
+|   Returns:	    The return code to pass to the OS.			      |
 |									      |
 |   Notes:								      |
 |									      |
@@ -274,421 +320,425 @@ int MergeMatches(char *new, int iNewSize, char *match, int nMatch, char **ppOut)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int main(int argc, char *argv[])
-    {
-    int c;                  /* Current character */
-    char old[SZ] = "";	    /* old string, to be replaced by the new string */
-    char new[SZ] = "";	    /* New string, to replace the old string */
-    char *maybe=malloc(SZ); /* Possible matching input */
-    int iMaybeSize = SZ;
-    int oldDone, newDone;
-    int iNewSize = 0;	    /* length of the new string */
-    int ixOld;              /* Index in the old string */
-    int ixMaybe = 0;	    /* Index in the maybe string */
-    FILE *sf, *df;
-    int i;
-    char *pszInName = NULL;
-    char *pszOutName = NULL;
-    char *pc;
-    char szBakName[FILENAME_MAX+1];
-    int sameFile = FALSE;   // Backup the input file, and modify it in place.
-    int keepTime = FALSE;   // If true, set the out file time = in file time.
-    struct stat sInTime = {0};
-    int demime = FALSE;
-    long lnChanges = 0;	    // Number of changes done
-    int iQuiet = FALSE;
-    int iNoBackup = FALSE;
-    char cSet[256];	    // Character set to match
-    int iSetSize;	    // Number of valid characters in the set.
-    char cRepeat = '\0';    // Repeat character. Either '?', '+', '*', or NUL.
-    int iOptionI = FALSE;   // TRUE = -i option specified
-    int iEOS = FALSE;	    // TRUE = End Of Switches
+int main(int argc, char *argv[]) {
+  int c;		    /* Current character */
+  char old[SZ] = "";	    /* old string, to be replaced by the new string */
+  char new[SZ] = "";	    /* New string, to replace the old string */
+  char *maybe=malloc(SZ);   /* Possible matching input */
+  int iMaybeSize = SZ;
+  int oldDone = FALSE;
+  int newDone = FALSE;
+  int iNewSize = 0;	    /* length of the new string */
+  int ixOld;		    /* Index in the old string */
+  int ixMaybe = 0;	    /* Index in the maybe string */
+  FILE *sf = NULL;	    /* Source file handle */
+  FILE *df = NULL;	    /* Destination file handle */
+  int i;
+  char *pszInName = NULL;
+  char *pszOutName = NULL;
+  char szBakName[FILENAME_MAX+1];
+  int iSameFile = FALSE;    /*  Backup the input file, and modify it in place. */
+  int iCopyTime = FALSE;    /*  If true, set the out file time = in file time. */
+  struct stat sInTime = {0};
+  int demime = FALSE;
+  long lnChanges = 0;	    /*  Number of changes done */
+  int iQuiet = FALSE;
+  int iBackup = FALSE;
+  char cSet[256];	    /*  Character set to match */
+  int iSetSize;		    /*  Number of valid characters in the set. */
+  char cRepeat = '\0';	    /*  Repeat character. Either '?', '+', '*', or NUL. */
+  int iOptionI = FALSE;	    /*  TRUE = -i option specified */
+  int iEOS = FALSE;	    /*  TRUE = End Of Switches */
+  char *pszPathCopy = NULL;
+  char *pszDirName = NULL;  /*  Output file directory */
 
-    mf = stdout; 		/* Assume output on stdout will be visible */
-    if (is_redirected(mf))	/* If error and stdout redirected... */
-	mf = stderr;			/* ... then use stderr */
+  /* Open a new message file stream for debug and verbose messages */
+  if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
+    /* Then use stderr to make sure they're visible. */
+    /* Drawback: Some scripting shells (Ex: tclsh) will think our program has failed. */
+    mf = stderr;
+  } else {
+    /* Else use stdout to avoid the above drawback. */
+    /* This requires duplicating the handle, to make sure it remains in text mode,
+       as stdout may be switched to binary mode further down */
+    mf = fdopen(dup(fileno(stdout)), "wt");
+    /* Disable buffering in both files, else the output may not appear in the programmed order */
+    setvbuf(stdout, NULL, _IONBF, 0); /* Disable buffering for stdio */
+    setvbuf(mf, NULL, _IONBF, 0); /* Disable buffering for dup of stdio */
+  }
 
-    oldDone = newDone = FALSE;
-    sf = df = NULL;
+  /* Process arguments */
 
-    /* Force stdin and stdout to untranslated */
-#if defined(_MSDOS) || defined(_WIN32)
-    _setmode( _fileno( stdin ), _O_BINARY );
-    _setmode( _fileno( stdout ), _O_BINARY );
-    _setmode( _fileno( stderr ), _O_BINARY );
-#endif
-
-    for (i=1; i<argc; i++)          /* Process all command line arguments */
-        {
-	if (iEOS) goto is_arg;		    // End Of Switches already reached.
-        if (   (*(argv[i]) == '/')          /* Process switches first */
-            || (*(argv[i]) == '-') )
-            {
-	    if (strieq(argv[i], "-")) goto is_arg;
-	    if (   strieq(argv[i]+1, "?")
-	        || strieq(argv[i]+1, "h")
-	        || strieq(argv[i]+1, "-help"))
-                {
-		usage(0);
-                }
-	    if (strieq(argv[i]+1, "-"))		/* End of switches */
-		{
-		iEOS = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "."))		/* No operation */
-		{
-		oldDone = TRUE;
-		newDone = TRUE;
-		continue;
-		}
-	    if (strieq(argv[i]+1, "="))		/* Decode Mime =XX codes */
-		{
-		demime = '=';
-		oldDone = TRUE;
-		newDone = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "%"))		/* Decode URL %XX codes */
-		{
-		demime = '%';
-		oldDone = TRUE;
-		newDone = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "#"))		/* End of command line */
-		{ /* Useful for adding comments in a Windows pipe */
-		break;
-                }
+  for (i=1; i<argc; i++) {
+    char *pszArg = argv[i];
+    if ((!iEOS) && IsSwitch(pszArg)) {          /* Process switches first */
+      char *pszOpt = pszArg+1;
+      if (   strieq(pszOpt, "?")
+	  || strieq(pszOpt, "h")
+	  || strieq(pszOpt, "-help")) {
+	usage(0);
+      }
+      if (streq(pszOpt, "-")) {		/* End of switches */
+	iEOS = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, ".")) {		/* No operation */
+	oldDone = TRUE;
+	newDone = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "=")) {		/* Decode Mime =XX codes */
+	demime = '=';
+	oldDone = TRUE;
+	newDone = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "%")) {		/* Decode URL %XX codes */
+	demime = '%';
+	oldDone = TRUE;
+	newDone = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "#")) {		/* End of command line */
+	/* Useful for adding comments in a Windows pipe */
+	break;
+      }
+      if (strieq(pszOpt, "bak")) {
+	iBackup = TRUE;
+	continue;
+      }
 #ifdef _DEBUG
-	    if (strieq(argv[i]+1, "d"))
-		{
-		DEBUG_ON();
-		iVerbose = TRUE;
-		continue;
-                }
+      if (streq(pszOpt, "d")) {
+	DEBUG_ON();
+	iVerbose = TRUE;
+	continue;
+      }
 #endif
-	    if (strieq(argv[i]+1, "f"))		/* Fixed string <==> no regexp */
-		{
-		cRepeat = '\xFF';
-		continue;
-                }
-	    if (strieq(argv[i]+1, "i"))
-		{
-		iOptionI = TRUE;
-		InitBackBuf(argv[++i]);
-		continue;
-                }
-	    if (strieq(argv[i]+1, "nb"))
-		{
-		iNoBackup = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "pipe"))	/* Now the default. Left for compatibility with early version. */
-                {
-		sf = stdin;
-		df = stdout;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "q"))
-		{
-		iQuiet = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "same"))
-		{
-		sameFile = TRUE;
-		continue;
-                }
-	    if (strieq(argv[i]+1, "t"))
-		{
-		keepTime = TRUE;
-		continue;
-                }
-	    if (streq(argv[i]+1, "v"))
-		{
-		iVerbose = TRUE;
-		continue;
-                }
-	    if (streq(argv[i]+1, "V"))
-		{
-		printf("%s\n", version());
-		exit(0);
-                }
-	    /* Default: Assume it's not a switch, but a string to replace */
-	    }
-is_arg:
-	if (!oldDone)
-            {
-	    strncpy(old, argv[i], sizeof(old));
-	    oldDone = TRUE;
-            continue;
-            }
-	if (!newDone)
-            {
-	    iNewSize = GetEscChars(new, argv[i], sizeof(new));
-	    newDone = TRUE;
-            continue;
-            }
-	if (!sf)
-	    {
-	    if (streq(argv[i], "-"))
-		{
-		sf = stdin;
-		continue;
-		}
-	    sf = fopen(argv[i], "rb");
-	    if (!sf)
-		{
-		fprintf(stderr, "Can't open file %s\r\n", argv[i]);
-		exit(2);
-		}
-	    pszInName = argv[i];
-	    stat(pszInName, &sInTime);
-            continue;
-            }
-	if (!df)
-	    {
-	    if (streq(argv[i], "-"))
-		{
-		df = stdout;
-		continue;
-		}
-	    if (strieq(argv[i], pszInName))
-		{
-		sameFile = TRUE;
-		continue;
-		}
-	    sameFile = FALSE; // Just in case we got contradictory arguments.
-	    df = fopen(argv[i], "wb");
-	    if (!df)
-		{
-		fprintf(stderr, "Can't open file %s\r\n", argv[i]);
-		exit(2);
-		}
-	    pszOutName = argv[i];
-            continue;
-            }
-	usage(2);		    /* Error: Too many arguments */
-        }
-
-    if (!oldDone && !demime) usage(2);
-
-    if (sameFile)
-	{
-	if (!sf) usage(2);
-	fclose(sf);
-
-	strcpy(szBakName, pszInName);
-	pc = strrchr(szBakName, '.');
-	if (pc && !strchr(pc, '\\'))	/* If extension in name & not in path */
-	    strcpy(pc, ".bak"); 	/* Change extension to .bak */
-	else
-	    strcat(szBakName, ".bak");	/* Set extension to .bak */
-	unlink(szBakName); 		/* Remove the .bak if already there */
-	rename(pszInName, szBakName);	/* Rename the source as .bak */
-
-	sf = fopen(szBakName, "rb");
-	if (!sf)
-	    {
-	    fprintf(stderr, "Can't open file %s\r\n", szBakName);
-	    exit(2);
-	    }
-	df = fopen(pszInName, "wb");
-	if (!df)
-	    {
-	    fclose(sf);
-	    fprintf(stderr, "Can't open file %s\r\n", pszInName);
-	    exit(2);
-	    }
-	pszOutName = pszInName;
+      if (strieq(pszOpt, "f")) {		/* Fixed string <==> no regexp */
+	cRepeat = '\xFF';
+	continue;
+      }
+      if (strieq(pszOpt, "i")) {
+	int iErr = InitBackBuf(argv[++i]);
+	if (iErr) {
+fail_no_mem:
+	  FAIL("Not enough memory");
 	}
-
-    if (!sf)
-	{
-	if (iOptionI)
-	    {
-	    sf = fopen(DEVNUL, "rb");
-	    if (!sf)
-		{
-		fprintf(stderr, "Can't open file %s\r\n", DEVNUL);
-		exit(2);
-		}
-	    pszInName = DEVNUL;
-	    }
-	else
-	    {
-	    sf = stdin;
-	    }
-	}
-    if (!df)
-	{
+	iOptionI = TRUE;
+	continue;
+      }
+      if (strieq(pszOpt, "nb")) {
+	iBackup = FALSE;
+	continue;
+      }
+      if (strieq(pszOpt, "pipe")) {	/* Now the default. Left for compatibility with early version. */
+	sf = stdin;
 	df = stdout;
+	continue;
+      }
+      if (strieq(pszOpt, "q")) {
+	iQuiet = TRUE;
+	continue;
+      }
+      if (strieq(pszOpt, "same")) {
+	iSameFile = TRUE;
+	continue;
+      }
+      if (strieq(pszOpt, "st")) {
+	iCopyTime = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "v")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "V")) {
+	printf("%s\n", version());
+	exit(0);
+      }
+      /* Default: Assume it's not a switch, but a string to replace */
+    }
+    if (!oldDone) {
+      strncpy(old, pszArg, sizeof(old));
+      oldDone = TRUE;
+      continue;
+    }
+    if (!newDone) {
+      iNewSize = GetEscChars(new, pszArg, sizeof(new));
+      newDone = TRUE;
+      continue;
+    }
+    /* It's not a switch, it's an argument */
+    if (!pszInName) {
+      pszInName = pszArg;
+      continue;
+    }
+    if (!pszOutName) {
+      pszOutName = pszArg;
+      continue;
+    }
+    usage(2);		    /* Error: Too many arguments */
+  }
+
+  if (!oldDone && !demime) usage(2);
+
+  /* Report what the message stream is */
+  DEBUG_CODE(
+    if (mf == stderr) {	/* If stdout is redirected to a file or a pipe */
+      DEBUG_FPRINTF((mf, "// Debug output sent to stderr.\n"));
+    } else {
+      DEBUG_FPRINTF((mf, "// Debug output sent to file #%d.\n", fileno(mf)));
+    }
+  )
+
+  /* Force stdin and stdout to untranslated */
+#if defined(_MSDOS) || defined(_WIN32)
+  _setmode( _fileno( stdin ), _O_BINARY );
+  fflush(stdout); /* Make sure any previous output is done in text mode */
+  _setmode( _fileno( stdout ), _O_BINARY );
+#endif
+
+  if (((!pszInName) || streq(pszInName, "-")) && iOptionI) {
+    pszInName = DEVNUL;
+    iSameFile = FALSE;	/*  Meaningless in this case. Avoid issues below. */
+  }
+  if ((!pszInName) || streq(pszInName, "-")) {
+    sf = stdin;
+    iSameFile = FALSE;	/*  Meaningless in this case. Avoid issues below. */
+  } else {
+    sf = fopen(pszInName, "rb");
+    if (!sf) fail("Can't open file %s\n", pszInName);
+    stat(pszInName, &sInTime);
+  }
+  if ((!pszOutName) || streq(pszOutName, "-")) {
+    if (!iSameFile) df = stdout;
+  } else { /*  Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
+    iSameFile = IsSameFile(pszInName, pszOutName);
+  }
+  if (iSameFile) {
+    DEBUG_FPRINTF((mf, "// In and out files are the same. Writing to a temp file.\n"));
+    pszPathCopy = strdup(pszInName);
+    if (!pszPathCopy) goto fail_no_mem;
+    pszDirName = dirname(pszPathCopy);
+    pszOutName = tempnam(pszDirName, "conv.");
+    DEBUG_FPRINTF((mf, "tempnam(\"%s\", \"conv.\"); // \"%s\"\n", pszDirName, pszOutName));
+    if (iBackup) {	/* Create an *.bak file in the same directory */
+      char *pszNameCopy = strdup(pszInName);
+      char *pszBaseName = basename(pszNameCopy);
+      char *pc;
+      if (!pszNameCopy) goto fail_no_mem;
+      strcpy(szBakName, pszDirName);
+      strcat(szBakName, DIRSEPARATOR_STRING);
+      pc = strrchr(pszBaseName, '.');
+      if (pc) {
+	if (SAMENAME(pc, ".bak")) {
+	  fail("Can't backup file %s\n", pszInName);
 	}
+	*pc = '\0';			/* Remove the extension */
+      }
+      strcat(szBakName, pszBaseName);	/* Copy the base name without the extension */
+      strcat(szBakName, ".bak");	/* Set extension to .bak */
+      free(pszNameCopy);		/* We don't need that copy anymore */
+    }
+  } else {
+    DEBUG_FPRINTF((mf, "// In and out files are distinct. Writing directly to the out file.\n"));
+  }
+  if (!df) {
+    df = fopen(pszOutName, "wb");
+    if (!df) {
+      if (sf != stdout) fclose(sf);
+      fail("Can't open file %s\n", pszOutName);
+    }
+  }
 
-    if (iVerbose)
-	{
-	if (demime && !iQuiet) fprintf(mf, "Replacing Mime %cXX codes.\r\n", demime);
-	if (old[0] && !iQuiet) 
-	    {
-	    fprintf(mf, "Replacing \"%s\" (\"", old);
-	    PrintEscapeString(mf, old);
-	    fprintf(mf, "\") with \"%s\" (\"", new);
-	    PrintEscapeString(mf, new);
-	    fprintf(mf, "\").\r\n");
-	    }
-	}
+  if (iVerbose) {
+    if (demime && !iQuiet) fprintf(mf, "Replacing Mime %cXX codes.\n", demime);
+    if (old[0] && !iQuiet) {
+      fprintf(mf, "Replacing \"%s\" (\"", old);
+      PrintEscapeString(mf, old);
+      fprintf(mf, "\") with \"%s\" (\"", new);
+      PrintEscapeString(mf, new);
+      fprintf(mf, "\").\n");
+    }
+  }
 
-    ixOld = 0;
-    ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
-    ixMaybe = 0;
+  ixOld = 0;
+  ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
+  ixMaybe = 0;
 
-    while ((c = FGetC(sf)) != EOF)	 /* Read chars until End of file */
-	{
-	if (demime && (c == demime))
-	    {
-	    char c0, c1, sz[3];
-	    int ic;
+  while ((c = FGetC(sf)) != EOF) {	 /* Read chars until End of file */
+    if (demime && (c == demime)) {
+      char c0, c1, sz[3];
+      int ic;
 
-	    if ((c0 = (char)FGetC(sf)) == EOF)
-		{
-		FPutC(c, df);
-		break;
-		}
-	    /* At the end of a line, it signals a broken line. Merge halves. */
-	    if (c0 == 0x0A)
-		{
-		// ~~jfl 2003-09-23 Added support for Unix-style files. Don't output anything.
-		lnChanges += 1;
-		continue;
-		}
-	    if ((c1 = (char)FGetC(sf)) == EOF)
-		{
-		FPutC(c, df);
-		FPutC((char)c0, df);
-		break;
-		}
-	    /* At the end of a line, it signals a broken line. Merge halves. */
-	    if ((c0 == 0x0D) && (c1 == 0x0A))
-		{
-		// ~~jfl 1999-08-02 Don't output anything.
-		lnChanges += 1;
-		continue;
-		}
-	    /* Else it's an ASCII code */
-	    sz[0] = (char)c0;
-	    sz[1] = (char)c1;
-	    sz[2] = '\0';
-            DEBUG_FPRINTF((mf, "Found code %s: ", sz));
-	    if (sscanf(sz, "%X", &ic))
-		{
-                DEBUG_FPRINTF((mf, "Changed to char %c.\n", ic));
-		FPutC((char)ic, df);
-		lnChanges += 1;
-		}
-	    else
-		{
-                DEBUG_FPRINTF((mf, "Not a valid code.\n"));
-		FPutC('=', df);
-		FWrite(sz, 2, 1, df);
-		}
-	    continue;
-	    }
+      if ((c0 = (char)FGetC(sf)) == EOF) {
+	FPutC(c, df);
+	break;
+      }
+      /* At the end of a line, it signals a broken line. Merge halves. */
+      if (c0 == 0x0A) {
+	/*  ~~jfl 2003-09-23 Added support for Unix-style files. Don't output anything. */
+	lnChanges += 1;
+	continue;
+      }
+      if ((c1 = (char)FGetC(sf)) == EOF) {
+	FPutC(c, df);
+	FPutC((char)c0, df);
+	break;
+      }
+      /* At the end of a line, it signals a broken line. Merge halves. */
+      if ((c0 == 0x0D) && (c1 == 0x0A)) {
+	/*  ~~jfl 1999-08-02 Don't output anything. */
+	lnChanges += 1;
+	continue;
+      }
+      /* Else it's an ASCII code */
+      sz[0] = (char)c0;
+      sz[1] = (char)c1;
+      sz[2] = '\0';
+      DEBUG_FPRINTF((mf, "Found code %s: ", sz));
+      if (sscanf(sz, "%X", &ic)) {
+	DEBUG_FPRINTF((mf, "Changed to char %c.\n", ic));
+	FPutC((char)ic, df);
+	lnChanges += 1;
+      } else {
+	DEBUG_FPRINTF((mf, "Not a valid code.\n"));
+	FPutC('=', df);
+	FWrite(sz, 2, 1, df);
+      }
+      continue;
+    }
 
 try_next_set:
-        DEBUG_CODE_IF_ON(
-	    char cBuf[8];
-	    fprintf(mf, "Trying to match '%s' in set \"", EscapeChar(cBuf, (char)c));
-	    for (i=0; i<iSetSize; i++) PrintEscapeChar(mf, cSet[i]);
-	    fprintf(mf, "\" %c\n", cRepeat);
-	    );
+    DEBUG_CODE_IF_ON(
+      char cBuf[8];
+      fprintf(mf, "Trying to match '%s' in set [", EscapeChar(cBuf, (char)c));
+      for (i=0; i<iSetSize; i++) PrintEscapeChar(mf, cSet[i]);
+      fprintf(mf, "]%s ... ", cRepeat ? EscapeChar(cBuf, cRepeat) : "");
+    );
 
-	if (memchr(cSet, c, iSetSize))		/* If c belongs to the old string */
-            {
-            DEBUG_FPRINTF((mf, "Match! Next is old[%d]='%c'\n", ixOld, old[ixOld]));
+    if (memchr(cSet, c, iSetSize)) {	/* If c belongs to the old string */
+      DEBUG_CODE_IF_ON(
+	char cBuf[8];
+	fprintf(mf, "Match! Next is old[%d]='%s'\n", ixOld, EscapeChar(cBuf, old[ixOld]));
+      )
 
-	    MakeRoom(&maybe, &iMaybeSize, ixMaybe+1); // If needed, extend the buffer
-	    maybe[ixMaybe++] = (char)c;		/* Save the matching character */
-            if (cRepeat == '?') cRepeat = '\0'; /* We've found it. No more expected. */
-            if (cRepeat == '+') cRepeat = '*';  /* We've found it. More possible. */
-            if (cRepeat == '*') continue;
-            if (!old[ixOld])                    /* and if it is the last char. of the string to replace */
-                {
-                char *new2;
-                int iNewSize2 = MergeMatches(new, iNewSize, maybe, ixMaybe, &new2);
-		FWrite(new2, iNewSize2, 1, df);       /* then write new string */
-		free(new2);
-		lnChanges += 1;
-                ixOld = 0;                      /* and start over again. */
-                ixMaybe = 0;
-                }
-            }
-        else                    /* Else it is an unexpected char. */
-            {
-            DEBUG_FPRINTF((mf, "No match. Next is old[%d]='%c'\n", ixOld, old[ixOld]));
-
-            if ((cRepeat == '?') || (cRepeat == '*'))
-		{
-		if (old[ixOld])
-		    {
-		    ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
-		    goto try_next_set;
-		    }
-		else		    /* The set was complete. Write the new string */
-		    {
-		    char *new2;
-		    int iNewSize2 = MergeMatches(new, iNewSize, maybe, ixMaybe, &new2);
-		    FWrite(new2, iNewSize2, 1, df);       /* then write new string */
-		    free(new2);
-		    lnChanges += 1;
-		    }
-		ixMaybe = 0;
-		}
-            if (ixMaybe)                    /* If there were pending characters */
-                {
-		// ~~jfl 2002-11-28 In case of a partial match, output 1 character only, and look for another match starting on the next.
-		FSeek(sf, -ixMaybe, SEEK_CUR); // Backtrack to the 2nd input character
-		MakeRoom(&maybe, &iMaybeSize, ixMaybe+1); // If needed, extend the buffer
-		maybe[ixMaybe++] = (char)c;
-		c = maybe[0];
-                }
-            ixOld = 0;
-            ixMaybe = 0;
-	    FPutC(c, df);	    /* Then output the given character. */
-            }
-	ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
-        }
-    DEBUG_FPRINTF((mf, "End of file. Flushing remainders.\n"));
-    if (((cRepeat == '?') || (cRepeat == '*')) && !old[ixOld])
-	{	/* The set was complete. Write the new string */
+      MakeRoom(&maybe, &iMaybeSize, ixMaybe+1); /*  If needed, extend the buffer */
+      maybe[ixMaybe++] = (char)c;		/* Save the matching character */
+      if (cRepeat == '?') cRepeat = '\0'; /* We've found it. No more expected. */
+      if (cRepeat == '+') cRepeat = '*';  /* We've found it. More possible. */
+      if (cRepeat == '*') continue;
+      if (!old[ixOld]) {                  /* and if it is the last char. of the string to replace */
 	char *new2;
 	int iNewSize2 = MergeMatches(new, iNewSize, maybe, ixMaybe, &new2);
 	FWrite(new2, iNewSize2, 1, df);       /* then write new string */
 	free(new2);
 	lnChanges += 1;
+	ixOld = 0;                      /* and start over again. */
+	ixMaybe = 0;
+      }
+    } else {              /* Else it is an unexpected char. */
+      DEBUG_CODE_IF_ON(
+	char cBuf[8];
+	fprintf(mf, "No match. Next is old[%d]='%s'\n", ixOld, EscapeChar(cBuf, old[ixOld]));
+      )
+
+      if ((cRepeat == '?') || (cRepeat == '*')) {
+	if (old[ixOld]) {
+	  ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
+	  goto try_next_set;
+	} else {		    /* The set was complete. Write the new string */
+	  char *new2;
+	  int iNewSize2 = MergeMatches(new, iNewSize, maybe, ixMaybe, &new2);
+	  FWrite(new2, iNewSize2, 1, df);       /* then write new string */
+	  free(new2);
+	  lnChanges += 1;
 	}
-    else if (ixOld) FWrite(maybe, ixMaybe, 1, df); /* Flush an uncompleted old string */
-
-    fclose(sf);
-    fclose(df);
-
-    if (sameFile)
-	{
-	if (iNoBackup) unlink(szBakName);     /* Optionally don't keep a backup */
-	}
-
-    if (pszInName && pszOutName && keepTime)
-	{
-	struct utimbuf sOutTime = {0};
-	sOutTime.actime = sInTime.st_atime;
-	sOutTime.modtime = sInTime.st_mtime;
-	utime(pszOutName, &sOutTime);
-	}
-
-    if (iVerbose) fprintf(mf, "Remplace: %ld changes done.\r\n", lnChanges);
-
-    return ((lnChanges>0) ? 0 : 1);              /* and exit */
+	ixMaybe = 0;
+      }
+      if (ixMaybe) {                  /* If there were pending characters */
+	/*  ~~jfl 2002-11-28 In case of a partial match, output 1 character only, and look for another match starting on the next. */
+	FSeek(sf, -ixMaybe, SEEK_CUR); /*  Backtrack to the 2nd input character */
+	MakeRoom(&maybe, &iMaybeSize, ixMaybe+1); /*  If needed, extend the buffer */
+	maybe[ixMaybe++] = (char)c;
+	c = maybe[0];
+      }
+      ixOld = 0;
+      ixMaybe = 0;
+      FPutC(c, df);	    /* Then output the given character. */
     }
+    ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
+  }
+  DEBUG_FPRINTF((mf, "End of file. Flushing remainders.\n"));
+  if (((cRepeat == '?') || (cRepeat == '*')) && !old[ixOld]) {
+    /* The set was complete. Write the new string */
+    char *new2;
+    int iNewSize2 = MergeMatches(new, iNewSize, maybe, ixMaybe, &new2);
+    FWrite(new2, iNewSize2, 1, df);       /* then write new string */
+    free(new2);
+    lnChanges += 1;
+  } else if (ixOld) {
+    FWrite(maybe, ixMaybe, 1, df); /* Flush an uncompleted old string */
+  }
+
+  if (sf != stdin) fclose(sf);
+  if (df != stdout) fclose(df);
+
+  if (iSameFile) {
+    if (iBackup) {	/* Create an *.bak file in the same directory */
+      unlink(szBakName); 		/* Remove the .bak if already there */
+      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      rename(pszInName, szBakName);	/* Rename the source as .bak */
+    } else {		/* Don't keep a backup of the input file */
+      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
+      unlink(pszInName); 		/* Remove the original file */
+    }
+    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    pszOutName = pszInName;
+  }
+
+  if ((sf != stdin) && (df != stdout) && iCopyTime) {
+    struct utimbuf sOutTime = {0};
+    sOutTime.actime = sInTime.st_atime;
+    sOutTime.modtime = sInTime.st_mtime;
+    utime(pszOutName, &sOutTime);
+  }
+
+  if (iVerbose) fprintf(mf, "Remplace: %ld changes done.\n", lnChanges);
+
+  return ((lnChanges>0) ? 0 : 1);              /* and exit */
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -759,90 +809,90 @@ void usage(int err)
     /* Note: The help is too long, and needs to be split into several sub strings */
     /*       Also be careful of the % character that appears in some options */
     fprintf(f, "\
-\r\n\
-remplace version %s - Replace substrings in a stream\r\n\
-\r\n\
-Usage: remplace [switches] {operation} [files_spec]\r\n\
-\r\n\
-files_spec: [input_file [output_file]]\r\n\
-  Default input_file: standard input\r\n\
-  Default output_file: standard output\r\n", version());
+\n\
+remplace version %s - Replace substrings in a stream\n\
+\n\
+Usage: remplace [SWITCHES] OPERATIONS [FILES_SPEC]\n\
+\n\
+files_spec: [INFILE [OUTFILE|-same]]\n\
+  INFILE  Input file pathname. Default or \"-\": stdin\n\
+  OUTFILE Output file pathname. Default or \"-\": stdout\n", version());
     fprintf(f, "%s", "\
-\r\n\
-operation: {old_string new_string}|-=|-%|-.\r\n\
-  -=      Decode Mime =XX codes.\r\n\
-  -%      Decode URL %XX codes.\r\n\
-  -.      No change.\r\n\
-\r\n\
-switches:\r\n\
-  -#      Ignore all further arguments.\r\n\
-  -?      Display this brief help screen.\r\n\
-  --      End of switches.\r\n"
+\n\
+operation: {old_string new_string}|-=|-%|-.\n\
+  -=      Decode Mime =XX codes.\n\
+  -%      Decode URL %XX codes.\n\
+  -.      No change.\n\
+\n\
+Note that the input is byte-oriented, not line oriented. So both the old\n\
+string and new string can span multiple lines.\n\
+\n\
+switches:\n\
+  -#      Ignore all further arguments.\n\
+  -?      Display this brief help screen.\n\
+  --      End of switches.\n\
+  -bak    When used with -same, create a backup file of the input file\n"
 #ifdef _DEBUG
-"  -d      Output debug information\r\n"
+"  -d      Output debug information\n"
 #endif
-"  -f      Fixed old string = Disable the regular expression subset supported.\r\n\
-  -i txt  Input text to use before input file, if any. (Use - for force stdin)\r\n\
-  -nb     keep no backup if in_file==out_file. Default: Rename as .bak.\r\n\
-  -q      Quiet mode. No status message.\r\n\
-  -same   Modify the input file in place.\r\n\
-  -t      Set the output file time equal to the initial input file time.\r\n\
-  -v      Verbose mode.\r\n\
-\r\n\
-Examples:\r\n"
+"\
+  -f      Fixed old string = Disable the regular expression subset supported.\n\
+  -i TEXT Input text to use before input file, if any. (Use - for force stdin)\n\
+  -q      Quiet mode. No status message.\n\
+  -same   Modify the input file in place. (Default: Automatically detected)\n\
+  -st     Set the output file time to the same time as the input file.\n\
+  -v      Verbose mode.\n\
+  -V      Display this program version\n\
+\n\
+Examples:\n"
 );
     fprintf(f,
 #if defined _MSDOS || defined _WIN32
-"  remplace \\n \\r\\n <unixfile >dosfile\r\n\
-  remplace -t \\n \\r\\n unixfile -same\r\n\
-  remplace -= unreadable_mime_file\r\n\
-  remplace \\CHICAGO \\WIN95 config.sys -same -nb\r\n\
-\r\n\
-Note that the MSVC command line parser interprets quotes itself this way:\r\n\
-Characters surrounded by \"s are parsed as a single argument. \"s are removed.\r\n\
-Use \\\" to enter a \". \\ series are used literally, unless followed by a \".\r\n\
-In that case, the \\s and \" are treated as by a C compiler.\r\n\
-Special characters: Use \\r for CR, \\n for LF, \\x3C for <, \\x3E for >.\r\n\
-Use the verbose mode to see how quotes and backslashes went through.\r\n"
+"  remplace \\n \\r\\n <unixfile >dosfile\n\
+  remplace -t \\n \\r\\n unixfile -same\n\
+  remplace -= unreadable_mime_file\n\
+  remplace \\CHICAGO \\WIN95 config.sys -same -nb\n\
+\n\
+Note that the MSVC command line parser interprets quotes itself this way:\n\
+Characters surrounded by \"s are parsed as a single argument. \"s are removed.\n\
+Use \\\" to enter a \". \\ series are used literally, unless followed by a \".\n\
+In that case, the \\s and \" are treated as by a C compiler.\n\
+Special characters: Use \\r for CR, \\n for LF, \\x3C for <, \\x3E for >.\n\
+Use the verbose mode to see how quotes and backslashes went through.\n"
 #endif
 #if defined __unix__
-"  remplace \\\\n \\\\r\\\\n <unixfile >dosfile\r\n\
-  remplace -t \\\\n \\\\r\\\\n unixfile -same\r\n\
-  remplace -= unreadable_mime_file\r\n\
-  remplace New-York \"Big apple\" catalog -same -nb\r\n\
-\r\n\
-Note that the Unix shells interpret quotes and backslashes themselves. Hence\r\n\
-the double backslashes in the examples.\r\n\
-Special characters: Use \\\\r for CR, \\\\n for LF, \\\\x3C for <, \\\\x3E for >.\r\n\
-Use the verbose mode to see how quotes and backslashes went through.\r\n"
+"  remplace \\\\n \\\\r\\\\n <unixfile >dosfile\n\
+  remplace -t \\\\n \\\\r\\\\n unixfile -same\n\
+  remplace -= unreadable_mime_file\n\
+  remplace New-York \"Big apple\" catalog -same -nb\n\
+\n\
+Note that the Unix shells interpret quotes and backslashes themselves. Hence\n\
+the double backslashes in the examples.\n\
+Special characters: Use \\\\r for CR, \\\\n for LF, \\\\x3C for <, \\\\x3E for >.\n\
+Use the verbose mode to see how quotes and backslashes went through.\n"
 #endif
-"\r\n\
-Regular expressions subset for the old_string:\r\n\
-  .     Matches any character.\r\n\
-  c?    Matches 0 or 1 occurence of c.\r\n\
-  c*    Matches 0 or plus occurences of c.\r\n\
-  c+    Matches 1 or plus occurences of c.\r\n\
-  [abc] Matches any of the enumerated characters. Use [[] to match one [.\r\n\
-  [a-z] Matches any character in the specified range.\r\n\
-  [^ab] Matches all but the enumerated characters.\r\n"
+"\n\
+Regular expressions subset for the old_string:\n\
+  .     Matches any character.\n\
+  c?    Matches 0 or 1 occurence of c.\n\
+  c*    Matches 0 or plus occurences of c.\n\
+  c+    Matches 1 or plus occurences of c.\n\
+  [abc] Matches any of the enumerated characters. Use [[] to match one [.\n\
+  [a-z] Matches any character in the specified range.\n\
+  [^ab] Matches all but the enumerated characters.\n"
 #if defined _MSDOS || defined _WIN32
-"        Warning: ^ is cmd prompt escape character. Double it if needed.\r\n"
+"        Warning: ^ is cmd prompt escape character. Double it if needed.\n"
 #endif
-"\r\n\
-The new string may contain the following special sequences\r\n\
-  \\\\    Replaced by a single \\\r\n\
-  \\\\0   Replaced by the current matching input\r\n\
-\r\n\
-Return code: 0=Success; 1=No change done; 2=Error.\r\n\
-\r\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\r\n"
+"\n\
+The new string may contain the following special sequences\n\
+  \\\\    Replaced by a single \\\n\
+  \\\\0   Replaced by the current matching input\n\
+\n\
+Return code: 0=Success; 1=No change done; 2=Error.\n\
+\n\
+Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
-"\r\n"
+"\n"
 #endif
 );
 
@@ -875,46 +925,46 @@ int GetEscChar(char *pszIn, char *pc)
 
     if (c == '\\') switch(c = *(pszIn++))
         {
-        case '\0':			// End of string
+        case '\0':			/*  End of string */
             *pc = '\\';
             pszIn -= 1;
             break;
-        case '\\':			// Litteral \ .
+        case '\\':			/*  Litteral \ . */
             *pc = c;
             break;
-        case '0':			// NUL
+        case '0':			/*  NUL */
             *pc = '\0';
             break;
-        case 'a':			// Alert (Bell)
+        case 'a':			/*  Alert (Bell) */
             *pc = '\a';
             break;
-        case 'b':			// Backspace
+        case 'b':			/*  Backspace */
             *pc = '\b';
             break;
-        case 'e':			// Escape
+        case 'e':			/*  Escape */
             *pc = '\x1B';
             break;
-        case 'f':			// Form feed
+        case 'f':			/*  Form feed */
             *pc = '\f';
             break;
-        case 'n':			// New Line
+        case 'n':			/*  New Line */
             *pc = '\n';
             break;
-        case 'r':			// Return
+        case 'r':			/*  Return */
             *pc = '\r';
             break;
-        case 't':			// Tabulation
+        case 't':			/*  Tabulation */
             *pc = '\t';
             break;
-        case 'v':			// Vertical tabulation
+        case 'v':			/*  Vertical tabulation */
             *pc = '\v';
             break;
-        case 'x':			// Hexadecimal character
+        case 'x':			/*  Hexadecimal character */
             sscanf(pszIn, "%2X", &i);	/* convert next 2 chars */
             pszIn += 2;			/* Count them */
             *pc = (char)i;
             break;
-        default:			// Anything else: Preserve the characters.
+        default:			/*  Anything else: Preserve the characters. */
             *pc = c;
             break;
         }
@@ -968,21 +1018,21 @@ int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat)
 	{
 	switch (c = *pszOld)
 	    {
-	    case '[':	// '[' is the beginning of a set of characters
+	    case '[':	/*  '[' is the beginning of a set of characters */
 		pszOld += 1;
 		memset(cSet, 0, 256);
-		negative = 0; // 1=This is a negative set, like [^abc]
+		negative = 0; /*  1=This is a negative set, like [^abc] */
 		if (*pszOld == '^') { negative = 1; pszOld += 1; }
 		if (*pszOld == ']') { cSet[(unsigned char)']'] = 1; pszOld += 1; }
 		while ((c = *pszOld)) {
 		  pszOld += GetEscChar(pszOld, &c);
 		  if (c == ']') break;
 		  cSet[(unsigned char)c] = 1;
-		  if (*pszOld == '-') { // If this is the beginning of a range
-		    char cLast = c; // Avoid problem if there's no end.
-		    pszOld += 1; // Skip the -
+		  if (*pszOld == '-') { /*  If this is the beginning of a range */
+		    char cLast = c; /*  Avoid problem if there's no end. */
+		    pszOld += 1; /*  Skip the - */
 		    pszOld += GetEscChar(pszOld, &cLast);
-		    if (cLast < c) cLast = c; // Avoid problem if ends are reversed.
+		    if (cLast < c) cLast = c; /*  Avoid problem if ends are reversed. */
 		    for (c++ ; c <= cLast; c++) {
 		      cSet[(unsigned char)c] = 1;
 		    }
@@ -991,24 +1041,24 @@ int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat)
 		if (negative) for (i=0; i<256; i++) cSet[i] = (char)!cSet[i];
 		hasNul = cSet[0];
 		for (i=1, n=0; i<256; i++) if (cSet[i]) cSet[n++] = (char)i;
-		if (hasNul) cSet[n++] = '\0';  // Ensure the NUL is the last character, so that the debug output below does not break.
+		if (hasNul) cSet[n++] = '\0';  /*  Ensure the NUL is the last character, so that the debug output below does not break. */
 		break;
-	    case '.':	// '.' matches any character
+	    case '.':	/*  '.' matches any character */
 		pszOld += 1;
 		for (n=0; n<256; n++)
 		    {
-		    cSet[n] = (char)(n+1); // Ensure the NUL is the 256th character, so that the debug output below does not break.
+		    cSet[n] = (char)(n+1); /*  Ensure the NUL is the 256th character, so that the debug output below does not break. */
 		    }
 		break;
-	    default:	// Normal character
+	    default:	/*  Normal character */
 		pszOld += GetEscChar(pszOld, cSet);
 		n = 1;
 		break;
 	    }
 	*piSetSize = n;
-	if (n<256) cSet[n] = '\0';	// Convenience to make it look like a string in most cases.    
+	if (n<256) cSet[n] = '\0';	/*  Convenience to make it look like a string in most cases.     */
     
-	// Now look for the optional ?+* repetition character behind.
+	/*  Now look for the optional ?+* repetition character behind. */
 	c = *pszOld;
 	switch (c)
 	    {
@@ -1076,7 +1126,7 @@ int GetEscChars(char *pBuf, char *pszFrom, size_t iSize)
 	pszFrom += GetEscChar(pszFrom, pBuf++);
 	iSize -= 1;
         }
-    if (iSize) *pBuf = '\0';	// Convenience to make it look like a string in most cases.
+    if (iSize) *pBuf = '\0';	/*  Convenience to make it look like a string in most cases. */
 
     return (int)(pBuf - pBuf0);
     }
@@ -1096,12 +1146,15 @@ int GetEscChars(char *pBuf, char *pszFrom, size_t iSize)
 |									      |
 |   History:								      |
 |    2008-12-10 JFL Created this routine.                                     |
+|    2016-09-14 JFL Added a case for the NUL character = '\0'.                |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 char *EscapeChar(char *pBuf, char c)
     {
-    if ((c < ' ') || ((unsigned char)c > (unsigned char)'\x7F'))
+    if (!c)
+	strcpy(pBuf, "\\0");
+    else if ((c < ' ') || ((unsigned char)c > (unsigned char)'\x7F'))
 	sprintf(pBuf, "\\x%02X", (unsigned char)c);
     else if (c == '\\') 
 	strcpy(pBuf, "\\\\");
@@ -1172,34 +1225,32 @@ char *BBMove(char *p)
   return p;
 }
 
-void InitBackBuf(char *psz0)
+int InitBackBuf(char *psz0) /* Returns 0=Success, else error */
 {
   ixBB = nBB = strlen(psz0);
   lBB = max(nBB, 1024);
   if (!pszBackBuf)
   {
     pszBackBuf = malloc(lBB);
-    if (!pszBackBuf)
-    {
-      fprintf(stderr, "Error: not enough memory.\n");
-      exit(1);
-    }
+    if (!pszBackBuf) return 1;
   }
   pszBBEnd = pszBackBuf + lBB;
   strncpy(pszBackBuf, psz0, nBB);
   pszBBTail = pszBackBuf;
   pszBBHead = BBMove(pszBackBuf + nBB);
+  return 0;
 }
 
 int FGetC(FILE *f)
 {
-//  if (f != stdin) return fgetc(f);
+/*   if (f != stdin) return fgetc(f); */
   if (!pszBackBuf) InitBackBuf("");
+  if (!pszBackBuf) return EOF;
   if (!ixBB)
   {
     int iRet = fgetc(f);
     if (iRet == EOF) return iRet;
-    if (nBB == lBB) pszBBTail = BBMove(pszBBTail + 1); // Drop one from the tail.
+    if (nBB == lBB) pszBBTail = BBMove(pszBBTail + 1); /*  Drop one from the tail. */
     *pszBBHead = (char)iRet;
     pszBBHead = BBMove(pszBBHead + 1);
     if (nBB < lBB) nBB += 1;
@@ -1213,7 +1264,7 @@ int FGetC(FILE *f)
 
 int FSeek(FILE *f, long lOffset, int iOrigin)
 {
-// if (f != stdin) return fseek(f, lOffset, iOrigin);
+/*  if (f != stdin) return fseek(f, lOffset, iOrigin); */
   if (iOrigin == SEEK_CUR)
   {
     if (lOffset >= 0) 
@@ -1369,5 +1420,100 @@ int MergeMatches(char *new, int iNewSize, char *match, int nMatch, char **ppOut)
 
   DEBUG_LEAVE(("return %d; // \"%.*s\"\n", ixOut, ixOut, pOut));
   return ixOut;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSameFile						      |
+|									      |
+|   Description     Check if two pathnames refer to the same file	      |
+|									      |
+|   Parameters:     char *pszPathname1	    The first pathname to check	      |
+|                   char *pszPathname2	    The second pathname to check      |
+|                   							      |
+|   Returns	    1 = Same file; 0 = Different files			      |
+|									      |
+|   Notes	    Constraints:					      |
+|		    - Do not change the files.				      |
+|		    - Fast => Avoid resolving links when not necessary.	      |
+|		    - Works even if the files do not exist yet.		      |
+|		    							      |
+|		    Must define a SAMENAME constant, that refers to a file    |
+|		    name comparison routine. This routine is OS-dependant,    |
+|		    as comparisons are case-dependant in Unix, but not in     |
+|		    Windows.						      |
+|		    							      |
+|   History								      |
+|    2016-09-12 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSameFile(char *pszPathname1, char *pszPathname2) {
+  int iSameFile;
+  char *pszBuf1 = NULL;
+  char *pszBuf2 = NULL;
+#if defined _WIN32
+  WIN32_FILE_ATTRIBUTE_DATA attr1;
+  WIN32_FILE_ATTRIBUTE_DATA attr2;
+#else
+  struct stat attr1;
+  struct stat attr2;
+#endif /* defined _WIN32 */
+  int bDone1;
+  int bDone2;
+  DEBUG_CODE(
+  char *pszReason;
+  )
+
+  DEBUG_ENTER(("IsSameFile(\"%s\", \"%s\");\n", pszPathname1, pszPathname2));
+
+  /* First try the obvious: Compare the input arguments */
+  if (streq(pszPathname1, pszPathname2)) {
+    DEBUG_CODE(pszReason = "Exact same pathnames";)
+    iSameFile = TRUE;
+IsSameFile_done:
+    free(pszBuf1);
+    free(pszBuf2);
+    RETURN_INT_COMMENT(iSameFile, ("%s\n", pszReason));
+  }
+
+  /* Then try a simple attributes comparison, to quickly detect different files */
+#if defined _WIN32
+  bDone1 = (int)GetFileAttributesEx(pszPathname1, GetFileExInfoStandard, &attr1);
+  bDone2 = (int)GetFileAttributesEx(pszPathname2, GetFileExInfoStandard, &attr2);
+#else
+  bDone1 = stat(pszPathname1, &attr1) + 1;
+  bDone2 = stat(pszPathname2, &attr2) + 1;
+#endif /* defined _WIN32 */
+  if (bDone1 != bDone2) {
+    DEBUG_CODE(pszReason = "One exists and the other does not";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
+  }
+  if ((!bDone1) && SAMENAME(pszPathname1, pszPathname2)) {
+    DEBUG_CODE(pszReason = "They will be the same";)
+    iSameFile = TRUE;
+    goto IsSameFile_done;
+  }
+  if ((bDone1) && memcmp(&attr1, &attr2, sizeof(attr1))) {
+    DEBUG_CODE(pszReason = "They're different sizes, times, etc";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
+  }
+  /* They look very similar now: Names differ, but same size, same dates, same attributes */
+
+  /* Get the canonic names, with links resolved, to see if they're actually the same or not */
+  pszBuf1 = realpath(pszPathname1, NULL);
+  pszBuf2 = realpath(pszPathname2, NULL);
+  if ((!pszBuf1) || (!pszBuf2)) {
+    DEBUG_CODE(pszReason = "Not enough memory for temp buffers";)
+    iSameFile = FALSE;
+    goto IsSameFile_done;
+  }
+  iSameFile = SAMENAME(pszBuf1, pszBuf2);
+  DEBUG_LEAVE(("return %d; // \"%s\" %c= \"%s\";\n", iSameFile, pszBuf1, iSameFile ? '=' : '!', pszBuf2));
+  free(pszBuf1);
+  free(pszBuf2);
+  return iSameFile; 
 }
 
