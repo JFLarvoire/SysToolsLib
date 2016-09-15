@@ -95,6 +95,7 @@
 #    2016-01-07 JFL Correctly process predefined CFLAGS.                      #
 #    2016-04-13 JFL Forward library detections to the C compiler.	      #
 #    2016-08-24 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
+#    2016-09-15 JFL Added WSDKINCLUDE definition, and pass it to the compiler.#
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -177,6 +178,7 @@ PATH=$(WIN32_PATH)
 INCLUDE=$(WIN32_INCPATH)
 MSVCINCLUDE=$(WIN32_VCINC:\=/) # Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(WIN32_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
+WSDKINCLUDE=$(WIN32_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
 LIB=$(WIN32_LIBPATH)
 
 MACHINE=X86			# Target CPU = Intel 32-bits X86
@@ -197,6 +199,13 @@ CFLAGS=$(CFLAGS) "/DMSVCINCLUDE=$(MSVCINCLUDE)" # Path of MSVC compiler include 
 !IF "$(UCRTINCLUDE)"!=""
 CFLAGS=$(CFLAGS) "/DUCRTINCLUDE=$(UCRTINCLUDE)" # Path of MSVC CRT library include files, without quotes, and with forward slashes
 !ENDIF # "$(UCRTINCLUDE)"!=""
+!IF "$(WSDKINCLUDE)"!=""
+!IF EXIST("$(WSDKINCLUDE)\windows.h")
+CFLAGS=$(CFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)" # Path of Windows SDK include files, without quotes, and with forward slashes
+!ELSE IF EXIST("$(WSDKINCLUDE)\um\windows.h")                
+CFLAGS=$(CFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)/um" # Path of Windows SDK include files, without quotes, and with forward slashes
+!ENDIF # EXIST("$(WSDKINCLUDE)\windows.h")
+!ENDIF # "$(WSDKINCLUDE)"!=""
 !IF !DEFINED(LFLAGS)
 LFLAGS=/NOLOGO /INCREMENTAL:NO /MACHINE:$(MACHINE) /MAP:$(L)\$(*B).map /FORCE:MULTIPLE
 !ENDIF # DEFINED(LFLAGS)

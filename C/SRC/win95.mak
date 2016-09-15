@@ -65,6 +65,7 @@
 #									      #
 #  History:								      #
 #    2015-11-05 JFL Created this file.					      #
+#    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -87,6 +88,7 @@ PATH=$(WIN95_PATH)  		# 32-bits programs paths
 INCLUDE=$(WIN95_INCPATH)	# 32-bits include files paths	
 MSVCINCLUDE=$(WIN95_VCINC:\=/)  # Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(WIN95_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
+WSDKINCLUDE=$(WIN95_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
 LIB=$(WIN95_LIBPATH)		# 32-bits libraries paths		
 
 WINVER=4.0			# Target Windows 95 and NT4
