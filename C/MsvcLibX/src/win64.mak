@@ -93,6 +93,7 @@
 #    2015-12-07 JFL Added support for a base output directory other than .\   #
 #    2015-12-10 JFL Keep win64-specific definitions, and include win32.mak.   #
 #    2016-01-07 JFL Do not use /Zp to avoid alignment issues.                 #
+#    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -115,6 +116,7 @@ PATH=$(WIN64_PATH)  		# 64-bits programs paths
 INCLUDE=$(WIN64_INCPATH)	# 64-bits include files paths	
 MSVCINCLUDE=$(WIN64_VCINC:\=/)  # Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(WIN64_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
+WSDKINCLUDE=$(WIN64_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
 LIB=$(WIN64_LIBPATH)		# 64-bits libraries paths		
 
 !IF !DEFINED(CFLAGS)

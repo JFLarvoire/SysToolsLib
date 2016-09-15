@@ -1,6 +1,6 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename	    GetLongPathNameU.c					      *
+*   Filename	    GetLongPathName.c					      *
 *									      *
 *   Description:    UTF-8 version of WIN32's GetLongPathName()		      *
 *                                                                             *
@@ -13,7 +13,9 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#include <windowsU.h>
+#ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+#include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <limits.h>
 #include "debugm.h"	/* MsvcLibX debugging macros */
 
@@ -68,4 +70,6 @@ DWORD WINAPI GetLongPathNameU(LPCTSTR lpShortName, LPTSTR lpBuf, DWORD nBufferLe
 
   RETURN_INT_COMMENT(n-1, ("\"%s\"\n", lpBuf));
 }
+
+#endif /* defined(_WIN32) */
 

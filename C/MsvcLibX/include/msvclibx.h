@@ -10,6 +10,7 @@
 *    2013       JFL Created this file.                                        *
 *    2014-05-30 JFL Added macros to work around the lack of a #include_next.  *
 *    2015-11-15 JFL Added macro UCRT_INCLUDE_FILE for Visual Studio 2015.     *
+*    2016-09-15 JFL Added macro WINSDK_INCLUDE_FILE for Windows SDK.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -103,6 +104,7 @@ extern int _mainU(int argc, char *argv[]);	/* UTF-8 main routine */
 /* Up to VS2013, both kinds of include files were in the same directory. Then in VS2015, they were split in two dirs. */
 #define MSVC_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(MSVCINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* C compiler include files */
 #define UCRT_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(UCRTINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* C runtime library include files */
+#define WINSDK_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(WSDKINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* Windows SDK include files */
 
 /* Prevent an incompatibility with <winsock.h>. See MsvcLibX' "sys/time.h" for explanations. */
 #define _WINSOCKAPI_   /* Prevent the inclusion of winsock.h in windows.h */

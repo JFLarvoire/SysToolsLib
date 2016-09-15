@@ -1,6 +1,6 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename	    GetFullPathNameU.c					      *
+*   Filename	    GetFullPathName.c					      *
 *									      *
 *   Description:    UTF-8 version of WIN32's GetFullPathName()		      *
 *                                                                             *
@@ -13,7 +13,9 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#include <windowsU.h>
+#ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+#include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <limits.h>
 #include "debugm.h"	/* MsvcLibX debugging macros */
 
@@ -86,4 +88,6 @@ DWORD WINAPI GetFullPathNameU(LPCTSTR lpName, DWORD nBufferLength, LPTSTR lpBuf,
 
   RETURN_INT_COMMENT(n-1, ("\"%s\" \"%s\"\n", lpBuf, lpFilePart?*lpFilePart:"(NULL)"));
 }
+
+#endif /* defined(_WIN32) */
 

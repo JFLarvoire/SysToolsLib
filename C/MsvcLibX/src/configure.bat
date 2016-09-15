@@ -127,6 +127,7 @@
 :#   2016-09-05 JFL Updated macro %USE_SDK% to avoid recording duplicates.    *
 :#		    Fixed macros ADD_POST_MAKE_ACTION & ADD_POST_MAKE_ACTION. *
 :#                  Fixed a warning when running on Chinese Windows.          *
+:#   2016-09-15 JFL For each VC version, record the WinSDK include directory. *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -1435,6 +1436,7 @@ if /i %PROC%==x86 if not exist "!%VC%.LIBPATH!\kernel32.lib" SET "%VC%.LIBPATH=!
 set TRYDIRS="!%VS%.IDE!" &:# Tools location for Visual Studio 6
 if defined WINSDK (
   set "%VC%.WINSDK=!WINSDK!"
+  set "%VC%.WINSDKINC=!WINSDK_INCDIR!"
   set "%VC%.INCPATH=!%VC%.INCPATH!;!WINSDK_INCLUDE!"
   set "%VC%.LIBPATH=!%VC%.LIBPATH!;!WINSDK_LIB!"
   set TRYDIRS=!TRYDIRS! "%WINSDK_BIN%"
@@ -1917,6 +1919,7 @@ for %%s in (
   %CONFIG% SET "%%k_INCPATH=!%%l.INCPATH!" ^&:# Include paths for %%m compilation
   %CONFIG% SET "%%k_LIBPATH=!%%l.LIBPATH!" ^&:# Libraries paths for %%m linking
   %CONFIG% SET "%%k_WINSDK=!%%l.WINSDK!" ^&:# Microsoft Windows %%m SDK
+  %CONFIG% SET "%%k_WINSDKINC=!%%l.WINSDKINC!" ^&:# Microsoft Windows %%m SDK Include directory
 )
 
 :# Output base directory

@@ -1,6 +1,6 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename	    GetFileAttributesExU.c				      *
+*   Filename	    GetFileAttributesEx.c				      *
 *									      *
 *   Description:    UTF-8 version of WIN32's GetFileAttributesEx()	      *
 *                                                                             *
@@ -13,7 +13,9 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#include <windowsU.h>
+#ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+#include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <limits.h>
 
 /*---------------------------------------------------------------------------*\
@@ -65,3 +67,6 @@ BOOL WINAPI GetFileAttributesExU(
   LocalFree((HLOCAL)pwszName);
   return bDone;
 }
+
+#endif /* defined(_WIN32) */
+

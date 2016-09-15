@@ -249,8 +249,7 @@ realpath_failed:
 
 #ifdef _WIN32
 
-#include <windows.h>
-#include <windowsU.h>		/* Include MsvcLibX' WIN32 UTF-8 extensions */
+#include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

@@ -1,8 +1,8 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename:	    windowsU.h						      *
+*   Filename:	    windows.h						      *
 *                                                                             *
-*   Description:    Define MsvcLibX' UTF-8 versions of WIN32 API functions    *
+*   Description:    Define MsvcLibX' extensions to the WIN32 API functions    *
 *                                                                             *
 *   Notes:	    							      *
 *                                                                             *
@@ -13,14 +13,14 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef	_WINDOWSU_H
-#define	_WINDOWSU_H	1
+#ifndef	_MSVCLIBX_WINDOWS_H
+#define	_MSVCLIBX_WINDOWS_H	1
 
 #include "msvclibx.h"
 
 #ifdef _WIN32
 
-#include <windows.h> /* Defines all WIN32 types */
+#include WINSDK_INCLUDE_FILE(windows.h) /* Include Windows SDK's own windows.h */
 
 /****************** Define UTF-8 versions of WIN32 routines ******************/
 
@@ -57,4 +57,4 @@ DWORD WINAPI GetLongPathNameU(LPCTSTR lpShortName, LPTSTR lpBuf, DWORD nBufferLe
 
 #endif /* defined(_WIN32) */
 
-#endif /* defined(_WINDOWSU_H) */
+#endif /* defined(_MSVCLIBX_WINDOWS_H) */
