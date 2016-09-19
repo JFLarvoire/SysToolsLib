@@ -4,9 +4,9 @@
 #                                                                             #
 #   Description     A sample service in a standalone PowerShell script        #
 #                                                                             #
-#   Notes           The latest PSService.ps1 version will be available in     #
-#                   https://github.com/JFLarvoire/SysToolsLib/ , in the       #
-#                   PowerShell subdirectory.                                  #
+#   Notes           The latest PSService.ps1 version is available in GitHub   #
+#                   repository https://github.com/JFLarvoire/SysToolsLib/ ,   #
+#                   in the PowerShell subdirectory.                           #
 #                   Please report any problem in the Issues tab in that       #
 #                   GitHub repository in                                      #
 #                   https://github.com/JFLarvoire/SysToolsLib/issues	      #
@@ -74,6 +74,8 @@
 #    2016-09-06 JFL Fixed issue #4 detecting the System account. Now done in  #
 #		    a language-independent way. Thanks A Gonzalez.	      #
 #    2016-09-19 JFL Fixed issue #5 starting services that begin with a number.#
+#                   Added a $ServiceDescription string global setting, and    #
+#                   use it for the service registration.                      #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -187,6 +189,7 @@ $scriptFullName = $argv0.fullname       # Ex: C:\Temp\PSService.ps1
 # Global settings
 $serviceName = $script                  # A one-word name used for net start commands
 $serviceDisplayName = "A Sample PowerShell Service"
+$ServiceDescription = "Shows how a service can be written in PowerShell"
 $pipeName = "Service_$serviceName"      # Named pipe name. Used for sending messages to the service task
 # $installDir = "${ENV:ProgramFiles}\$serviceName" # Where to install the service files
 $installDir = "${ENV:windir}\System32"  # Where to install the service files
@@ -867,7 +870,7 @@ if ($Setup) {                   # Install the service
   }
   # Register the service
   Write-Verbose "Registering service $serviceName"
-  $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -StartupType Automatic
+  $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
 
   return
 }
