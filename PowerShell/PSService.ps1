@@ -76,6 +76,7 @@
 #    2016-09-19 JFL Fixed issue #5 starting services that begin with a number.#
 #                   Added a $ServiceDescription string global setting, and    #
 #                   use it for the service registration.                      #
+#                   Added comments about Windows event logs limitations.      #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -199,6 +200,13 @@ $exeFullName = "$installDir\$exeName"
 $logDir = "${ENV:windir}\Logs"          # Where to log the service messages
 $logFile = "$logDir\$serviceName.log"
 $logName = "Application"                # Event Log name (Unrelated to the logFile!)
+# Note: The current implementation only supports "classic" (ie. XP-compatble) event logs.
+#	To support new style (Vista and later) "Applications and Services Logs" folder trees, it would
+#	be necessary to use the new *WinEvent commands instead of the XP-compatible *EventLog commands.
+# Gotcha: If you change $logName to "NEWLOGNAME", make sure that the registry key below does not exist:
+#         HKLM\System\CurrentControlSet\services\eventlog\Application\NEWLOGNAME
+#	  Else, New-EventLog will fail, saying the log NEWLOGNAME is already registered as a source,
+#	  even though "Get-WinEvent -ListLog NEWLOGNAME" says this log does not exist!
 
 # If the -Version switch is specified, display the script version and exit.
 if ($Version) {
@@ -699,7 +707,7 @@ $source = @"
         // Success. Set the service state to Running.                   // SET STATUS
         serviceStatus.dwCurrentState = ServiceState.SERVICE_RUNNING;    // SET STATUS
       } catch (Exception e) {
-        EventLog.WriteEntry(ServiceName, "$exeName // Failed to start $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
+        EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Failed to start $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
         // Change the service state back to Stopped.                    // SET STATUS [
         serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;
         Win32Exception w32ex = e as Win32Exception; // Try getting the WIN32 error code
