@@ -73,6 +73,7 @@
 #		    Thanks Nischl.					      #
 #    2016-09-06 JFL Fixed issue #4 detecting the System account. Now done in  #
 #		    a language-independent way. Thanks A Gonzalez.	      #
+#    2016-09-19 JFL Fixed issue #5 starting services that begin with a number.#
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -175,7 +176,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-09-06"
+$scriptVersion = "2016-09-19"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -647,11 +648,11 @@ $source = @"
     ERROR_PROCESS_ABORTED = 1067,
   };
 
-  public class $serviceName : ServiceBase {
+  public class Service_$serviceName : ServiceBase { // $serviceName may begin with a digit; The class name must begin with a letter
     private System.Diagnostics.EventLog eventLog;                       // EVENT LOG
     private ServiceStatus serviceStatus;                                // SET STATUS
 
-    public $serviceName() {
+    public Service_$serviceName() {
       ServiceName = "$serviceName";
       CanStop = true;
       CanPauseAndContinue = false;
@@ -735,7 +736,7 @@ $source = @"
     }
 
     public static void Main() {
-      System.ServiceProcess.ServiceBase.Run(new $serviceName());
+      System.ServiceProcess.ServiceBase.Run(new Service_$serviceName());
     }
   }
 "@
