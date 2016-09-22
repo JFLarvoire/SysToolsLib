@@ -102,6 +102,7 @@
 #    2016-04-14 JFL Forward HAS_<lib> flags to the C compiler.		      #
 #    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      #
 #    2016-09-02 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
+#    2016-09-21 JFL Fixed an issue that caused double definition warnings.    #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -144,18 +145,13 @@ DS=
 !ENDIF
 DD=$(DD) /D_BIOS /DMINICOMS	# Tell sources what environment they're built for
 
-# If possible, load the make file for the current program.
-# This may override the memory model
-!IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak")
-!  MESSAGE Getting specific rules from $(PROGRAM).mak.
-!  INCLUDE $(PROGRAM).mak
-!ELSE IF EXIST("Files.mak")
-!  MESSAGE Getting specific rules from Files.mak.
-!  INCLUDE Files.mak
-!ELSE
-!  MESSAGE There are no specific rules.
-# EXENAME=_-_-_-_.exe	# An unlikely name, to prevent the $(EXENAME) Dependency rule from firing.
-# OBJECTS=
+# If possible, load the 16-bits memory model definition from the make file for the current program.
+# Do not load the rest of the make file, as it may contain more rules depending on other variables defined further down.
+# Also loading it entirely here would cause warnings about goals defined twice.
+TMPMAK=$(TMP)\$(T)_mem.mak # TO DO: Find a way to generate a unique name, to avoid conflicts in case of // builds.
+!IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak") && ![findstr /R "^MEM=" "$(PROGRAM).mak" >"$(TMPMAK)" 2>NUL]
+!  MESSAGE Getting memory model definition from $(PROGRAM).mak.
+!  INCLUDE "$(TMPMAK)"
 !ENDIF
 
 # Memory model for 16-bit C compilation (T|S|C|D|L|H)
@@ -780,14 +776,16 @@ $(L)\$(@B).lst
 #									      #
 ###############################################################################
 
-# PROGRAM.mak and/or FILES.mak may define macros SOURCES, OBJECTS, and PROGRAM.
+# $(PROGRAM).mak and/or Files.mak may define macros SOURCES, OBJECTS, and PROGRAM.
 # These make files are intended to be OS-independant, and be used in both Windows and Unix build environments. 
 # These macros in turn allow the following rules to work, and build more complex programs with more than one source.
 #
-# 2015-10-30 JFL Moved the inclusion of PROGRAM.mak or FILES.mak at the top of this make file.
-#                This move allows defining the DOS memory model in individual PROGRAM.mak files.
+# 2015-10-30 JFL Moved the inclusion of $(PROGRAM).mak or FILES.mak at the top of this make file.
+#                This move allows defining the DOS memory model in individual $(PROGRAM).mak files.
 # 2015-11-02 JFL We still need a second inclusion of the same make files here,
 #		 as the definition of the memory model may have changed the $(B) and $(O) definitions.
+# 2016-09-21 JFL Actually we must only do the full make files inclusion here, else we get warnings
+#		 about goals defined twice.
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak")
 #!  MESSAGE Getting specific rules from $(PROGRAM).mak.
 !  INCLUDE $(PROGRAM).mak
