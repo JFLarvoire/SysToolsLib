@@ -484,10 +484,9 @@ BSCFLAGS=/nologo
 #									      #
 ###############################################################################
 
-# PROGRAM.mak and/or FILES.mak may define macros SOURCES, OBJECTS, and PROGRAM.
+# $(PROGRAM).mak and/or Files.mak may define macros SOURCES, OBJECTS, and PROGRAM.
 # These make files are intended to be OS-independant, and be used in both Windows and Unix build environments. 
 # These macros in turn allow the following rules to work, and build more complex programs with more than one source.
-
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak")
 !  MESSAGE Getting specific rules from $(PROGRAM).mak.
 !  INCLUDE $(PROGRAM).mak
