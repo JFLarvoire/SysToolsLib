@@ -11,6 +11,7 @@
 *    2014-05-30 JFL Added macros to work around the lack of a #include_next.  *
 *    2015-11-15 JFL Added macro UCRT_INCLUDE_FILE for Visual Studio 2015.     *
 *    2016-09-15 JFL Added macro WINSDK_INCLUDE_FILE for Windows SDK.	      *
+*    2016-09-20 JFL Added workaround preventing warnings in WIN95 builds.     *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -77,13 +78,22 @@ extern int MultiByteToWidePath(UINT nCodePage, LPCSTR pszName, LPWSTR pwszName, 
 /* Count the number of elements in an array */
 #define COUNTOF(array) (sizeof(array)/sizeof(array[0]))
 
+/* Workaround for missing __pragma() directive in old versions of Visual Studio */
+#if defined(_WIN32) && defined(_MSC_VER) && (_MSC_VER <= 1400) /* For Visual C++ versions up to Visual Studio 2005 */
+#define __pragma(x)
+#endif /* (_MSC_VER <= 1400) */
+
 /* Support for UTF-8 command lines */
 #if defined(_WIN32)
 #if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 #if defined(_MSC_VER) && (_MSC_VER <= 1400) /* For Visual C++ versions up to Visual Studio 2005 */
-#pragma message("Adding workaround for missing __pragma() directive in this version of Visual Studio.")
-#define __pragma(x)
-#endif
+#define main \
+main(int argc, char *argv[]) { \
+  if (argc < 0) argv++; /* No-op line preventing the unreferenced formal parameter warning */ \
+  return _mainU0(); \
+} \
+int _mainU
+#else /* (_MSC_VER > 1400) */
 #define main \
 __pragma(warning(disable:4100))	/* Ignore the unreferenced formal parameter warning */ \
 main(int argc, char *argv[]) { \
@@ -91,9 +101,10 @@ main(int argc, char *argv[]) { \
 } \
 __pragma(warning(default:4100)) /* Restore the unreferenced formal parameter warning */ \
 int _mainU
+#endif /* (_MSC_VER <= 1400) */
 extern int _mainU0(void);	/* Generate a UTF-8 argv[], and call _mainU */
 extern int _mainU(int argc, char *argv[]);	/* UTF-8 main routine */
-#endif
+#endif /* defined(_UTF8_SOURCE) ... */
 #endif /* defined(_WIN32) */
 
 /* Macros for working around the lack of a #include_next directive */
