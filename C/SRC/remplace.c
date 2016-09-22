@@ -114,13 +114,15 @@
 *                   Minor tweaks to fix compilation in Linux.                 *
 *    2016-09-14 JFL Make sure the debug stream is always in text mode.        *
 *		    Version 2.5.4.  					      *
+*    2016-09-20 JFL Bug fix: The Win32 version did not process empty args.    *
+*		    Version 2.5.5.  					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.5.4"
-#define PROGRAM_DATE    "2016-09-14"
+#define PROGRAM_VERSION "2.5.5"
+#define PROGRAM_DATE    "2016-09-20"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 

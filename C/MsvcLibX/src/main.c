@@ -8,6 +8,7 @@
 *		    							      *
 *   History:								      *
 *    2014-03-03 JFL Created this module.				      *
+*    2016-09-20 JFL Bug fix: Empty arguments "" did not get recorded.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,9 +61,10 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
   int argc = 0;
   char c, c0;
   char *pszCopy;
-  int iString = FALSE;
+  int iString = FALSE;	/* TRUE = string mode; FALSE = non-string mode */
   int nBackslash = 0;
   char **ppszArg;
+  int iArg = FALSE;	/* TRUE = inside an argument; FALSE = between arguments */
 
   ppszArg = (char **)malloc((argc+1)*sizeof(char *));
 
@@ -78,13 +80,14 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
       pszCopy[j++] = c;
       break;
     }
+    if ((!iArg) && (c != ' ') && (c != '\t')) { /* Beginning of a new argument */
+      iArg = TRUE;
+      ppszArg[argc++] = pszCopy+j;
+      ppszArg = (char **)realloc(ppszArg, (argc+1)*sizeof(char *));
+      pszCopy[j] = c0 = '\0';
+    }
     if (c == '\\') {	    /* Escaped character in string (maybe) */
       nBackslash += 1; 
-      if (!c0) {  /* Beginning of a new argument */
-	ppszArg[argc++] = pszCopy+j;
-	ppszArg = (char **)realloc(ppszArg, (argc+1)*sizeof(char *));
-	c0 = c;
-      }
       continue;
     }
     if (c == '"') {
@@ -100,10 +103,9 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
       continue;
     }
     for ( ; nBackslash; nBackslash--) pszCopy[j++] = '\\'; /* Output pending \s */
-    if ((!iString) && ((c == ' ') || (c == '\t'))) c = '\0';
-    if (c && !c0) {  /* Beginning of a new argument */
-      ppszArg[argc++] = pszCopy+j;
-      ppszArg = (char **)realloc(ppszArg, (argc+1)*sizeof(char *));
+    if ((!iString) && ((c == ' ') || (c == '\t'))) { /* End of an argument */
+      iArg = FALSE;
+      c = '\0';
     }
     pszCopy[j++] = c0 = c;
   }

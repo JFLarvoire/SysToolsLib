@@ -35,13 +35,15 @@
 *    2014-12-03 JFL Rebuilt with MsvcLibX support for WIN32 paths > 260 chars.*
 *		    Version 3.0.1.					      *
 *    2016-01-08 JFL Fixed all warnings in Linux. Version 3.0.2.		      *
+*    2016-09-20 JFL Bug fix: The Win32 version did not process empty args.    *
+*		    Version 3.0.3.  					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.2"
-#define PROGRAM_DATE    "2016-01-08"
+#define PROGRAM_VERSION "3.0.3"
+#define PROGRAM_DATE    "2016-09-20"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
