@@ -19,6 +19,7 @@
 *		    Added option -i for adding INCLUDE paths		      *
 *		    Version 1.3.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
+*    2016-09-23 JFL Removed warnings. No functional code change.              *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -148,7 +149,7 @@ int main(int argc, char *argv[])
     /* Add the default extension to the argument if needed */
 
     strcpy(szName, pszArgName);
-    if ( (pc = strrchr(szName, '.')) && !(strchr(pc, '\\')) )
+    if ( ((pc = strrchr(szName, '.')) != NULL) && !(strchr(pc, '\\')) )
 	/* If dot found and no backslash afterwards */
 	{
 	iExtension = TRUE;
@@ -310,10 +311,10 @@ StringList *WhichInc(char *pszName, int iShift, StringList *psl, char *pszSearch
 	l = strlen(cLine2);
 	if ((l > 0) && (cLine2[l-1] == '\n'))
 	    cLine2[--l] = '\0'; /* Remove the trailing new line */
-	if (   (pszToken = strtok(cLine, pszBlanks))
+	if (   ((pszToken = strtok(cLine, pszBlanks)) != NULL)
 	    && (   streq(pszToken, "#include")
 	        || (   streq(pszToken, "#")
-		    && (pszToken = strtok(NULL, pszBlanks))
+		    && ((pszToken = strtok(NULL, pszBlanks)) != NULL)
 		    && streq(pszToken, "include")
 		   )
 	       )
@@ -352,10 +353,10 @@ StringList *WhichInc(char *pszName, int iShift, StringList *psl, char *pszSearch
 	    }
 	memcpy(cLine, cLine2, LINESIZE);    /* Restore the line read */
 	if (   pszSearch
-	    && (pszToken = strtok(cLine, pszBlanks))
+	    && ((pszToken = strtok(cLine, pszBlanks)) != NULL)
 	    && (    streq(pszToken, "#define")
 	        || (   streq(pszToken, "#")
-		    && (pszToken = strtok(NULL, pszBlanks))
+		    && ((pszToken = strtok(NULL, pszBlanks)) != NULL)
 		    && streq(pszToken, "define")
 		   )
 	       )

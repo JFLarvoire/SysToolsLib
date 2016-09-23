@@ -28,6 +28,7 @@
 *		    Added options -A, -b, -O , -U to override the default CP. *
 *		    Version 1.3.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
+*    2016-09-23 JFL Removed warnings. No functional code change.              *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -362,7 +363,6 @@ char szNewHeader[] = "<html>\r\n\
 int CopyClip(UINT type, UINT codepage) {
   int nChars = 0;
   int iDone;
-  int i;
 
   if (iDebug) printf("CopyClip(%d, %d);\n", type, codepage);
 
@@ -385,14 +385,14 @@ int CopyClip(UINT type, UINT codepage) {
 	  char buf[128];
 	  int n;
 	  if (   (type > CF_PRIVATEFIRST)
-	    && (n = GetClipboardFormatName(type, buf, sizeof(buf)))
+	    && ((n = GetClipboardFormatName(type, buf, sizeof(buf))) != 0)
 	    && streq(buf, "HTML Format")) { // Special case for HTML:
 	    char *pc;
 	    int iFirst = 0;
 	    int iLast = nChars - 1; // Remove the trailing NUL
 	    // Skip the clipboard information header
-	    if (pc = strstr(lpString, "\nStartHTML:")) sscanf(pc+11, "%d", &iFirst);
-	    if (pc = strstr(lpString, "\nEndHTML:")) sscanf(pc+9, "%d", &iLast);
+	    if ((pc = strstr(lpString, "\nStartHTML:")) != NULL) sscanf(pc+11, "%d", &iFirst);
+	    if ((pc = strstr(lpString, "\nEndHTML:")) != NULL) sscanf(pc+9, "%d", &iLast);
 	    // Update the HTML header to declare it's encoded in UTF-8
 	    if (iFirst > (LNEWHEADER - LOLDHEADER)) {
 	      if (!strncmp(lpString + iFirst, szOldHeader, LOLDHEADER)) {
@@ -581,7 +581,7 @@ int EnumClip(void) {
   int j;
 
   if (OpenClipboard(NULL)) {
-    for (icf = 0; icf = EnumClipboardFormats(icf); ) {
+    for (icf = 0; (icf = EnumClipboardFormats(icf)) != 0; ) {
       cfList[ncf++] = icf;
     }
     qsort(cfList, ncf, sizeof(UINT), CompareUint); // Sort list by numeric order
