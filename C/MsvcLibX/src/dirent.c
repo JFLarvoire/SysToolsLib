@@ -644,8 +644,8 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
 int scandir(const char *pszName,
 	    _dirent ***resultList,
 	    int (*cbSelect) (const _dirent *),
-	    int (*cbCompare) (const _dirent **,
-			      const _dirent **)) {
+	    int (__cdecl *cbCompare) (const _dirent **,
+				      const _dirent **)) {
   int n = 0;
   DIR *pDir;
   _dirent *pDirent;
@@ -681,14 +681,21 @@ int scandir(const char *pszName,
 
   closedir(pDir);
 
+/* 2016-09-23 JFL I don't understand why this warning still fires, so leaving it enabled for now */
+#ifdef M_I86TM /* This warning appears only when compiling for the DOS tiny memory model ?!? */
+/* #pragma warning(disable:4220) /* Ignore the "varargs matches remaining parameters" warning */
+#endif
   if (cbCompare) qsort(pList, n, sizeof(_dirent *), cbCompare);
+#ifdef M_I86TM
+#pragma warning(default:4220) /* Ignore the "varargs matches remaining parameters" warning */
+#endif
   *resultList = pList;
   DEBUG_LEAVE(("return %d;\n", n));
   return n;
 }
 #pragma warning(default:4706)
 
-int alphasort(const _dirent **ppDE1, const _dirent **ppDE2) {
+int __cdecl alphasort(const _dirent **ppDE1, const _dirent **ppDE2) {
   int ret;
   /* Sort names a-la Windows, that is case insensitive */
   ret = _strnicmp((*ppDE1)->d_name, (*ppDE2)->d_name, NAME_MAX);

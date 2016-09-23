@@ -267,11 +267,11 @@ extern _dirent *readdirM(DIR *pDir, UINT cp);	    /* Read a directory entry. Ret
 extern int scandir(const char *dir,
 		   _dirent ***namelist,
 		   int (*cbSelect) (const _dirent *),
-		   int (*cbCompare) (const _dirent **,
-				     const _dirent **));
+		   int (__cdecl *cbCompare) (const _dirent **,
+					     const _dirent **));
 
 /* Function to compare two `struct dirent's alphabetically.  */
-extern int alphasort (const _dirent **ppDE1, const _dirent **ppDEe2);
+extern int __cdecl alphasort (const _dirent **ppDE1, const _dirent **ppDEe2);
 /* extern int versionsort (const _dirent **ppDE1, const _dirent **ppDEe2); */
 
 #ifdef  __cplusplus

@@ -4,7 +4,7 @@
 *		    							      *
 *   Description:    Display the amount of space used by a directory	      *
 *		    							      *
-*   Notes:	    Uses our custom debugging macros in debugm.h.	      *
+*   Notes:	    Uses MsvcLibX library debugm.h debugging macros.	      *
 *		    							      *
 *		    To build in Unix/Linux, copy debugm.h into your ~/include *
 *		    directory or equivalent, then run commands like:	      *
@@ -12,17 +12,9 @@
 *		    gcc dirsize.c -o dirsize	# Release mode version	      *
 *		    gcc -D_DEBUG dirsize.c -o dirsize.debug	# Debug ver.  *
 *		    							      *
-*		    To build in DOS/Windows with MSVC tools, copy the	      *
-*		    necessary C library extensions:			      *
-*		    stdint.h		Fixed-width integer types	      *
-*		    inttypes.h		Fixed-width integers management	      *
-*		    dirent.h		Directory entry definitions	      *
-*		    dirent.c		Directory entry management	      *
-*		    fnmatch.h		Function name matching definitions    *
-*		    fnmatch.c		Implement fnmatch().                  *
-*		    Then compile both .c files and include them in a library. *
-*		    Quick and dirty alternative: Change in include directives *
-*		    below dirent.h -> dirent.c, and fnmatch.h -> fnmatch.c.   *
+*		    To build in DOS/Windows with MSVC tools, first build the  *
+*		    MsvcLibX library.					      *
+*		    Then run configure.bat, then (make.bat dirsize.exe).      *
 *		    							      *
 *   History:								      *
 *    1986-09-03 JFL jf.larvoire@hp.com created this program.		      *
@@ -55,13 +47,15 @@
 *		    Version 3.1.1.					      *
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 3.1.2.  					      *
+*    2016-09-23 JFL Use macro CDECL to allow building a DOS .com version.     *
+*		    Version 3.1.3.  					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.1.2"
-#define PROGRAM_DATE    "2016-01-07"
+#define PROGRAM_VERSION "3.1.3"
+#define PROGRAM_DATE    "2016-09-23"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -107,6 +101,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
+#define CDECL __cdecl
+
 #endif /* defined(_MSDOS) */
 
 /************************ Win32-specific definitions *************************/
@@ -130,6 +126,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
+/* CDECL is defined in WinDef.h, which is already included by MsvcLibX */
+
 #endif /* defined(_WIN32) */
 
 /************************* OS/2-specific definitions *************************/
@@ -144,6 +142,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define NODENAME_SIZE CCHMAXPATHCOMP
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
+
+#define CDECL __cdecl
 
 #endif /* defined(_OS2) */
 
@@ -167,6 +167,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define IGNORECASE FALSE
+
+#define CDECL				/* No such thing needed for Linux builds */
 
 #endif /* defined(__unix__) */
 
@@ -236,7 +238,7 @@ void affiche(char *path, total_t size);/* Display sorted list */
 int scandirX(const char *pszName,
 	     struct dirent ***resultList,
 	     int (*cbSelect) (const struct dirent *, void *pRef),
-	     int (*cbCompare) (const struct dirent **, const struct dirent **),
+	     int (CDECL *cbCompare) (const struct dirent **, const struct dirent **),
 	     void *pRef);	    /* scandir() extension, passing a pRef to cbSelect() */
 
 long GetClusterSize(char drive);    /* Get cluster size */
@@ -1033,8 +1035,16 @@ long GetClusterSize(char drive) {	       /* Get cluster size */
 
   if (!drive)
     root = NULL;
-  else
+  else {
+    /* Workaround for invalid warning in old versions of Visual Studio */
+    #if defined(_WIN32) && defined(_MSC_VER) && (_MSC_VER <= 1400) /* For Visual C++ versions up to Visual Studio 2005 */
+    #pragma warning(disable:4244) /* Ignore the "'+=' : conversion from 'int' to 'char', possible loss of data" warning */
+    #endif /* (_MSC_VER <= 1400) */
     root[0] += drive;
+    #if defined(_WIN32) && defined(_MSC_VER) && (_MSC_VER <= 1400) /* For Visual C++ versions up to Visual Studio 2005 */
+    #pragma warning(default:4244) /* Restore the "'+=' : conversion from 'int' to 'char', possible loss of data" warning */
+    #endif /* (_MSC_VER <= 1400) */
+  }
 
   ok = GetDiskFreeSpace(root, &SectorsPerCluster, &BytesPerSector,
 			  &FreeClusters, &Clusters);
@@ -1110,7 +1120,7 @@ long GetClusterSize(char drive)	{       /* Get cluster size */
 *   Arguments:	    const char *name	Directory name            	      *
 *		    dirent ***namelist  where to store the result array       *
 *		    int (*cbSelect)()   Selection callback function           *
-*		    int (*cbCompare)()  Comparison function for sorting it    *
+*		    int (CDECL *cbCompare)()  Comparison function for sorting *
 *		    void *pRef		Reference data to pass to cbSelect    *
 *									      *
 *   Return value:   # of entries in the array, or -1 if error.		      *
@@ -1123,7 +1133,7 @@ long GetClusterSize(char drive)	{       /* Get cluster size */
 *                                                                             *
 \*****************************************************************************/
 
-typedef int (*pCompareProc)(const void *item1, const void *item2);
+typedef int (CDECL *pCompareProc)(const void *item1, const void *item2);
 
 #ifdef _MSC_VER
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
@@ -1132,7 +1142,7 @@ typedef int (*pCompareProc)(const void *item1, const void *item2);
 int scandirX(const char *pszName,
 	     struct dirent ***resultList,
 	     int (*cbSelect) (const struct dirent *, void *pRef),
-	     int (*cbCompare) (const struct dirent **, const struct dirent **),
+	     int (CDECL *cbCompare) (const struct dirent **, const struct dirent **),
 	     void *pRef) {
   int n = 0;
   DIR *pDir;
