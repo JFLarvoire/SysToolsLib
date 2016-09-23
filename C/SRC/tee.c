@@ -9,13 +9,14 @@
 *   History:								      *
 *    2012-10-24 JFL Created this program.				      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
+*    2016-09-23 JFL Minor tweak to avoid a warning.	                      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0"
-#define PROGRAM_DATE    "2012-10-24"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2016-09-23"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -39,6 +40,9 @@
 #else
 #define OS_NAME "Win32"
 #endif
+
+/* Avoid warnings for names that MSVC thinks deprecated */
+#define read _read
 
 #endif
 
@@ -107,6 +111,7 @@ int main(int argc, char *argv[]) {
   size_t szBuf = BUFSIZE;
   char *pBuf;
   char *pBufSize;
+  ssize_t nRead;
 
   pFirst = pLast = NewOutStream(NULL, NULL, NULL); /* Always output to stdout */
 
@@ -169,15 +174,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* Copy all incoming data */
-  while (TRUE) {
-    /*
-    size_t nRead = fread(pBuf, 1, szBuf, stdin);
-    if (!nRead) {
-      if (feof(stdin)) break;
-    }
-    */
-    int nRead = _read(0, pBuf, szBuf); /* Use read to void buffering the input */
-    if (nRead <= 0) break;
+  while ((nRead = read(0, pBuf, (int)szBuf)) > 0) { /* Use read to avoid buffering the input */ /* Cast (int) as MS version takes an in */
     /*
     printf("Read %d bytes: ", nRead);
     fwrite(pBuf, 1, nRead, stdout);
