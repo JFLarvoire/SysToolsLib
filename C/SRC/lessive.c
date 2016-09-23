@@ -204,7 +204,6 @@ int main(int argc, char *argv[]) {
   FILE *df = NULL;		/* Destination file pointer */
   int nChanged = 0;		/* Number of lines changed */
   char line[LINESIZE];
-  char c;
   char szBakName[FILENAME_MAX+1];
   int iBackup = FALSE;
   int iSameFile = FALSE;	/* Backup the input file, and modify it in place. */

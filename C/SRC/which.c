@@ -697,7 +697,7 @@ int FixNameCase(char *pszPathname) {
       iModified |= FixNameCase(pszPathname); /* Recursively fix the parent pathname */
     } else { /* Possibly a drive letter, then a root directory name */
       if (lDrive) { /* A drive letter, then a root directory name */
-	pszPath = szRootDir; // Use the "C:\\" copy on the stack to make sure the routine is reentrant
+	pszPath = szRootDir; /* Use the "C:\\" copy on the stack to make sure the routine is reentrant */
 	pszPath[0] = pszPathname[0];
       } else { /* Just a root directory name */
 	pszPath = "\\";
@@ -707,7 +707,7 @@ int FixNameCase(char *pszPathname) {
   } else { /* No path separator */
     pszName = pszPathname;
     if (lDrive) { /* A drive letter, then a file name */
-      pszPath = szDriveCurDir; // Use the "C:." copy on the stack to make sure the routine is reentrant
+      pszPath = szDriveCurDir; /* Use the "C:." copy on the stack to make sure the routine is reentrant */
       pszPath[0] = pszPathname[0];
       pszName += 2;  /* Skip the drive letter */
     } else {	  /* Just the file name */
