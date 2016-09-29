@@ -39,9 +39,9 @@ Programming languages:
 Old tools were mostly written in C/C++. Then I started using scripting languages more often:  
 Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Linux-only tools.
 
-Jean-François Larvoire
-jf.larvoire@hpe.com
-2016-09-05
+Jean-François Larvoire  
+jf.larvoire@hpe.com  
+2016-09-29
 
 
 ## Installation
@@ -57,7 +57,7 @@ You can use the WIN32 release files on all versions of Windows.
 
 ### Scripts and programs in Linux
 
-The C programs need to be rebuilt from source.
+The C programs need to be rebuilt from source.  
 As for scripts, only the Tcl directory contains useful scripts for Linux.
 
 * Download the project sources archive.
@@ -65,13 +65,7 @@ As for scripts, only the Tcl directory contains useful scripts for Linux.
 * Make sure the scripts in the Bash and Tcl subdirectories are executable, using the chmod +x command.
 * Copy the Tcl scripts into a directory in your PATH. For example in /usr/local/bin.
 * Remove the .tcl extension on all these tcl scripts (except Library.tcl), so that they can be invoked with just their base name.
-* Go to the C/SRC subdirectory, and run the following commands to rebuild the C programs:
-
-        cd $WORKDIR/C/SRC
-        chmod +x configure
-        ./configure
-        make
-
+* Go to the C/SRC subdirectory, and run the instructions in [C/README.md](C/README.md) to rebuild the C programs.
 * Copy the executable files from the output subdirectory, into the same /usr/local/bin.
 
 ### Development environment
@@ -85,7 +79,8 @@ can share the same sources, and output executables in distinct target-OS-specifi
 
 #### Files description
 
-See the README.txt file in each subdirectory for more details about that particular library, and further subdirectories.
+See the README.txt or README.md file in each subdirectory for more details about that particular library,
+and further subdirectories.
 
 Name            | Description
 --------------- | -------------------------------------------------
