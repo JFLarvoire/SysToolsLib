@@ -65,7 +65,7 @@ As for scripts, only the Tcl directory contains useful scripts for Linux.
 * Make sure the scripts in the Bash and Tcl subdirectories are executable, using the chmod +x command.
 * Copy the Tcl scripts into a directory in your PATH. For example in /usr/local/bin.
 * Remove the .tcl extension on all these tcl scripts (except Library.tcl), so that they can be invoked with just their base name.
-* Go to the C/SRC subdirectory, and run the instructions in [C/README.md](C/README.md) to rebuild the C programs.
+* Go to the C/SRC subdirectory, and apply the instructions in [C/README.md](C/README.md) to rebuild the C programs.
 * Copy the executable files from the output subdirectory, into the same /usr/local/bin.
 
 ### Development environment
@@ -75,7 +75,7 @@ can share the same sources, and output executables in distinct target-OS-specifi
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
-* See the (C/README.txt)[C/README.txt] file on how to rebuild C programs for each OS.
+* See the [C/README.md](C/README.md) file on how to rebuild C programs for each OS.
 
 #### Files description
 
@@ -128,7 +128,7 @@ provided that future contributors agree with the following conditions:
 
 - Contributions from independent individuals are welcome under the rules of the Apache 2.0 license.
 - Contributions from employees of outside (non-HPE) companies will only be accepted after
-  they've signed HPE's Corporate Contributor License Agreement in file HPE_CCLA.docx.
+  they've signed HPE's Corporate Contributor License Agreement in file [HPE_CCLA.docx].
 
 
 ## License
