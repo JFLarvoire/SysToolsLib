@@ -12,6 +12,7 @@
 *    2015-11-15 JFL Added macro UCRT_INCLUDE_FILE for Visual Studio 2015.     *
 *    2016-09-15 JFL Added macro WINSDK_INCLUDE_FILE for Windows SDK.	      *
 *    2016-09-20 JFL Added workaround preventing warnings in WIN95 builds.     *
+*    2016-09-28 JFL Can also be included by MS' Resource Compiler.            *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -22,7 +23,7 @@
 #ifndef _MSVCLIBX_H_
 #define _MSVCLIBX_H_
 
-#ifndef _MSC_VER
+#if !(defined(_MSC_VER) || defined(RC_INVOKED)) 
 #error The msvclibx library is designed for use with the Microsoft Visual C/C++ tools only.
 #endif
 
