@@ -114,6 +114,10 @@
 #    2015-12-15 JFL Added dynamic checking of prerequisites set in Files.mak. #
 #    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              #
 #    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      #
+#    2016-09-28 JFL Avoid having the word "Error" in the log unnecessarily.   #
+#		    Added support for the optional OUTDIR.		      #
+#		    Rewrote the all rule handling to record errors, and	      #
+#		    report them in the end.				      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -128,6 +132,12 @@ TMP=$(TEMP)
 !ELSE
 TMP=.
 !ENDIF
+!ENDIF
+
+!IF DEFINED(OUTDIR)
+OD=$(OUTDIR)^\
+!ELSE
+OD=
 !ENDIF
 
 ###############################################################################
@@ -162,6 +172,7 @@ OS=$(OS) WIN32
 !IF DEFINED(WIN64_CC)
 OS=$(OS) WIN64
 !ENDIF
+# Note: Don't attempt to build IA64 or ARM versions by default
 !ENDIF
 
 !IF "$(OS)"=="all"
@@ -307,44 +318,44 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 # Inference rule to build a simple program. Build BIOS, DOS, Win32, and Win64 debug versions.
 {.\}.c{Debug\}.com:
     @echo Applying inference rule {.\}.c{Debug\}.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) DOS\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.c{Debug\}.exe:
     @echo Applying inference rule {.\}.c{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
 
 {.\}.cpp{Debug\}.com:
     @echo Applying inference rule {.\}.cpp{Debug\}.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) DOS\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.cpp{Debug\}.exe:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
 
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.lib:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
 
 # Inference rules to build something for DOS, WIN32 and WIN64 respectively
 # Get them from their respective DOS.mak, WIN32.mak, WIN64.mak make files, etc.
@@ -444,41 +455,64 @@ Also supports .obj and .res to compile C, C++, ASM, and Windows .RC files.
 
 !IF DEFINED(ALL)
 all: $(REQS) $(ALL)
-!ELSEIF DEFINED(PROGRAMS) # An earlier scheme for defining all goals
-all: $(REQS)
-    @echo Applying All.mak all rule with PROGRAMS defined:
-    for %%f in ($(PROGRAMS)) do $(HEADLINE) Building %%~f & $(MAKE) /$(MAKEFLAGS) /f $(MAKEFILE) "OS=$(OS)" $(MAKEDEFS) "%%~f" "Debug\%%~f"
-!ELSE # As a last resort, try compiling all C and C++ files in the current directory
-all:
-    @echo Applying All.mak all rule with PROGRAMS undefined:
-    for %%f in (*.c *.cpp) do $(HEADLINE) Building %%~nxf.exe & $(MAKE) /$(MAKEFLAGS) /f $(MAKEFILE) "OS=$(OS)" $(MAKEDEFS) "%%~nxf.exe" "Debug\%%~nxf.exe"
+!ELSE # Another scheme for defining all goals, using $(PROGRAMS)
+all: $(REQS) # Having a batch file is necessary for dynamically updating the ...FAILED variables.
+    @cmd /c <<"$(TMP)\build_all.bat" || exit /b &:# To do: Find a way to generate a unique name, to avoid conflicts in case of // builds.
+        @echo off
+        setlocal EnableExtensions EnableDelayedExpansion
+        set "PROGRAMS=$(PROGRAMS)"
+        if defined PROGRAMS ( :# Build the list of programs defined in Files.mak 
+	    echo Applying All.mak all rule with PROGRAMS=!PROGRAMS!
+	) else ( :# As a last resort, try compiling all C and C++ files in the current directory
+	    echo Applying All.mak all rule with PROGRAMS undefined
+	    for %%f in (*.c *.cpp) do set "PROGRAMS=!PROGRAMS! %%~nf.exe"
+	    set PROGRAMS=!PROGRAMS:~1!
+	    echo Trying to compile all C and C++ files: set PROGRAMS=!PROGRAMS!
+	)
+        set "NFAILED=0"
+        set "WHAT_FAILED="
+        for %%f in (!PROGRAMS!) do (
+	    $(HEADLINE) Building %%~f
+	    $(MAKE) /$(MAKEFLAGS) /f $(MAKEFILE) "OS=$(OS)" $(MAKEDEFS) "%%~f" "Debug\%%~f"
+	    if errorlevel 1 (
+		set /A "NFAILED+=1"
+		set "WHAT_FAILED=!WHAT_FAILED! %%~f"
+		echo All.mak: %%~f build failed
+	    )
+        )
+        if defined WHAT_FAILED set "WHAT_FAILED=%WHAT_FAILED:~1%"
+        echo NFAILED=%NFAILED% WHAT_FAILED=(%WHAT_FAILED%)
+        if not %NFAILED%==0 $(HEADLINE) Error: Builds failed: %WHAT_FAILED%
+        exit /b %NFAILED%
+<<
 !ENDIF
 
 # Dummy targets for dynamically checking common prerequisites
+# Prefix these commands with an @, to avoid getting the word "Error" in the build log.
 BiosLib_library:
-    if not defined BIOSLIB echo>con Error: The BiosLib library is not configured & exit /b 1
-    if not exist %BIOSLIB%\clibdef.h echo>con Error: The BiosLib library is not configured correctly & exit /b 1
-    if not exist %BIOSLIB%\bios.lib echo>con Error: The BiosLib library must be built first & exit /b 1
+    @if not defined BIOSLIB echo>con Error: The BiosLib library is not configured & exit /b 1
+    @if not exist %BIOSLIB%\clibdef.h echo>con Error: The BiosLib library is not configured correctly & exit /b 1
+    @if not exist %BIOSLIB%\bios.lib echo>con Error: The BiosLib library must be built first & exit /b 1
 
 LoDosLib_library:
-    if not defined LODOSLIB echo>con Error: The LoDosLib library is not configured & exit /b 1
-    if not exist %LODOSLIB%\lodos.h echo>con Error: The LoDosLib library is not configured correctly & exit /b 1
-    if not exist %LODOSLIB%\lodos.lib echo>con Error: The LoDosLib library must be built first & exit /b 1
+    @if not defined LODOSLIB echo>con Error: The LoDosLib library is not configured & exit /b 1
+    @if not exist %LODOSLIB%\lodos.h echo>con Error: The LoDosLib library is not configured correctly & exit /b 1
+    @if not exist %LODOSLIB%\lodos.lib echo>con Error: The LoDosLib library must be built first & exit /b 1
 
 SysLib_library:
-    if not defined SYSLIB echo>con Error: The SysLib library is not configured & exit /b 1
-    if not exist %SYSLIB%\oprintf.h echo>con Error: The SysLib library is not configured correctly & exit /b 1
-    if not exist %SYSLIB%\lib\*.lib echo>con Error: The SysLib library must be built first & exit /b 1
+    @if not defined SYSLIB echo>con Error: The SysLib library is not configured & exit /b 1
+    @if not exist %SYSLIB%\oprintf.h echo>con Error: The SysLib library is not configured correctly & exit /b 1
+    @if not exist %SYSLIB%\lib\*.lib echo>con Error: The SysLib library must be built first & exit /b 1
 
 MsvcLibX_library:
-    if not defined MSVCLIBX echo>con Error: The MsvcLibX library is not configured & exit /b 1
-    if not exist %MSVCLIBX%\include\msvclibx.h echo>con Error: The MsvcLibX library is not configured correctly & exit /b 1
-    if not exist %MSVCLIBX%\lib\*.lib echo>con Error: The MsvcLibX library must be built first & exit /b 1
+    @if not defined MSVCLIBX echo>con Error: The MsvcLibX library is not configured & exit /b 1
+    @if not exist %MSVCLIBX%\include\msvclibx.h echo>con Error: The MsvcLibX library is not configured correctly & exit /b 1
+    @if not exist %MSVCLIBX%\lib\*.lib echo>con Error: The MsvcLibX library must be built first & exit /b 1
 
 PMode_library:
-    if not defined PMODE echo>con Error: The PMode library is not configured & exit /b 1
-    if not exist %PMODE%\pmode.h echo>con Error: The PMode library is not configured correctly & exit /b 1
-    if not exist %PMODE%\pmode.lib echo>con Error: The PMode library must be built first & exit /b 1
+    @if not defined PMODE echo>con Error: The PMode library is not configured & exit /b 1
+    @if not exist %PMODE%\pmode.h echo>con Error: The PMode library is not configured correctly & exit /b 1
+    @if not exist %PMODE%\pmode.lib echo>con Error: The PMode library must be built first & exit /b 1
 
 !IF !DEFINED(ZIPFILE)
 ZIPFILE=sources.zip
