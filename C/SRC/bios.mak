@@ -103,7 +103,9 @@
 #    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      #
 #    2016-09-02 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
 #    2016-09-21 JFL Fixed an issue that caused double definition warnings.    #
-#									      #
+#    2016-09-28 JFL Display FAILED messages when compilation or link fails.   #
+#		    Avoid having the word "Error" in the log unnecessarily.   #
+#		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
@@ -196,6 +198,8 @@ OP=$(O)\			#
 BP=$(B)\			#
 LP=$(L)\			#
 
+BR=$(T)$(DS)\BIN\$(MEM)		# Idem, relative to sources
+
 BB=$(BD)			# Final destination of executable files
 
 !IFNDEF TMP
@@ -283,6 +287,7 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 
 MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
 
 ###############################################################################
 #									      #
@@ -679,7 +684,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -689,7 +694,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation of resident modules
@@ -699,7 +704,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(CC) $(CFLAGS) /NTRESID /c $(TC) $(O)\$(<F)
+    $(CC) $(CFLAGS) /NTRESID /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -708,7 +713,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Assembling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(AS) $(AFLAGS) /c $<
+    $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule to link a program
@@ -726,10 +731,10 @@ $(LFLAGS) /tiny
 <<NOKEEP
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
-    $(LK) @$(L)\$(*B).LNK
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
     if exist $@ copy $@ $(BB)
     cd $(L)
-    $(MAPSYM) $(*F).map
+    -$(MAPSYM) $(*F).map
     cd $(MAKEDIR)
     $(MSG) ... done.
 
@@ -748,10 +753,10 @@ $(LFLAGS) /knoweas /stack:32768
 <<NOKEEP
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
-    $(LK) @$(L)\$(*B).LNK
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
     if exist $@ copy $@ $(BB)
     cd $(L)
-    $(MAPSYM) $(*F).map
+    -$(MAPSYM) $(*F).map
     cd $(MAKEDIR)
     $(MSG) ... done.
 
@@ -761,7 +766,7 @@ $(LFLAGS) /knoweas /stack:32768
     $(MSG) Creating $(B)\$(@F) ...
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /batch @<<
+    $(LB) /batch @<< || $(REPORT_FAILURE)
 $@
 $(OBJECTS:/=\)
 $(L)\$(@B).lst
@@ -819,7 +824,7 @@ $(B)\$(PROGRAM).lib: $(OBJECTS:+=)
     $(MSG) Creating $@ ...
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /batch @<<$(L)\$(PROGRAM).inp
+    $(LB) /batch @<<$(L)\$(PROGRAM).inp || $(REPORT_FAILURE)
 "$@"
 $(OBJECTS:/=\)
 $(L)\$(PROGRAM).lst
@@ -866,6 +871,7 @@ $(UTF8_BOM_FILE): $(MAKEFILE)
 $(REMOVE_UTF8_BOM): $(MAKEFILE)
     $(MSG) Generating script $@
     copy <<$@ NUL
+	@echo off
 	findstr /B /G:$(UTF8_BOM_FILE) <"%~1" >NUL
 	if errorlevel 1 (
 	  echo No UTF-8 BOM in "%~1". Copying the file.
