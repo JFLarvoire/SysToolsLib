@@ -30,10 +30,10 @@ Major highlights:
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
   with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM.
-  More details in the MsvcLibX [documentation](C/MsvcLibX/ReadMe.txt).
+  More details in the [MsvcLibX documentation](C/MsvcLibX/README.md).
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
   It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.  
-  This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.txt).
+  This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.md).
 
 Programming languages:
 
@@ -97,7 +97,7 @@ Particular files:
 Name            | Description
 --------------- | ---------------------------------------------------------------
 README.md	| This file
-NEWS.txt	| Project history
+NEWS.md		| Project history
 LICENSE.txt	| Project license (Apache 2.0)
 *.lst		| MakeZip.bat input files for generating partial source releases. (Deprecated)
 
