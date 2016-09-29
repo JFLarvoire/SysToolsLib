@@ -29,7 +29,8 @@ Major highlights:
   They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts.  
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
-  with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM. More details in the MsvcLibX documentation.
+  with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM.
+  More details in the MsvcLibX [documentation](C/MsvcLibX/ReadMe.txt).
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
   It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.  
   This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.txt).
@@ -128,7 +129,7 @@ provided that future contributors agree with the following conditions:
 
 - Contributions from independent individuals are welcome under the rules of the Apache 2.0 license.
 - Contributions from employees of outside (non-HPE) companies will only be accepted after
-  they've signed HPE's Corporate Contributor License Agreement in file [HPE_CCLA.docx].
+  they've signed HPE's Corporate Contributor License Agreement in file [HPE_CCLA.docx](HPE_CCLA.docx).
 
 
 ## License
