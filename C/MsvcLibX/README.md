@@ -47,15 +47,19 @@ Building the MsvcLibX library
 On a recent Windows PC, with Microsoft Visual C++ compilers installed:
 
 - Select a base work directory. I'll call it %BASEDIR% in the examples below:
+
   ```
   set "HOME=%HOMEDRIVE%%HOMEPATH%"
   set "BASEDIR=%HOME%\Documents\SRC"
   md "%BASEDIR%"
   cd "%BASEDIR%"
   ```
+  
 - Extract the MsvcLibX archive into a work subdirectory. Ex: %BASEDIR%\MsvcLibX\   
   This will put files in several subdirectories: include, src
+
 - Open a cmd window, and run:
+
   ```
   cd "%BASEDIR%\MsvcLibX\src" 
   configure
@@ -408,12 +412,14 @@ CP    | Description
 Important: Changing the code page will only work correctly if cmd.exe is using
 a TrueType font. The default "Raster" font supports code page 437 only.
 
-To enable that UTF-8 support:  
+To enable that UTF-8 support:
+
 1. Set the C or C++ source encoding to UTF-8 with BOM. (BOM = Byte-Order Mark)
 Having a BOM is important, as without it some Windows editors will incorrectly
 detect the encoding, and then sometimes corrupt the source.
 2. Define one of the following constants in the .c source, _before_ including
 any .h include files:
+
 ```
 #define _BSD_SOURCE  1	/* Defined by many standard BSD-Unix programs */
 #define _GNU_SOURCE  1	/* Defined by many standard GNU-Unix/Linux programs */
@@ -424,10 +430,11 @@ Note that most modern Linux compilers do expect C sources encoded as UTF-8,
 and will silently ignore the UTF-8 BOM if present.
 
 Internally, MsvcLibX extends Microsoft's convention of having two ANSI and Wide
-versions of each routine, respectively with an 'A' and a 'W' suffix. Ex:
+versions of each routine, respectively with an 'A' and a 'W' suffix. Ex:  
 FindFirstFile() being an alias to either FindFirstFileA() or FindFirstFileW().  
 MsvcLibX uses two additional suffixes: 'U' for the UTF-8 version, and 'M' for
 the common MultiByte subroutine used by both the 'A' and 'U' versions. Ex:
+
 Function   | Description
 ---------- | ---------------------------------------------------------------
 readlinkW  | Posix routine readlink - Wide char version
@@ -451,12 +458,16 @@ Currently this is implemented as a macro that redefines the main token, so
 that it generates a main() routine just calling a _mainU0() routine from
 MsvcLibX.lib, followed by another local _mainU() routine with the body intended
 for your main routine. Ex:
+
 `int main(int argc, char *argv[]) { /* your main body */ }`
+
 Becomes:
+
 ```
 int main(int argc, char *argv[]) {return _mainU0()}
 int _mainU(int argc, char *argv[]) { /* your main body */ }
 ```
+
 The _mainU0() routine from MsvcLibX.lib reprocesses the Win32 command line as
 UTF-8 argv[] arguments, then calls _mainU(argc, argv[]).  
 This works well and transparently, except in one case:  
@@ -615,7 +626,7 @@ stub for the Windows version.
 This allows building executables that work in *all* versions of DOS and Windows!
 
 - When run in MS-DOS, it's the DOS stub of the exe that runs.
-- When run in Windows, it's the Win32 part that runs.
+- When run in Windows (even 64-bits versions), it's the Win32 part that runs.
 
 Note that the make system will build such bound executables for any WIN32
 build made with more recent compilers. But these recent compilers generate
@@ -789,7 +800,7 @@ Many significant changes and improvements this year:
   The MsvcLibX library was beginning to use a significant number of these
   custom routines internally. They're now accessible directly to outside
   UTF-8 programs targeting only Windows.
-- Finished implementing support for the OUTDIR variable. (Started in 2015)
+- Finished implementing support for the OUTDIR variable. (Started in 2015.)
   All make files now optionally create output files in an %OUTDIR% directory.
   This is intended for testing builds in VMs, with shared sources on the
   host, but the output locally in the VM, avoiding to overwrite the main
