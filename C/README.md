@@ -34,19 +34,15 @@ Quick Guide for rebuilding everything in Windows
 
 3. Rebuild the MsvcLibX library.
 
-   ```
-   cd %WORKDIR%\MsvcLibX\src
-   configure
-   make
-   ```
+        cd %WORKDIR%\MsvcLibX\src
+        configure
+        make
 
 4. Rebuild all C tools.
 
-   ```
-   cd %WORKDIR%\SRC
-   configure
-   make
-   ```
+        cd %WORKDIR%\SRC
+        configure
+        make
 
 
 Quick guide for rebuilding everything in Linux
@@ -58,20 +54,16 @@ Quick guide for rebuilding everything in Linux
 
    Example if you *don't* have a C_INCLUDE_PATH defined yet:
 
-   ```
-   mkdir ~/include
-   cp $WORKDIR/MsvcLibX/include/debugm.h ~/include
-   export C_INCLUDE_PATH=~/include
-   ```
+        mkdir ~/include
+        cp $WORKDIR/MsvcLibX/include/debugm.h ~/include
+        export C_INCLUDE_PATH=~/include
 
    Note: Do not attempt to point C_INCLUDE_PATH at $WORKDIR/MsvcLibX/include, as this directory
          contains other include files for Windows that conflict with homonyms in Linux.
 
 3. Go to the SRC directory and rebuild all tools.
 
-   ```
-   cd $WORKDIR/SRC
-   chmod +x configure
-   ./configure
-   make
-   ```
+        cd $WORKDIR/SRC
+        chmod +x configure
+        ./configure
+        make
