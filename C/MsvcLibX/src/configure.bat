@@ -128,13 +128,17 @@
 :#		    Fixed macros ADD_POST_MAKE_ACTION & ADD_POST_MAKE_ACTION. *
 :#                  Fixed a warning when running on Chinese Windows.          *
 :#   2016-09-15 JFL For each VC version, record the WinSDK include directory. *
+:#   2016-09-27 JFL Make sure the configure.*.bat scripts are invoked in a    *
+:#		    predictable order: The alphabetic order.		      *
+:#                  Work around bug in old nmake test of "Program Files (x86)".
+:#   2016-09-28 JFL Also search for configure.*.bat in %windir% and %HOME%.   *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-09-05"
+set "VERSION=2016-09-28"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -150,6 +154,7 @@ set "POPARG=call :PopArg"
 call :Macro.Init
 call :Debug.Init
 call :Exec.Init
+if not defined HOME set "HOME=%HOMEDRIVE%%HOMEPATH%"
 goto Main
 
 :#----------------------------------------------------------------------------#
@@ -1147,6 +1152,7 @@ if /i "%~2"=="x86" (
     set SEARCH_IN=call :FindVsIn %~2 "bin\x86_%~2"
   )
 )
+set "NEEDSHORTPATH=0"
 :# If specified on the command line, and looking reasonably valid, then use it.
 if defined VSTUDIO call :FindVsIn "%VSTUDIO%" && goto :foundvs
 :# If VS' vcvars*.bat has already been run manually, then use it.
@@ -1195,13 +1201,15 @@ exit /b 1
 %SEARCH_IN% "Microsoft Visual Studio 9.0"	&& goto :foundvs    &:# VS 2008	5.00		5.00
 :lastvs95
 %SEARCH_IN% "Microsoft Visual Studio 8"		&& goto :foundvs    &:# VS 2005	4.00		5.00
-%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundvs    &:# VS 7.1	4.00		4.00 
-%SEARCH_IN% "Microsoft Visual Studio .NET"	&& goto :foundvs    &:# VS 7.0
-%SEARCH_IN% "Microsoft Visual Studio"		&& goto :foundvs    &:# VS 6
+%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundoldvs &:# VS 7.1	4.00		4.00 
+%SEARCH_IN% "Microsoft Visual Studio .NET"	&& goto :foundoldvs &:# VS 7.0
+%SEARCH_IN% "Microsoft Visual Studio"		&& goto :foundoldvs &:# VS 6
 SET "%VS%="
 %RETURN0%
-:foundvs
 
+:foundoldvs
+set "NEEDSHORTPATH=1" &:# Work around bug in old nmake handling of !IF EXIST("Program Files (x86)")
+:foundvs
 :# Find Visual Studio Common Files, which can have one of two names.
 :# The common files subdirectory can be named Common or Common7 depending on the VS version.
 SET "%VS%.COMMON="
@@ -1269,6 +1277,12 @@ if not defined WINSDK (
   :# Record the SDK version
   set "WINSDKVER="
   for %%p in ("%WINSDK%") do set "WINSDKVER=%%~nxp"
+)
+
+if defined WINSDK if "%NEEDSHORTPATH%"=="1" (
+  :# Work around bug in old nmake handling of !IF EXIST("Program Files (x86)")
+  call :long2short WINSDK_INCDIR WINSDK_INCDIR
+  %ECHOVARS.D% WINSDK_INCDIR
 )
 
 if defined WINSDK echo %TOS%	WinSDK	%WINSDKPROC%	"%WINSDK%"
@@ -1622,13 +1636,16 @@ set ADD_POST_MAKE_ACTION=%MACRO% ( %\n%
 %IF_DEBUG% set ADD_POST_MAKE_ACTION &:# Display the macro, for debugging changes
 
 :# Call other local and project-specific configure scripts, possibly overriding all the above
-:# Must be placed before the following commands, to allow defining %MSVCLIBX%, %98DDK%, %BOOST%, %PTHREADS%
-for %%f in (configure.*.bat) do (
-  %DO% call "%%~f"
-  if errorlevel 1 (
-    set "ERROR=!ERRORLEVEL!"
-    del %CONFIG.BAT%
-    exit /b !ERROR!
+:# Must be placed before the following commands, to allow defining %MSVCLIBX%, %SYSLIB%, %98DDK%, %BOOST%, %PTHREADS%
+:# Make sure the files are invoked in a predictable order: The alphabetic order.
+for %%d in ("%windir%" "%HOME%" ".") do (
+  %FOREACHLINE% %%f in ('dir /b /o "%%~d\configure.*.bat" 2^>NUL') do (
+    %DO% call "%%~d\%%~f"
+    if errorlevel 1 (
+      set "ERROR=!ERRORLEVEL!"
+      del %CONFIG.BAT%
+      exit /b !ERROR!
+    )
   )
 )
 %ECHOVARS.D% SDK_LIST
@@ -1712,7 +1729,7 @@ for %%v in (VC16) do if defined %%v (
     :# Do not configure BIOSLIB, LODOSLIB, PMODE variables at this stage, as they'll be needed for BIOS builds only
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
@@ -1750,7 +1767,7 @@ for %%v in (VC95 VC32) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
@@ -1781,7 +1798,7 @@ for %%v in (VCIA64 VC64 VCARM VCARM64) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(B)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
