@@ -96,7 +96,10 @@
 #    2016-04-13 JFL Forward library detections to the C compiler.	      #
 #    2016-08-24 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
 #    2016-09-15 JFL Added WSDKINCLUDE definition, and pass it to the compiler.#
-#									      #
+#    2016-09-28 JFL Also pass WSDKINCLUDE definition to the resource compiler.#
+#		    Display FAILED messages when compilation or link fails.   #
+#		    Avoid having the word "Error" in the log unnecessarily.   #
+#		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
@@ -155,6 +158,8 @@ OP=$(O)\			#
 BP=$(B)\			#
 LP=$(L)\			#
 
+BR=$(T)$(DS)			# Idem, relative to sources
+
 !IFNDEF TMP
 !IFDEF TEMP
 TMP=$(TEMP)
@@ -189,6 +194,7 @@ USEDOSSTUB=1			# Use an MS-DOS stub
 !IF !DEFINED(AFLAGS)
 AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /Sn /Zim
 !ENDIF
+RFLAGS=$(DD)
 !IF !DEFINED(CFLAGS)
 CFLAGS=/FAsc /Os /W4 /Zp /Zi
 !ENDIF # DEFINED(CFLAGS)
@@ -202,8 +208,10 @@ CFLAGS=$(CFLAGS) "/DUCRTINCLUDE=$(UCRTINCLUDE)" # Path of MSVC CRT library inclu
 !IF "$(WSDKINCLUDE)"!=""
 !IF EXIST("$(WSDKINCLUDE)\windows.h")
 CFLAGS=$(CFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)" # Path of Windows SDK include files, without quotes, and with forward slashes
+RFLAGS=$(RFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)" # Path of Windows SDK include files, without quotes, and with forward slashes
 !ELSE IF EXIST("$(WSDKINCLUDE)\um\windows.h")                
 CFLAGS=$(CFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)/um" # Path of Windows SDK include files, without quotes, and with forward slashes
+RFLAGS=$(RFLAGS) "/DWSDKINCLUDE=$(WSDKINCLUDE)/um" # Path of Windows SDK include files, without quotes, and with forward slashes
 !ENDIF # EXIST("$(WSDKINCLUDE)\windows.h")
 !ENDIF # "$(WSDKINCLUDE)"!=""
 !IF !DEFINED(LFLAGS)
@@ -214,7 +222,6 @@ GUILIBS=gdi32.lib winspool.lib comdlg32.lib shell32.lib ole32.lib oleaut32.lib
 !IF (("$(T)"=="WIN32") || ("$(T)"=="WIN95")) && DEFINED(PTHREADS) && EXIST("$(PTHREADS)\pthread.lib")
 LIBS=$(LIBS) pthread.lib
 !ENDIF
-RFLAGS=$(DD)
 
 # Target subsystem version. XP=5.1, minimum supported by VS 2013 and later. Win95/NT4=4.0, only supported by VS 2005 and earlier.
 !IF !DEFINED(WINVER)
@@ -270,6 +277,7 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 
 MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
 
 ###############################################################################
 #									      #
@@ -389,7 +397,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -399,7 +407,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F)
+    $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -408,7 +416,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Assembling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(AS) $(AFLAGS) /c $<
+    $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule to compile Windows resources
@@ -417,7 +425,7 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
     $(MSG) Compiling $(<F) resources ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(RC) /Fo$@ $(RFLAGS) /r $<
+    $(RC) /Fo$@ $(RFLAGS) /r $< || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule to link a program
@@ -441,7 +449,7 @@ $(LFLAGS)
 <<NOKEEP
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
-    $(LK) @$(L)\$(*B).LNK
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule to link a DLL
@@ -459,7 +467,7 @@ $(LFLAGS)
 <<NOKEEP
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
-    $(LK) @$(L)\$(*B).LNK
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for generating a bsc file
@@ -475,7 +483,7 @@ BSCFLAGS=/nologo
     $(MSG) Creating $(B)\$(@F) ...
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /OUT:$@ $(OBJECTS:+=)
+    $(LB) /OUT:$@ $(OBJECTS:+=) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 ###############################################################################
@@ -520,7 +528,7 @@ $(B)\$(PROGRAM).lib: $(OBJECTS:+=)
     $(MSG) Creating $@ ...
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /OUT:$@ $(OBJECTS:+=)
+    $(LB) /OUT:$@ $(OBJECTS:+=) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 !ENDIF # if DEFINED(PROGRAM)
@@ -561,6 +569,7 @@ $(UTF8_BOM_FILE): $(MAKEFILE)
 $(REMOVE_UTF8_BOM): $(MAKEFILE)
     $(MSG) Generating script $@
     copy <<$@ NUL
+	@echo off
 	findstr /B /G:$(UTF8_BOM_FILE) <"%~1" >NUL
 	if errorlevel 1 (
 	  echo No UTF-8 BOM in "%~1". Copying the file.
