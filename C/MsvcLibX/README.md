@@ -2,7 +2,6 @@
 ===========================================
 
 
-
 Introduction
 ------------
 
@@ -25,16 +24,27 @@ It also includes a number of useful routines and macros, either needed
 internally to implement and debug the above, or made necessary by irresolvable 
 incompatibilities between Unix and Windows.  
 
-An obvious alternative exists for Windows: MinGW. But I started all this before
-MinGW even existed. And, surprisingly, even MinGW still has holes in 2014,
-where MsvcLibX in significantly more advanced.  
+Other major features of the MsvcLibX library are:
+
+* A powerful make system, based on Microsoft nmake files, that allow building
+  multiple versions of the same program (Ex: DOS/WIN32/WIN64) with one simple
+  command. And in most cases without having to write any dedicated make file.
+* Support for UTF-8 sources, allowing to build programs working in any code page.
+* Support for NTFS symlinks and junctions.
+* Support for DOS, and Windows 95 targets, for targeting old computers.
+* Support for bound DOS+Windows programs, for truly universal executables that
+  work in *all* versions of DOS and Windows.
+
+An obvious alternative exists for building Windows programs: MinGW.
+But I started all this before MinGW even existed. And, surprisingly, even MinGW
+still has holes in 2014, where MsvcLibX in significantly more advanced.  
 Another alternative is CygWin. This one is more complete, but also much more 
 heavyweight. Using programs built with CygWin requires installing CygWin DLLs.
 Copying the program .exe from one system to the next is not sufficient. In that
-sense, MinGW is much better.  
+sense, MinGW or MsvcLibX are much better.  
 
-Contrary to these two, MsvcLibX does not attempt to be complete, and is unlikely
-to ever be. But any contribution of improvements is welcome.  
+Contrary to MinGW and CygWin, MsvcLibX does not attempt to be complete, and is
+unlikely to ever be. But any contribution of improvements is welcome.  
 Likewise, any help at contributing unique MsvcLibX features to MinGW is welcome. 
 
 Jean-François Larvoire
@@ -48,23 +58,19 @@ On a recent Windows PC, with Microsoft Visual C++ compilers installed:
 
 - Select a base work directory. I'll call it %BASEDIR% in the examples below:
 
-  ```
-  set "HOME=%HOMEDRIVE%%HOMEPATH%"
-  set "BASEDIR=%HOME%\Documents\SRC"
-  md "%BASEDIR%"
-  cd "%BASEDIR%"
-  ```
+      set "HOME=%HOMEDRIVE%%HOMEPATH%"
+      set "BASEDIR=%HOME%\Documents\SRC"
+      md "%BASEDIR%"
+      cd "%BASEDIR%"
   
 - Extract the MsvcLibX archive into a work subdirectory. Ex: %BASEDIR%\MsvcLibX\   
   This will put files in several subdirectories: include, src
 
 - Open a cmd window, and run:
 
-  ```
-  cd "%BASEDIR%\MsvcLibX\src" 
-  configure
-  make
-  ```
+      cd "%BASEDIR%\MsvcLibX\src" 
+      configure
+      make
 
 The configure.bat script will locate your MSVC tools, and generate a config
 file. It needs to be run once initially, then again if new MSVC tool versions
@@ -124,35 +130,33 @@ Building programs using the MsvcLibX library
 
 Create a work directory, distinct from the MsvcLibX directories. Ex:
 
-```
-set "HOME=%HOMEDRIVE%%HOMEPATH%"
-set "BASEDIR=%HOME%\Documents\SRC"
-md "%BASEDIR%\MyTools"
-cd "%BASEDIR%\MyTools"
-:# Define a variable giving the location of the MsvcLibX base directory
-:# (Automatically defined if you built the library already on that same system.)
-set "MSVCLIBX=%BASEDIR%\MsvcLibX"
-:# Get batch files and make files from MsvcLibX sources
-copy "%MSVCLIBX%\src\*.bat"
-copy "%MSVCLIBX%\src\*.mak"
-:# Create the configuration file (To be done just once)
-configure
-:# Compile and link your C or C++ program.
-:# Ex, for the dirc.c sample, to create all dirc.exe versions, type:
-make dirc.exe
-:# If there is any error, the dirc.log file will pop up.
-:# If there's no error, it's possible to check for warnings by reading dirc.log:
-notepad dirc.log
-:# All generated object files, listings, executables, etc, are in
-:# target-OS-specific subdirectories, like for the MsvcLibX builds above.
-:# They're automatically linked with the corresponding (renamed) MsvcLibX*.lib.
-```
+    set "HOME=%HOMEDRIVE%%HOMEPATH%"
+    set "BASEDIR=%HOME%\Documents\SRC"
+    md "%BASEDIR%\MyTools"
+    cd "%BASEDIR%\MyTools"
+    :# Define a variable giving the location of the MsvcLibX base directory
+    :# (Automatically defined if you built the library already on that same system.)
+    set "MSVCLIBX=%BASEDIR%\MsvcLibX"
+    :# Get batch files and make files from MsvcLibX sources
+    copy "%MSVCLIBX%\src\*.bat"
+    copy "%MSVCLIBX%\src\*.mak"
+    :# Create the configuration file (To be done just once)
+    configure
+    :# Compile and link your C or C++ program.
+    :# Ex, for the dirc.c sample, to create all dirc.exe versions, type:
+    make dirc.exe
+    :# If there is any error, the dirc.log file will pop up.
+    :# If there's no error, it's possible to check for warnings by reading dirc.log:
+    notepad dirc.log
+    :# All generated object files, listings, executables, etc, are in
+    :# target-OS-specific subdirectories, like for the MsvcLibX builds above.
+    :# They're automatically linked with the corresponding (renamed) MsvcLibX*.lib.
 
 make.bat will generate WIN32 (X86) and WIN64 (AMD64) versions by default,
 and put them respectively in the WIN32\ and WIN64\ subdirectories.  
 It will also generate a DOS version in DOS\ if MSVC 1.52 is installed.  
 It will also generate a WIN95 version in WIN95\ if MSVC 8 (aka. 2005) is installed.  
-Run 'make -?' get a help screen for make.bat.
+Run `make -?` get a help screen for make.bat.
 
 Note that the configure.bat and make.bat scripts are actually independent of the
 rest of the MsvcLibX library. They can be used to easily build any console 
@@ -169,27 +173,26 @@ Install virtual machines with Linux, and give them access to the host's file
 system, for example in the /c directory.  
 Then execute the following commands, adapting the paths as needed:
 
-```
-# Go to the work directory
-BASEDIR=/c/Users/YOURNAME/Documents/SRC
-mkdir $BASEDIR/MyTools
-cd $BASEDIR/MyTools
-# Get a bash script to build Linux versions using similar directory outputs 
-cp $BASEDIR/MsvcLibX/src/exe .
-# Make sure the Linux C compiler finds MsvcLibX debug macros, but not other MsvcLibX include files.
-# Important: Do not point C_INCLUDE_PATH at MsvcLibX/include, as this directory
-# contains duplicates for standard include files (Ex: stdio.h), that will fail
-# to compile in Linux.
-mkdir ~/include
-cp $BASEDIR/MsvcLibX/include/debugm.h ~/include
-export C_INCLUDE_PATH=~/include
-# Make sure that variable is defined in all future sessions
-echo "export C_INCLUDE_PATH=~/include" >>~/.bashrc
-# Compile your sample dirc.c program (which uses MsvcLibX debug macros)
-./exe dirc
-# The output will be in subdirectories such as Linux.i686/ or Linux.x86_64/.
-# (The exact name depends on `echo "$(uname -s).$(uname -m)"` output)
-```
+    # Go to the work directory
+    BASEDIR=/c/Users/YOURNAME/Documents/SRC
+    mkdir $BASEDIR/MyTools
+    cd $BASEDIR/MyTools
+    # Get a bash script to build Linux versions using similar directory outputs 
+    cp $BASEDIR/MsvcLibX/src/exe .
+    # Make sure the Linux C compiler finds MsvcLibX debug macros, but not other MsvcLibX include files.
+    # Important: Do not point C_INCLUDE_PATH at MsvcLibX/include, as this directory
+    # contains duplicates for standard include files (Ex: stdio.h), that will fail
+    # to compile in Linux.
+    mkdir ~/include
+    cp $BASEDIR/MsvcLibX/include/debugm.h ~/include
+    export C_INCLUDE_PATH=~/include
+    # Make sure that variable is defined in all future sessions
+    echo "export C_INCLUDE_PATH=~/include" >>~/.bashrc
+    # Compile your sample dirc.c program (which uses MsvcLibX debug macros)
+    ./exe dirc
+    # The output will be in subdirectories such as Linux.i686/ or Linux.x86_64/.
+    # (The exact name depends on `echo "$(uname -s).$(uname -m)"` output)
+
 
 Adding new files to the library
 -------------------------------
@@ -286,32 +289,29 @@ Example 1: The 2clip program has no MS-DOS version. To prevent the make system
 from attempting to build a DOS version (Only necessary if you DO have MSVC 1.52 
 installed), create a 2clip.mak file with this content:
 
-```
-!IF "$(T)"=="DOS"
-complain:
-        @echo>con There's no DOS version of this program.
-
-dirs $(O)\2clip.obj $(B)\2clip.exe: complain
-        @rem Do nothing
-!ENDIF
-```
+    !IF "$(T)"=="DOS"
+    complain:
+            @echo>con There's no DOS version of this program.
+    
+    dirs $(O)\2clip.obj $(B)\2clip.exe: complain
+            @rem Do nothing
+    !ENDIF
 
 Example 2: Porting to Windows a resize.c program manipulating jpeg images,
 and using the libjpeg library. Create a resize.mak file with lines like these:
-```
-INCLUDE=$(INCLUDE);C:\JFL\SRC\Libs\libjpeg;C:\JFL\SRC\Libs\libjpeg\jpeg-8d
-LFLAGS=$(LFLAGS) C:\JFL\SRC\Libs\libjpeg\$(B)\libjpeg.lib
-```
+
+    INCLUDE=$(INCLUDE);C:\JFL\SRC\Libs\libjpeg;C:\JFL\SRC\Libs\libjpeg\jpeg-8d
+    LFLAGS=$(LFLAGS) C:\JFL\SRC\Libs\libjpeg\$(B)\libjpeg.lib
 
 Example 3: Some Windows programs need to include additional resources, defined
 in a .rc file. Ex: The update program uses a manifest to control its rights.
 Create an update.mak file with directives like this:
-```
-!IF "$(T)"=="WIN32" || "$(T)"=="WIN64"
-SOURCES=update.c update.rc
-LFLAGS=$(LFLAGS) /MANIFEST
-!ENDIF
-```
+
+    !IF "$(T)"=="WIN32" || "$(T)"=="WIN64"
+    SOURCES=update.c update.rc
+    LFLAGS=$(LFLAGS) /MANIFEST
+    !ENDIF
+
 
 The debug system
 ----------------
@@ -370,26 +370,25 @@ RETURN_STRING(s)	      | DEBUG_LEAVE(("return %s\n", s)); return s;
 For all the above, the release version just does return retValue;
 
 Example for a recursive function factorial:
-```
-int fact(int n) {
-  DEBUG_ENTER((__FUNCTION__ "(%d);\n", n));
-  if (n) n *= fact(n-1); else n = 1;
-  RETURN_INT(n);
-}
-```
+
+    int fact(int n) {
+      DEBUG_ENTER((__FUNCTION__ "(%d);\n", n));
+      if (n) n *= fact(n-1); else n = 1;
+      RETURN_INT(n);
+    }
+
 The debug version, in debug mode, invoked with argument 4, prints:
-```
-fact(4);
-  fact(3);
-    fact(2);
-      fact(1);
-        fact(0);
-          return 1;
-        return 1;
-      return 2;
-    return 6;
-  return 24;
-```
+
+    fact(4);
+      fact(3);
+        fact(2);
+          fact(1);
+            fact(0);
+              return 1;
+            return 1;
+          return 2;
+        return 6;
+      return 24;
 
 
 Support for UTF-8 sources
@@ -420,11 +419,9 @@ detect the encoding, and then sometimes corrupt the source.
 2. Define one of the following constants in the .c source, _before_ including
 any .h include files:
 
-```
-#define _BSD_SOURCE  1	/* Defined by many standard BSD-Unix programs */
-#define _GNU_SOURCE  1	/* Defined by many standard GNU-Unix/Linux programs */
-#define _UTF8_SOURCE 1	/* MsvcLibX-specific */
-```
+       #define _BSD_SOURCE  1	/* Defined by many standard BSD-Unix programs */
+       #define _GNU_SOURCE  1	/* Defined by many standard GNU-Unix/Linux programs */
+       #define _UTF8_SOURCE 1	/* MsvcLibX-specific */
 
 Note that most modern Linux compilers do expect C sources encoded as UTF-8,
 and will silently ignore the UTF-8 BOM if present.
@@ -459,14 +456,12 @@ that it generates a main() routine just calling a _mainU0() routine from
 MsvcLibX.lib, followed by another local _mainU() routine with the body intended
 for your main routine. Ex:
 
-`int main(int argc, char *argv[]) { /* your main body */ }`
+    int main(int argc, char *argv[]) { /* your main body */ }
 
 Becomes:
 
-```
-int main(int argc, char *argv[]) {return _mainU0()}
-int _mainU(int argc, char *argv[]) { /* your main body */ }
-```
+    int main(int argc, char *argv[]) {return _mainU0()}
+    int _mainU(int argc, char *argv[]) { /* your main body */ }
 
 The _mainU0() routine from MsvcLibX.lib reprocesses the Win32 command line as
 UTF-8 argv[] arguments, then calls _mainU(argc, argv[]).  
@@ -642,7 +637,8 @@ DOS/95/98/ME/2000/XP/Vista/7/8/10.
 History
 -------
 
-**1986**  
+**1986**
+
 I (Jean-François Larvoire) started writing command-line tools for MS-DOS.
 Some were enumerating files, using inline assembly language to make MS-DOS
 interrupt 21h system calls: update, dirsize, redo, backnum, which, dirc...  
@@ -651,7 +647,9 @@ that I manually copied from one program to the next.
 Things got a bit tricky to support recursion, which was not straightforward
 in MS-DOS.
 
-**1992**  
+
+**1992**
+
 We got an OS/2 server, and I started porting the above programs to OS/2.
 MS-DOS was still important, so I used conditional compilation to support
 both operating systems with the same source.  
@@ -661,8 +659,10 @@ dirc was the first program I ported, then I slowly duplicated the code into
 the other programs. Synchronizing bug fixes became more difficult.  
 A nice trick was the OS/2 supported dual-mode EXEs, with both the DOS and
 OS/2 version bound in the same .exe file.
-     
-**1995**  
+
+
+**1995**
+
 We ditched the OS/2 server, and got a new one running Windows NT.  
 Again, I created a third conditionally compiled version of srch1st/srchnext/
 srchdone for WIN32, for use in dirc.  
@@ -670,8 +670,10 @@ Manually back porting the updates and bug fixes to all programs became
 really painful, and took several years.  
 Like OS/2, Windows supported dual-mode EXEs, and I updated my make files
 to include both the DOS and Windows version in the same file.
-     
-**2005**  
+
+
+**2005**
+
 I started working on Linux projects. Despite the bonanza of command-line
 tools available, I couldn't find one equivalent to dirc.  
 So, yet another time, I created a fourth conditionally compiled version of
@@ -681,13 +683,17 @@ first 64-bits OS I worked with. This exposed a few unsuspected bugs.
 The thing became so complex than porting the changes and updates to the
 other programs was a nightmare. I did it for a few of them, but never
 got the time to port them all.
-     
-**2010**  
+
+
+**2010**
+
 Building WIN64 versions was relatively easier due to the Tru64 precedent,
 but added yet another set of conditional compilations.   
 The porting nightmare worsened.
-     
-**2012**  
+
+
+**2012**
+
 I tried porting some unrelated Linux programs to Windows, and hit a wall:
 Many include files and standard C library routines were missing in MSVC.
 I then tried using MinGW, but it too was missing many required features!
@@ -702,8 +708,9 @@ write standard dirent.h/dirent.c routines for DOS/OS2/Windows, and
 rewrite all my programs around these standard routines.  
 I did it for DOS and Windows versions, and left stubs of the OS/2 versions,
 for the unlikely case where somebody wants to revive them.
-     
-**2013**  
+
+**2013**
+
 The restructuration was over for dirc, dirsize, which, backnum, update.
 The library got its final name, "MsvcLibX", to better match it purpose:  
 An extension of the Microsoft Visual C library, not of the standard libc.  
@@ -722,8 +729,10 @@ I started thinking about sorely needed improvements:
 The Linux version of the program did not have these issues, as all recent
 versions of Linux use the UTF-8 encoding, and this works transparently
 even for old programs using 8-bits characters like mine.
-     
-**2014**  
+
+
+**2014**
+
 I got a bit more time, and started working on a redesign of MsvcLibX's
 dirent.c/dirent.h, and added lstat.c, symlink.c, readlink.c, etc, to
 support symlinks, junctions, and UTF-8 file names.  
@@ -753,7 +762,8 @@ Later in the year, I made significant other changes:
 All tools like dirc, dirsize, which, backnum, update, truename, redo
 benefit from that last change.
 
-**2015**  
+**2015**
+
 A major improvement was the addition of support for new operating systems
 and processor targets. This required redesigning several things:  
 The OS-specific definition macros have been renamed to more generic names.
@@ -786,7 +796,9 @@ And of course there were also issues with MsvcLibX recent improvements,
 like Unicode support and symlink support, which had never been tested,
 and of course did not work, in Windows 95 and XP.
 
-**2016**  
+
+**2016**
+
 Many significant changes and improvements this year:
 
 - Changed the UTF-8 C source support to require a UTF-8 BOM.  
