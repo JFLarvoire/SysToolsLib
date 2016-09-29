@@ -16,10 +16,11 @@ For detailed information about each component, refer to the README.txt file in e
 Quick Guide for rebuilding everything in Windows
 ------------------------------------------------
 
-0) Install Microsoft Visual C++ if you don't have it already.  
+1. Install Microsoft Visual C++ if you don't have it already.  
    If needed, it's part of the free Visual Studio Express, available from this URL:  
    https://www.visualstudio.com/en-us/products/visual-studio-express-vs.aspx  
    Important: After installing Visual Studio Express Community Edition, make sure to install the optional C++ components:
+
     - Start Visual Studio
     - Click New project
     - Select Visual C++
@@ -29,48 +30,48 @@ Quick Guide for rebuilding everything in Windows
     - Make sure both "Common Tools for Visual C++ 2015" and "Windows 8.1 SDK and Universal CRT SDK" are selected.  
     ...
 
-1) Download the above folders into a %WORKDIR% directory.
+2. Download the above folders into a %WORKDIR% directory.
 
-2) Rebuild the MsvcLibX library.
+3. Rebuild the MsvcLibX library.
 
-```
-cd %WORKDIR%\MsvcLibX\src
-configure
-make
-```
+   ```
+   cd %WORKDIR%\MsvcLibX\src
+   configure
+   make
+   ```
 
-3) Rebuild all tools.
+4. Rebuild all C tools.
 
-```
-cd %WORKDIR%\SRC
-configure
-make
-```
+   ```
+   cd %WORKDIR%\SRC
+   configure
+   make
+   ```
 
 
 Quick guide for rebuilding everything in Linux
 ----------------------------------------------
 
-1) Download both the MsvcLibX and SRC folders into a $WORKDIR directory.
+1. Download both the MsvcLibX and SRC folders into a $WORKDIR directory.
 
-2) Copy MsvcLibX debug macros to another directory in your C_INCLUDE_PATH.
+2. Copy MsvcLibX debug macros to another directory in your C_INCLUDE_PATH.
 
-Example if you *don't* have a C_INCLUDE_PATH defined yet:
+   Example if you *don't* have a C_INCLUDE_PATH defined yet:
 
-```
-mkdir ~/include
-cp $WORKDIR/MsvcLibX/include/debugm.h ~/include
-export C_INCLUDE_PATH=~/include
-```
+   ```
+   mkdir ~/include
+   cp $WORKDIR/MsvcLibX/include/debugm.h ~/include
+   export C_INCLUDE_PATH=~/include
+   ```
 
-Note: Do not attempt to point C_INCLUDE_PATH at $WORKDIR/MsvcLibX/include, as this directory
-      contains other include files for Windows that conflict with homonyms in Linux.
+   Note: Do not attempt to point C_INCLUDE_PATH at $WORKDIR/MsvcLibX/include, as this directory
+         contains other include files for Windows that conflict with homonyms in Linux.
 
-3) Go to the SRC directory and rebuild all tools.
+3. Go to the SRC directory and rebuild all tools.
 
-```
-cd $WORKDIR/SRC
-chmod +x configure
-./configure
-make
-```
+   ```
+   cd $WORKDIR/SRC
+   chmod +x configure
+   ./configure
+   make
+   ```
