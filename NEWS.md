@@ -4,9 +4,28 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [1.5] 2016-09-15
-Publicly released on github.com
+## [1.5.1] 2016-09-29
+### Changed
+- C/*/*.mak:
+   - Added an OUTDIR variable, to optionally define a different output directory base.
+   - Display FAILED messages on the console when compilations or links fail.
+- C/*/configure.bat:
+   - Make sure the configure.*.bat scripts are invoked in a predictable order: The alphabetic order.
+   - Also search for configure.*.bat in %windir% and %HOME%. Allows to globally define your own preferences.
+   - Added a -o option to set the OUTDIR variable.  
+     (Recommended: In test VMs accessing the host sources, set it in a "%windir%\configure.system.bat" script.)
+- PowerShell\PSService.ps1:
+   - Added a $ServiceDescription string global setting, and use it for the service registration.
 
+### Fixed
+- C/MsvcLibX/include/msvclibx.h: Fixed an issue that prevented the RC compiler to use our new derived windows.h.
+- C/SRC/*.c: Minor changes to avoid warnings. No functional code change in most cases.
+- C/MsvcLibX/src/main.c: Fixed a bug that caused empty "" arguments to be lost in UTF-8 programs.  
+  This affected remplace.exe and redo.exe.
+- C/*/dos.mak: Fixed an issue that caused double goal definition warnings, for DOS builds of programs that have their own .mak file.
+- PowerShell\PSService.ps1: Fixed issue #5 starting services with a name that begins with a number.
+
+## [1.5] 2016-09-15
 ### Changed
 - C/MsvcLibX/*: Added a windows.h include file, that includes the Windows SDK's own Windows.h, then add its own UTF-8
   extensions. This minimizes changes when converting a Windows ANSI console application to support UTF-8.   
@@ -27,6 +46,7 @@ Publicly released on github.com
    - Bug fix: Detect and report output buffer overflows.
    - Convert short WIN32 paths to long paths.
    - Resize output buffers, to avoid wasting lots of memory.
+- PowerShell\PSService.ps1: Fixed issue #4 detecting the System account. Now done in a language-independent way.
 
 ## [unreleased] 2016-09-05
 ### Changed
