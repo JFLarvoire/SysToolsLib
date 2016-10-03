@@ -54,13 +54,18 @@
 :#                  running make.bat recursively.                             *
 :#   2016-07-12 JFL Store the log file in %OUTDIR% if defined.		      *
 :#   2016-09-02 JFL Fixed the -f option. (Likely broken by 2015-01-09 changes)*
+:#   2016-09-30 JFL Merged in the latest batch debugging library updates.     *
+:#                  Set the PID variable with the cmd.exe process ID. Useful  *
+:#                  for sub-scripts or make files to generate unique IDs.     *
+:#   2016-10-03 JFL Display list_programs pseudo target output directly.      *
+:#                  Fixed the :nmake routine to avoid creating a log file.    *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-09-02"
+set "VERSION=2016-10-03"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -197,6 +202,7 @@ goto :PopArg.GetNext
 :#  History                                                                   #
 :#   2015-04-15 JFL Initial version, based on dostips.com samples, with       #
 :#                  changes so that they work with DelayedExpansion on.       #
+:#   2015-11-27 JFL Added a primitive macro debugging capability.             #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -221,18 +227,46 @@ set ^"LF3=^^^^^^%LF2%%LF2%^^%LF2%%LF2%"
 set ^"LF4=^^^^^^^^^^^^%LF3%%LF3%^^^^%LF3%%LF3%"
 set ^"LF5=^^^^^^^^^^^^^^^^^^^^^^^^%LF4%%LF4%^^^^^^^^%LF4%%LF4%"
 
-:# Variable for use in inline macro functions
+:# Variables for use in inline macro functions
 set ^"\n=%LF3%^^^"	&:# Insert a LF and continue macro on next line
 set "^!=^^^^^^^!"	&:# Define a %!%DelayedExpansion%!% variable
 set "'^!=^^^!"		&:# Idem, but inside a quoted string
+set ">=^^^>"		&:# Insert a redirection character
 set "&=^^^&"		&:# Insert a command separator in a macro
-set "&2=^^^^^^^^^^^^^^^&"	&:# Idem, to be expanded twice
+:# Idem, to be expanded twice, for use in macros within macros
+set "^!2=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!"
+set "'^!2=^^^^^^^!"
+set "&2=^^^^^^^^^^^^^^^&"
 
 set "MACRO=for %%$ in (1 2) do if %%$==2"			&:# Prolog code of a macro
-set "/MACRO=else setlocal enableDelayedExpansion %&% set ARGS="	&:# Epilog code of a macro
+set "/MACRO=else setlocal enableDelayedExpansion %&% set MACRO.ARGS="	&:# Epilog code of a macro
 
 set "ON_MACRO_EXIT=for /f "delims=" %%r in ('echo"	&:# Begin the return variables definitions 
 set "/ON_MACRO_EXIT=') do endlocal %&% %%r"		&:# End the return variables definitions
+
+:# Primitive macro debugging definitions
+:# Macros, usable anywhere, including within other macros, for conditionally displaying debug information
+:# Use option -xd to set a > 0 macro debugging level.
+:# Usage: %IF_XDLEVEL% N command
+:# Runs command if the current macro debugging level is at least N.
+:# Ex: %IF_XDLEVEL% 2 set VARIABLE
+:# Recommended: Use set, instead of echo, to display variable values. This is sometimes
+:# annoying because this displays other unwanted variables. But this is the only way
+:# to be sure to display _all_ tricky characters correctly in any expansion mode. 
+:# Note: These debugging macros slow down a lot their enclosing macro.
+:#       They should be removed from the released code.
+set "XDLEVEL=0" &:# 0=No macro debug; 1=medium debug; 2=full debug; 3=Even more debug
+set "IF_XDLEVEL=for /f %%' in ('call echo.%%XDLEVEL%%') do if %%' GEQ"
+
+:# While at it, and although this is unrelated to macros, define other useful ASCII control codes
+:# Define a CR variable containing a Carriage Return ('\x0D')
+for /f %%a in ('copy /Z %COMSPEC% nul') do set "CR=%%a"
+
+:# Define a BS variable containing a BackSpace ('\x08')
+:# Use prompt to store a  backspace+space+backspace into a DEL variable.
+for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "DEL=%%a"
+:# Then extract the first backspace
+set "BS=%DEL:~0,1%"
 
 goto :eof
 :Macro.end
@@ -256,18 +290,16 @@ goto :eof
 :#                  EchoArgs	    Display the values of all arguments       #
 :#                                                                            #
 :#  Macros          %FUNCTION%	    Define and trace the entry in a function. #
+:#                  %UPVAR%         Declare a var. to pass back to the caller.#
 :#                  %RETURN%        Return from a function and trace it       #
-:#                  %RETURN#%       Idem, with comments after the return      #
-:#                  %RETVAL%        Default return value                      #
-:#                  %RETVAR%        Name of the return value. Default=RETVAL  #
 :#                                                                            #
 :#                  Always match uses of %FUNCTION% and %RETURN%. That is     #
 :#                  never use %RETURN% if there was no %FUNCTION% before it.  #
 :#                                                                            #
 :#                  :# Example of a factorial routine using this framework    #
 :#                  :Fact                                                     #
-:#                  %FUNCTION% Fact %*                                        #
-:#                  setlocal enableextensions enabledelayedexpansion          #
+:#                  %FUNCTION% enableextensions enabledelayedexpansion        #
+:#		    %UPVAR% RETVAL					      #
 :#                  set N=%1                                                  #
 :#                  if .%N%.==.0. (                                           #
 :#                    set RETVAL=1                                            #
@@ -276,7 +308,7 @@ goto :eof
 :#                    call :Fact !M!                                          #
 :#                    set /A RETVAL=N*RETVAL                                  #
 :#                  )                                                         #
-:#                  endlocal & set "RETVAL=%RETVAL%" & %RETURN%               #
+:#                  %RETURN%					              #
 :#                                                                            #
 :#                  %ECHO%	    Echo and log a string, indented           #
 :#                  %LOG%	    Log a string, indented                    #
@@ -289,6 +321,10 @@ goto :eof
 :#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
+:#                                                                            #
+:#                  %FUNCTION0%	    Weak functions with no local variables.   #
+:#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
+:#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
@@ -327,6 +363,28 @@ goto :eof
 :#   2013-12-04 JFL Added variable %>DEBUGOUT% to allow sending debug output  #
 :#                  either to stdout or to stderr.                            #
 :#   2015-10-29 JFL Added macro %RETURN#% to return with a comment.           #
+:#   2015-11-19 JFL %FUNCTION% now automatically generates its name & %* args.#
+:#                  (Simplifies usage, but comes at a cost of about a 5% slow #
+:#                   down when running in debug mode.)                        #
+:#                  Added an %UPVAR% macro allowing to define the list of     #
+:#                  variables that need to make it back to the caller.        #
+:#                  %RETURN% (Actually the Debug.return routine) now handles  #
+:#                  this variable back propagation using the (goto) trick.    #
+:#                  This works well, but the performance is poor.             #
+:#   2015-11-25 JFL Rewrote the %FUNCTION% and %RETURN% macros to manage      #
+:#                  most common cases without calling a subroutine. This      #
+:#                  resolves the performance issues of the previous version.  #
+:#   2015-11-27 JFL Redesigned the problematic character return mechanism     #
+:#                  using a table of predefined generic entities. Includes    #
+:#                  support for returning strings with CR & LF.		      #
+:#   2015-11-29 JFL Streamlined the macros and added lots of comments.        #
+:#                  The FUNCTION macro now runs with expansion enabled, then  #
+:#                  does a second setlocal in the end as requested.           #
+:#                  The RETURN macro now displays strings in debug mode with  #
+:#                  delayed expansion enabled. This fixes issues with CR & LF.#
+:#                  Added a backspace entity.                                 #
+:#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
+:#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -334,13 +392,95 @@ call :Debug.Init
 goto :Debug.End
 
 :Debug.Init
-set "RETVAR=RETVAL"
+:# Preliminary checks to catch common problems
+if exist echo >&2 echo WARNING: The file "echo" in the current directory will cause problems. Please delete it and retry.
+:# Inherited variables from the caller: DEBUG, VERBOSE, INDENT, >DEBUGOUT
+:# Initialize other debug variables
 set "ECHO=call :Echo"
 set "ECHOVARS=call :EchoVars"
-set ">DEBUGOUT=" &:# ""=output debug messages to stdout; ">&2"=output to stderr
+:# Define variables for problematic characters, that cause parsing issues
+:# Use the ASCII control character name, or the html entity name.
+:# Warning: The excl and hat characters need different quoting depending on context.
+set "DEBUG.percnt=%%"	&:# One percent sign
+set "DEBUG.excl=^!"	&:# One exclamation mark
+set "DEBUG.hat=^"	&:# One caret, aka. circumflex accent, or hat sign
+set ^"DEBUG.quot=""	&:# One double quote
+set "DEBUG.apos='"	&:# One apostrophe
+set "DEBUG.amp=&"	&:# One ampersand
+set "DEBUG.vert=|"	&:# One vertical bar
+set "DEBUG.gt=>"	&:# One greater than sign
+set "DEBUG.lt=<"	&:# One less than sign
+set "DEBUG.lpar=("	&:# One left parenthesis
+set "DEBUG.rpar=)"	&:# One right parenthesis
+set "DEBUG.lbrack=["	&:# One left bracket
+set "DEBUG.rbrack=]"	&:# One right bracket
+set "DEBUG.sp= "	&:# One space
+set "DEBUG.tab=	"	&:# One tabulation
+set "DEBUG.cr=!CR!"	&:# One carrier return
+set "DEBUG.lf=!LF!"	&:# One line feed
+set "DEBUG.bs=!BS!"	&:# One backspace
+:# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
+set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
+set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
+set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
+  set DEBUG.EXITCODE=%!%MACRO.ARGS%!%%\n%
+  if defined DEBUG.EXITCODE set DEBUG.EXITCODE=%!%DEBUG.EXITCODE: =%!%%\n%
+  if not defined DEBUG.EXITCODE set DEBUG.EXITCODE=%!%DEBUG.ERRORLEVEL%!%%\n%
+  set "DEBUG.SETARGS=" %\n%
+  for %%v in (%!%DEBUG.RETVARS%!%) do ( %\n%
+    set "DEBUG.VALUE=%'!%%%v%'!%" %# We must remove problematic characters in that value #% %\n%
+    if defined DEBUG.VALUE ( %# Else the following lines will generate phantom characters #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Encode percent #% %\n%
+      for %%e in (sp tab cr lf quot) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Encode named character entities #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+      ) %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
+      call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
+    ) %\n%
+    set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%" %\n%
+  ) %\n%
+  if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
+    set "DEBUG.MSG=return %'!%DEBUG.EXITCODE%'!%" %\n%
+    for %%v in (%!%DEBUG.SETARGS%!%) do ( %\n%
+      set "DEBUG.MSG=%'!%DEBUG.MSG%'!% %%DEBUG.amp%% set %%v" %!% %\n%
+    ) %\n%
+    call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+    if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
+      call :Echo.Eval2DebugOut %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+    ) else ( %# Output directly here, which is faster #% %\n%
+      for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #% %\n%
+    ) %\n%
+    if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
+      call :Echo.Eval2LogFile %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+    ) %\n%
+  ) %\n%
+  for %%r in (%!%DEBUG.EXITCODE%!%) do ( %# Carry the return values through the endlocal barriers #% %\n%
+    for /f "delims=" %%a in (""" %'!%DEBUG.SETARGS%'!%") do ( %# The initial "" makes sure the body runs even if the arg list is empty #% %\n%
+      endlocal %&% endlocal %&% endlocal %# Exit the RETURN and FUNCTION local scopes #% %\n%
+      if "%'!%%'!%"=="" ( %# Delayed expansion is ON #% %\n%
+	set "DEBUG.SETARGS=%%a" %\n%
+	call set "DEBUG.SETARGS=%'!%DEBUG.SETARGS:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+	for %%v in (%!%DEBUG.SETARGS:~3%!%) do ( %\n%
+	  set %%v %# Set each upvar variable in the caller's scope #% %\n%
+	) %\n%
+	set "DEBUG.SETARGS=" %\n%
+      ) else ( %# Delayed expansion is OFF #% %\n%
+	set "DEBUG.hat=^^^^" %# Carets need to be doubled to be set right below #% %\n%
+	for %%v in (%%a) do if not %%v=="" ( %\n%
+	  call set %%v %# Set each upvar variable in the caller's scope #% %\n%
+	) %\n%
+	set "DEBUG.hat=^^" %# Restore the normal value with a single caret #% %\n%
+      ) %\n%
+      exit /b %%r %# Return to the caller #% %\n%
+    ) %\n%
+  ) %\n%
+) %/MACRO%
 :Debug.Init.2
 set "LOG=call :Echo.Log"
-if .%LOGFILE%.==.NUL. set "LOG=rem"
+set ">>LOGFILE=>>%LOGFILE%"
+if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
+if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
 set "ECHO.V=call :Echo.Verbose"
 set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.V=call :EchoVars.Verbose"
@@ -349,7 +489,7 @@ set "ECHOVARS.D=call :EchoVars.Debug"
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
 :# Preserve the log file name, else by default use NUL.
-if .%LOGFILE%.==.. set "LOGFILE=NUL"
+:# if not defined LOGFILE set "LOGFILE=NUL"
 :# VERBOSE mode can only be 0 or 1. Default is 0.
 if not .%VERBOSE%.==.1. set "VERBOSE=0"
 call :Verbose.%VERBOSE%
@@ -364,28 +504,57 @@ goto :Debug.Init.2
 :Debug.Off
 :Debug.0
 set "DEBUG=0"
+set "DEBUG.ENTRY=rem"
 set "IF_DEBUG=if .%DEBUG%.==.1."
-set "FUNCTION=rem"
-set "RETURN=exit /b"
+set "FUNCTION0=rem"
+set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
+  call set "FUNCTION.NAME=%%0" %\n%
+  call set "ARGS=%%*"%\n%
+  set "DEBUG.RETVARS=" %\n%
+  if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
+  setlocal %!%MACRO.ARGS%!% %\n%
+) %/MACRO%
+set "RETURN0=exit /b"
 set "RETURN#=exit /b & rem"
 set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-debug mode
+if not defined LOGFILE set "ECHO.D=rem"
 if .%LOGFILE%.==.NUL. set "ECHO.D=rem"
+if not defined LOGFILE set "ECHOVARS.D=rem"
 if .%LOGFILE%.==.NUL. set "ECHOVARS.D=rem"
 goto :eof
 
 :Debug.On
 :Debug.1
 set "DEBUG=1"
+set "DEBUG.ENTRY=:Debug.Entry"
 set "IF_DEBUG=if .%DEBUG%.==.1."
-set "FUNCTION=call :Debug.Entry"
-set "RETURN=call :Debug.Return & exit /b"
+set "FUNCTION0=call call :Debug.Entry0 %%0 %%*"
+set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
+  call set "FUNCTION.NAME=%%0" %\n%
+  call set "ARGS=%%*"%\n%
+  if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
+    if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
+      call :Echo.2DebugOut call %!%FUNCTION.NAME%!% %!%ARGS%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+    ) else ( %# Output directly here, which is faster #% %\n%
+      echo%!%INDENT%!% call %!%FUNCTION.NAME%!% %!%ARGS%!%%\n%
+    ) %\n%
+    if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
+      call :Echo.2LogFile call %!%FUNCTION.NAME%!% %!%ARGS%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+    ) %\n%
+    call set "INDENT=%'!%INDENT%'!%  " %\n%
+  ) %\n%
+  set "DEBUG.RETVARS=" %\n%
+  if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
+  setlocal %!%MACRO.ARGS%!% %\n%
+) %/MACRO%
+set "RETURN0=call :Debug.Return0 & exit /b"
 :# Macro for displaying comments on the return log line
 set RETURN#=set "RETURN#ERR=%'!%ERRORLEVEL%'!%" %&% %MACRO% ( %\n%
-  set RETVAL=%!%ARGS:~1%!%%\n%
-  call :Debug.Return %!%RETURN#ERR%!% %\n%
+  set RETVAL=%!%MACRO.ARGS:~1%!%%\n%
+  call :Debug.Return0 %!%RETURN#ERR%!% %\n%
   %ON_MACRO_EXIT% set "INDENT=%'!%INDENT%'!%" %/ON_MACRO_EXIT% %&% set "RETURN#ERR=" %&% exit /b %\n%
 ) %/MACRO%
 set "EXEC.ARGS= %EXEC.ARGS%"
@@ -396,15 +565,25 @@ set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.D=call :EchoVars.Debug"
 goto :eof
 
-:Debug.Entry
-%>DEBUGOUT% echo %INDENT%call :%*
->>%LOGFILE% echo %INDENT%call :%*
+:Debug.Entry0
+setlocal DisableDelayedExpansion
+%>DEBUGOUT% echo %INDENT%call %*
+if defined LOGFILE %>>LOGFILE% echo %INDENT%call %*
+endlocal
 set "INDENT=%INDENT%  "
 goto :eof
 
-:Debug.Return %1=Optional exit code
+:Debug.Entry
+setlocal DisableDelayedExpansion
+%>DEBUGOUT% echo %INDENT%call %FUNCTION.NAME% %ARGS%
+if defined LOGFILE %>>LOGFILE% echo %INDENT%call %FUNCTION.NAME% %ARGS%
+endlocal
+set "INDENT=%INDENT%  "
+goto :eof
+
+:Debug.Return0 %1=Optional exit code
 %>DEBUGOUT% echo %INDENT%return !RETVAL!
->>%LOGFILE% echo %INDENT%return !RETVAL!
+if defined LOGFILE %>>LOGFILE% echo %INDENT%return !RETVAL!
 set "INDENT=%INDENT:~0,-2%"
 exit /b %1
 
@@ -417,7 +596,9 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-verbose mode
+if not defined LOGFILE set "ECHO.V=rem"
 if .%LOGFILE%.==.NUL. set "ECHO.V=rem"
+if not defined LOGFILE set "ECHOVARS.V=rem"
 if .%LOGFILE%.==.NUL. set "ECHOVARS.V=rem"
 goto :eof
 
@@ -437,7 +618,7 @@ goto :eof
 :Echo
 echo.%INDENT%%*
 :Echo.Log
->>%LOGFILE% 2>&1 echo.%INDENT%%*
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%*
 goto :eof
 
 :Echo.Verbose
@@ -448,20 +629,32 @@ goto :Echo.Log
 %IF_DEBUG% goto :Echo
 goto :Echo.Log
 
+:Echo.Eval2DebugOut %*=String with variables that need to be evaluated first
+:# Must be called with delayed expansion on, so that !variables! within %* get expanded
+:Echo.2DebugOut	%*=String to output to the DEBUGOUT stream
+%>DEBUGOUT% echo.%INDENT%%*
+goto :eof
+
+:Echo.Eval2LogFile %*=String with variables that need to be evaluated first
+:# Must be called with delayed expansion on, so that !variables! within %* get expanded
+:Echo.2LogFile %*=String to output to the LOGFILE
+%>>LOGFILE% echo.%INDENT%%*
+goto :eof
+
 :# Echo and log variable values, indented at the same level as the debug output.
 :EchoVars
 setlocal EnableExtensions EnableDelayedExpansion
 :EchoVars.loop
 if "%~1"=="" endlocal & goto :eof
 %>DEBUGOUT% echo %INDENT%set "%~1=!%~1!"
->>%LOGFILE% echo %INDENT%set "%~1=!%~1!"
+if defined LOGFILE %>>LOGFILE% echo %INDENT%set "%~1=!%~1!"
 shift
 goto EchoVars.loop
 
 :EchoVars.Verbose
 %IF_VERBOSE% (
   call :EchoVars %*
-) else (
+) else ( :# Make sure the variables are logged
   call :EchoVars %* >NUL 2>NUL
 )
 goto :eof
@@ -469,7 +662,7 @@ goto :eof
 :EchoVars.Debug
 %IF_DEBUG% (
   call :EchoVars %*
-) else (
+) else ( :# Make sure the variables are logged
   call :EchoVars %* >NUL 2>NUL
 )
 goto :eof
@@ -517,6 +710,7 @@ goto EchoArgs.loop
 :#                              modes; Log it always.                         #
 :#                              Useful to display commands in cases where     #
 :#                              %EXEC% can't be used, like in for ('cmd') ... #
+:#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                                                                            #
 :#  Variables       %LOGFILE%	Log file name.                                #
@@ -560,7 +754,6 @@ set "DO=call :Do"
 set "EXEC=call :Exec"
 set "ECHO.X=call :Echo.NoExec"
 set "ECHO.XVD=call :Echo.XVD"
-if .%LOGFILE%.==.. set "LOGFILE=NUL"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
 if not .%NOREDIR%.==.1. set "NOREDIR=0"
 :# Check if there's a tee.exe program available
@@ -616,7 +809,8 @@ setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
-if .%LOGFILE%.==.NUL. set "Exec.Redir="
+if not defined LOGFILE set "Exec.Redir="
+if /i .%LOGFILE%.==.NUL. set "Exec.Redir="
 :# Process optional arguments
 set "Exec.GotCmd=Exec.GotCmd"   &:# By default, the command line is %* for :Exec
 goto :Exec.GetArgs
@@ -624,7 +818,8 @@ goto :Exec.GetArgs
 set "Exec.GotCmd=Exec.BuildCmd" &:# An :Exec argument was found, we'll have to rebuild the command line
 shift
 :Exec.GetArgs
-if "%~1"=="-t" ( :# Tee the output to the log file
+if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
+if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
   if .%Exec.HaveTee%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
@@ -661,7 +856,7 @@ set "Exec.Echo=rem"
 %IF_DEBUG% set "Exec.Echo=echo"
 %IF_VERBOSE% set "Exec.Echo=echo"
 %>DEBUGOUT% %Exec.Echo%.%INDENT%%Exec.toEcho%
->>%LOGFILE% echo.%INDENT%%Exec.toEcho%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# Constraints at this stage:
 :# The command exit code must make it through, back to the caller.
 :# The local variables must disappear before return.
@@ -675,14 +870,55 @@ goto :eof
 
 :Exec.ShowExitCode
 %IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %ERRORLEVEL%
->>%LOGFILE% echo.%INDENT%  exit %ERRORLEVEL%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %ERRORLEVEL%
 exit /b %ERRORLEVEL%
 
 :Exec.End
-
 :#----------------------------------------------------------------------------#
 :#                        End of the debugging library                        #
 :#----------------------------------------------------------------------------#
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetPid                                                    #
+:#                                                                            #
+:#  Description     Get the PID of the current console                        #
+:#                                                                            #
+:#  Arguments       %1 = Variable name. Default: PID                          #
+:#                                                                            #
+:#  Notes 	    Uses a lock file to make sure that two scripts running    #
+:#                  within 0.01s of each other do not get the same uid string.#
+:#                  The instance that fails retries until it succeeds.        #
+:#                  No side effect on the window title.                       #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-12-23 DB  D.Benham published on dostips.com:                        #
+:#                  http://www.dostips.com/forum/viewtopic.php?p=38870#p38870 #
+:#   2016-09-11 JFL Adapted to my %FUNCTION%/%UPVAR%/%RETURN% mechanism.      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:GetPID [VARNAME]
+%FUNCTION% EnableExtensions DisableDelayedExpansion
+set "PIDVAR=%~1" & if not defined PIDVAR set "PIDVAR=PID"
+%UPVAR% %PIDVAR%
+:GetPID.retry
+set "lock=%temp%\%~nx0.%time::=.%.lock"
+set "uid=%lock:\=:b%"
+set "uid=%uid:,=:c%"
+set "uid=%uid:'=:q%"
+set "uid=%uid:_=:u%"
+setlocal enableDelayedExpansion
+set "uid=!uid:%%=:p!"
+endlocal & set "uid=%uid%"
+2>nul ( 9>"%lock%" (
+  for /f "skip=1" %%A in (
+    'wmic process where "name='cmd.exe' and CommandLine like '%%<%uid%>%%'" get ParentProcessID'
+  ) do for %%B in (%%A) do set "%PIDVAR%=%%B"
+  (call )
+))||goto :GetPID.retry
+del "%lock%" 2>nul
+%RETURN%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -701,7 +937,7 @@ exit /b %ERRORLEVEL%
 :GetDefaultMakeFile
 if exist NMakeFile (
   set "MAKEFILE=NMakeFile"	&rem :# Default make file name
-) else if exist All.mak ( :# _Experimental_
+) else if exist All.mak (
   set "MAKEFILE=All.mak"	&rem :# Most powerful one, that can build for all MS OS versions
 ) else if exist DosWin.mak (
   set "MAKEFILE=DosWin.mak"	&rem :# Previous version of the same, more complex and less powerfull
@@ -772,12 +1008,15 @@ exit /b
 :#-----------------------------------------------------------------------------
 
 :# Run nmake without logging anything, for simple goals like help, clean, etc.
-:nmake %*=nmake options
+:nmake [nmake.exe options]
+call :Debug.SetLog &:# Make sure there's no log file
 if not defined MAKEFILE call :GetDefaultMakeFile
 call :GetConfig >NUL 2>NUL :# Get Development tools location
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
-%EXEC% nmake /NOLOGO /f %MAKEFILE% /c /s %*
+for %%n in (nmake.exe) do set "NMAKE=%%~$PATH:n"
+set "QUIET_MAKE=1" &:# Tell All.mak, etc, to skip low priority information messages
+%EXEC% "%NMAKE%" /NOLOGO /f %MAKEFILE% /c /s %*
 exit /b
 
 :#-----------------------------------------------------------------------------
@@ -821,12 +1060,10 @@ if "!ARG!"=="-q" set "SHOW_RESULT=0" & goto next_arg
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.Off & goto next_arg
-:# Special goals that need special handling
-if "!ARG!"=="help"        call :nmake !ARG! & exit /b
-if "!ARG!"=="clean"       call :nmake !ARG! & exit /b
-if "!ARG!"=="mostlyclean" call :nmake !ARG! & exit /b
-if "!ARG!"=="distclean"   call :distclean & exit /b
-if "!ARG!"=="goal_name"   call :nmake !ARG! & exit /b
+:# Special targets that need special handling
+for %%t in (help clean mostlyclean distclean goal_name list_programs) do (
+  if "!ARG!"=="%%t" call :nmake !ARG! & exit /b
+)
 :# Anything else is an nmake argument. Fall through
 goto go
 
@@ -848,6 +1085,9 @@ if /i not .%LOGFILE%.==.NUL. (
 >>"%LOGFILE%" type %CONFIG.BAT%
 %LOG% :# ----------------------- End of %CONFIG.BAT% ----------------------
 %LOG%
+
+:# Get the shell PID. Useful for scripts or make files that want to generate unique IDs.
+call :GetPID
 
 :# Get the remaining args, and parse nmake command line arguments
 set "LASTGOAL="
@@ -906,7 +1146,7 @@ if "!ARG:~0,1!"=="/" ( :# This is a switch
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
-%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE
+%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE PID
 
 :# Set a makefile if needed, based on the target subdirectory
 :# :# Select a make file if none was specified
