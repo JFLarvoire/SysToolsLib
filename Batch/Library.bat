@@ -2075,7 +2075,7 @@ title %TITLE%
 %UPVAR% PID TITLE PREFIX SUFFIX
 %RETURN% 0
 
-:GetPid
+:GetPid1
 %FUNCTION% enableextensions
 :# Get the list of command prompts
 for /f "tokens=2,9*" %%a in ('tasklist /v /nh /fi "IMAGENAME eq cmd.exe"') do set TITLE.%%a=%%c
@@ -2092,6 +2092,48 @@ call set TITLE=%%TITLE.%PID%%%
 :# Restore the title
 title %TITLE%
 %UPVAR% PID TITLE
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetPid                                                    #
+:#                                                                            #
+:#  Description     Get the PID of the current console                        #
+:#                                                                            #
+:#  Arguments       %1 = Variable name. Default: PID                          #
+:#                                                                            #
+:#  Notes 	    Uses a lock file to make sure that two scripts running    #
+:#                  within 0.01s of each other do not get the same uid string.#
+:#                  The instance that fails retries until it succeeds.        #
+:#                  No side effect on the window title.                       #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-12-23 DB  D.Benham published on dostips.com:                        #
+:#                  http://www.dostips.com/forum/viewtopic.php?p=38870#p38870 #
+:#   2016-09-11 JFL Adapted to my %FUNCTION%/%UPVAR%/%RETURN% mechanism.      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:GetPID [VARNAME]
+%FUNCTION% EnableExtensions DisableDelayedExpansion
+set "PIDVAR=%~1" & if not defined PIDVAR set "PIDVAR=PID"
+%UPVAR% %PIDVAR%
+:GetPID.retry
+set "lock=%temp%\%~nx0.%time::=.%.lock"
+set "uid=%lock:\=:b%"
+set "uid=%uid:,=:c%"
+set "uid=%uid:'=:q%"
+set "uid=%uid:_=:u%"
+setlocal enableDelayedExpansion
+set "uid=!uid:%%=:p!"
+endlocal & set "uid=%uid%"
+2>nul ( 9>"%lock%" (
+  for /f "skip=1" %%A in (
+    'wmic process where "name='cmd.exe' and CommandLine like '%%<%uid%>%%'" get ParentProcessID'
+  ) do for %%B in (%%A) do set "%PIDVAR%=%%B"
+  (call )
+))||goto :GetPID.retry
+del "%lock%" 2>nul
 %RETURN%
 
 :#----------------------------------------------------------------------------#
