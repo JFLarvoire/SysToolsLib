@@ -118,6 +118,8 @@
 #		    Added support for the optional OUTDIR.		      #
 #		    Rewrote the all rule handling to record errors, and	      #
 #		    report them in the end.				      #
+#    2016-10-03 JFL Added target list_programs.                               #
+#		    Fixed errors comparing the WIN95 and WIN32 C compilers.   #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -163,7 +165,7 @@ OS=
 !IF DEFINED(DOS_CC)
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && [if not "$(WIN95_CC)"=="$(WIN32_CC)" exit 1]
+!IF DEFINED(WIN95_CC) && ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
 !ENDIF
 !IF DEFINED(WIN32_CC)
@@ -183,7 +185,7 @@ OS=$(OS) BIOS
 !ENDIF
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && [if not "$(WIN95_CC)"=="$(WIN32_CC)" exit 1]
+!IF DEFINED(WIN95_CC) && ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
 !ENDIF
 !IF DEFINED(WIN32_CC)
@@ -201,7 +203,9 @@ OS=$(OS) ARM
 !ENDIF
 
 # Report start options
+!IF !DEFINED(QUIET_MAKE)
 !MESSAGE Started All.mak. OS=$(OS)
+!ENDIF
 
 # Convert that text list to boolean variables, one for each OS.
 DOBIOS=0
@@ -526,5 +530,9 @@ $(ZIPFILE): $(ZIPSOURCES)
     7z.exe a $@ $**
     echo>con ... done
 
-zip: $(ZIPFILE)
+dist zip: $(ZIPFILE)
 
+# List PROGRAMS defined in Files.mak
+list_programs:
+    @set PROGRAMS=$(PROGRAMS)
+    @if defined PROGRAMS echo $(PROGRAMS)
