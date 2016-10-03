@@ -4,6 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-03
+### Added
+- Batch/touch.bat: A poor man's touch. Uses touch.exe if available, else uses pure batch.
+- C make system updates to help making releases.
+
+### Changed
+- Batch/Library.bat: New implementation of routine GetPID.
+- Docs/catalog.md: Added missing files, and many examples.
+
+### Fixed
+- C/*/All.mak: Fixed errors comparing the WIN95 and WIN32 C compilers.
+
 ## [1.5.1] 2016-09-29
 ### Changed
 - C/*/*.mak:
