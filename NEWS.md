@@ -7,11 +7,11 @@ For more details about changes in a particular area, see the README.txt and/or N
 ## [unreleased] 2016-10-03
 ### Added
 - Batch/touch.bat: A poor man's touch. Uses touch.exe if available, else uses pure batch.
-- C make system updates to help making releases.
 
 ### Changed
 - Batch/Library.bat: New implementation of routine GetPID.
 - Docs/catalog.md: Added missing files, and many examples.
+- C make system updates to help making releases.
 
 ### Fixed
 - C/*/All.mak: Fixed errors comparing the WIN95 and WIN32 C compilers.
