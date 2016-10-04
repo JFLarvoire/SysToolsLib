@@ -132,13 +132,14 @@
 :#		    predictable order: The alphabetic order.		      *
 :#                  Work around bug in old nmake test of "Program Files (x86)".
 :#   2016-09-28 JFL Also search for configure.*.bat in %windir% and %HOME%.   *
+:#   2016-10-04 JFL Clarified a warning message.			      *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-09-28"
+set "VERSION=2016-10-04"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1572,7 +1573,6 @@ if exist %CONFIG.BAT% del %CONFIG.BAT%
 %CONFIG% :#
 %CONFIG% :# Invoke configure.bat manually if anything changes in the tools config, such as
 %CONFIG% :# installing a Visual Studio update, or updating a configure.XXX.bat script.
-%CONFIG%.
 
 :# Find Program Files directories
 set "PF32=C:\Pgm32"
@@ -1711,7 +1711,7 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
       if not "!V:~7!"=="" set "TAB= " &rem A space
       echo C	%%v!TAB!	"!%%v!"
     ) else (
-      %ECHO% Warning: Can't find the !SDK.%%v.NAME! ^(%%v^).
+      %ECHO% Warning: Can't find the !SDK.%%v.NAME! ^(%%v^). Dependant modules won't be built.
       %CONFIG% set "HAS_%%v=" ^&:# Did not find the !SDK.%%v.NAME!
     )
     %CONFIG% set "%%v=!%%v!" ^&:# !SDK.%%v.NAME!
