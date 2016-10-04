@@ -17,10 +17,15 @@
 #    2016-07-05 JFL Fixed a typo preventing the build of DOS S Debug version. #
 #    2016-09-26 JFL Added macro LIBDIR, depending on OUTDIR.                  #
 #		    Copy the include files to $(OUTDIR).		      #
+#    2016-10-04 JFL Make sure nothing is displayed when doing a make clean.   #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
+
+!IF DEFINED(MESSAGES)
+!MESSAGE "Started NMakefile"	# Display this file name, or the caller's name
+!ENDIF
 
 !IF DEFINED(OUTDIR)
 OD=$(OUTDIR)^\
@@ -161,18 +166,19 @@ $(OD)WIN64\DEBUG\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
 
 # Dummy target, to display a help screen
 help:
-    @echo Targets:
-    @echo.
-    @echo "  all       Rebuild all library versions (Default)"
-    @echo "  clean     Delete all build files"
-    @echo "  zip       Build a source archive in ..\MsvcLibX.zip. Requires 7-zip."
+    type <<
+Targets:
+  all       Rebuild all library versions (Default)
+  clean     Delete all build files
+  zip       Build a source archive in ..\MsvcLibX.zip. Requires 7-zip.
+<<NOKEEP
 
 # Dummy target, to delete all files built by these make files
 clean:
     rem # Delete temporary files 
-    -for /f "delims=" %f in ('dir /b /s ..\*~ ..\*.bak 2^>NUL') do del "%f"
+    -for /f "delims=" %f in ('dir /b /s ..\*~ ..\*.bak 2^>NUL') do @del "%f"
     rem # Delete files built by this nmakefile
-    -for /f "delims=" %f in ('dir /b /s ..\*.zip ..\*.log 2^>NUL') do del "%f"
+    -for /f "delims=" %f in ('dir /b /s ..\*.zip ..\*.log 2^>NUL') do @del "%f"
     rem # Delete files built by the DOS.mak, WIN32.mak, WIN64.mak make files
     rem # But make DOS.mak will fail if 16-bit tools are missing. Workaround:
     -$(MAKE) /$(MAKEFLAGS) /f DOS.mak clean
@@ -196,6 +202,6 @@ zip:
     set PATH=$(PATH);C:\Program Files\7-zip
     7z.exe a MsvcLibX.zip *.txt src\*.bat src\*.mak src\nmakefile src\exe src\*.c -r include\*.h lib\
     rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
-    7z.exe d MsvcLibX.zip src\config.bat lib\*.lib
+    7z.exe d MsvcLibX.zip src\config.*.bat lib\*.lib
     cd src
 
