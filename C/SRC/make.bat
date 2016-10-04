@@ -59,13 +59,15 @@
 :#                  for sub-scripts or make files to generate unique IDs.     *
 :#   2016-10-03 JFL Display list_programs pseudo target output directly.      *
 :#                  Fixed the :nmake routine to avoid creating a log file.    *
+:#   2016-10-04 JFL Fixed logging in case an OUTDIR is defined.               *
+:#                  Display build messages only if var. MESSAGES is defined.  *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-03"
+set "VERSION=2016-10-04"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1011,11 +1013,11 @@ exit /b
 :nmake [nmake.exe options]
 call :Debug.SetLog &:# Make sure there's no log file
 if not defined MAKEFILE call :GetDefaultMakeFile
-call :GetConfig >NUL 2>NUL :# Get Development tools location
+call :GetConfig >NUL 2>NUL :# Get Development tools location. Also defines OUTDIR.
+%ECHOVARS.D% MESSAGES OUTDIR
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
 for %%n in (nmake.exe) do set "NMAKE=%%~$PATH:n"
-set "QUIET_MAKE=1" &:# Tell All.mak, etc, to skip low priority information messages
 %EXEC% "%NMAKE%" /NOLOGO /f %MAKEFILE% /c /s %*
 exit /b
 
@@ -1040,8 +1042,8 @@ set "MAKEDEFS="
 set "MAKEGOALS="
 set "MAKEORIGIN=WIN32"
 
-set "LOGFILE=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal.
-if not "%OUTDIR%"=="" set "LOGFILE=%OUTDIR%\%LOGFILE%"
+set "LOGNAME=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal.
+call :Debug.SetLog      &:# Make sure nothing's logged at first
 
 :next_arg
 %POPARG%
@@ -1054,7 +1056,7 @@ if "!ARG!"=="-f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
 if "!ARG!"=="/f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
 if "!ARG!"=="-h" goto help
 if "!ARG!"=="-H" goto mstool_help
-if "!ARG!"=="-L" set "LOGFILE=NUL" & goto next_arg
+if "!ARG!"=="-L" set "LOGNAME=" & goto next_arg
 if "!ARG!"=="-o" %POPARG% & set "MAKEORIGIN=!ARG!" & goto next_arg
 if "!ARG!"=="-q" set "SHOW_RESULT=0" & goto next_arg
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
@@ -1069,14 +1071,26 @@ goto go
 
 :go
 
-call :GetConfig :# Get Development tools location
+call :GetConfig :# Get Development tools location. Also defines OUTDIR.
 
-if /i not .%LOGFILE%.==.NUL. (
-  if exist "%LOGFILE%" del "%LOGFILE%"
-  call :Debug.SetLog "%LOGFILE%"
+:# Create the output directory if needed
+if not "%OUTDIR%"=="" if not exist "%OUTDIR%" md "%OUTDIR%" & if errorlevel 1 (
+  >&2 echo Cannot create output directory "%OUTDIR%".
+  exit /b 1
+)
+
+:# Put the log file in OUTDIR if defined.
+if defined LOGNAME (
+  if /i not .%LOGNAME%.==.NUL. (
+    if not "%OUTDIR%"=="" set "LOGNAME=%OUTDIR%\%LOGNAME%"
+    if exist "%LOGNAME%" del "%LOGNAME%"
+  )
 ) else ( :# Avoid logging during recursive calls
   set "NOREDIR=1"
 )
+call :Debug.SetLog "%LOGNAME%"
+
+:# Start logging by recording the make command.
 %LOG% make %*
 %LOG%
 
@@ -1172,7 +1186,7 @@ if defined NEEDMAKEFILE set MAKEARGS=/f !MAKEFILE! !MAKEARGS!
 set RESULT=Success
 set MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!
 :# set CMD=%MAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
-set CMD=%MAKE% %NMAKEFLAGS% %MAKEARGS%
+set CMD=%MAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
 %EXEC% %CMD%
 set ERROR=%ERRORLEVEL%
 if ERRORLEVEL 1 set RESULT=Failure
@@ -1182,6 +1196,7 @@ if ERRORLEVEL 1 set RESULT=Failure
 %LOG% %RESULT%
 
 :# Rename %LOGFILE% after the goal. The goal is the last argument, without the extension.
+if not defined LOGFILE goto :SkipRename
 if .%LOGFILE%.==.NUL. goto :SkipRename
 set LOGFILE2=%LOGFILE%
 set GOAL=
@@ -1215,7 +1230,7 @@ if not "%OUTDIR%"=="" set "LOGFILE2=%OUTDIR%\%LOGFILE2%"
 if not "%LOGFILE2%"=="%LOGFILE%" (
   if exist "%LOGFILE2%" del "%LOGFILE2%"
   move "%LOGFILE%" "%LOGFILE2%" >nul
-  set "LOGFILE=%LOGFILE2%"
+  call :Debug.SetLog "%LOGFILE2%"
 )
 :SkipRename
 
