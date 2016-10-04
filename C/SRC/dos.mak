@@ -116,6 +116,8 @@
 #    2016-09-21 JFL Fixed an issue that caused double definition warnings.    #
 #    2016-09-28 JFL Display FAILED messages when compilation or link fails.   #
 #		    Avoid having the word "Error" in the log unnecessarily.   #
+#    2016-10-04 JFL Use the shell PID to generate unique temp file names.     #
+#		    Display messages only if variable MESSAGES is defined.    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -133,7 +135,9 @@
 !IF !DEFINED(T)
 T=DOS				# Target OS
 !ENDIF
+!IF DEFINED(MESSAGES)
 !MESSAGE "Started $(T).mak"	# Display this file name, or the caller's name
+!ENDIF
 
 # Command-line definitions that need carrying through to sub-make instances
 # Note: Cannot redefine MAKEFLAGS, so defining an alternate variable instead.
@@ -162,7 +166,7 @@ DS=
 # If possible, load the 16-bits memory model definition from the make file for the current program.
 # Do not load the rest of the make file, as it may contain more rules depending on other variables defined further down.
 # Also loading it entirely here would cause warnings about goals defined twice.
-TMPMAK=$(TMP)\$(T)_mem.mak # TO DO: Find a way to generate a unique name, to avoid conflicts in case of // builds.
+TMPMAK=$(TMP)\$(T)_mem.$(PID).mak # Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak") && ![findstr /R "^MEM=" "$(PROGRAM).mak" >"$(TMPMAK)" 2>NUL]
 !  MESSAGE Getting memory model definition from $(PROGRAM).mak.
 !  INCLUDE "$(TMPMAK)"
@@ -170,10 +174,14 @@ TMPMAK=$(TMP)\$(T)_mem.mak # TO DO: Find a way to generate a unique name, to avo
 
 # Memory model for 16-bit C compilation (T|S|C|D|L|H)
 !IF !DEFINED(MEM)
-!MESSAGE Using the default memory model S.
 MEM=S				# Memory model for C compilation
+!IF DEFINED(MESSAGES)
+!MESSAGE Using the default memory model $(MEM).
+!ENDIF
 !ELSE
+!IF DEFINED(MESSAGES)
 !MESSAGE Using the specified memory model $(MEM).
+!ENDIF
 !ENDIF
 
 # Convert the memory model flag into a memory model name
@@ -267,12 +275,14 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 !ENDIF
 
 # Report start options
+!IF DEFINED(MESSAGES)
 !MESSAGE PROGRAM="$(PROGRAM)" Mode=$(DM).
 !MESSAGE R="$(R)" B="$(B)" O="$(O)".
 !MESSAGE PATH=$(PATH) # Default library paths
 !MESSAGE INCLUDE=$(INCLUDE) # Target OS specific include paths
 !MESSAGE LIB=$(LIB) # Default library paths
 !MESSAGE LIBS=$(LIBS) # Default library names
+!ENDIF
 
 !ENDIF # !DEFINED(DISPATCH_OS)
 
