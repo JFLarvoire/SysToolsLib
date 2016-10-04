@@ -120,6 +120,9 @@
 #		    report them in the end.				      #
 #    2016-10-03 JFL Added target list_programs.                               #
 #		    Fixed errors comparing the WIN95 and WIN32 C compilers.   #
+#    2016-10-04 JFL Updated fix comparing the WIN95 and WIN32 C compilers.    #
+#		    Use the shell PID to generate unique temp file names.     #
+#		    Display messages only if variable MESSAGES is defined.    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -165,8 +168,10 @@ OS=
 !IF DEFINED(DOS_CC)
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
+!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
+!IF ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
+!ENDIF
 !ENDIF
 !IF DEFINED(WIN32_CC)
 OS=$(OS) WIN32
@@ -185,8 +190,10 @@ OS=$(OS) BIOS
 !ENDIF
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
+!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
+!IF ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
+!ENDIF
 !ENDIF
 !IF DEFINED(WIN32_CC)
 OS=$(OS) WIN32
@@ -203,7 +210,7 @@ OS=$(OS) ARM
 !ENDIF
 
 # Report start options
-!IF !DEFINED(QUIET_MAKE)
+!IF DEFINED(MESSAGES)
 !MESSAGE Started All.mak. OS=$(OS)
 !ENDIF
 
@@ -461,7 +468,7 @@ Also supports .obj and .res to compile C, C++, ASM, and Windows .RC files.
 all: $(REQS) $(ALL)
 !ELSE # Another scheme for defining all goals, using $(PROGRAMS)
 all: $(REQS) # Having a batch file is necessary for dynamically updating the ...FAILED variables.
-    @cmd /c <<"$(TMP)\build_all.bat" || exit /b &:# To do: Find a way to generate a unique name, to avoid conflicts in case of // builds.
+    @cmd /c <<"$(TMP)\build_all.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
         @echo off
         setlocal EnableExtensions EnableDelayedExpansion
         set "PROGRAMS=$(PROGRAMS)"
