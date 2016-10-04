@@ -99,6 +99,7 @@
 #    2016-09-28 JFL Also pass WSDKINCLUDE definition to the resource compiler.#
 #		    Display FAILED messages when compilation or link fails.   #
 #		    Avoid having the word "Error" in the log unnecessarily.   #
+#    2016-10-04 JFL Display messages only if variable MESSAGES is defined.    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -116,7 +117,9 @@
 !IF !DEFINED(T)
 T=WIN32				# Target OS
 !ENDIF
+!IF DEFINED(MESSAGES)
 !MESSAGE "Started $(T).mak"	# Display this file name, or the caller's name
+!ENDIF
 
 # Command-line definitions that need carrying through to sub-make instances
 # Note: Cannot redefine MAKEFLAGS, so defining an alternate variable instead.
@@ -266,12 +269,14 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 !ENDIF
 
 # Report start options
+!IF DEFINED(MESSAGES)
 !MESSAGE PROGRAM="$(PROGRAM)" Mode=$(DM).
 !MESSAGE R="$(R)" B="$(B)" O="$(O)".
 !MESSAGE PATH=$(PATH) # Default library paths
 !MESSAGE INCLUDE=$(INCLUDE) # Target OS specific include paths
 !MESSAGE LIB=$(LIB) # Default library paths
 !MESSAGE LIBS=$(LIBS) # Default library names
+!ENDIF
 
 !ENDIF # !DEFINED(DISPATCH_OS)
 
