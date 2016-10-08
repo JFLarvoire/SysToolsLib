@@ -1,0 +1,111 @@
+###############################################################################
+#									      #
+#   File name	    NMakefile						      #
+#									      #
+#   Description     An NMake file for making all SysToolLib libs & programs   #
+#									      #
+#   Notes	    make.bat looks for a default nmake file called NMakeFile. #
+#									      #
+#   History								      #
+#    2016-10-05 JFL jf.larvoire@hpe.com created this file.                    #
+#		    							      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+!IF DEFINED(MESSAGES)
+!MESSAGE "Started C/NMakefile"	# Display this make file name
+!ENDIF
+
+MSG=>con echo		# Command for writing a progress message on the console
+HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+
+SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F NMakefile # Recursive call to this make file
+
+# Check which subdirectories exist, and rebuild each in the correct order
+!IF !DEFINED(DIRS)
+!IF EXIST("BiosLib") && DEFINED(DOS_CC)
+DIRS=$(DIRS) BiosLib 
+!ENDIF
+!IF EXIST("LoDosLib") && DEFINED(DOS_CC)
+DIRS=$(DIRS) LoDosLib 
+!ENDIF
+!IF EXIST("PModeLib") && DEFINED(DOS_CC)
+DIRS=$(DIRS) PModeLib 
+!ENDIF
+!IF EXIST("MsvcLibX")
+DIRS=$(DIRS) MsvcLibX 
+!ENDIF
+!IF EXIST("SysLib")
+DIRS=$(DIRS) SysLib 
+!ENDIF
+!IF EXIST("SRC")
+DIRS=$(DIRS) SRC
+!ENDIF
+!ENDIF # !DEFINED(DIRS)
+
+# Default goal: Generate all versions
+all: $(DIRS)
+
+# Build an individual module
+BiosLib LoDosLib PModeLib MsvcLibX SysLib SRC: NUL
+    $(SUBMAKE) "DIR=$@" updates &:# Update the make scripts
+    make.bat -C $@ -L & if errorlevel 1 exit /b &:# Build the module in dir $@, using the current log file 
+
+# Update the make system scripts in sub-directories
+update_all:
+    for %%f in ($(DIRS)) do @$(SUBMAKE) "DIR=%%f" updates
+
+updates: NUL
+    $(SUBMAKE) "DIR=$(DIR)" "FILE=configure.bat" update
+    $(SUBMAKE) "DIR=$(DIR)" "FILE=make.bat" update
+
+update: $(DIR)\$(FILE)
+
+$(DIR)\$(FILE): $(FILE)
+    if "$(FILE)"=="" $(MSG) Error: Must define DIR ^& FILE & exit 1 &:# Avoid catastrophies if invoked out of spec.
+    $(MSG) Updating %CD%\$@
+    copy /y $** $@ >NUL
+
+# Erase all output files
+clean mostlyclean distclean:
+    for %%f in ($(DIRS)) do @$(SUBMAKE) "DIR=%%f" updates & make.bat -L -C %%f $@ & if errorlevel 1 exit /b
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+    -del /Q *.bak	>NUL 2>&1
+    -del /Q *~		>NUL 2>&1
+    -del /Q *.log	>NUL 2>&1
+    -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
+
+# Output the default goal name for make.bat
+goal_name:
+    echo Build
+
+# Display a help screen
+help:
+    type <<
+Nmake definitions:       (Definition must be quoted if it contains spaces)
+  DIRS=dir1 dir2 ...     Modules to work on. Default: all
+  DIR=directory          Where to update files. Used by targets update & updates
+  FILE=filename          Which file to update. Used by target update
+
+Targets:
+  all                    Build all available modules (default)
+  clean                  Erase all output files in DIRS
+  update                 Update one file, defined by the DIR and FILE variables
+  updates                Update all make scripts in directory DIR
+  update_all             Update all make scripts in all directories
+<<
+
+# Dummy target, to build a source archive
+dist zip: NUL
+    $(MSG) Building CSources.zip
+    :# if exist SysLib.zip del SysLib.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    :# 7z.exe a SysLib.zip *.txt *.bat *.mak nmakefile exe *.c *.h
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    :# 7z.exe d SysLib.zip config.bat config.*.bat
+    $(MSG) TO DO: Implement this
+    exit 1
+
