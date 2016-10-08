@@ -18,6 +18,7 @@
 #    2016-09-26 JFL Added macro LIBDIR, depending on OUTDIR.                  #
 #		    Copy the include files to $(OUTDIR).		      #
 #    2016-10-04 JFL Make sure nothing is displayed when doing a make clean.   #
+#    2016-10-06 JFL Added targets mostlyclean & distclean.                    #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -174,11 +175,11 @@ Targets:
 <<NOKEEP
 
 # Dummy target, to delete all files built by these make files
-clean:
+clean mostlyclean distclean:
     rem # Delete temporary files 
-    -for /f "delims=" %f in ('dir /b /s ..\*~ ..\*.bak 2^>NUL') do @del "%f"
+    -for /f "delims=" %f in ('dir /b /s *~ *.bak #*# 2^>NUL') do @del "%f"
     rem # Delete files built by this nmakefile
-    -for /f "delims=" %f in ('dir /b /s ..\*.zip ..\*.log 2^>NUL') do @del "%f"
+    -for /f "delims=" %f in ('dir /b /s ..\*.zip *.log 2^>NUL') do @del "%f"
     rem # Delete files built by the DOS.mak, WIN32.mak, WIN64.mak make files
     rem # But make DOS.mak will fail if 16-bit tools are missing. Workaround:
     -$(MAKE) /$(MAKEFLAGS) /f DOS.mak clean
@@ -193,6 +194,7 @@ clean:
 !IF DEFINED(OUTDIR)
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
 !ENDIF
+    -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
 
 # Dummy target, to build a source archive
 zip:
