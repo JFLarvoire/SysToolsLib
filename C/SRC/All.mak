@@ -123,6 +123,7 @@
 #    2016-10-04 JFL Updated fix comparing the WIN95 and WIN32 C compilers.    #
 #		    Use the shell PID to generate unique temp file names.     #
 #		    Display messages only if variable MESSAGES is defined.    #
+#    2016-10-04 JFL Target distclean must delete config.*.bat files.	      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -417,6 +418,7 @@ clean mostlyclean distclean:
     -del /Q *.bak	>NUL 2>&1
     -del /Q *~		>NUL 2>&1
     -del /Q *.log	>NUL 2>&1
+    -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
 
 # Convert sources from Windows to Unix formats
 UNIXTEMP=$(TMP)\$(PROGRAM)
