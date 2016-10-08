@@ -133,13 +133,19 @@
 :#                  Work around bug in old nmake test of "Program Files (x86)".
 :#   2016-09-28 JFL Also search for configure.*.bat in %windir% and %HOME%.   *
 :#   2016-10-04 JFL Clarified a warning message.			      *
+:#   2016-10-06 JFL Bug fix: Avoid failure if no SDK flags are defined.       *
+:#   2016-10-07 JFL Bug fix: Avoid double \ in Visual Studio base path.       *
+:#                  Bug fix: When invoked from recursive nmake files,         *
+:#                  variables %ProgramFiles% and %PROCESSOR_ARCHITECTURE% are *
+:#                  reset to their x86 values.                                *
+:#                  Improvement: Also look for library paths in the master env.
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-04"
+set "VERSION=2016-10-07"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1141,13 +1147,13 @@ set "VC=%~4"
 if /i "%~2"=="x86" (
   set SEARCH_IN=call :FindVsIn %~2 "bin"
 ) else if /i "%~2"=="AMD64" (
-  if /i %PROCESSOR_ARCHITECTURE%==AMD64 (
+  if /i %ARCH%==AMD64 ( :# Do not test %PROCESSOR_ARCHITECTURE%, which is reset in recursive nmake runs
     set SEARCH_IN=call :FindVsIn %~2 "bin\amd64 bin\x86_amd64"
   ) else (
     set SEARCH_IN=call :FindVsIn %~2 "bin\x86_amd64"
   )
 ) else (
-  if /i %PROCESSOR_ARCHITECTURE%==AMD64 (
+  if /i %ARCH%==AMD64 ( :# Do not test %PROCESSOR_ARCHITECTURE%, which is reset in recursive nmake runs
     set SEARCH_IN=call :FindVsIn %~2 "bin\amd64_%~2 bin\x86_%~2"
   ) else (
     set SEARCH_IN=call :FindVsIn %~2 "bin\x86_%~2"
@@ -1182,6 +1188,7 @@ set "%VS%=" & set "%VC%=" & set "%VC%.BIN="
 for %%s in (%~2) do (
   for /d %%d in ("%PF64%\%~3\VC*" "%PF32%\%~3\VC*") do if exist "%%d\%%s\cl.exe" (
     set "%VS%=%%~dpd" &:# Remove the VC* subdir name
+    set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
     set "%VC%=%%d"
     set "%VC%.BIN=%%d\%%s"
     set "%VC%.CC="%%d\%%s\cl.exe""
@@ -1575,10 +1582,15 @@ if exist %CONFIG.BAT% del %CONFIG.BAT%
 %CONFIG% :# installing a Visual Studio update, or updating a configure.XXX.bat script.
 
 :# Find Program Files directories
-set "PF32=C:\Pgm32"
+:# Gotcha: When invoked recursively by nmake, both %ProgramFiles% and %ProgramFiles(x86)%
+:# point at the x86 version. This breaks the 64-bits programs detection. The workaround
+:# is to rely on the fact that the PF32 and PF64 variables defined here are left unchanged.
+:# First checking for symlinks C:\Pgm32 and C:\Pgm64, which I had on some of my systems.
+if not defined PF32   set "PF32=C:\Pgm32"
 if not exist "%PF32%" set "PF32=%ProgramFiles(x86)%"
 if not exist "%PF32%" set "PF32=%ProgramFiles%"
-set "PF64=C:\Pgm64"
+
+if not defined PF64   set "PF64=C:\Pgm64"
 if not exist "%PF64%" set "PF64=%ProgramFiles%"
 
 if "%PF32%"=="%PF64%" (
@@ -1586,6 +1598,10 @@ if "%PF32%"=="%PF64%" (
 ) else (
   set PF64AND32="%PF64%" "%PF32%"
 )
+
+:# Identify the native PROCESSOR_ARCHITECTURE
+:# Gotcha: When invoked recursively by nmake, both %PROCESSOR_ARCHITECTURE% is reset to x86.
+if not defined ARCH set "ARCH=%PROCESSOR_ARCHITECTURE%"
 
 :# Find Microsoft development tools directories
 echo OS	Tool	Proc	Path
@@ -1691,6 +1707,9 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
   %ECHO.V% Searching %%v
   set "INDENT=!INDENT!  "
   set "PATH_LIST="
+  :# When doing automated builds, the previously built libraries bases are set in the master environment,
+  :# but not available in parent nmake environment.
+  if not defined %%v call :Reg.GetValue HKCU\Environment %%v %%v :# Get value from the master environment in the registry
   if defined %%v call :lappend PATH_LIST "!%%v!"
   if defined MY_SDKS for %%s in (%MY_SDKS%) do call :lappend PATH_LIST "%%~s\!DIR!"
   call :lappend PATH_LIST ..\!DIR!
@@ -1721,7 +1740,8 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
   )
   set "INDENT=!INDENT:~0,-2!"
 )
-%CONFIG% set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS:~1%" ^&:# SDK detection flags for the C compiler
+if defined HAS_SDK_FLAGS set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS:~1%"
+%CONFIG% set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS%" ^&:# SDK detection flags for the C compiler
 
 :# Update 16-bits include and library paths for well-known libraries
 for %%v in (VC16) do if defined %%v (
@@ -1877,6 +1897,7 @@ if defined POST_CONFIG_ACTIONS set "POST_CONFIG_ACTIONS=%POST_CONFIG_ACTIONS:¡¡¡
 %CONFIG%.
 %CONFIG% SET "PF32=%PF32%" ^&:# 32-bits Program Files
 %CONFIG% SET "PF64=%PF64%" ^&:# 64-bits Program Files
+%CONFIG% SET "ARCH=%ARCH%" ^&:# PROCESSOR_ARCHITECTURE
 %CONFIG%.
 %CONFIG% SET "MASM=%MASM%" ^&:# Microsoft 16-bits Assembler base path
 %CONFIG% SET "MSVC=%MSVC%" ^&:# Microsoft 16-bits Visual C++ base path
