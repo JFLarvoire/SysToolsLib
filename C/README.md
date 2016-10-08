@@ -30,15 +30,30 @@ Quick Guide for rebuilding everything in Windows
     - Make sure both "Common Tools for Visual C++ 2015" and "Windows 8.1 SDK and Universal CRT SDK" are selected.  
     ...
 
-2. Download the above folders into a %WORKDIR% directory.
+2. Download the SysToolsLib C folders listed above into a %WORKDIR% directory.
 
-3. Rebuild the MsvcLibX library.
+3. Rebuild everything
+
+        cd %WORKDIR%
+        configure
+        make
+
+Note:
+
+   - The configure.bat script needs to be run only once, the first time a build is done.
+   - It must only be run again if other versions of the build tools (C compiler, etc) are installed.
+   - Before running make.bat, verify in the configure.bat output that it correctly detected the location of your
+     C compiler (CC) and Windows Software Development Kit (WINSDK).
+
+### Individual components can be built separately if desired
+
+1. Rebuild the MsvcLibX library.
 
         cd %WORKDIR%\MsvcLibX\src
         configure
         make
 
-4. Rebuild all C tools.
+2. Rebuild all C tools.
 
         cd %WORKDIR%\SRC
         configure
