@@ -41,7 +41,9 @@
 *    2016-09-09 JFL Flush every DEBUG_PRINTF output, to make sure to see      *
 *		    every debug string printed before a program crash.	      *
 *    2016-09-13 JFL Added macros DEBUG_WSTR2NEWUTF8() and DEBUG_FREEUTF8().   *
-*									      *
+*    2016-10-04 JFL Added macros DEBUG_OFF(), DEBUG_MORE(), DEBUG_LESS().     *
+*		    Allow using DEBUG_ON()/MORE()/LESS()/OFF() in release mode.
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -68,9 +70,12 @@ int iDebug = 0;		/* Global variable enabling debug output if TRUE. */ \
 int iIndent = 0;	/* Global variable controlling debug indentation. */
 
 extern int iDebug;	/* Global variable enabling of disabling debug messages */
-#define DEBUG_ON() iDebug += 1		/* Turn debug mode on */
+#define DEBUG_ON() iDebug = 1		/* Turn debug mode on */
+#define DEBUG_MORE() iDebug += 1	/* Increase the debug level */
+#define DEBUG_LESS() iDebug -= 1	/* Decrease the debug level */
+#define DEBUG_OFF() iDebug = 0		/* Turn debug mode off */
 #define DEBUG_IS_ON() (iDebug > 0)	/* Check if the debug mode is enabled */
-#define XDEBUG_ON() iDebug += 2		/* Turn extra debug mode on */
+#define XDEBUG_ON() iDebug = 2		/* Turn extra debug mode on. Same as calling DEBUG_MORE() twice. */
 #define XDEBUG_IS_ON() (iDebug > 1)	/* Check if the extra debug mode is enabled */
 
 #define DEBUG_CODE(code) code	/* Code included in the _DEBUG version only */
@@ -122,6 +127,10 @@ extern int iIndent;		/* Debug messages indentation */
 
 #define DEBUG_GLOBALS
 
+#define DEBUG_ON() (void)0
+#define DEBUG_MORE() (void)0
+#define DEBUG_LESS() (void)0
+#define DEBUG_OFF() (void)0
 #define DEBUG_IS_ON() 0
 #define XDEBUG_IS_ON() 0
 #define DEBUG_CODE(code) 	/* Code included in _DEBUG version only */
