@@ -28,6 +28,7 @@
 *    2016-09-14 JFL Make sure the debug stream is always in text mode.	      *
 *    2016-09-15 JFL Bug fix: Now preserve the \r characters at end of lines.  *
 *                   Version 1.4.                                              *
+*    2016-10-05 JFL Removed obsolete TARGET_xxx definitions, not used anymore.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -68,8 +69,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #ifdef _WIN32		/* Defined for Win32 applications */
 
-#define TARGET_WIN32
-
 #if defined(__MINGW64__)
 #define OS_NAME "MinGW64"
 #elif defined(__MINGW32__)
@@ -104,7 +103,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #ifdef _MSDOS		/* Defined for MS-DOS applications */
 
-#define TARGET_MSDOS
 #define OS_NAME "DOS"
 
 #include <dos.h>
@@ -122,7 +120,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #ifdef __unix__		/* Defined for Unix applications */
 
-#define TARGET_UNIX
 #define OS_NAME "UNIX"
 
 #include <unistd.h>
