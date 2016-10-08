@@ -61,17 +61,24 @@
 :#                  Fixed the :nmake routine to avoid creating a log file.    *
 :#   2016-10-04 JFL Fixed logging in case an OUTDIR is defined.               *
 :#                  Display build messages only if var. MESSAGES is defined.  *
+:#   2016-10-05 JFL Added Unix make-compatible option -C to change directory. *
+:#                  Added option -u to upgrade the make scripts.              *
+:#   2016-10-06 JFL Added option -ce to clean environment variables.          *
+:#   2016-10-08 JFL Do not show the result when invoked recursively with -L.  *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-04"
+set "VERSION=2016-10-08"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
 set  ARGS=%*
+
+:# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
+set FOREACHLINE=for /f "delims="
 
 set "POPARG=call :PopArg"
 call :Macro.Init
@@ -974,11 +981,14 @@ echo.
 echo Options:
 echo   -?^|-h         This help
 echo   -c CONFIG     Use conf. from config.CONFIG.bat. Default: config.%COMPUTERNAME%.bat
-echo   -d            Run this script in debug mode.
+echo   -C DIRECTORY  Change the current directory before doing anything
+echo   -ce           Clean environment variables in case the script was interrupted
+echo   -d            Run this script in debug mode
 echo   -f MAKEFILE   Make file to use. Default: %MAKEFILE%
 echo   -H [PROGRAM]  Display nmake.exe help (or that of another MSVC32 program)
 echo   -o OS         Use nmake for OS. Default: Use that for %MAKEORIGIN%
-echo   -v            Enable verbose output.
+echo   -u DIRECTORY  Upgrade configure.bat and make.bat scripts in this dir.
+echo   -v            Enable verbose output
 echo   -V            Display %SCRIPT% version
 echo   -X            Display the nmake command to run, but don't run it
 echo.
@@ -1014,11 +1024,13 @@ exit /b
 call :Debug.SetLog &:# Make sure there's no log file
 if not defined MAKEFILE call :GetDefaultMakeFile
 call :GetConfig >NUL 2>NUL :# Get Development tools location. Also defines OUTDIR.
-%ECHOVARS.D% MESSAGES OUTDIR
+%ECHOVARS.D% CD MESSAGES OUTDIR
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
 for %%n in (nmake.exe) do set "NMAKE=%%~$PATH:n"
-%EXEC% "%NMAKE%" /NOLOGO /f %MAKEFILE% /c /s %*
+set "NMAKEFLAGS=/NOLOGO /c /s"
+%IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
+%EXEC% "%NMAKE%" %NMAKEFLAGS% /F %MAKEFILE% %*
 exit /b
 
 :#-----------------------------------------------------------------------------
@@ -1028,6 +1040,68 @@ exit /b
 call :nmake distclean
 if exist config.* del config.* &:# Delete all instances of %CONFIG.BAT% for all systems
 exit /b
+
+:#-----------------------------------------------------------------------------
+
+:# Update the make system scripts in another directory
+:update_scripts
+set "UPDATE=xcopy /c /d /y"
+%IF_NOEXEC% set "UPDATE=%UPDATE% /l"
+for %%s in (configure.bat make.bat) do (
+  %IF_VERBOSE% echo %UPDATE% %%s %1
+  %FOREACHLINE% %%n in ('%UPDATE% %%s %1 2^>NUL ^| findstr ":"') do (
+    >con echo Upgrading %~1\%%s
+  )
+)
+exit /b
+
+:#-----------------------------------------------------------------------------
+
+:# Cleanup the environment polluted by this script, in case it is interrupted
+:CleanEnvironment
+endlocal &:# Return to the shell environment
+:# Delete families of variables, which we're pretty sure we all created
+for %%f in (
+  "DEBUG." "ECHO." "ECHOVARS" "EXEC." "IF_" "LF" "RETURN"
+  VSCOMMON VSIDE VSTOOLS VSTUDIO
+) do (
+  for /f "delims==" %%v in ('set %%f 2^>NUL') do set "%%v="
+)
+:# Delete individual variables with plain names
+for %%v in (
+  "ARG" ARG ARG0 BS CONFIG.BAT CR DEBUG DEL DO ECHO EXEC FOREACHLINE FUNCTION FUNCTION0
+  LOG LOGNAME MACRO MACRO.GETEXP NOEXEC NOREDIR ON_MACRO_EXIT POPARG
+  SCRIPT SPATH UPVAR VERBOSE VERSION XDLEVEL
+  CONFIG.BAT GOAL ISDEF LASTGOAL LOGFILE2 MAKEARGS MAKEFILE MAKEGOALS MAKEORIGIN
+  NEEDMAKEFILE NMAKE NMAKEFLAGS MAKEGOALS SHOW_RESULT POST_MAKE_ACTIONS SUBDIR UPDATE
+) do set "%%v="
+:# Delete individual variables with names with characters that need quoting
+for %%v in (
+  "/MACRO" "/ON_MACRO_EXIT" "&" "&2" ">" ">>LOGFILE" "\n"
+) do set "%%~v="
+:# Delete variables with tricky characters that need escaping
+set "^!="
+set "'^!="
+set "^!2="
+set "'^!2="
+:# Restore variables that are changed
+set "OS=Windows_NT" &:# May have been changed to target OS values
+exit /b
+
+:#-----------------------------------------------------------------------------
+
+:# Execute this make.bat command in another directory
+:MakeInDir DIR
+:# Get all arguments in the initial command line. Insert a space ahead. 
+set ARGS= %*
+:# Remove the ' -C DIR' option that brought us here
+set ARGS=!ARGS: -C %"ARG"%=!
+if "!ARGS:~0,1!"==" " set ARGS=!ARGS:~1!
+%DO% pushd %"ARG"%
+%DO% call make.bat !ARGS!
+set "ERROR=%ERRORLEVEL%"
+%DO% popd
+exit /b %ERROR%
 
 :#-----------------------------------------------------------------------------
 
@@ -1051,14 +1125,17 @@ if "!ARG!"=="" goto go
 if "!ARG!"=="-?" goto help
 if "!ARG!"=="/?" goto help
 if "!ARG!"=="-c" %POPARG% & set "CONFIG.BAT=config.!ARG!.bat" & goto next_arg
+if "!ARG!"=="-C" %POPARG% & call :MakeInDir %* & exit /b
+if "!ARG!"=="-ce" goto :CleanEnvironment
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto next_arg
 if "!ARG!"=="-f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
 if "!ARG!"=="/f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
 if "!ARG!"=="-h" goto help
 if "!ARG!"=="-H" goto mstool_help
-if "!ARG!"=="-L" set "LOGNAME=" & goto next_arg
+if "!ARG!"=="-L" set "LOGNAME=" & set "SHOW_RESULT=0" & goto next_arg &:# Not logging is useful when invoked recursively within a make file. In this case don't show intermediate results either.
 if "!ARG!"=="-o" %POPARG% & set "MAKEORIGIN=!ARG!" & goto next_arg
 if "!ARG!"=="-q" set "SHOW_RESULT=0" & goto next_arg
+if "!ARG!"=="-u" %POPARG% & call :update_scripts "!ARG!" & goto :eof
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.Off & goto next_arg
@@ -1113,25 +1190,21 @@ goto :get_ra
 %POPARG%
 :get_ra
 if not defined ARG goto done_ra
-set "SPACE="
 if "!ARG:~0,1!"=="/" ( :# This is a switch
   %ECHO.D% :# nmake switch !"ARG"!
-  if defined NMAKEFLAGS set "SPACE= "
-  set "NMAKEFLAGS=!NMAKEFLAGS!!SPACE!!ARG!"
+  set "NMAKEFLAGS=!NMAKEFLAGS! !ARG!"
   rem set  MAKEARGS=!MAKEARGS! !ARG!
 ) else ( :# Not a switch, so either a variable definition or a goal
   set "ISDEF="
   for /l %%i in (0,1,20) do if not defined ISDEF if "!ARG:~%%i,1!!ARG:~%%i,1!"=="==" set "ISDEF=1"
   if defined ISDEF ( :# It's a variable definition
     %ECHO.D% :# nmake variable !"ARG"!
-    if defined MAKEDEFS set "SPACE= "
     set MAKEDEFS=!MAKEDEFS!!SPACE!!"ARG"!
     set MAKEARGS=!MAKEARGS! !"ARG"!
   ) else ( :# It's a goal = a build target
     %ECHO.D% :# nmake goal !"ARG"!
     set "LASTGOAL=!ARG!" &:# Record the last goal, without quotes
-    if defined MAKEGOALS set "SPACE= "
-    set MAKEGOALS=!MAKEGOALS!!SPACE!!"ARG"!
+    set MAKEGOALS=!MAKEGOALS! !"ARG"!
     if not defined MAKEFILE if exist "All.mak" (
       %ECHO.D% :# Looking for SUBDIR in goal !"ARG"!
       :# Look for the first \ index
@@ -1157,6 +1230,8 @@ if "!ARG:~0,1!"=="/" ( :# This is a switch
     set MAKEARGS=!MAKEARGS! !"ARG"!
   )
 )
+if "!NMAKEFLAGS:~0,1!"==" " set "NMAKEFLAGS=!NMAKEFLAGS:~1!"
+if "!NMAKEARGS:~0,1!"==" " set "NMAKEARGS=!NMAKEARGS:~1!"
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
@@ -1242,10 +1317,11 @@ if %SHOW_RESULT%==1 (
 :# Log the post-make actions we're about to do
 :# I'm afraid the %ECHO% methods won't work with multi-line macros, so decomposing the log and echo tasks.
 %LOG%
->>"%LOGFILE%" 2>&1 (if defined POST_MAKE_ACTIONS (set POST_MAKE_ACTIONS) else (echo :# No POST_MAKE_ACTIONS))
+%>>LOGFILE% 2>&1 (if defined POST_MAKE_ACTIONS (set POST_MAKE_ACTIONS) else (echo :# No POST_MAKE_ACTIONS))
 if defined POST_MAKE_ACTIONS (%IF_VERBOSE% set POST_MAKE_ACTIONS) else (%IF_DEBUG% echo :# No POST_MAKE_ACTIONS)
 
-if not %ERROR%==0 if not .%LOGFILE%.==.NUL. start notepad "%LOGFILE%"
+if .%LOGFILE%.==.NUL. set "LOGFILE="
+if not %ERROR%==0 if defined LOGFILE start notepad "%LOGFILE%"
 set "&="
 if defined POST_MAKE_ACTIONS set "&=&"
 endlocal %&% %POST_MAKE_ACTIONS% & exit /b %ERROR%
