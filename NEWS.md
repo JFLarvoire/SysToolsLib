@@ -4,6 +4,27 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-08
+### Added
+- Recursive make files in C\ and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
+
+### Changed
+- Debug macro DEBUG_ON() now sets the debug level, and a new DEBUG_MORE() increases it.  
+  Conversely, new macros DEBUG_LESS() and DEBUG_OFF() reverse the previous ones.  
+  All four are usable outside of a DEBUG_CODE() block, and do nothing in release mode.
+
+### Fixed
+ - Fixed an incompatiility in MsvcLibX with the (very old) Visual Studio 2003.
+ - Target distclean now removes the `config.*.bat` files output by configure.bat.
+
+## [unreleased] 2016-10-04
+### Fixed
+- C/*/*mak*:
+   - Fixed logging in case an OUTDIR is defined. This resolves the issue doing multiple builds at the same time.
+   - Use the shell PID to generate unique temp file names.
+- C/*/All.mak:
+   - Updated the fix comparing the WIN95 and WIN32 C compilers.
+
 ## [unreleased] 2016-10-03
 ### Added
 - Batch/touch.bat: A poor man's touch. Uses touch.exe if available, else uses pure batch.
