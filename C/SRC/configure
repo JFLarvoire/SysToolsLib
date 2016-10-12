@@ -12,13 +12,14 @@
 #    2015-12-16 JFL Created this script.                                      #
 #    2016-01-06 JFL Automatically create a symbolic link to debugm.h if poss. #
 #    2016-01-08 JFL Actually copy the file instead of making a link.          #
+#    2016-10-12 JFL Search includes in $(STINCLUDE).			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 # Global variables
-VERSION="2016-01-08"
+VERSION="2016-10-12"
 
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 
@@ -75,21 +76,20 @@ if [ $? -ne 0 ] ; then
 fi
 EchoV "OK"
 
-# Make sure that debugm.h is accessible
-EchoV "Making sure that debugm.h is accessible"
-cc -o /dev/null -xc - >&6 2>&1 <<EOF
+# Make sure that the SysToolsLib global include directory is accessible
+EchoV "Making sure that the SysToolsLib global include directory is accessible"
+CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
 #include "debugm.h"
 int main(int argc, char *argv[]) {return 0;}
 EOF
 if [ $? -ne 0 ] ; then # It's not accessible
-  if [ -f ../MsvcLibX/include/debugm.h ] ; then
-    EchoV "Copying ../MsvcLibX/include/debugm.h"
-    cp -p ../MsvcLibX/include/debugm.h debugm.h # Don't create a link, as this does not always work.
+  if [ -r ../include/debugm.h ] ; then
+    STINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
   else
-    echo>&2 Error: Please copy MsvcLibX"'" debugm.h into the current directory, or into one in your C_INCLUDE_PATH
+    >&2 echo "Error: Please set STINCLUDE with the pathname of SysToolsLib's global include directory"
     exit 1
   fi
 fi
-EchoV "OK"
+EchoV "OK      STINCLUDE=$STINCLUDE"
 
 echo Configuration done successfully.

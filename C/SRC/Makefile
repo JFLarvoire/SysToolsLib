@@ -16,6 +16,7 @@
 #    2004-12-14 JFL jf.larvoire@hp.com created this file.                     #
 #    2014-12-05 JFL Finished the job. Yes, 10 years later!                    #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
+#    2016-10-12 JFL Search includes in $(STINCLUDE).			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -102,46 +103,68 @@ CXXFLAGS = $(CFLAGS)
 LFLAGS = 
 LDLIBS = -ltermcap
 
+# Add the path to SysToolsLib global include files
+ifdef STINCLUDE
+  ifeq '$(shell ls -1 "$(STINCLUDE)/debugm.h" 2>/dev/null)' ''
+    $(error "Can't find SysToolsLib global include files in $(STINCLUDE)")
+  endif
+endif
+ifndef STINCLUDE
+  ifneq '$(shell ls -1 "../include/debugm.h" 2>/dev/null)' ''
+    STINCLUDE := ../include
+  endif
+endif
+ifdef STINCLUDE
+CFLAGS := $(CFLAGS) -I $(STINCLUDE)
+CXXFLAGS := $(CXXFLAGS) -I $(STINCLUDE)
+endif
+
+# Make file messages control
+TRACE_MSGS = $(or $(filter-out 0, $(VERBOSE)), $(filter-out 0, $(DEBUG)))
+REPORT_FAILURE = (ERR=$$? ; echo " ... FAILED" ; exit $$ERR)
+
 # Pattern rules for compiling any standalone C or C++ source.
 $(OSPN)/%: %.c
 	$(MAKE) -$(MAKEFLAGS) dirs
 	echo "Building $@ ..."
-	$(CC) $(CFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.c
 	$(MAKE) -$(MAKEFLAGS) ddirs
 	echo "Building $@ ..."
-	$(CC) $(CFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPN)/%: %.cpp
 	$(MAKE) -$(MAKEFLAGS) dirs
 	echo "Building $@ ..."
-	$(CC) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $<
+	$(CC) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.cpp
 	$(MAKE) -$(MAKEFLAGS) ddirs
 	echo "Building $@ ..."
-	$(CC) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $<
+	$(CC) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
+QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory
+
 %: %.c
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.c
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %: %.cpp
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.cpp
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 .SILENT:
 
@@ -156,6 +179,9 @@ testmak:
 	echo "PROC = $(PROC)"
 	echo "MACHINE = $(MACHINE)"
 	echo "OSP = $(OSP)"
+	echo "PROGRAM = $(PROGRAM)"
+	echo "MAKEFLAGS = $(MAKEFLAGS)"
+	echo "CURDIR = $(CURDIR)"
 
 # Load $(PROGRAM).mak or Files.mak if possible 
 ifdef PROGRAM
@@ -170,7 +196,7 @@ ifdef PROGRAM
 else
   files_mak := $(shell find . -maxdepth 1 -type f -iname files.mak)
   ifneq "$(files_mak)" ""
-    $(info Including $(files_mak))
+    $(if $(TRACE_MSGS), $(info Including $(files_mak)))
     include $(files_mak)
     # The PROGRAMS list contains .exe suffixes for DOS/Windows. Remove it.
     # (But do leave it in Unix-compatible shells in Windows, like MinGW or CygWin.)
@@ -195,15 +221,23 @@ $(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
 	$(info Creating directory $@)
 	mkdir -p $@
 
-# Place holder for environment dependancies rules
+# Place holder for build results selt test
 .PHONY: check
 check:
 	true
 
+# Check the build environment. Ex: global include files location
+.PHONY: checkenv
+checkenv:
+	if [ ! -r "$(STINCLUDE)/debugm.h" ] ; then \
+	    >&2 echo "C/Makefile: Error: Can't find SysToolsLib global include files. Please export their location in STINCLUDE." ; \
+	    false ; \
+	fi
+
 # How to reluild all targets
 .PHONY: all
 all: $(PROGRAMS)
-	echo "All done."
+	echo "All C programs built."
 
 # How to install all programs built above
 .PHONY: install
@@ -231,3 +265,22 @@ $(BP)/$(PROGRAM): dirs $(SOURCES)
 	$(CC) -o $@ -pthread -ltermcap $(CFLAGS) $(SOURCES)
 	@echo "$(BP)/$(PROGRAM) done."
 
+define HELP
+Usage: make [MAKEOPTS] [MAKEDEFS] [TARGETS]
+
+MakeDefs:
+  STINCLUDE=PATH    SysToolsLib global include dir. Default: $(STINCLUDE)
+
+Targets:
+  PROGRAM   Build the normal and debug versions of PROGRAM.c or .cpp
+  all       Build all programs defined in Files.mak. Default.
+  checkenv  Check if all necessary definitions are set for the build to succeed
+  clean     Delete all files generated by this Makefile
+  help      Display this help message
+  install   Copy the programs built to $$bindir. Default: $(bindir)
+
+endef
+
+export HELP
+help:
+	echo "$$HELP"
