@@ -30,7 +30,7 @@ Quick Guide for rebuilding everything in Windows
     - Make sure both "Common Tools for Visual C++ 2015" and "Windows 8.1 SDK and Universal CRT SDK" are selected.  
     ...
 
-2. Download the SysToolsLib C folders listed above into a %WORKDIR% directory.
+2. Download the whole SysToolsLib C folder contents into a %WORKDIR% directory.
 
 3. Rebuild everything
 

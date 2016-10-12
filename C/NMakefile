@@ -8,13 +8,14 @@
 #									      #
 #   History								      #
 #    2016-10-05 JFL jf.larvoire@hpe.com created this file.                    #
+#    2016-10-11 JFL Adapted for use with make files in the global include dir.#
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 !IF DEFINED(MESSAGES)
-!MESSAGE "Started C/NMakefile"	# Display this make file name
+!MESSAGE Started C/NMakefile in $(MAKEDIR) # Display this make file name
 !ENDIF
 
 MSG=>con echo		# Command for writing a progress message on the console
@@ -49,7 +50,7 @@ all: $(DIRS)
 
 # Build an individual module
 BiosLib LoDosLib PModeLib MsvcLibX SysLib SRC: NUL
-    $(SUBMAKE) "DIR=$@" updates &:# Update the make scripts
+    :# $(SUBMAKE) "DIR=$@" updates &:# Update the make scripts
     make.bat -C $@ -L & if errorlevel 1 exit /b &:# Build the module in dir $@, using the current log file 
 
 # Update the make system scripts in sub-directories
@@ -62,14 +63,15 @@ updates: NUL
 
 update: $(DIR)\$(FILE)
 
-$(DIR)\$(FILE): $(FILE)
+$(DIR)\$(FILE): $(STINCLUDE)\$(FILE)
     if "$(FILE)"=="" $(MSG) Error: Must define DIR ^& FILE & exit 1 &:# Avoid catastrophies if invoked out of spec.
     $(MSG) Updating %CD%\$@
     copy /y $** $@ >NUL
 
 # Erase all output files
 clean mostlyclean distclean:
-    for %%f in ($(DIRS)) do @$(SUBMAKE) "DIR=%%f" updates & make.bat -L -C %%f $@ & if errorlevel 1 exit /b
+    :# for %%f in ($(DIRS)) do @$(SUBMAKE) "DIR=%%f" updates & make.bat -L -C %%f $@ & if errorlevel 1 exit /b
+    for %%f in ($(DIRS)) do @make.bat -L -C %%f $@ & if errorlevel 1 exit /b
 !IF DEFINED(OUTDIR)
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
 !ENDIF

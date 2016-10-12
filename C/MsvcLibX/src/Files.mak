@@ -28,6 +28,7 @@
 #    2014-07-01 JFL Added mb2wpath.obj.			                      #
 #    2016-09-08 JFL Added basename.obj and dirname.obj.		 	      #
 #    2016-09-12 JFL Added WIN32_OBJECTS, and several WIN32 UTF-8 routines.    #
+#    2016-10-11 JFL moved debugm.h to SysToolsLib global C include dir.       #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -95,8 +96,9 @@ REMOVED_OBJECTS = \
 ###############################################################################
 
 I=..\include
+CI=$(STINCLUDE)
 
-$(I)\chdir.h: $(I)\unistd.h $(I)\iconv.h $(I)\debugm.h
+$(I)\chdir.h: $(I)\unistd.h $(I)\iconv.h $(CI)\debugm.h
 
 $(I)\config.h: $(I)\msvclibx.h $(I)\stdbool.h $(I)\unistd.h
 
@@ -110,7 +112,7 @@ $(I)\error.h: $(I)\msvclibx.h
 
 $(I)\fnmatch.h: $(I)\msvclibx.h 
 
-$(I)\getcwd.h: $(I)\unistd.h $(I)\debugm.h
+$(I)\getcwd.h: $(I)\unistd.h $(CI)\debugm.h
 
 # $(I)\getopt.h: 
 
@@ -157,37 +159,37 @@ $(I)\sys\types.h: $(I)\msvclibx.h
 #			Source files dependancies			      #
 ###############################################################################
 
-access.c: $(I)\MsvcLibX.h $(I)\debugm.h
+access.c: $(I)\MsvcLibX.h $(CI)\debugm.h
 
 basename.c: $(I)\libgen.h
 
-chdir.c: $(I)\debugm.h $(I)\iconv.h $(I)\unistd.h
+chdir.c: $(CI)\debugm.h $(I)\iconv.h $(I)\unistd.h
 
 clock_gettime.c: $(I)\MsvcLibX.h $(I)\time.h $(I)\sys\stat.h
 
-debugv.c: $(I)\debugm.h
+debugv.c: $(CI)\debugm.h
 
-dirent.c: $(I)\debugm.h $(I)\dirent.h $(I)\sys\stat.h $(I)\unistd.h
+dirent.c: $(CI)\debugm.h $(I)\dirent.h $(I)\sys\stat.h $(I)\unistd.h
 
 dirname.c: $(I)\libgen.h
 
-err2errno.c: $(I)\MsvcLibX.h $(I)\debugm.h
+err2errno.c: $(I)\MsvcLibX.h $(CI)\debugm.h
 
 error.c: $(I)\config.h $(I)\error.h
 
 filetime.c: $(I)\sys\stat.h
 
-fnmatch.c: $(I)\debugm.h $(I)\fnmatch.h
+fnmatch.c: $(CI)\debugm.h $(I)\fnmatch.h
 
 fopen.c: $(I)\MsvcLibX.h
 
-fstat64.c: fstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
+fstat64.c: fstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
 
-fstat64i32.c: fstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
+fstat64i32.c: fstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
 
 fullpath.c: $(I)\stdlib.h $(I)\limits.h
 
-getcwd.c: $(I)\debugm.h $(I)\unistd.h
+getcwd.c: $(CI)\debugm.h $(I)\unistd.h
 
 GetFileAttributesU.c: $(I)\windowsU.h $(I)\limits.h
 
@@ -209,17 +211,17 @@ iconv.c: $(I)\iconv.h
 
 initmain.c: $(I)\config.h
 
-lstat32.c: lstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
+lstat32.c: lstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
 
-lstat32i64.c: lstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
+lstat32i64.c: lstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
 
-lstat64.c: lstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
+lstat64.c: lstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
 
-lstat64i32.c: lstat.c $(I)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
+lstat64i32.c: lstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
 
 main.c: $(I)\MsvcLibX.h
 
-mb2wpath.c: $(I)\MsvcLibX.h $(I)\debugm.h
+mb2wpath.c: $(I)\MsvcLibX.h $(CI)\debugm.h
 
 mkdir.c: $(I)\MsvcLibX.h $(I)\sys\stat.h
 
@@ -229,11 +231,11 @@ mkstemp.c: $(I)\unistd.h
 
 pwd.c: $(I)\pwd.h 
 
-readlink.c: $(I)\debugm.h $(I)\unistd.h $(I)\reparsept.h
+readlink.c: $(CI)\debugm.h $(I)\unistd.h $(I)\reparsept.h
 
-realpath.c: $(I)\debugm.h $(I)\unistd.h
+realpath.c: $(CI)\debugm.h $(I)\unistd.h
 
-spawm.c: $(I)\debugm.h $(I)\MsvcLibX.h $(I)\process.h
+spawm.c: $(CI)\debugm.h $(I)\MsvcLibX.h $(I)\process.h
 
 strerror.c: $(I)\MsvcLibX.h
 
@@ -241,11 +243,11 @@ strerror.c: $(I)\MsvcLibX.h
 
 # strptime.c:
 
-symlink.c: $(I)\debugm.h $(I)\reparsept.h $(I)\unistd.h
+symlink.c: $(CI)\debugm.h $(I)\reparsept.h $(I)\unistd.h
 
 uname.c: $(I)\MsvcLibX.h $(I)\sys\utsname.h
 
-utime.c: $(I)\debugm.h $(I)\unistd.h $(I)\utime.h $(I)\sys\time.h
+utime.c: $(CI)\debugm.h $(I)\unistd.h $(I)\utime.h $(I)\sys\time.h
 
 xfreopen.c: $(I)\xfreopen.h
 
