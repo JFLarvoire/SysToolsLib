@@ -4,9 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-12
+### Added
+- The SysLib library can now be built in Linux, and used in Linux programs.
+- Recursive Unix make files in C\, and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
+
+## [unreleased] 2016-10-11
+### Changed
+Moved debugm.h and all common Windows make system scripts and nmake files to C/INCLUDE.  
+This avoids having duplicate files in multiple subdirectories.  
+Added proxy scripts in each subdirectory to avoid having to add C/INCLUDE to the PATH. 
+
 ## [unreleased] 2016-10-08
 ### Added
-- Recursive make files in C\ and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
+- Recursive Windows make files in C\ and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
 
 ### Changed
 - Debug macro DEBUG_ON() now sets the debug level, and a new DEBUG_MORE() increases it.  
