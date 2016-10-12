@@ -400,11 +400,11 @@ int main(int argc, char *argv[])
   PRINTVAL(=_M_I86TM);	/* Tiny memory model: CS=DS=ES=SS */
   PRINTVAL(=M_I86SM);
   PRINTVAL(=_M_I86SM);	/* Small memory model: DS=SS, multiple code segments */
-  PRINTVAL(=M_I86CM);
-  PRINTVAL(=_M_I86MM);	/* Medium memory model: DS=SS, multiple code segments */
-  PRINTVAL(=M_I86LM);
-  PRINTVAL(=_M_I86CM);	/* Compact memory model: Single code segment, multiple data segments */
   PRINTVAL(=M_I86MM);
+  PRINTVAL(=_M_I86MM);	/* Medium memory model: DS=SS, multiple code segments */
+  PRINTVAL(=M_I86CM);
+  PRINTVAL(=_M_I86CM);	/* Compact memory model: Single code segment, multiple data segments */
+  PRINTVAL(=M_I86LM);
   PRINTVAL(=_M_I86LM);	/* Large memory model: Multiple code and data segments */
   PRINTVAL(=M_I86HM);
   PRINTVAL(=_M_I86HM);	/* Huge memory model: Multiple code and data segments; single array may be >64 KB */
