@@ -73,6 +73,7 @@
 #  History:								      #
 #    2015-11-13 JFL Created this file.					      #
 #    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
+#    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -92,7 +93,7 @@ RC=$(ARM_RC)    		# 32-bits Resource compiler
 MT=$(ARM_MT)    		# 32-bits Manifest Tool		
 
 PATH=$(ARM_PATH)  		# 32-bits programs paths		
-INCLUDE=$(ARM_INCPATH)		# 32-bits include files paths	
+INCPATH=$(ARM_INCPATH)		# 32-bits include files paths	
 MSVCINCLUDE=$(ARM_VCINC:\=/)	# Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(ARM_CRTINC:\=/)	# Path of MSVC CRT library include files, without quotes, and with forward slashes
 WSDKINCLUDE=$(ARM_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
@@ -105,4 +106,4 @@ USEDOSSTUB=0			# Do not use an MS-DOS stub
 !ENDIF # !DEFINED(DISPATCH_OS)
 
 # Get common WIN32 definitions and rules from win32.mak
-!INCLUDE "win32.mak"
+!INCLUDE <win32.mak>

@@ -100,6 +100,7 @@
 #		    Display FAILED messages when compilation or link fails.   #
 #		    Avoid having the word "Error" in the log unnecessarily.   #
 #    2016-10-04 JFL Display messages only if variable MESSAGES is defined.    #
+#    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -118,7 +119,7 @@
 T=WIN32				# Target OS
 !ENDIF
 !IF DEFINED(MESSAGES)
-!MESSAGE "Started $(T).mak"	# Display this file name, or the caller's name
+!MESSAGE Started $(T).mak in $(MAKEDIR) # Display this file name, or the caller's name
 !ENDIF
 
 # Command-line definitions that need carrying through to sub-make instances
@@ -128,7 +129,12 @@ MAKEDEFS=
 MAKEDEFS=$(MAKEDEFS) "WINVER=$(WINVER)"
 !ENDIF
 
-MAKEFILE=win32.mak		# This make file name
+THIS_MAKEFILE=win32.mak		# This very make file name
+MAKEFILE=$(T).mak		# The OS-specific make file name
+!IF (!EXIST("$(MAKEFILE)")) && EXIST("$(STINCLUDE)\$(MAKEFILE)")
+MAKEFILE=$(STINCLUDE)\$(MAKEFILE)
+THIS_MAKEFILE=$(STINCLUDE)\$(THIS_MAKEFILE)
+!ENDIF
 
 # Debug-mode-specific definitions
 !IF DEFINED(_DEBUG) || "$(DEBUG)"=="1"
@@ -183,7 +189,7 @@ RC=$(WIN32_RC)
 MT=$(WIN32_MT)
 
 PATH=$(WIN32_PATH)
-INCLUDE=$(WIN32_INCPATH)
+INCPATH=$(WIN32_INCPATH)
 MSVCINCLUDE=$(WIN32_VCINC:\=/) # Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(WIN32_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
 WSDKINCLUDE=$(WIN32_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
@@ -254,7 +260,7 @@ CFLAGS=$(CFLAGS) "/D_USING_V110_SDK71_=1" # Workaround for VisualStudio2012/WinS
 SUBSYSTEM=CONSOLE,$(WINVER:.=.0) # Link.exe SUBSYSTEM version format is M.mm, with M the major version, and mm the minor version
 !ENDIF
 
-INCLUDE=$(S);$(INCLUDE);$(USER_INCLUDE)
+INCLUDE=$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
 LIBS=$(LIBS) $(USER_LIBS)
 
 # Forward library detections by configure.bat to the C compiler
@@ -283,6 +289,7 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
+SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to this make file
 
 ###############################################################################
 #									      #
@@ -298,32 +305,32 @@ REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and fo
 .cpp.obj:
     @echo Applying $(T).mak inference rule .cpp.obj:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
 
 .c.obj:
     @echo Applying $(T).mak inference rule .c.obj:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
 
 .rc.res:
     @echo Applying $(T).mak inference rule .rc.res:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).res
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).res
 
 .cpp.exe:
     @echo Applying $(T).mak inference rule .cpp.exe:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
 .c.exe:
     @echo Applying $(T).mak inference rule .c.exe:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
 .mak.lib:
     @echo Applying $(T).mak inference rule .mak.lib:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(B)\$(*F).lib
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(B)\$(*F).lib
 !ENDIF # !DEFINED(DISPATCH_OS)
 
 # Inference rules to compile a C++ program, inferring the debug mode from the output path specified.
@@ -331,68 +338,68 @@ REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and fo
 {$(S)\}.cpp{$(R)\obj\}.obj:
     @echo Applying $(T).mak inference rule {$$(S)\}.cpp{$$(R)\obj\}.obj:
     $(MSG) Compiling the $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
 
 {$(S)\}.cpp{$(R)\DEBUG\obj\}.obj:
     @echo Applying $(T).mak inference rule {$$(S)\}.cpp{$$(R)\DEBUG\obj\}.obj:
     $(MSG) Compiling the $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 # Inference rules to compile a C program, inferring the debug mode from the output path specified.
 {$(S)\}.c{$(R)\obj\}.obj:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\obj\}.obj:
     $(MSG) Compiling the $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
 
 {$(S)\}.c{$(R)\DEBUG\obj\}.obj:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\DEBUG\obj\}.obj:
     $(MSG) Compiling the $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 # Inference rules to compile a Windows resource file, inferring the debug mode from the output path specified.
 {$(S)\}.rc{$(R)\obj\}.res:
     @echo Applying $(T).mak inference rule {$$(S)\}.rc{$$(R)\obj\}.res:
     $(MSG) Compiling the $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
 
 {$(S)\}.rc{$(R)\DEBUG\obj\}.res:
     @echo Applying $(T).mak inference rule {$$(S)\}.rc{$$(R)\DEBUG\obj\}.res:
     $(MSG) Compiling the $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 # Inference rules to build a C++ program, inferring the debug mode from the output path specified.
 # (Define C++ inferences rules before C inferences rules, so that if both a .c and .cpp file are present, the .cpp is used preferably.)
 {$(S)\}.cpp{$(R)\}.exe:
     @echo Applying $(T).mak inference rule {$$(S)\}.cpp{$$(R)\}.exe:
     $(HEADLINE) Building $(@F) $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
 
 {$(S)\}.cpp{$(R)\DEBUG\}.exe:
     @echo Applying $(T).mak inference rule {$$(S)\}.cpp{$$(R)\DEBUG\}.exe:
     $(HEADLINE) Building $(@F) $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
 
 # Inference rules to build a C program, inferring the debug mode from the output path specified.
 {$(S)\}.c{$(R)\}.exe:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\}.exe:
     $(HEADLINE) Building $(@F) $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
 
 {$(S)\}.c{$(R)\DEBUG\}.exe:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\DEBUG\}.exe:
     $(HEADLINE) Building $(@F) $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
 
 # Inference rules to build a library, inferring the debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.lib:
     @echo Applying $(T).mak inference rule {$$(S)\}.mak{$$(R)\}.lib:
     $(HEADLINE) Building $(@F) $(T) release version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
 
 {$(S)\}.mak{$(R)\DEBUG\}.lib:
     @echo Applying $(T).mak inference rule {$$(S)\}.mak{$$(R)\DEBUG\}.lib:
     $(HEADLINE) Building $(@F) $(T) debug version
-    $(MAKE) /$(MAKEFLAGS) /f $(T).mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 !ELSE # if DEFINED(PROGRAM)
 # Inference rule for C++ compilation
@@ -556,7 +563,7 @@ dirs: $(B) $(O) $(L) files
 
 files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT)
 
-$(UTF8_BOM_FILE): $(MAKEFILE)
+$(UTF8_BOM_FILE): $(THIS_MAKEFILE)
     $(MSG) Generating file $@
     cscript //E:JScript //nologo << $@
 	var args = WScript.Arguments;
@@ -571,7 +578,7 @@ $(UTF8_BOM_FILE): $(MAKEFILE)
 	WScript.Quit(0);
 <<NOKEEP
 
-$(REMOVE_UTF8_BOM): $(MAKEFILE)
+$(REMOVE_UTF8_BOM): $(THIS_MAKEFILE)
     $(MSG) Generating script $@
     copy <<$@ NUL
 	@echo off
@@ -586,7 +593,7 @@ $(REMOVE_UTF8_BOM): $(MAKEFILE)
 	)
 <<KEEP
 
-$(CONV_SCRIPT): $(MAKEFILE)	# Poor man's version of conv.exe, limited to what this make file needs
+$(CONV_SCRIPT): $(THIS_MAKEFILE)	# Poor man's version of conv.exe, limited to what this make file needs
     $(MSG) Generating script $@
     copy <<$@ NUL
 	@if (@Language == @Batch) @then /* NOOP for Batch; Begins a comment for JScript.

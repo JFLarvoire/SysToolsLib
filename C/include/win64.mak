@@ -94,6 +94,7 @@
 #    2015-12-10 JFL Keep win64-specific definitions, and include win32.mak.   #
 #    2016-01-07 JFL Do not use /Zp to avoid alignment issues.                 #
 #    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
+#    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -113,7 +114,7 @@ RC=$(WIN64_RC)    		# 64-bits Resource compiler
 MT=$(WIN64_MT)    		# 64-bits Manifest Tool		
 
 PATH=$(WIN64_PATH)  		# 64-bits programs paths		
-INCLUDE=$(WIN64_INCPATH)	# 64-bits include files paths	
+INCPATH=$(WIN64_INCPATH)	# 64-bits include files paths	
 MSVCINCLUDE=$(WIN64_VCINC:\=/)  # Path of MSVC compiler include files, without quotes, and with forward slashes
 UCRTINCLUDE=$(WIN64_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
 WSDKINCLUDE=$(WIN64_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
@@ -130,4 +131,4 @@ USEDOSSTUB=0			# Do not use an MS-DOS stub
 !ENDIF # !DEFINED(DISPATCH_OS)
 
 # Get common WIN32 definitions and rules from win32.mak
-!INCLUDE "win32.mak"
+!INCLUDE <win32.mak>

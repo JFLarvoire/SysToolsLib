@@ -65,13 +65,15 @@
 :#                  Added option -u to upgrade the make scripts.              *
 :#   2016-10-06 JFL Added option -ce to clean environment variables.          *
 :#   2016-10-08 JFL Do not show the result when invoked recursively with -L.  *
+:#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
+:#                  Clear a few variables that pollute the (nmake /P) logs.   *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-08"
+set "VERSION=2016-10-11"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1030,6 +1032,8 @@ set PATH=!%MAKEORIGIN%_PATH!
 for %%n in (nmake.exe) do set "NMAKE=%%~$PATH:n"
 set "NMAKEFLAGS=/NOLOGO /c /s"
 %IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
+:# Clear a few variables that pollute the (nmake /P) logs
+for %%v in (LF1 LF2 LF3 LF4 LF5 ON_MACRO_EXIT) do set "%%v="
 %EXEC% "%NMAKE%" %NMAKEFLAGS% /F %MAKEFILE% %*
 exit /b
 
@@ -1105,6 +1109,15 @@ exit /b %ERROR%
 
 :#-----------------------------------------------------------------------------
 
+:# Locate the make file in well known dirs and in the INCLUDE path
+:LocateMakefile
+if exist "%~1" set "MAKEFILE=%~1" & exit /b 0
+if exist "%STINCLUDE%\%~1" set "MAKEFILE=%STINCLUDE%\%~1" & exit /b 0
+for %%p in ("%INCLUDE:;=" "%") do if exist "%%p\%~1" set "MAKEFILE=%%p\%~1" & exit /b 0
+set "MAKEFILE=%~1" & exit /b 1
+
+:#-----------------------------------------------------------------------------
+
 :main
 set "CONFIG.BAT=config.%COMPUTERNAME%.bat"
 set "POST_MAKE_ACTIONS=" &:# A series of commands to run after the final endlocal after make
@@ -1115,6 +1128,11 @@ set "NMAKEFLAGS="	&:# Do not name this MAKEFLAGS, as this confuses nmake
 set "MAKEDEFS="
 set "MAKEGOALS="
 set "MAKEORIGIN=WIN32"
+
+if not defined STINCLUDE ( :# Try getting the copy in the master environment
+  for /f "tokens=3" %%v in ('reg query "HKCU\Environment" /v STINCLUDE 2^>NUL') do set "STINCLUDE=%%v"
+)
+set "INCLUDE=%STINCLUDE%" &:# Ensure common make files are found by nmake in the %STINCLUDE% directory
 
 set "LOGNAME=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal.
 call :Debug.SetLog      &:# Make sure nothing's logged at first
@@ -1128,8 +1146,8 @@ if "!ARG!"=="-c" %POPARG% & set "CONFIG.BAT=config.!ARG!.bat" & goto next_arg
 if "!ARG!"=="-C" %POPARG% & call :MakeInDir %* & exit /b
 if "!ARG!"=="-ce" goto :CleanEnvironment
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto next_arg
-if "!ARG!"=="-f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
-if "!ARG!"=="/f" %POPARG% & set "MAKEFILE=!ARG!" & goto next_arg
+if "!ARG!"=="-f" %POPARG% & call :LocateMakefile !ARG! & goto next_arg
+if "!ARG!"=="/f" %POPARG% & call :LocateMakefile !ARG! & goto next_arg
 if "!ARG!"=="-h" goto help
 if "!ARG!"=="-H" goto mstool_help
 if "!ARG!"=="-L" set "LOGNAME=" & set "SHOW_RESULT=0" & goto next_arg &:# Not logging is useful when invoked recursively within a make file. In this case don't show intermediate results either.
@@ -1235,7 +1253,7 @@ if "!NMAKEARGS:~0,1!"==" " set "NMAKEARGS=!NMAKEARGS:~1!"
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
-%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE PID
+%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE INCLUDE PID
 
 :# Set a makefile if needed, based on the target subdirectory
 :# :# Select a make file if none was specified
@@ -1262,9 +1280,11 @@ set RESULT=Success
 set MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!
 :# set CMD=%MAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
 set CMD=%MAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
+setlocal &:# Clear a few variables that pollute the (nmake /P) logs
+for %%v in (LF1 LF2 LF3 LF4 LF5 ON_MACRO_EXIT) do set "%%v="
 %EXEC% %CMD%
-set ERROR=%ERRORLEVEL%
-if ERRORLEVEL 1 set RESULT=Failure
+endlocal & set ERROR=%ERRORLEVEL%
+if not "%ERROR%"=="0" set RESULT=Failure
 %IF_NOEXEC% del %LOGFILE% & goto :eof
 
 %LOG%

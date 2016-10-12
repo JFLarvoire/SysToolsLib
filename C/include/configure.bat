@@ -139,13 +139,14 @@
 :#                  variables %ProgramFiles% and %PROCESSOR_ARCHITECTURE% are *
 :#                  reset to their x86 values.                                *
 :#                  Improvement: Also look for library paths in the master env.
+:#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-07"
+set "VERSION=2016-10-11"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1618,7 +1619,7 @@ call :findArm	&:# Find ARM development tools
 call :findArm64	&:# Find ARM64 development tools
 
 :# Manage a list of known SDKs, that we'll include further down in the build variables
-set "SDK_LIST=" &:# List of variable names, defining the SDK install directories.
+set "SDK_LIST=STINCLUDE" &:# List of variable names, defining the SDK install directories.
 :# Macro, for use in configure.*.bat scripts, to easily add variables to %SDK_LIST%
 set USE_SDK=%MACRO% ( %\n%
   for %%a in (%!%MACRO.ARGS%!%) do ( %\n%
@@ -1667,13 +1668,17 @@ for %%d in ("%windir%" "%HOME%" ".") do (
 %ECHOVARS.D% SDK_LIST
 
 :# Known SDKs:
-set "SDK.BIOSLIB.NAME=BIOS library"
+set "SDK.STINCLUDE.NAME=System Tools global C includes"
+set "SDK.STINCLUDE.DIR=INCLUDE"
+set "SDK.STINCLUDE.FILE=debugm.h"
+
+set "SDK.BIOSLIB.NAME=BIOS Library"
 set "SDK.BIOSLIB.FILE=clibdef.h"
 
-set "SDK.LODOSLIB.NAME=Low DOS library"
+set "SDK.LODOSLIB.NAME=Low DOS Library"
 set "SDK.LODOSLIB.FILE=dosdrv.h"
 
-set "SDK.PMODE.NAME=Protected Mode library"
+set "SDK.PMODE.NAME=x86 Protected Mode library"
 set "SDK.PMODE.FILE=pmode.h"
 
 set "SDK.SYSLIB.NAME=System Library"
@@ -1682,10 +1687,10 @@ set "SDK.SYSLIB.FILE=oprintf.h"
 set "SDK.MSVCLIBX.NAME=MSVC Library eXtensions library"
 set "SDK.MSVCLIBX.FILE=include\msvclibx.h"
 
-set "SDK.LMPTK.NAME=LanManager 2.1 Programmer's ToolKit"
+set "SDK.LMPTK.NAME=LanManager Programmer's ToolKit"
 set "SDK.LMPTK.FILE=DOS\NETSRC\H\lan.h"
 
-set "SDK.98DDK.NAME=Windows 98 DDK"
+set "SDK.98DDK.NAME=Windows 98 Device Driver Kit"
 set "SDK.98DDK.FILE=INC\Win98\vmm.h"
 
 set "SDK.GNUEFI.NAME=gnu-efi sources"
@@ -1927,7 +1932,7 @@ if defined POST_CONFIG_ACTIONS set "POST_CONFIG_ACTIONS=%POST_CONFIG_ACTIONS:¡¡¡
 %CONFIG%.
 %CONFIG% SET "AS=" ^&:# Assembler
 %CONFIG% SET "CC=" ^&:# C compiler
-%CONFIG% SET "INCLUDE=" ^&:# Include paths. Define USER_INCLUDE if needed.
+%CONFIG% SET "INCLUDE=%STINCLUDE%" ^&:# Include paths. Define USER_INCLUDE if needed.
 %CONFIG% SET "LK=" ^&:# Linker
 %CONFIG% SET "LIB=" ^&:# Libraries paths. Define USER_LIBS if needed.
 %CONFIG% SET "LB=" ^&:# Library manager
