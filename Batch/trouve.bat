@@ -16,7 +16,7 @@
 :#  History:                                                                  #
 :#   2010-05-04 JFL Changed the default to case-insensitive name matching.    #
 :#                  Added options -j and -J.                                  #
-:#                  Renamed option -in as -d.                                 #
+:#                  Renamed option -in as -D.                                 #
 :#   2010-10-29 JFL Dynamically detect the tools path.			      #
 :#                  Added partial support for SUA Unix tools.                 #
 :#                  Added options -r and changed the default to non-recursive.#
@@ -26,16 +26,17 @@
 :#   2013-04-03 JFL First try ezWinPorts versions of find & grep, which are   #
 :#                  much faster than the others. (Specially the 64-bits one)  #
 :#   2013-04-04 JFL The ezWinPorts versions already end lines with crlf.      #
-:#                  Made the -d optional before the directory name.           #
+:#                  Made the -D optional before the directory name.           #
 :#                  Added option -v.                                          #
 :#   2013-04-05 JFL Added support for the gnuwin32 and mingw ports.           #
+:#   2016-10-11 JFL Added options -d, -l, -L.                                 #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2013-04-05"
+set "VERSION=2016-10-11"
 set "SCRIPT=%~nx0"
 set "SCRIPT_DRIVE=%~d0"
 set "SCRIPT_PATH=%~dp0" & set "SCRIPT_PATH=!SCRIPT_PATH:~0,-1!"
@@ -176,6 +177,8 @@ echo   -g          Use the gnuwin32.sourceforge.net port (3rd choice)
 echo   -i          Ignore case in the search string
 echo   -j          Ignore case in the file name (default)
 echo   -J          Do not ignore case in the file name
+echo   -l          List files that match. (Default: List all matches)
+echo   -L          List files that do NOT match
 echo   -m          Use the mingw.sourceforge.net port (5th choice)
 echo   -n {name*}  Name template. Default: *.*
 echo   -r          Recursive search in all subdirectories
@@ -192,7 +195,7 @@ if .%DEBUG%.==.1. echo %ARG0% %*
 set "VERBOSE=0"
 set "NOEXEC=0"
 set "FROM=."
-set "CASE="
+set "GREPOPTS="			&:# grep options
 set "-NAME=-iname"
 set "NAME="
 set "-MAXDEPTH=-maxdepth 1"
@@ -209,12 +212,15 @@ if .%1.==.. goto help
 if "%~1"=="-?" goto help
 if "%~1"=="/?" goto help
 if "%~1"=="--" shift & goto start
+if "%~1"=="-d" set "DEBUG=1" & goto next_arg
 if "%~1"=="-D" set FROM=%2& goto next2_arg &:# Leave the %2 quoting unchanged
 if "%~1"=="-e" set "PORTS=%PORTS% ezWinPorts" & goto next_arg
 if "%~1"=="-g" set "PORTS=%PORTS% GnuWin32" & goto next_arg
-if "%~1"=="-i" set "CASE=-i" & goto next_arg
+if "%~1"=="-i" set "GREPOPTS=%GREPOPTS% -i" & goto next_arg
 if "%~1"=="-j" set "-NAME=-iname" & goto next_arg
 if "%~1"=="-J" set "-NAME=-name" & goto next_arg
+if "%~1"=="-l" set "GREPOPTS=%GREPOPTS% -l" & goto next_arg
+if "%~1"=="-L" set "GREPOPTS=%GREPOPTS% -L" & goto next_arg
 if "%~1"=="-m" set "PORTS=%PORTS% MinGW" & goto next_arg
 if "%~1"=="-n" set NAME=%2& goto next2_arg &:# Leave the %2 quoting unchanged
 if "%~1"=="-r" set "-MAXDEPTH=" & goto next_arg
@@ -238,7 +244,7 @@ for %%c in (find grep) do (
     >&2 echo Error: Cannot find a Windows port of the Unix %%c program
     goto :eof
   )
-  if .%DEBUG%.==.1. echo set "%%c=!CMD!"
+  if .%DEBUG%.==.1. echo set "%%c=!%%c!"
   call :condquote %%c
 )
 
@@ -247,10 +253,14 @@ if not '%2'=='' (
   shift
 )
 if .%NAME%.==.. set "-NAME="
+set "FINDOPTS=-type f"
+if defined -MAXDEPTH set "FINDOPTS=%-MAXDEPTH% %FINDOPTS%"
+if defined -NAME set "FINDOPTS=%FINDOPTS% %-NAME%"
+if defined NAME set "FINDOPTS=%FINDOPTS% %NAME%"
 :# Note: The "" around %1 are necessary to support strings with spaces.
 :# Note: The "" around {} are necessary to support pathnames with spaces.
 :# 2013-04-03 JFL Removed one pair of "quotes" around {}, as the third pair caused the ezWinPorts grep to fail.
-set CMDLINE=%find% %FROM% %-MAXDEPTH% -type f %-NAME% %NAME% -exec %grep% %CASE% -- %1 "{}" %NUL% ";"
+set CMDLINE=%find% %FROM% %FINDOPTS% -exec %grep%%GREPOPTS% -- %1 "{}" %NUL% ";"
 if %VERBOSE%==1 echo %CMDLINE%
 if %VERBOSE%==0 if %NOEXEC%==1 echo %CMDLINE%
 if %NOEXEC%==0 %CMDLINE% %FILTER%
