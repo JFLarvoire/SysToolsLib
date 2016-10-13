@@ -27,12 +27,16 @@ PROGRAMS = \
   dirsize.exe     \
   driver.exe      \
   dump.exe        \
+  gpt.exe         \
   lessive.exe     \
   redo.exe        \
   remplace.exe    \
+  sector.exe      \
+  smbios.exe      \
   tee.exe         \
   truename.exe    \
   update.exe      \
+  uuid.exe	  \
   which.exe       \
   whichinc.exe    \
 
@@ -69,6 +73,7 @@ ZIPSOURCES =		 \
   configure              \
   configure.bat          \
   configure.msvclibx.bat \
+  configure.syslib.bat   \
   conv.c                 \
   conv.mak               \
   cpuid.c                \
@@ -86,6 +91,7 @@ ZIPSOURCES =		 \
   exe                    \
   exe.bat                \
   Files.mak              \
+  gpt.cpp		 \
   lessive.c              \
   macros.cpp             \
   make.bat               \
@@ -94,6 +100,11 @@ ZIPSOURCES =		 \
   redo.c                 \
   redo.mak               \
   remplace.c             \
+  sector.cpp		 \
+  smbios.c               \
+  smbios.mak             \
+  smbios_defs.c          \
+  smbios_lib.c           \
   src2objs.bat           \
   tee.c                  \
   Tools.lst              \
@@ -104,6 +115,7 @@ ZIPSOURCES =		 \
   update.mak             \
   update.manifest        \
   update.rc              \
+  uuid.c		 \
   which.c                \
   whichinc.c             \
   win32.mak              \

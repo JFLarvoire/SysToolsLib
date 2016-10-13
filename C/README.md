@@ -8,6 +8,7 @@ It contains the following subfolders:
 Folder		| Content
 --------------- | -----------------------------------------------------
 MsvcLibX	| Microsoft Visual C++ runtime library extensions
+SysLib		| Cross-OS system management library
 SRC		| Sources of the SysToolsLib C tools
 
 For detailed information about each component, refer to the README.txt file in each folder.
@@ -53,7 +54,13 @@ Note:
         configure
         make
 
-2. Rebuild all C tools.
+2. Rebuild the SysLib library
+
+        cd %WORKDIR%\SysLib
+        configure
+        make
+
+3. Rebuild all C tools.
 
         cd %WORKDIR%\SRC
         configure
@@ -63,22 +70,22 @@ Note:
 Quick guide for rebuilding everything in Linux
 ----------------------------------------------
 
-1. Download both the MsvcLibX and SRC folders into a $WORKDIR directory.
+1. Download the whole SysToolsLib C folder contents into a $WORKDIR directory.
 
-2. Copy MsvcLibX debug macros to another directory in your C_INCLUDE_PATH.
+2. Rebuild everything
 
-   Example if you *don't* have a C_INCLUDE_PATH defined yet:
+        cd $WORKDIR
+        make
 
-        mkdir ~/include
-        cp $WORKDIR/MsvcLibX/include/debugm.h ~/include
-        export C_INCLUDE_PATH=~/include
+### Individual components can be built separately if desired
 
-   Note: Do not attempt to point C_INCLUDE_PATH at $WORKDIR/MsvcLibX/include, as this directory
-         contains other include files for Windows that conflict with homonyms in Linux.
+1. Rebuild the SysLib library
 
-3. Go to the SRC directory and rebuild all tools.
+        cd $WORKDIR/SysLib
+        make
+
+2. Rebuild all C tools.
 
         cd $WORKDIR/SRC
-        chmod +x configure
-        ./configure
         make
+
