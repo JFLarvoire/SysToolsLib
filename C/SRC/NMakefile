@@ -1,1 +1,4 @@
 !INCLUDE <All.mak>
+
+cleanenv:
+    rem
