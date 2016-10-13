@@ -4,6 +4,21 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.6.2] - 2016-10-13
+### Added
+- C/SysLib/: A directory, with a new System Management library. See the README there for details.
+- C/SRC/sector.cpp: Source for building sector.exe, a tool for raw hard disk I/O.
+- C/SRC/gpt.cpp: Source for building gpt.exe, a tool for displaying legacy and GPT disk partitions.
+- C/SRC/uuid.cpp: Source for building uuid.exe, a tool for managing UUIDs. An option displays the system UUID.
+- C/SRC/smbios*.c: Sources for building smbios.exe, a tool for managing the System Management BIOS.
+- Added a cleanenv target to all NMakefile files, to help testing multiple versions of the whole SysToolsLib.
+- Added a release target to C/NMakefile, to automate building binary releases.
+
+### Changed
+- Updated the make system for building the SysLib library, and programs depending on it.
+- Batch\trouve.bat: Added options -d, -l, -L.
+  Allows finding files containing a string (or not), without getting every matching line.
+
 ## [unreleased] 2016-10-12
 ### Added
 - The SysLib library can now be built in Linux, and used in Linux programs.
