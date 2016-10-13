@@ -16,7 +16,7 @@
 #    2004-12-14 JFL jf.larvoire@hp.com created this file.                     #
 #    2014-12-05 JFL Finished the job. Yes, 10 years later!                    #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
-#    2016-10-12 JFL Search includes in $(STINCLUDE).			      #
+#    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -117,6 +117,24 @@ endif
 ifdef STINCLUDE
 CFLAGS := $(CFLAGS) -I $(STINCLUDE)
 CXXFLAGS := $(CXXFLAGS) -I $(STINCLUDE)
+endif
+
+# Add the path to SysLib library files
+ifdef SYSLIB
+  ifeq '$(shell ls -1 "$(SYSLIB)/SysLib.h" 2>/dev/null)' ''
+    $(error "Can't find the SysLib library files in $(SYSLIB)")
+  endif
+endif
+ifndef SYSLIB
+  ifneq '$(shell ls -1 "../SysLib/SysLib.h" 2>/dev/null)' ''
+    SYSLIB := ../SysLib
+  endif
+endif
+ifdef SYSLIB
+CFLAGS := $(CFLAGS) -I $(SYSLIB)
+CXXFLAGS := $(CXXFLAGS) -I $(SYSLIB)
+NLDLIBS := $(NLDLIBS) -L $(SYSLIB)/$(OSPN) -l SysLib # Normal build linker flags
+DLDLIBS := $(DLDLIBS) -L $(SYSLIB)/$(OSPD) -l SysLib # Debug build linker flags
 endif
 
 # Make file messages control
@@ -233,6 +251,10 @@ checkenv:
 	    >&2 echo "C/Makefile: Error: Can't find SysToolsLib global include files. Please export their location in STINCLUDE." ; \
 	    false ; \
 	fi
+	if [ ! -r "$(SYSLIB)/SysLib.h" ] ; then \
+	    >&2 echo "C/Makefile: Error: Can't find SysLib library files. Please export their location in SYSLIB." ; \
+	    false ; \
+	fi
 
 # How to reluild all targets
 .PHONY: all
@@ -270,6 +292,7 @@ Usage: make [MAKEOPTS] [MAKEDEFS] [TARGETS]
 
 MakeDefs:
   STINCLUDE=PATH    SysToolsLib global include dir. Default: $(STINCLUDE)
+  SYSLIB=PATH       SysLib library base dir. Default: $(SYSLIB)
 
 Targets:
   PROGRAM   Build the normal and debug versions of PROGRAM.c or .cpp
