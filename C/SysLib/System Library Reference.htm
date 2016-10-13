@@ -1,0 +1,3038 @@
+<html>
+
+<head>
+<meta name="GENERATOR" content="Microsoft FrontPage 12.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+</head>
+
+<body>
+
+<h1 align="center">System Library Reference</h1>
+<p>&nbsp;</p>
+<h1>Introduction</h1>
+<p>The SysLib library is designed to provide OS-independent APIs where none exist.</p>
+<p>The standard C library has a comprehensive coverage of file and memory access needs.<br>
+The SysLib library extends this coverage in the area of hardware and system programming.</p>
+<p>With it, it is possible to write a single source code for a system utility, and build a 16-bits versions for BIOS and MS-DOS, and 32-bits versions for
+Windows 95 and Windows NT. Other operating systems such as EFI or Linux could be easily added if needed.</p>
+<p>&nbsp;</p>
+<h2>Contents</h2>
+<p>&nbsp;&nbsp;&nbsp; <a href="#Architecture">Architecture</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#OsSupported">OS supported</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#FunctionFamilies">Function families</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#SingleEXE">Single EXE for DOS and Windows</a></p>
+<p>&nbsp;&nbsp;&nbsp; <a href="#CatalogOfFunctions">Catalog of functions</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#QWord">64-bits QWORDs family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#OPrintfFamily">Object printf family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#EfiCrc">EFI tables CRC family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#GptFamily">GPT management family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#BlockIoFamily">Block device I/O family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#HardDiskIoFamily">Hard Disk I/O family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#VolumeIoFamily">Logical Volume I/O family</a></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#BootSectorFamily">Boot
+sector management family</a></p>
+<p>&nbsp;</p>
+<h2>Revision history</h2>
+<table border="1">
+  <tbody>
+    <tr>
+      <td>When</td>
+      <td>Who</td>
+      <td>What</td>
+    </tr>
+    <tr>
+      <td>2001-09-10</td>
+      <td>jean-francois.larvoire@hp.com</td>
+      <td>Created this document.</td>
+    </tr>
+    <tr>
+      <td>2001-12-21</td>
+      <td>jean-francois.larvoire@hp.com</td>
+      <td>Finally made it a real library.&nbsp;</td>
+    </tr>
+    <tr>
+      <td>2002-04-08</td>
+      <td>jean-francois.larvoire@hp.com</td>
+      <td>Added the logical volume I/O function family.<br>
+        Build now creates both the debug and release versions at the same time.</td>
+    </tr>
+    <tr>
+      <td>2002-06-24</td>
+      <td>jean-francois.larvoire@hp.com</td>
+      <td>Added Boot sector management family.</td>
+    </tr>
+    <tr>
+      <td>2002-07-01</td>
+      <td>jean-francois.larvoire@hp.com</td>
+      <td>Added a second parameter to routine IsBS().</td>
+    </tr>
+    <tr>
+      <td>2016-04-22</td>
+      <td>jf.larvoire@hpe.com</td>
+      <td>Cleaned up and renamed MultiOS.lib as SysLib.lib.</td>
+    </tr>
+  </tbody>
+</table>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<h1>Architecture<a name="Architecture"></a></h1>
+<p>Major feature: The library does not have any dependency on external programs, DLL, etc.&nbsp; (Except of course for the standard C library, and a few core
+Windows DLLs)<br>
+I'm especially proud of the direct hard disk access under Windows 95.</p>
+<p>There is one .lib library per target OS. See the table below.<br>
+Preferred usage: Link-in the right library.</p>
+<p>It is also possible to compile-in the sources directly in other projects. This allows to use optimal compilation options, which is especially important in
+the BIOS case to save space.<br>
+The language can be C and/or C++ depending on sources: It's possible to #include a cpp file from inside a c file. But in this case, some features may be lost.<br>
+C++ recommended.</p>
+<p>To rebuild the library, run go.bat.<br>
+Make sure the various tools and libraries pathnames in go.bat are correct for your system.<br>
+Each library comes in two versions: Debug and release. The debug version is identified by the extra d at the end of its name.</p>
+<p>&nbsp;</p>
+<h3>OS supported<a name="OsSupported"></a></h3>
+<table border="1">
+  <tr>
+    <td><b>OS</b></td>
+    <td><b>Size</b></td>
+    <td><b>Compilation</b></td>
+    <td><b>Run time</b></td>
+    <td><b>Library name</b></td>
+  </tr>
+  <tr>
+    <td>BIOS</td>
+    <td>16-bits</td>
+    <td>Visual C++ 1.5 BiosLib environment</td>
+    <td>ROM; MS-DOS drivers</td>
+    <td>SysLibbt.lib, SysLibbtd.lib</td>
+  </tr>
+  <tr>
+    <td>DOS</td>
+    <td>16-bits</td>
+    <td>Visual C++ 1.5 standard C library environment</td>
+    <td>MS-DOS .COM and .EXE</td>
+    <td>SysLibds.lib, SysLibdsd.lib</td>
+  </tr>
+  <tr>
+    <td>Win9X</td>
+    <td>32-bits</td>
+    <td>Visual C++ 6 WIN32 environment</td>
+    <td>Windows 95/98/ME</td>
+    <td>SysLibw95.lib, SysLibw95d.lib</td>
+  </tr>
+  <tr>
+    <td>WinNT</td>
+    <td>32-bits</td>
+    <td>Visual C++ 6 WIN32 environment</td>
+    <td>Windows NT/2000/XP/7/8/10</td>
+    <td>SysLibw32.lib, SysLibw32d.lib</td>
+  </tr>
+  <tr>
+    <td>WinNT</td>
+    <td>64-bits</td>
+    <td>Visual C++ 6 WIN64 environment</td>
+    <td>Windows XP/7/8/10</td>
+    <td>SysLibw64.lib, SysLibw64d.lib</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<h3>Function families<a name="FunctionFamilies"></a></h3>
+<table border="1">
+  <tr>
+    <td><b>Family</b></td>
+    <td><b>Description</b></td>
+    <td><b>BIOS</b></td>
+    <td><b>DOS</b></td>
+    <td><b>Win9X</b></td>
+    <td><b>WinNT</b></td>
+  </tr>
+  <tr>
+    <td>64-bits QWORDs</td>
+    <td>Manipulate 64-bit unsigned integers, even in 16-bits programs.</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Boot sector</td>
+    <td>Manage boot sectors</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Block device I/O</td>
+    <td>I/O to files; hard disks; logical volumes; and eventually physical floppies and CDs.</td>
+    <td bgcolor="#FF0000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>EFI tables CRC</td>
+    <td>Compute standard CRC on EFI tables</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Floppy, CD I/O</td>
+    <td>I/O to physical floppies, CDs.</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>GPT</td>
+    <td>Manage entries in EFI GPT partition tables</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Hard disk I/O</td>
+    <td>I/O to hard disk sectors.</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Logical disk I/O</td>
+    <td>I/O to logical volumes visible to the operating system.</td>
+    <td bgcolor="#FF0000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>NetBIOS</td>
+    <td>Send/Receive NetBIOS packets</td>
+    <td bgcolor="#FF0000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Object printf</td>
+    <td>Print formatted C++ objects, as conveniently as C's printf(), with format strings similar to C#'s.</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>SM-BIOS</td>
+    <td>Access SM-BIOS tables</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#FF0000">&nbsp;</td>
+  </tr>
+  <tr>
+    <td>UUID</td>
+    <td>Generate UUIDs</td>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+    <td bgcolor="#008000">&nbsp;</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="0">
+  <tr>
+    <td bgcolor="#008000">&nbsp;&nbsp;&nbsp;</td>
+    <td>Implemented and tested</td>
+  </tr>
+  <tr>
+    <td bgcolor="#FF6600">&nbsp;</td>
+    <td>Work to do (feasible)</td>
+  </tr>
+  <tr>
+    <td bgcolor="#FF0000">&nbsp;</td>
+    <td>Unfeasible or not known</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<h3>Single EXE for DOS and Windows<a name="SingleEXE"></a></h3>
+<p>One nice possibility is to use the MS-DOS version of a program as the 16-bits DOS stub for the WIN32 version of the same program.</p>
+<p>This way, the same executable runs identically in DOS, Windows 9X and Windows NT environments.</p>
+<p></p>
+<h3>Debug version</h3>
+<p>Each library comes in two versions: Debug and release. The debug version is identified by the extra d at the end of its name.</p>
+<p>The debug version contains extra debug directives. </p>
+<p>In debug mode, the invoking program MUST define three global &quot;C&quot; integer variables:</p>
+<ul>
+  <li>iVerbose&nbsp;&nbsp;&nbsp; If TRUE, output status information on standard output.</li>
+  <li>iDebug&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; If TRUE, output debug information. This includes a trace of major function calls.</li>
+  <li>iReadOnly&nbsp; If TRUE, I/O routines will abort all write attempts, while returning success.</li>
+</ul>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<h1>Catalog of functions<a name="CatalogOfFunctions"></a></h1>
+<p>&nbsp;</p>
+<h2>64-bits QWORD family<a name="QWord"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>Manipulate 64-bit unsigned integers, even in 16-bits programs</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/9X, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C++. A limited subset of features also available in C.</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>qword.h
+      <p>Important note:<br>
+      QWORDs supports the SysLib lib's Object printf().<br>
+      To avoid dragging-in the oprintf() code, define the NO_OPRINTF constant before including any qword family file.</p>
+    </td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>qword.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>- Add missing operator xx functions.<br>
+      - Add other overloadings of arithmetic and logic functions, with an integer as the right argument.<br>
+      &nbsp;&nbsp; This will avoid many compilation warnings, which currently need to be overcome this way: QWORD qw = (DWORD)0;<br>
+      - Add conversion functions to other integer types.<br>
+      - Add conversion function to decimal string, etc.</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>MSVC 1.5 lacks a 64-bits integer type.<br>
+We needed one to use EFI include files in DOS programs.</p>
+<p>Constraints:<br>
+&nbsp;- QWORD type usable as base types in computations. =&gt; Redefine all operator xxx functions.<br>
+&nbsp;- No constructor, to avoid problems with unions. =&gt; Use friend functions _QWORD for initializations.<br>
+&nbsp;&nbsp; ISSUE: Constants created by the _QWORD() functions are not deleted automatically. This causes memory leaks.<br>
+&nbsp;&nbsp; Idem for results of QWORD arithmetic operators.</p>
+<p>Note: Only the C++ support is documented here. See qword.h for the C support.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>_QWORD</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Makeshift for a class constructor</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>friend QWORD&amp; _QWORD();<br>
+      friend QWORD&amp; _QWORD(DWORD dw);<br>
+      friend QWORD&amp; _QWORD(DWORD dw0, DWORD dw1);<br>
+      friend QWORD&amp; _QWORD(QWORD&amp; qw);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>DWORD dw</td>
+          <td></td>
+          <td>The initialization value as a DWORD.</td>
+        </tr>
+        <tr>
+          <td>DWORD dw0, DWORD dw1</td>
+          <td></td>
+          <td>The initialization value as a QWORD, split in its low and high halves.</td>
+        </tr>
+        <tr>
+          <td>QWORD&amp; qw</td>
+          <td></td>
+          <td>The initialization value as a QWORD.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>An initialized QWORD. Default: 0.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>These routines were created due to a problem in the MSVC 1.5 compiler (Or is it a C++ feature?),<br>
+      which fails to compile structures containing a QWORD class member, if that class has a constructor.<br>
+      As the whole purpose of the QWORD class is to recompile structures such as EFI's containing QWORDs,<br>
+      we has to do without class constructors.
+      <p>Drawback: As this is a friend function, the objects created are not tracked by the compiler.<br>
+      They are not automatically destroyed, which may cause memory leaks.<br>
+      This is a problem with several arithmetic functions above, which create their result object this way.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>+ - / *</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>+&nbsp; -&nbsp; /&nbsp; *</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>QWORD arithmetics.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>QWORD operator+(QWORD&amp; qw2);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>QWORD this</td>
+          <td></td>
+          <td>Left object.</td>
+        </tr>
+        <tr>
+          <td>QWORD&amp; qw2</td>
+          <td></td>
+          <td>Right object</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>QWORD Result.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The result is NOT automatically deleted. May cause a memory leak.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>+= -= /= *=</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>=&nbsp; +=&nbsp; -=&nbsp; /=&nbsp; *=&nbsp; ++&nbsp; --</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>QWORD arithmetics.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>QWORD operator=(QWORD&amp; qw2);<br>
+      QWORD operator=(DWORD dw);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>QWORD this</td>
+          <td></td>
+          <td>Left object.</td>
+        </tr>
+        <tr>
+          <td>QWORD&amp; qw2</td>
+          <td></td>
+          <td>Right object if it's a QWORD</td>
+        </tr>
+        <tr>
+          <td>DWORD dw</td>
+          <td></td>
+          <td>Right object if it's a DWORD</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>*this</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Contrary to the above, these do not cause memory leak problems.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>=&nbsp; -&nbsp; /&nbsp; *</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>==&nbsp; !=&nbsp; &lt;&nbsp; &lt;=&nbsp; &gt;&nbsp; &gt;=&nbsp; !</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>QWORD logics.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>QWORD operator==(QWORD&amp; qw2);<br>
+      QWORD operator==(DWORD dw);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>QWORD this</td>
+          <td></td>
+          <td>Left object.</td>
+        </tr>
+        <tr>
+          <td>QWORD&amp; qw2</td>
+          <td></td>
+          <td>Right object if it's a QWORD</td>
+        </tr>
+        <tr>
+          <td>DWORD dw</td>
+          <td></td>
+          <td>Right object if it's a DWORD</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>An integer with the comparison result.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>=&nbsp; -&nbsp; /&nbsp; *</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>(int)&nbsp; (WORD)&nbsp; (DWORD)&nbsp; (double)</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Type cast operators</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>operator int();<br>
+      operator unsigned short();<br>
+      operator unsigned long();<br>
+      operator double();</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>QWORD this</td>
+          <td></td>
+          <td>The QWORD to convert.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The result of the conversion</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>(OPFARG)</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Special type cast operator for oprintf() support.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>operator OPFARG();</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>QWORD this</td>
+          <td></td>
+          <td>The QWORD to convert.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The result of the conversion</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>See the <a href="#OPrintfFamily">Object printf</a> function family for details.
+      <p>The QWORD format string supported are WIN32-compatible: &quot;{%I64d}&quot;, etc.<br>
+      Ex: oprintf(&quot;Reading sector {%I64d}\n&quot;, qwSector);</p>
+      <p>To avoid dragging-in this routine, and the oprintf() code,<br>
+      define the NO_OPRINTF constant before including any qword family file.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;qword.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>The <a href="#OPrintfFamily">Object printf</a> function family</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+<h2>Object printf family<a name="OPrintfFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>Print formatted C++ objects, as conveniently as C's printf(), with format strings similar to C#'s.</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/9X, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>oprintf.h</td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>oprintf.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>- Add support for other standard C built-in types.<br>
+      - Add support for other printf family-like routines.<br>
+      - Automate generation of variable argument list routines, using macros or templates.<br>
+      - Automate generation of C built-in types management routines using templates.<br>
+      - Use va_list macros for accessing argument lists.</td>
+  </tr>
+</table>
+<p>Design goals:</p>
+<ul>
+  <li>Same ease of use a the C printf() routine.</li>
+  <li>Same generality as C# WriteLine's {format} formats.</li>
+  <li>Supports built-in C++ types and user-defined classes.</li>
+  <li>Easily extensible without modifying the print routine.</li>
+  <li>Recursive: The format string can modify itself.</li>
+  <li>Simple and short code, not relying on large libraries.</li>
+</ul>
+<p>Principle:<br>
+All arguments are responsible for formatting themselves.<br>
+Formatting strings are defined as: &quot;{anything}&quot;<br>
+The oprintf routine passes each formatting string (without the enclosing {}) to each argument formatting routine.<br>
+The returned string replaces the formatting.</p>
+<p>All oprintf arguments are automatically converted to an intermediate OPFARG object.<br>
+The conversion routine is built in the OPFARG class constructors list for C built-in types.<br>
+The conversion routine must be provided by user-defined classes as an operator OPFARG() member function.<br>
+Automatic conversion is done by predefining overloaded versions of oprintf routines with 0 to N (currently 3) OPFARG arguments.</p>
+<p>External names derived from the equivalent printf() family routine, with an o in front.<br>
+Example: int oprintf(char *pszFormat, ...);</p>
+<p>All internal names prefixed with OPF, for Object PrintF.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>oprintf</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Print formatted objects on standard output.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int _cdecl oprintf(const char *pszForm, ...);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>const char *pszForm</td>
+          <td></td>
+          <td>Format string.</td>
+        </tr>
+        <tr>
+          <td>OPFARG oArg</td>
+          <td></td>
+          <td>Optional arguments, all implicitely converted to an OPFARG.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The number of characters printed.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Akin to standard C library's printf().
+      <p>Format specifiers: &quot;{anything}&quot;<br>
+      For C built-in types, use printf() formats within parenthesis. Ex: &quot;{%d}&quot;<br>
+      Recursion is permitted: &quot;{%{%d}d}&quot; is the same as C's &quot;%*d&quot;.<br>
+      But &quot;{%4{%c}}&quot; has no C equivalent. It allows choosing at run time &quot;%4d&quot; or &quot;%4x&quot;.<br>
+      For user-defined types, then the format is object-specific.</p>
+      <p>Examples of use:<br>
+      osnprintf(szBuf, 80, &quot;Checkpoint {%d} on {%4d/%02d/%02d}&quot;, 1, myDate);<br>
+      &nbsp;&nbsp;&nbsp; outputs: &quot;Checkpoint 1 on 2001/03/20&quot;, assuming myDate is an object with an OPFARG() member function capable of processing
+      &quot;{%4d/%02d/%02d}&quot; format strings.</p>
+      <p>oprintf(&quot;{%{%c}}&quot;, 'd', 1000);<br>
+      &nbsp;&nbsp;&nbsp; outputs &quot;1000&quot;<br>
+      oprintf(&quot;{%{%c}}&quot;, 'x', 1000);<br>
+      &nbsp;&nbsp;&nbsp; outputs &quot;3e8&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;oprintf.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>osnprintf().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>osnprintf</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Print formatted objects into a buffer.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int _cdecl osnprintf(char *pszBuf, size_t iSize, const char *pszForm, ...);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char *pszBuf</td>
+          <td></td>
+          <td>Output buffer</td>
+        </tr>
+        <tr>
+          <td>size_t iSize</td>
+          <td></td>
+          <td>Output buffer size</td>
+        </tr>
+        <tr>
+          <td>const char *pszForm</td>
+          <td></td>
+          <td>Format string. See oprintf().</td>
+        </tr>
+        <tr>
+          <td>OPFARG oArg</td>
+          <td></td>
+          <td>Optional arguments, all implicitely converted to an OPFARG.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The number of characters printed.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Akin to Microsoft C library's _snprintf().
+      <p>To do: Known bug: The iSize argument is NOT managed correctly. In some cases, buffer overflow will not be detected.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;oprintf.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>oprintf().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>ovprintf</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Print an array of formatted objects on standard output.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int ovprintf(const char *pszForm, OPFARG *poArg, int nArgs);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>const char *pszForm</td>
+          <td></td>
+          <td>Format string. See oprintf().</td>
+        </tr>
+        <tr>
+          <td>OPFARG *poArg</td>
+          <td></td>
+          <td>Array of OPFARG objects.</td>
+        </tr>
+        <tr>
+          <td>int nArg</td>
+          <td></td>
+          <td>Number of elements in the array.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The number of characters printed.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Akin to standard C library's vprintf().
+      <p>Currently limited to 1024 characters of output at a time.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;oprintf.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>osnprintf().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>ovsnprintf</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Print an array of formatted objects into a buffer.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int opfvsnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFARG *poArg, int *pnArgs);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char *pszBuf</td>
+          <td></td>
+          <td>Output buffer</td>
+        </tr>
+        <tr>
+          <td>size_t iSize</td>
+          <td></td>
+          <td>Output buffer size</td>
+        </tr>
+        <tr>
+          <td>const char **ppszForm</td>
+          <td></td>
+          <td>Format string. See oprintf().</td>
+        </tr>
+        <tr>
+          <td>OPFARG **ppoArg</td>
+          <td></td>
+          <td>Optional arguments, all implicitely converted to an OPFARG.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The number of characters printed.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Akin to Microsoft C library's _vsnprintf()
+      <p>To do: Known bug: The iSize argument is NOT managed correctly. In some cases, buffer overflow will not be detected.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;oprintf.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>oprintf().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+<h2>EFI tables CRC family<a name="EfiCrc"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>Compute standard CRC on EFI tables.</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/9X, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C and C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>crc32.h</td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>crc32.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>Implements the standard CRC32 algorithm, required by EFI for most of its structure headers.</p>
+<p>The implementation was chosen to minimize memory usage, at the cost of speed. On a 1 GHz processors, this is not a problem at all.</p>
+<p>For an even smaller implementation, here's the optimal in x86 assembly language:</p>
+<pre>;-----------------------------------------------------------------------------;
+;									      ;
+;   function:	    crc32						      ;
+;									      ;
+;   Description:    Compute the standard CRC32 for a buffer 		      ;
+;									      ;
+;   Arguments:	    DS:SI	Buffer address				      ;
+;		    CX		buffer length				      ;
+;									      ;
+;   Return value:   DX:AX	Standard CRC32 for the buffer		      ;
+;									      ;
+;   modified:	    AX, DX						      ;
+;									      ;
+;   Notes:								      ;
+;									      ;
+;   History:								      ;
+;    2000/12/18 JFL Created this routine.				      ;
+;									      ;
+;-----------------------------------------------------------------------------;
+
+crc32		proc	near
+
+		push	si
+		push	cx
+		push	bx
+
+		stc
+		sbb	ax, ax		; DX:AX = CRC seed = 0xFFFFFFFF
+		sbb	dx, dx
+		jcxz	crcDone
+crcNextByte:
+		xor	al, [si]
+		inc	si
+		mov	bl, 8
+crcNextBit:
+		shr	dx, 1
+		rcr	ax, 1
+		jnc	crcSkipXor
+		xor	ax, 08320H	; Bit reversal of standard CRC32 polynom 0x04C11DB7
+		xor	dx, 0EDB8H	; Bit reversal of standard CRC32 polynom 0x04C11DB7
+crcSkipXor:
+		dec	bl
+		jnz	crcNextBit
+		loop	crcNextByte
+crcDone:
+		not	ax
+		not	dx
+
+		pop	bx
+		pop	cx
+		pop	si
+
+		ret
+
+crc32		endp
+
+</pre>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>crc32</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Calculate the standard CRC32 of a buffer.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>DWORD crc32(void FAR *pBuf, int iLen)</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>void FAR *pBuf</td>
+          <td></td>
+          <td>Input buffer</td>
+        </tr>
+        <tr>
+          <td>int iLen</td>
+          <td></td>
+          <td>Buffer length, in bytes</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The CRC32</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;crc32.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>SetCrc().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>CheckCrc</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Verify the CRC32 of an EFI structure.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>BOOLEAN CheckCrc(IN UINTN MaxSize, IN OUT EFI_TABLE_HEADER *Hdr);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>UINTN MaxSize</td>
+          <td></td>
+          <td>The maximum acceptable size, in case the header contains invalid data.</td>
+        </tr>
+        <tr>
+          <td>EFI_TABLE_HEADER *Hdr</td>
+          <td></td>
+          <td>The structure EFI header.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>TRUE or FALSE.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Requires write access to the buffer, as it temporarily changes the CRC32 field to 0 during the verification.<br>
+      In the end, it restores the field to the initial value, even if the value is wrong.
+      <p>Uses crc32() internally</p>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;efi.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>crc32().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>SetCrc</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Set the CRC32 of an EFI structure.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>VOID SetCrc(IN OUT EFI_TABLE_HEADER *Hdr);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>EFI_TABLE_HEADER *Hdr</td>
+          <td></td>
+          <td>The structure EFI header.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Nothing.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Uses crc32() internally</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;efi.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>crc32().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<hr>
+<h2>GPT management family<a name="GptFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>Manage entries in EFI GPT partition tables</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/9X, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>SysLib's gpt.h<br>
+      EFI's efi.h and lib.h. The latter includes in turn the fundamental efigpt.h.
+      <p>Important note:<br>
+      Uses QWORDs internally, which in turn supports Object printf().<br>
+      To avoid dragging-in the oprintf() code, define the NO_OPRINTF constant before including any gpt family file.</p>
+    </td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>gpt.cpp, block.cpp, harddisk.cpp.</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>- Merge with HP Brazil's code.<br>
+      - Add better error recovery, using the GPT backup if needed.<br>
+      - Manage the case where there are two GPTs, and not only two headers.<br>
+      - Add a GptCreate() routine.<br>
+      - Track if header refresh is needed, and call GptWriteHeader() in GptClose() if needed.<br>
+      - Add a GptList() routine.<br>
+      - Add GptLock() / GptUnlock() functions to help resolve critical section issues.<br>
+      - Remove some now useless debug code. Compile the rest only if the _DEBUG constant is defined.</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>Allows to decode and manage EFI GPT partition tables structures outside of the EFI environment.</p>
+<p>Implements some, but not all, GPT extensions defined in HP's &quot;MBR+GPT partitioning specification&quot;. For example does not manage backup GPTs.</p>
+<p>Calls to GPT management functions should be inside a critical section, to prevent multiple simultaneous accesses to a GPT. There should be helper functions
+for that.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptAllocFileCopy</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Allocate an entry in the GPT, a block of sectors in GPT-managed space, and copy a file into the allocated space.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptAllocFileCopy(HGPT hGPT, char *pszFileName, EFI_PARTITION_ENTRY *pNewEntry);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>char *pszFileName</td>
+          <td></td>
+          <td>Name of file to copy</td>
+        </tr>
+        <tr>
+          <td>EFI_PARTITION_ENTRY *pGptEntryBuf</td>
+          <td></td>
+          <td>Input/Output buffer. See efigpt.h for definition.</td>
+        </tr>
+        <tr>
+          <td>QWORD pNewEntry-&gt;StartingLBA</td>
+          <td></td>
+          <td>Start sector. 0 = 1st available.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>&gt;= 0&nbsp; =&gt;&nbsp; The index of the allocated entry in the GPT<br>
+      &nbsp;&nbsp;&nbsp; In this case pNewEntry is filled with allocated data.<br>
+      &lt; 0&nbsp;&nbsp;&nbsp; =&gt; Error.<br>
+      &nbsp;&nbsp;&nbsp; -1 = GPT full<br>
+      &nbsp;&nbsp;&nbsp; -2 = Not enough contiguous free space<br>
+      &nbsp;&nbsp;&nbsp; -3 = Disk I/O error<br>
+      &nbsp;&nbsp;&nbsp; -4 = Not enough memory<br>
+      &nbsp;&nbsp;&nbsp; -5 = Forced value out of GPT space or not free<br>
+      &nbsp;&nbsp; -10 = File not found.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The number of sectors needed is computed to fit the file size.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(), GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptAllocSectors</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Allocate an entry in the GPT, and a contiguous block of sectors in GPT-managed space.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptAllocSectors(HGPT hGPT, EFI_PARTITION_ENTRY *pGptEntryBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>EFI_PARTITION_ENTRY *pGptEntryBuf</td>
+          <td></td>
+          <td>Input/Output buffer. See efigpt.h for definition.</td>
+        </tr>
+        <tr>
+          <td>QWORD pNewEntry-&gt;StartingLBA</td>
+          <td></td>
+          <td>Start sector. 0 = 1st available.</td>
+        </tr>
+        <tr>
+          <td>QWORD pNewEntry-&gt;EndingLBA</td>
+          <td></td>
+          <td>Number of sectors to allocate</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>&gt;= 0&nbsp; =&gt;&nbsp; The index of the allocated entry in the GPT<br>
+      &nbsp;&nbsp;&nbsp; In this case pNewEntry is filled with allocated data.<br>
+      &lt; 0&nbsp;&nbsp;&nbsp; =&gt; Error.<br>
+      &nbsp;&nbsp;&nbsp; -1 = GPT full<br>
+      &nbsp;&nbsp;&nbsp; -2 = Not enough contiguous free space<br>
+      &nbsp;&nbsp;&nbsp; -3 = Disk I/O error<br>
+      &nbsp;&nbsp;&nbsp; -4 = Not enough memory<br>
+      &nbsp;&nbsp;&nbsp; -5 = Forced value out of GPT space or not free</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(), GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptBootProgramAdd</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Add a boot program to the Boot Program chain</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptBootProgramAdd(HGPT hGPT, char *pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>char *pBuf</td>
+          <td></td>
+          <td>First sector of the boot program, with all fields (except the boot program chain) valid and up to date.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else error code.<br>
+      1 = Not enough memory<br>
+      2 = I/O error<br>
+      3 = Invalid boot program chain</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>There must be a valid MBR+GPT spec compliant MBR.
+      <p>The first sector of the previous boot program, or the MBR if there's no previous boot program, is updated on the disk.<br>
+      The first sector of this boot program is updated on the disk if it is inserted before the end of the chain.</p>
+      <p>The boot program is inserted ahead of the boot program chain.<br>
+      Exception: The boot menu is put last at the end of the chain.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(), GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptBootProgramDelete</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Remove a boot program to the Boot Program chain</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptBootProgramDelete(HGPT hGPT, QWORD qwFirst);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwFirst</td>
+          <td></td>
+          <td>First sector of the boot program.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else error code.<br>
+      1 = Not enough memory<br>
+      2 = I/O error<br>
+      3 = Invalid boot program chain</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>There must be a valid MBR+GPT spec compliant MBR.
+      <p>The first sector of the previous boot program, or the MBR if there's no previous boot program, is updated on the disk.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(), GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptBootProgramList</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Display the Boot Program chain</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptBootProgramList(HGPT hGPT);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else error code.<br>
+      1 = Not enough memory<br>
+      2 = I/O error<br>
+      3 = Invalid boot program head<br>
+      4 = Invalid boot program chain</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>There must be a valid MBR+GPT spec compliant MBR.
+      <p>The first sector of the previous boot program, or the MBR if there's no previous boot program, is updated on the disk.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(), GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptClose</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Terminate I/O access to a GPT.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>void GptClose(HGPT hGPT);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Releases resources reserved by GptOpen().
+      <p>Does NOT flush buffers. Must call GptWriteHeader() for that first.</p>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(); GptWriteHeader().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptOpen</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Open a GPT</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>HGPT GptOpen(HANDLE hBlockDev);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hBlockDev</td>
+          <td></td>
+          <td>Block device handle. See <a href="#BlockIoFamily">Block device family</a>.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>A handle identifying the open GPT. Must be closed eventually by calling GptClose().<br>
+      Else NULL if no valid GPT found on the drive.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen(); GptClose().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptReadEntry</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Read a partition entry from a GPT.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptReadEntry(HGPT hGPT, int iPartition, EFI_PARTITION_ENTRY *pGptEntryBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>int iPartition</td>
+          <td></td>
+          <td>Index of the partition entry in the GPT. 0=first partition.</td>
+        </tr>
+        <tr>
+          <td>EFI_PARTITION_ENTRY *pGptEntryBuf</td>
+          <td></td>
+          <td>Output buffer. See efigpt.h for definition.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else OS-specific error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen(); GptWriteEntry().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptWriteEntry</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Write a partition entry into a GPT.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptWriteEntry(HGPT hGPT, int iPartition, EFI_PARTITION_ENTRY *pGptEntryBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+        <tr>
+          <td>int iPartition</td>
+          <td></td>
+          <td>Index of the partition entry in the GPT. 0=first partition.</td>
+        </tr>
+        <tr>
+          <td>EFI_PARTITION_ENTRY *pGptEntryBuf</td>
+          <td></td>
+          <td>Input buffer. See efigpt.h for definition.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else OS-specific error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Does not update the CRC in the GPT header. This must be done by calling GptWriteHeader() later.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>GptWriteHeader</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Update the GPT header CRCs, and write it and its backup on the disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int GptWriteHeader(HGPT hGPT);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HGPT hGPT</td>
+          <td></td>
+          <td>GPT handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success. Else OS-specific error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>All GPT management functions keep a copy of the GPT header in memory.<br>
+      If any change is done to the GPT entries, it's necessary to update the header CRCs<br>
+      &nbsp;and write it back to the disk before closing the GPT.
+      <p>To do: This should be automatically tracked, and this routine should be called if needed in GptClose().</p>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;gpt.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>GptOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+<h2>Block device I/O family<a name="BlockIoFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>OS-independent access to physical sectors on block devices. (Hard disks; Files; Logical volumes; eventually Floppies; CDs).</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>DOS, WIN32/9X, WIN32/NT
+      <p>BIOS support for hard disk I/O, but not file I/O.</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C and C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>block.h</td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>block.cpp and harddisk.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>Volume locking not managed</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>An obvious extension of this architecture is to create two families of I/O routines for floppy disks and CDs, with features similar to that in the Hard Disk
+family.<br>
+Then extend the name syntax of the Block family to cover the other two kinds.<br>
+The current convention of referring to hard disks as 80: and 81: is maybe too DOS-specific. A Linux-like hd0: would probably be better.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockClose</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Terminate I/O access to the sectors of a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>void BlockClose(HANDLE hDevice);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDevice</td>
+          <td></td>
+          <td>Block device handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Releases resources reserved by BlockOpen().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockCount</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Return the total number of blocks in the current device.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>QWORD BlockCount(HANDLE hDevice);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDevice</td>
+          <td></td>
+          <td>Block device handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Number of bytes for files, and number of sectors for hard disks.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockIndexName</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Return the name of indexes for the device.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>char *BlockIndexName(HANDLE hBlock);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDevice</td>
+          <td></td>
+          <td>Block device handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>&quot;offset&quot; for files<br>
+      &quot;sector&quot; for hard disks.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockOpen</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Prepare I/O access to the sectors of a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>HANDLE BlockOpen(char *pszName, char *pszMode);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char *pszName</td>
+          <td></td>
+          <td>File name, or &quot;80:&quot; or &quot;81:&quot; for hard disks.</td>
+        </tr>
+        <tr>
+          <td>char *pszMode</td>
+          <td></td>
+          <td>&quot;rb&quot; for read-only, or &quot;wb+&quot; for read/write.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Handle for block I/O.<br>
+      0 = Failure. Invalid device name.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The handle must be eventually closed by BlockClose().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockClose(); HardDiskOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockRead</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Read blocks from a block device.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int BlockRead(HANDLE hDrive, QWORD qwIndex, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwIndex</td>
+          <td></td>
+          <td>Offset in file, or LBA in disk, to read.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of blocks to read</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Output buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The Windows 9X version of the routine uses an undocumented trick for accessing hard disks.<br>
+      Severe qualification should be done before using in production code.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen(); BlockWrite(); HardDiskRead().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockSize</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Return the block size for the current device.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int BlockSize(HANDLE hDevice);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDevice</td>
+          <td></td>
+          <td>Block device handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>The block size. Typically 1 for files, and 512 for hard disks.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockType</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Return the block device type.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int BlockType(HANDLE hDevice);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDevice</td>
+          <td></td>
+          <td>Block device handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Either BLOCK_TYPE_FILE<br>
+      or&nbsp;&nbsp; BLOCK_TYPE_HARDDISK</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>BlockWrite</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Write sectors to a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int BlockWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwSector</td>
+          <td></td>
+          <td>LBA (=index) of the first sector to write.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of sectors to write</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Input buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The Windows 9X version of the routine uses an undocumented trick for accessing hard disks.<br>
+      Severe qualification should be done before using in production code.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;block.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen(); BlockRead(); HardDiskWrite().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+<h2>Hard Disk sector I/O family<a name="HardDiskIoFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>OS-independent access to physical hard disk sectors</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/9X, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C and C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>harddisk.h
+      <p>Important note:<br>
+      Uses QWORDs internally, which in turn supports Object printf().<br>
+      To avoid dragging-in the oprintf() code, define the NO_OPRINTF constant before including any harddisk family file.</p>
+    </td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>harddisk.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>- Add functions HardDiskLock() and HardDiskUnlock()<br>
+      - Port function HardDiskLBA2CHS() to WIN32.<br>
+      - Create an HardDiskCHS2LBA().</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>All functions support 64-bit sector numbers. This will become important for disk larger than 2000 GB.</p>
+<p>The unique feature is the native WIN32 version for Windows 9X. As far as I know, this is a first.<br>
+The principle is the use loopholes in Windows 9X architecture to switch in privileged &nbsp;mode, and make calls to Virtual Machine Manager's I/O Subsystem.<br>
+Testing has been done only under Windows 98 SE and Windows ME. Risks. medium.<br>
+There is a known problem with SCSI disks larger that 8 GB: Access does not work beyond the 8 GB limit.</p>
+<p>The WIN32 version for Windows NT has been tested only under Windows 2000. Risks: low.</p>
+<p>The hdiskdos.cpp (BIOS &amp; DOS), hdisk95.cpp (Win32/9X), and hdisknt.cpp (Win32/NT) versions can be compiled-in other programs on their own if needed.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>HardDiskClose</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Terminate I/O access to the sectors of a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>void HardDiskClose(HANDLE hDrive);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Releases resources reserved by HardDiskOpen().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;harddisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>HardDiskOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>HardDiskGetGeometry</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Get the characteristics of a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int HardDiskGetGeometry(HANDLE hDrive, HDGEOMETRY *pHdGeometry);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+        <tr>
+          <td>HDGEOMETRY *pHdGeometry</td>
+          <td></td>
+          <td>Output buffer for geometry information</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Structure HDGEOMETRY is defined in harddisk.h. The fields are:<br>
+      <table border="0">
+        <tr>
+          <td>QWORD qwSectors</td>
+          <td></td>
+          <td>Total number of sectors on the disk.</td>
+        </tr>
+        <tr>
+          <td>WORD wSectorSize</td>
+          <td></td>
+          <td>Sector size, in bytes. Usually 512.</td>
+        </tr>
+        <tr>
+          <td>DWORD dwCyls</td>
+          <td></td>
+          <td>Number of physical cylinders.</td>
+        </tr>
+        <tr>
+          <td>DWORD dwHeads</td>
+          <td></td>
+          <td>Number of physical heads.</td>
+        </tr>
+        <tr>
+          <td>DWORD dwSects</td>
+          <td></td>
+          <td>Number of physical sectors per track.</td>
+        </tr>
+        <tr>
+          <td>DWORD dwXlatCyls</td>
+          <td></td>
+          <td>Number of translated cylinders</td>
+        </tr>
+        <tr>
+          <td>DWORD dwXlatHeads</td>
+          <td></td>
+          <td>Number of translated heads</td>
+        </tr>
+        <tr>
+          <td>DWORD dwXlatSects</td>
+          <td></td>
+          <td>Number of translated sectors per track</td>
+        </tr>
+      </table>
+      <p>The &quot;physical&quot; parameters are the actual parameters of the disk.<br>
+      The &quot;translated&quot; parameters are the virtual parameters made visible by the BIOS for MS-DOS applications.<br>
+      This virtualization is managed by the BIOS for legacy compatibility reasons. But at the cost of limiting virtual disks size to about 8 GB.</p>
+      <p>Known problem: The Windows 9X version of this routine takes about 3 seconds to compute the correct value for qwSectors.<br>
+      To avoid this timeout, set field dwXlatCyls = 0xFEEDBACC on invocation. In this case, the value returned in qwSectors<br>
+      &nbsp;is equal to (dwXlatCyls * dwXlatHeads * dwXlatSects), which is less than the actual total.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;harddisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>HardDiskOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>HardDiskOpen</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Prepare I/O access to the sectors of a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>HANDLE HardDiskOpen(int iDisk, int iMode);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>int iDisk</td>
+          <td></td>
+          <td>Hard disk number. 0=1st hard disk.</td>
+        </tr>
+        <tr>
+          <td>int iMode</td>
+          <td></td>
+          <td>0=READWRITE; 1=READONLY</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Handle for hard disk I/O.<br>
+      0 = Failure. Invalid hard disk number.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The handle must be eventually closed by HardDiskClose().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;harddisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen(); HardDiskClose();</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>HardDiskRead</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Read sectors from a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int HardDiskRead(HANDLE hDrive, QWORD qwSector, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwSector</td>
+          <td></td>
+          <td>LBA (=index) of the first sector to read.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of sectors to read</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Output buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The Windows 9X version of the routine uses an undocumented trick for accessing the disk.<br>
+      Severe qualification should be done before using in production code.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;harddisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockRead(); HardDiskOpen(); HardDiskWrite()</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>HardDiskWrite</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Write sectors to a hard disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int HardDiskWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>Hard disk handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwSector</td>
+          <td></td>
+          <td>LBA (=index) of the first sector to write.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of sectors to write</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Input buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The Windows 9X version of the routine uses an undocumented trick for accessing the disk.<br>
+      Severe qualification should be done before using in production code.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;harddisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockRead(); HardDiskOpen(); HardDiskWrite()</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+<h2>Logical volume sector I/O family<a name="VolumeIoFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>OS-independent access to logical volumes sectors</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C and C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>logdisk.h
+      <p>Important note:<br>
+      Uses QWORDs internally, which in turn supports Object printf().<br>
+      To avoid dragging-in the oprintf() code, define the NO_OPRINTF constant before including any logdisk family file.</p>
+    </td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>logdisk.cpp</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>- Add support for Windows 95. Take code from HPLG's AllocZone.<br>
+      - Add functions LogDiskLock() and LogDiskUnlock()</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>All functions support 64-bit sector numbers. This will become important for disk larger than 2000 GB.</p>
+<p>The WIN32 version for Windows NT has been tested under Windows 2000 and XP. Risks: low.</p>
+<p>The ldiskdos.cpp (BIOS &amp; DOS), ldisk95.cpp (Win32/9X), and ldisknt.cpp (Win32/NT) versions can be compiled-in other programs on their own if needed.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>LogDiskClose</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Terminate I/O access to the sectors of a logical volume.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>void LogDiskClose(HANDLE hDrive);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>logical volume handle.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Releases resources reserved by LogDiskOpen().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;logdisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>LogDiskOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>LogDiskGetBPB</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Get the &quot;Bios Parameter Block&quot; (ie. the volume descriptor) at the beginning of a logical disk.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int LogDiskGetBPB(HANDLE hDrive, BPB *pBpb);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>logical volume handle.</td>
+        </tr>
+        <tr>
+          <td>BPB *pBpb</td>
+          <td></td>
+          <td>Output buffer for the Bios Parameter Block</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The Bios Parameter Block is best defined in the FAT32 specification.
+      <p>See logdisk.h for the list of fields, including variations for each file system.</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;logdisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>LogDiskOpen().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>LogDiskOpen</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Prepare I/O access to the sectors of a logical volume.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>HANDLE LogDiskOpen(int iDisk, int iMode);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char cDisk</td>
+          <td></td>
+          <td>Volume drive letter. A=1st floppy disk.</td>
+        </tr>
+        <tr>
+          <td>int iMode</td>
+          <td></td>
+          <td>0=READWRITE; 1=READONLY</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>Handle for logical volume I/O.<br>
+      0 = Failure. Invalid hard disk number.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>The handle must be eventually closed by LogDiskClose().</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;logdisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockOpen(); LogDiskClose();</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>LogDiskRead</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Read sectors from a logical volume.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int LogDiskRead(HANDLE hDrive, QWORD qwSector, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>logical volume handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwSector</td>
+          <td></td>
+          <td>Index of the first sector to read.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of sectors to read</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Output buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;logdisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockRead(); LogDiskOpen(); LogDiskWrite()</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>LogDiskWrite</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Write sectors to a logical volume.</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int LogDiskWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, LPVOID pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>HANDLE hDrive</td>
+          <td></td>
+          <td>logical volume handle.</td>
+        </tr>
+        <tr>
+          <td>QWORD qwSector</td>
+          <td></td>
+          <td>Index of the first sector to write.</td>
+        </tr>
+        <tr>
+          <td>WORD wNum</td>
+          <td></td>
+          <td>Number of sectors to write</td>
+        </tr>
+        <tr>
+          <td>LPVOID pBuf</td>
+          <td></td>
+          <td>Input buffer</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>0 = Success; Else OS-dependant error code.</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;logdisk.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>BlockWrite(); LogDiskOpen(); LogDiskWrite()</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr>
+<h2>Boot sector management family<a name="BootSectorFamily"></a></h2>
+<table border="2" bordercolor="#000080" bordercolorlight="#000080" bordercolordark="#000080">
+  <tr>
+    <td>Family description</td>
+    <td>Manage hard disk boot sectors</td>
+  </tr>
+  <tr>
+    <td>OS Supported</td>
+    <td>BIOS, DOS, WIN32/NT</td>
+  </tr>
+  <tr>
+    <td>Language</td>
+    <td>Compilable in 16 and 32-bits C and C++</td>
+  </tr>
+  <tr>
+    <td>Definitions</td>
+    <td>IsMBR.h
+    </td>
+  </tr>
+  <tr>
+    <td>Modules to compile-in</td>
+    <td>IsMBR.c</td>
+  </tr>
+  <tr>
+    <td>To do</td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+<p>Design notes:</p>
+<p>Example of use to distinguish a floppy from a hard disk image:</p>
+<font SIZE="2">
+<blockquote>
+  <pre></font><font SIZE="2" COLOR="#0000ff">if</font><font SIZE="2"> (IsBS(pBuf, iBufSize))
+   </font> <font SIZE="2">iType = 1; </font><font SIZE="2" COLOR="#008000">// Floppy fisk image
+</font><font SIZE="2" COLOR="#0000ff">else</font><font SIZE="2"> </font><font SIZE="2" COLOR="#0000ff">if</font><font SIZE="2"> (IsMBR(pBuf))
+    iType = 2; </font><font SIZE="2" COLOR="#008000">// Hard disk image
+</font><font SIZE="2" COLOR="#0000ff">else
+    </font><font SIZE="2">iType = 0; </font><font SIZE="2" COLOR="#008000">// Unknown</pre>
+</blockquote>
+</font>
+<p>To do:</p>
+<p>Add to this family functions to manipulate the MBR partition tables.</p>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>IsBS</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Test if a buffer contains a valid boot sector</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int IsBS(char *pBuf, unsigned int uBufSize);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char *pBuf</td>
+          <td></td>
+          <td>512-bytes buffer possibly containing a Boot Sector</td>
+        </tr>
+        <tr>
+          <td>unsigned int uBufSize</td>
+          <td></td>
+          <td>Buffer size, in bytes.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>TRUE or FALSE</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Verifies the standard boot sector 55AAH signature.<br>
+      Then tests if the beginning of the buffer appears to contain a valid BPB
+      (BIOS Parameter Block).<br>
+      If so, the buffer is probably the image of the boot sector of a floppy
+      disk or of a hard disk partition.
+      <p>The buffer size parameter is useful to avoid protection errors in the
+      WIN32 version.<br>
+      This may occur while decoding invalid BPBs, where memory reads beyond the
+      buffer end may have been done.</p>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;IsMBR.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>IsMBR().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<table border="1">
+  <tr>
+    <td><i>Function name</i></td>
+    <td>
+      <h3>IsMBR</h3>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Description</i></td>
+    <td>Test if a buffer contains a valid Master Boot Record</td>
+  </tr>
+  <tr>
+    <td><i>Prototype</i></td>
+    <td>int IsMBR(char *pBuf);</td>
+  </tr>
+  <tr>
+    <td><i>Parameters</i></td>
+    <td>
+      <table border="0">
+        <tr>
+          <td>char *pBuf</td>
+          <td></td>
+          <td>512-bytes buffer possibly containing a Master Boot Record</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Return value</i></td>
+    <td>TRUE or FALSE</td>
+  </tr>
+  <tr>
+    <td><i>Notes</i></td>
+    <td>Verifies the standard boot sector 55AAH signature.<br>
+      Then tests if the end of the buffer appears to contain a valid partition
+      table.<br>
+      If so, the buffer is probably the image of the master boot record of a
+      hard disk.
+      <p>Important: IsMBR() is likely to return a false positive on floppy boot
+      sectors.<br>
+      This is because it's impossible to distinguish empty space in the end from
+      an empty partition table.<br>
+      It's necessary to call IsBS() BEFORE calling IsMBR() to distinguish floppy
+      disks from hard disks.</p>
+    </td>
+  </tr>
+  <tr>
+    <td><i>Defined in</i></td>
+    <td>#include &quot;IsMBR.h&quot;</td>
+  </tr>
+  <tr>
+    <td><i>Cross-reference</i></td>
+    <td>IsMBR().</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr>
+
+</body>
+
+</html>
