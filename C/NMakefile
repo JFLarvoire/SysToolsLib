@@ -9,7 +9,7 @@
 #   History								      #
 #    2016-10-05 JFL jf.larvoire@hpe.com created this file.                    #
 #    2016-10-11 JFL Adapted for use with make files in the global include dir.#
-#    2016-10-13 JFL Added target cleanenv.                                    #
+#    2016-10-13 JFL Added targets cleanenv and release.                       #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -85,6 +85,17 @@ clean mostlyclean distclean:
 goal_name:
     echo Build
 
+# Dummy target, to build a source archive
+dist zip: NUL
+    $(MSG) Building CSources.zip
+    :# if exist SysLib.zip del SysLib.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    :# 7z.exe a SysLib.zip *.txt *.bat *.mak nmakefile exe *.c *.h
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    :# 7z.exe d SysLib.zip config.bat config.*.bat
+    $(MSG) TO DO: Implement this
+    exit 1
+
 # Erase all global environment variables created by this build
 VARS=STINCLUDE		# Global environment variables generated here
 cleanenv:
@@ -102,6 +113,76 @@ cleanenv:
       )
 <<
 
+# Create an MsvcLibX binary release
+release:
+    %COMSPEC% /c <<"$(TMP)\MsvcLibX-release-$(PID).bat"
+	@echo off
+	setlocal EnableExtensions EnableDelayedExpansion
+	
+	:# Set the output file name
+	pushd .. & set "ZIP=!CD!\SysTools.zip" & popd
+	
+	:# Build the program list
+	set "QUIET_MAKE=1" &:# Tell All.mak, etc, to skip low priority information messages
+	%FOREACHLINE% %%f in ('make.bat -C SRC list_programs') do set "PROGRAMS=%%f"
+	$(MSG) PROGRAMS = (!PROGRAMS!)
+	if not defined PROGRAMS ($(MSG) Error: Can't get the programs list. & exit 1)
+	
+	:# List scripts from Scripts.lst
+	pushd ..
+	for %%l in (Bash Batch PowerShell Tcl) do (
+	  set "%%l= " &:# The variable must not be empty, else the substitution may fail in the second part.
+	  for /f "delims=" %%f in ('find /i "%%l\" ^<Scripts.lst') do (
+	    echo From Scripts.lst: %%f
+	    set %%l=!%%l! ".\%%~nxf"
+	  )
+	  :# Also add the libraries from ScriptLibs.lst, but only if not already defined in Scripts.lst.
+	  for /f "delims=" %%f in ('find /i "%%l\" ^<ScriptLibs.lst') do (
+	    echo From ScriptsLibs.lst: %%f
+	    if "!%%l:.\%%~nxf=!"=="!%%l!" set %%l=!%%l! "%%~nxf"
+	  )
+	  set "%%l=!%%l:~1!" &:# Remove the initial space
+	  if defined %%l if "!%%l:~0,1!"==" " set "%%l=!%%l:~1!" & rem :# Remove the initial space
+	  set "LIST=(!%%l!)"
+	  $(MSG) %%l = !LIST!
+	)
+	popd
+	
+	:# Rebuild a new zip file
+	set PATH=%PATH%;C:\Program Files\7-zip
+	if exist "%ZIP%" del "%ZIP%"
+	$(MSG) Creating "%ZIP%"
+
+	:# Select the programs to use.
+	for %%d in (WIN95 WINXP WIN32) do ( :# May be overriden by setting PROGRAMS_DIR before running make release.
+	  if not defined PROGRAMS_DIR if exist SRC\%%d (
+	    pushd SRC\%%d & set "PROGRAMS_DIR=!CD!" & popd
+	  )
+	)
+	if not exist "%PROGRAMS_DIR%" ($(MSG) Error: Can't find the programs directory. & exit 1) &:# Also fails if it's not defined
+
+	:# Add programs
+	$(MSG) Adding programs from %PROGRAMS_DIR%
+	pushd "%PROGRAMS_DIR%"
+	7z.exe a "%ZIP%" !PROGRAMS!
+	popd
+	
+	:# Add scripts for each language
+	for %%l in (Bash Batch PowerShell Tcl) do if defined %%l (
+	  pushd ..\%%l
+	  $(MSG) Adding %%l scripts from !CD!
+	  7z.exe a "%ZIP%" !%%l!
+	  popd
+	)
+	
+	:# Add the doc files
+	$(MSG) Adding README
+	pushd ..\Docs
+	7z.exe a "%ZIP%" Catalog.md
+	7z.exe rn "%ZIP%" Catalog.md README.md
+	popd
+<<
+
 # Display a help screen
 help:
     type <<
@@ -114,19 +195,9 @@ Targets:
   all                    Build all available modules (default)
   clean                  Erase all output files in DIRS
   cleanenv               Erase all environment variables created by this build
+  release                Create an MsvcLibX full release. Requires 7-Zip.
   update                 Update one file, defined by the DIR and FILE variables
   updates                Update all make scripts in directory DIR
   update_all             Update all make scripts in all directories
 <<
-
-# Dummy target, to build a source archive
-dist zip: NUL
-    $(MSG) Building CSources.zip
-    :# if exist SysLib.zip del SysLib.zip
-    set PATH=$(PATH);C:\Program Files\7-zip
-    :# 7z.exe a SysLib.zip *.txt *.bat *.mak nmakefile exe *.c *.h
-    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
-    :# 7z.exe d SysLib.zip config.bat config.*.bat
-    $(MSG) TO DO: Implement this
-    exit 1
 
