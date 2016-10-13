@@ -540,19 +540,17 @@ clean mostlyclean distclean:
     if exist $(LIBDIR) rd /s /q $(LIBDIR)
 
 # Erase all global environment variables created by this build
+VARS=SYSLIB		# Global environment variables generated here
 cleanenv:
     %COMSPEC% /c <<"$(TMP)\cleanenv-$(PID).bat" &:# Delete variables created here
       @echo off
-      for %%f in (STINCLUDE $(DIRS)) do @if /I not "%%~f"=="SRC" (
-	set "VARNAME="
-	for /f "tokens=1,3" %%v in ('reg query "HKCU\Environment" ^| findstr /i /b /r /c:" *%%f "') do set "VARNAME=%%v"
-	if defined VARNAME ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
-	  >>"$(TMP)\cleanenv-$(PID).lst" call echo %%VARNAME%% &:# Pass the name back to make.bat, for deleting it in the current shell environment
-	  call echo [%%VARNAME%%] & :# Enclose in [brackets] to distinguish global variables deleted here, from local variables deleted in make.bat
-	  call reg delete "HKCU\Environment" /v %%VARNAME%% /f >NUL
-	) else ( :# The global variable does not exist, but there may be one in the local shell environment
-	  for /f "tokens=1 delims==" %%v in ('set ^| findstr /i /b /c:"%%f="') do set "VARNAME=%%v"
-	  if defined VARNAME >>"$(TMP)\cleanenv-$(PID).lst" call echo %%VARNAME%% &:# Pass the name back to make.bat
+      if not "$(VARS)"=="" for %%v in ($(VARS)) do @(
+	>>"$(TMP)\cleanenv-$(PID).lst" (echo %%v) &:# Pass the name back to make.bat, for deleting it in the current shell environment
+	set "VALUE="
+	for /f "tokens=1,3" %%a in ('reg query "HKCU\Environment" ^| findstr /i /b /r /c:" *%%v "') do set VALUE="%%b"
+	if defined VALUE ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
+	  echo ~/%%v & :# Prefix with ~/ to distinguish global variables deleted here, from local variables deleted in make.bat
+	  reg delete "HKCU\Environment" /v %%v /f >NUL
 	)
       )
 <<

@@ -24,8 +24,6 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 
 SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F NMakefile # Recursive call to this make file
 
-DIRS=src
-
 # Default goal: Build MsvcLibX in the src subdirectory
 all: MsvcLibX
 
@@ -62,23 +60,9 @@ goal_name:
     echo MsvcLibX
 
 # Erase all global environment variables created by this build
+VARS=
 cleanenv:
-    -for %%f in ($(DIRS)) do @make.bat -L -C %%f $@ 2>NUL &:# Recursively run in sub-project directories
-    %COMSPEC% /c <<"$(TMP)\cleanenv-$(PID).bat" &:# Delete variables created here
-      @echo off
-      for %%f in (STINCLUDE $(DIRS)) do @if /I not "%%~f"=="SRC" (
-	set "VARNAME="
-	for /f "tokens=1,3" %%v in ('reg query "HKCU\Environment" ^| findstr /i /b /r /c:" *%%f "') do set "VARNAME=%%v"
-	if defined VARNAME ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
-	  >>"$(TMP)\cleanenv-$(PID).lst" call echo %%VARNAME%% &:# Pass the name back to make.bat, for deleting it in the current shell environment
-	  call echo [%%VARNAME%%] & :# Enclose in [brackets] to distinguish global variables deleted here, from local variables deleted in make.bat
-	  call reg delete "HKCU\Environment" /v %%VARNAME%% /f >NUL
-	) else ( :# The global variable does not exist, but there may be one in the local shell environment
-	  for /f "tokens=1 delims==" %%v in ('set ^| findstr /i /b /c:"%%f="') do set "VARNAME=%%v"
-	  if defined VARNAME >>"$(TMP)\cleanenv-$(PID).lst" call echo %%VARNAME%% &:# Pass the name back to make.bat
-	)
-      )
-<<
+    @make.bat -L -C src $@ 2>NUL &:# Recursively run in sub-project directories
 
 # Display a help screen
 help:
