@@ -17,6 +17,7 @@
 #    2014-12-05 JFL Finished the job. Yes, 10 years later!                    #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
+#    2016-10-14 JFL Fixed rules for building C++ programs.        	      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -99,7 +100,7 @@ XPD = $(OSPD)
 
 # Define compiler and linker flags
 CFLAGS = -std=c99 -pthread -Wall
-CXXFLAGS = $(CFLAGS)
+CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap
 
@@ -157,13 +158,13 @@ $(OSPD)/%: %.c
 $(OSPN)/%: %.cpp
 	$(MAKE) -$(MAKEFLAGS) dirs
 	echo "Building $@ ..."
-	$(CC) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.cpp
 	$(MAKE) -$(MAKEFLAGS) ddirs
 	echo "Building $@ ..."
-	$(CC) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory
