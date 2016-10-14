@@ -54,11 +54,10 @@ Building the SysLib library
      (Only necessary to rebuild support for NetBIOS and MAC address for DOS programs.)
 - Extract the SysLib library sources into another directory at the same level. Ex: %MY_LIBS_DIR%\SysLib\.
 - Open a cmd window, and run:
-```
-cd "%MY_LIBS_DIR%\SysLib"
-configure
-make
-```
+
+        cd "%MY_LIBS_DIR%\SysLib"
+        configure
+        make
 
 Note: configure.bat will output a warning about the optional libraries that it cannot find.
 You may safely ignore that warning.
@@ -71,55 +70,51 @@ gnu-efi patches for 16-bits compiler support
 
 If you want to build the SysLib library for MS-DOS with GPT support, it's necessary to make the following changes.  
 All these add a conditional compilation around union definitions that are incompatible with the MSVC 1.5 C++ compiler:
-```
-#ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
-[Code incompatible with the MSVC 1.5 C++ compiler]
-#endif	 /* !defined(_MSDOS) */
-```
+       
+    #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
+    [Code incompatible with the MSVC 1.5 C++ compiler]
+    #endif	 /* !defined(_MSDOS) */
 
 * gnu-efi\inc\efidevp.h: Add a conditional compilation around union definitions in the end (about lines 473 to the end):
-```
-#ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
 
-typedef union {
-[...]
-} EFI_DEV_PATH;
-
-typedef union {
-[...]
-} EFI_DEV_PATH_PTR;
-
-#endif	 /* !defined(_MSDOS) */
-```
+        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
+        
+        typedef union {
+        [...]
+        } EFI_DEV_PATH;
+        
+        typedef union {
+        [...]
+        } EFI_DEV_PATH_PTR;
+        
+        #endif	 /* !defined(_MSDOS) */
 
 * gnu-efi\inc\efiapi.h: Add a conditional compilation around union definitions, about lines 582 to 588):
-```
-#ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
 
-typedef struct {
-[...]
-} EFI_CAPSULE_BLOCK_DESCRIPTOR;
-
-#endif	 /* !defined(_MSDOS) */
-```
+        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
+        
+        typedef struct {
+        [...]
+        } EFI_CAPSULE_BLOCK_DESCRIPTOR;
+        
+        #endif	 /* !defined(_MSDOS) */
 
 * gnu-efi\inc\efilib.h: Add a conditional compilation around the following definitions (About lines 763 to 783):
-```
-\#ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
 
-typedef union {
-[...]
-} EFI_PCI_ADDRESS_UNION;
-
-[...]
-
-EFI_STATUS
-PciFindDevice (
-[...]
-    );
-
-\#endif	 /* !defined(_MSDOS) */
-```
+        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
+        
+        typedef union {
+        [...]
+        } EFI_PCI_ADDRESS_UNION;
+        
+        [...]
+        
+        EFI_STATUS
+        PciFindDevice (
+        [...]
+        );
+        
+        #endif	 /* !defined(_MSDOS) */
 
 
 Windows 98 DDK installation
@@ -140,25 +135,28 @@ Then make the following changes:
 
 * 98DDK\inc\win98\vmm.h: Allow using VxD C services that return a value in EAX:
 
-Change
-	typedef (_cdecl * VXD_C_SERVICE)();
-To
-	typedef int (_cdecl * VXD_C_SERVICE)(); /* Some VxD C services return a value in EAX */
+  Change
+
+        typedef (_cdecl * VXD_C_SERVICE)();
+
+  To
+
+        typedef int (_cdecl * VXD_C_SERVICE)(); /* Some VxD C services return a value in EAX */
 
 * 98DDK\src\block\inc\dcb.h: Put it with the other include files, then rename a structure to avoid a conflict:
 
-Copy that file to 98DDK\inc\win98\, then, in the copy, change:  
-```
-typedef struct  _DCB { /* */
-[...]
-} DCB, *PDCB;
-```
-to
-```
-typedef struct  _IOSDCB { /* Renamed DCB as IOSDCB, to avoid conflict with WIN32's winbase.h own DCB structure. */
-[...]
-} IOSDCB, *PIOSDCB;
-```
+  Copy that file to 98DDK\inc\win98\, then, in the copy, change:  
+
+        typedef struct  _DCB { /* */
+        [...]
+        } DCB, *PDCB;
+
+  to
+
+        typedef struct  _IOSDCB { /* Renamed DCB as IOSDCB, to avoid conflict with WIN32's winbase.h own DCB structure. */
+        [...]
+        } IOSDCB, *PIOSDCB;
+
 
 
 LAN Manager 2.1 Programmer's ToolKit installation
@@ -189,7 +187,7 @@ or if this is a side effect of running it in a VM, which might break some built-
 To do
 -----
 
-* Port the library to Linux.
+* Port additional routines to Linux, like block I/O.
 * An obvious extension that I never had time to complete is to add floppy disk and CD/DVD/BR disk I/O.  
   This would allow writing a tool for creating floppy images, or .iso files from CDs.
 * The QWORD support can be improved, to add other operators, and make its usage even more seamless in 16-bits programs.
