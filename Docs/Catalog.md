@@ -113,6 +113,7 @@ echoargs.bat	| DW-	| Display echoargs arguments. Useful to diagnose command-line
 EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	|
 errorlev.bat	| D--	| Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)		|
 MakeZip.bat	| -W-	| Create a zip file, based on a list of files in an input file. Uses 7-zip.		| `makezip tools.lst` &:# Builds tools.zip.
+nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
 PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
 tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Windows to run *.tcl files as command-line scripts.	 |
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`

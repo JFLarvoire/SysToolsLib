@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-18
+### Added
+- Tcl/nlines.tcl: A tool for counting non-commented source lines.
+
 ## [1.6.2] - 2016-10-13
 ### Added
 - C/SysLib/: A directory, with a new System Management library. See the README there for details.
