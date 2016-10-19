@@ -155,6 +155,7 @@
 :#                  Fixed a bug in the %FUNCTION% macro.                      #
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
 :#                  Added registry access routines.			      #
+:#   2016-10-19 JFL Bug fix: Routine :Exec now preserves initial errorlevel.  #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -166,7 +167,7 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2015-12-01"
+set "VERSION=2016-10-19"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -174,10 +175,6 @@ set "ARGS=%*"
 
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
-
-:# Initialize ERRORLEVEL with known values
-set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
 
 set "POPARG=call :PopArg"
 call :Macro.Init
@@ -858,6 +855,8 @@ goto EchoArgs.loop
 :#                  also a tee.bat script in the path.                        #
 :#   2015-03-12 JFL If there are output redirections, then cancel any attempt #
 :#		    at redirecting output to the log file.		      #
+:#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
+:#                  errorlevel that was there on entrance.                    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -876,6 +875,9 @@ if not .%NOREDIR%.==.1. set "NOREDIR=0"
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
 if not errorlevel 1 set "Exec.HaveTee=1"
+:# Initialize ERRORLEVEL with known values
+set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
+set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -923,6 +925,14 @@ goto :Exec.Start
 :Exec
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
+:# Save the initial errorlevel: Build a command for restoring it later
+if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow.
+  set "Exec.RestoreErr=%COMSPEC% /c exit %ERRORLEVEL%"
+) else if errorlevel 1 ( :# For the common error 1, use the quick %FALSE.EXE% trick
+  set "Exec.RestoreErr=%FALSE.EXE%"
+) else ( :# For no error, use the quick %TRUE% trick
+  set "Exec.RestoreErr=%TRUE.EXE%"
+)
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -979,6 +989,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
   call :Exec.ShowExitCode
 )

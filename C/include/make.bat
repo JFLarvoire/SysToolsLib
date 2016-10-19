@@ -68,13 +68,14 @@
 :#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
 :#                  Clear a few variables that pollute the (nmake /P) logs.   *
 :#   2016-10-13 JFL Added support for target cleanenv.                        *
+:#   2016-10-19 JFL Gracefully fail if configuration failed.                  *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
-setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-13"
+setlocal EnableExtensions EnableDelayedExpansion
+set "VERSION=2016-10-19"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -754,6 +755,8 @@ goto EchoArgs.loop
 :#                  also a tee.bat script in the path.                        #
 :#   2015-03-12 JFL If there are output redirections, then cancel any attempt #
 :#		    at redirecting output to the log file.		      #
+:#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
+:#                  errorlevel that was there on entrance.                    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -772,6 +775,9 @@ if not .%NOREDIR%.==.1. set "NOREDIR=0"
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
 if not errorlevel 1 set "Exec.HaveTee=1"
+:# Initialize ERRORLEVEL with known values
+set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
+set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -819,6 +825,14 @@ goto :Exec.Start
 :Exec
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
+:# Save the initial errorlevel: Build a command for restoring it later
+if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow.
+  set "Exec.RestoreErr=%COMSPEC% /c exit %ERRORLEVEL%"
+) else if errorlevel 1 ( :# For the common error 1, use the quick %FALSE.EXE% trick
+  set "Exec.RestoreErr=%FALSE.EXE%"
+) else ( :# For no error, use the quick %TRUE% trick
+  set "Exec.RestoreErr=%TRUE.EXE%"
+)
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -875,6 +889,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
   call :Exec.ShowExitCode
 )
@@ -886,6 +901,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %ERRORLEVEL%
 exit /b %ERRORLEVEL%
 
 :Exec.End
+
 :#----------------------------------------------------------------------------#
 :#                        End of the debugging library                        #
 :#----------------------------------------------------------------------------#
@@ -964,7 +980,10 @@ goto :eof
 if not exist %CONFIG.BAT% if exist configure.bat (
   echo Generating %CONFIG.BAT%
   %DO% call configure.bat
-  if errorlevel 1 exit /b
+  if errorlevel 1 (
+    >&2 echo The configure.bat script failed.
+    exit /b
+  )
 )
 :# Load tools settings
 if exist %CONFIG.BAT% %DO% call %CONFIG.BAT%
@@ -1008,6 +1027,7 @@ exit /b 0
 :# Get help about a Microsoft development tool
 :mstool_help
 call :GetConfig :# Get Development tools location
+if errorlevel 1 exit /b
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
 set PROG=nmake.exe
@@ -1027,6 +1047,7 @@ exit /b
 call :Debug.SetLog &:# Make sure there's no log file
 if not defined MAKEFILE call :GetDefaultMakeFile
 call :GetConfig >NUL 2>NUL :# Get Development tools location. Also defines OUTDIR.
+if errorlevel 1 exit /b
 %ECHOVARS.D% CD MESSAGES OUTDIR
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
@@ -1064,6 +1085,7 @@ exit /b
 
 :# Cleanup the environment polluted by this script, in case it is interrupted
 :CleanDebugEnvironment
+%IF_DEBUG% @echo on
 endlocal &:# Return to the shell environment
 :# Delete families of variables, which we're pretty sure we all created
 for %%f in (
@@ -1195,6 +1217,7 @@ goto go
 :go
 
 call :GetConfig :# Get Development tools location. Also defines OUTDIR.
+if errorlevel 1 exit /b
 
 :# Create the output directory if needed
 if not "%OUTDIR%"=="" if not exist "%OUTDIR%" md "%OUTDIR%" & if errorlevel 1 (
@@ -1281,7 +1304,7 @@ if "!NMAKEARGS:~0,1!"==" " set "NMAKEARGS=!NMAKEARGS:~1!"
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
-%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE INCLUDE PID
+%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE INCLUDE PID MAKEORIGIN %MAKEORIGIN%_CC
 
 :# Set a makefile if needed, based on the target subdirectory
 :# :# Select a make file if none was specified

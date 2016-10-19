@@ -140,23 +140,20 @@
 :#                  reset to their x86 values.                                *
 :#                  Improvement: Also look for library paths in the master env.
 :#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
+:#   2016-10-19 JFL Bug fix: Make sure the exit code is 0 when successful.    *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-11"
+set "VERSION=2016-10-19"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
 set  ARGS=%*
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
-
-:# Initialize ERRORLEVEL with known values
-set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
 
 set "POPARG=call :PopArg"
 call :Macro.Init
@@ -830,6 +827,8 @@ goto EchoArgs.loop
 :#                  also a tee.bat script in the path.                        #
 :#   2015-03-12 JFL If there are output redirections, then cancel any attempt #
 :#		    at redirecting output to the log file.		      #
+:#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
+:#                  errorlevel that was there on entrance.                    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -848,6 +847,9 @@ if not .%NOREDIR%.==.1. set "NOREDIR=0"
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
 if not errorlevel 1 set "Exec.HaveTee=1"
+:# Initialize ERRORLEVEL with known values
+set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
+set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -895,6 +897,14 @@ goto :Exec.Start
 :Exec
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
+:# Save the initial errorlevel: Build a command for restoring it later
+if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow.
+  set "Exec.RestoreErr=%COMSPEC% /c exit %ERRORLEVEL%"
+) else if errorlevel 1 ( :# For the common error 1, use the quick %FALSE.EXE% trick
+  set "Exec.RestoreErr=%FALSE.EXE%"
+) else ( :# For no error, use the quick %TRUE% trick
+  set "Exec.RestoreErr=%TRUE.EXE%"
+)
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -951,6 +961,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
   call :Exec.ShowExitCode
 )
@@ -1657,6 +1668,7 @@ set ADD_POST_MAKE_ACTION=%MACRO% ( %\n%
 :# Make sure the files are invoked in a predictable order: The alphabetic order.
 for %%d in ("%windir%" "%HOME%" ".") do (
   %FOREACHLINE% %%f in ('dir /b /o "%%~d\configure.*.bat" 2^>NUL') do (
+    %TRUE.EXE% &:# Clear the errorlevel in the likely case that the batch does not do it
     %DO% call "%%~d\%%~f"
     if errorlevel 1 (
       set "ERROR=!ERRORLEVEL!"
@@ -1976,3 +1988,10 @@ if defined POST_MAKE_ACTIONS (
   %CONFIG% :# List of commands to run when make.bat exits
   %CONFIG% SET "POST_MAKE_ACTIONS=%POST_MAKE_ACTIONS%"
 )
+
+:# The config.bat script must explicitly return 0, as in XP some set commands do set errorlevel 1!
+%CONFIG%.
+%CONFIG% exit /b 0 ^&:# Configuration done successfully
+
+:# Configuration file created successfully
+exit /b 0

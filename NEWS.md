@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-19
+### Fixed
+- Bugs in configure.bat, make.bat, and library.bat, that sometimes caused build failures in Windows XP.
+
 ## [unreleased] 2016-10-18
 ### Added
 - Tcl/nlines.tcl: A tool for counting non-commented source lines.
