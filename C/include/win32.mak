@@ -101,6 +101,7 @@
 #		    Avoid having the word "Error" in the log unnecessarily.   #
 #    2016-10-04 JFL Display messages only if variable MESSAGES is defined.    #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
+#    2016-10-20 JFL Added missing inference rules to build .asm programs.     #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -312,6 +313,11 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
 
+.asm.obj:
+    @echo Applying $(T).mak inference rule .asm.obj:
+    $(HEADLINE) Building $(@F) $(T) $(DM) version
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj
+
 .rc.res:
     @echo Applying $(T).mak inference rule .rc.res:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
@@ -324,6 +330,11 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 .c.exe:
     @echo Applying $(T).mak inference rule .c.exe:
+    $(HEADLINE) Building $(@F) $(T) $(DM) version
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
+
+.asm.exe:
+    @echo Applying $(T).mak inference rule .asm.exe:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
@@ -354,6 +365,17 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 {$(S)\}.c{$(R)\DEBUG\obj\}.obj:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\DEBUG\obj\}.obj:
     $(MSG) Compiling the $(T) debug version
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
+
+# Inference rules to assemble an assembler program, inferring the debug mode from the output path specified.
+{$(S)\}.asm{$(R)\obj\}.obj:
+    @echo Applying $(T).mak inference rule {$$(S)\}.asm{$$(R)\obj\}.obj:
+    $(MSG) Assembling the $(T) release version
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+
+{$(S)\}.asm{$(R)\DEBUG\obj\}.obj:
+    @echo Applying $(T).mak inference rule {$$(S)\}.asm{$$(R)\DEBUG\obj\}.obj:
+    $(MSG) Assembling the $(T) debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 # Inference rules to compile a Windows resource file, inferring the debug mode from the output path specified.
@@ -387,6 +409,17 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 {$(S)\}.c{$(R)\DEBUG\}.exe:
     @echo Applying $(T).mak inference rule {$$(S)\}.c{$$(R)\DEBUG\}.exe:
+    $(HEADLINE) Building $(@F) $(T) debug version
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+
+# Inference rules to build an assembler program, inferring the debug mode from the output path specified.
+{$(S)\}.asm{$(R)\}.exe:
+    @echo Applying $(T).mak inference rule {$$(S)\}.asm{$$(R)\}.exe:
+    $(HEADLINE) Building $(@F) $(T) release version
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+
+{$(S)\}.asm{$(R)\DEBUG\}.exe:
+    @echo Applying $(T).mak inference rule {$$(S)\}.asm{$$(R)\DEBUG\}.exe:
     $(HEADLINE) Building $(@F) $(T) debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
 

@@ -125,6 +125,7 @@
 #		    Display messages only if variable MESSAGES is defined.    #
 #    2016-10-04 JFL Target distclean must delete config.*.bat files.	      #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
+#    2016-10-20 JFL Added missing inference rules to build .asm programs.     #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -324,6 +325,16 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
 
+.asm.exe:
+    @echo Applying inference rule .asm.exe:
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
+
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.lib:
     @echo Applying inference rule .mak.lib:
@@ -358,6 +369,16 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 {.\}.cpp{Debug\}.exe:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
+
+{.\}.asm{Debug\}.exe:
+    @echo Applying inference rule {.\}.c{Debug\}.exe:
     $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
     $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
