@@ -141,13 +141,14 @@
 :#                  Improvement: Also look for library paths in the master env.
 :#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
 :#   2016-10-19 JFL Bug fix: Make sure the exit code is 0 when successful.    *
+:#   2016-10-20 JFL Added a workaround for an XP/64 bug causing build failure.*
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-19"
+set "VERSION=2016-10-20"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1890,6 +1891,13 @@ set PATH64=%MSVC32%\bin\amd64;%VSIDE%\amd64;%VSTOOLS%\amd64;%PATH0%
 :# set "CONV="
 :# for /f "delims=" %%p in ('where conv.exe') do @if not defined CONV set "CONV=%%p"
 :# for %%p in (WIN32\conv.exe WIN64\conv.exe) do @if not defined CONV set "CONV=%%p"
+
+:# Find the chcp.com tool, which we use just below.
+:# Work around for an XP/64 bug: The 32-bits version of chcp.com is missing
+if exist "%windir%\SysWow64" if not exist "%windir%\SysWow64\chcp.com" (
+  echo Note: Replacing the missing 32-bits %windir%\SysWow64\chcp.com by its 64-bits cousin 
+  copy /y "%windir%\System32\chcp.com" "%windir%\SysWow64\" >NUL
+)
 
 :# Get the Windows system Code Page
 call :Reg.GetValue HKLM\SYSTEM\CurrentControlSet\Control\Nls\CodePage ACP WIN.CP
