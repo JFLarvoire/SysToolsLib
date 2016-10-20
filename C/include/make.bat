@@ -69,13 +69,14 @@
 :#                  Clear a few variables that pollute the (nmake /P) logs.   *
 :#   2016-10-13 JFL Added support for target cleanenv.                        *
 :#   2016-10-19 JFL Gracefully fail if configuration failed.                  *
+:#   2016-10-19 JFL Bug fix. Must now look for %OS%.mak in %STINCLUDE% dir.   *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-10-19"
+set "VERSION=2016-10-20"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1187,8 +1188,8 @@ set "LOGNAME=make.log"	&:# Temporary name for the log file. Will be renamed late
 call :Debug.SetLog      &:# Make sure nothing's logged at first
 
 :next_arg
+if not defined ARGS set "ARG=" & goto go
 %POPARG%
-if "!ARG!"=="" goto go
 if "!ARG!"=="-?" goto help
 if "!ARG!"=="/?" goto help
 if "!ARG!"=="-c" %POPARG% & set "CONFIG.BAT=config.!ARG!.bat" & goto next_arg
@@ -1274,13 +1275,13 @@ if "!ARG:~0,1!"=="/" ( :# This is a switch
     %ECHO.D% :# nmake goal !"ARG"!
     set "LASTGOAL=!ARG!" &:# Record the last goal, without quotes
     set MAKEGOALS=!MAKEGOALS! !"ARG"!
-    if not defined MAKEFILE if exist "All.mak" (
+    if not defined MAKEFILE if exist "%STINCLUDE%\All.mak" (
       %ECHO.D% :# Looking for SUBDIR in goal !"ARG"!
       :# Look for the first \ index
       set "SUBDIR="
       for /l %%i in (0,1,10) do if not defined SUBDIR if "!ARG:~%%i,1!"=="\" set "SUBDIR=!ARG:~0,%%i!"
-      if defined SUBDIR if exist "!SUBDIR!.mak" (
-      	set "MAKEFILE=!SUBDIR!.mak"
+      if defined SUBDIR if exist "%STINCLUDE%\!SUBDIR!.mak" (
+      	set "MAKEFILE=%STINCLUDE%\!SUBDIR!.mak"
 	%ECHO.D% :# Setting MAKEFILE !MAKEFILE! after goal !"ARG"!
       )
       if not defined MAKEFILE (
@@ -1304,7 +1305,7 @@ if "!NMAKEARGS:~0,1!"==" " set "NMAKEARGS=!NMAKEARGS:~1!"
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
-%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE INCLUDE PID MAKEORIGIN %MAKEORIGIN%_CC
+%ECHOVARS.D% MAKEFILE NMAKEFLAGS MAKEDEFS MAKEGOALS LASTGOAL NEEDMAKEFILE INCLUDE STINCLUDE PID MAKEORIGIN %MAKEORIGIN%_CC
 
 :# Set a makefile if needed, based on the target subdirectory
 :# :# Select a make file if none was specified
