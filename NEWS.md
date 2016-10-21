@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-10-21
+### Changed
+- Fixed various bugs and added missing inference rules, so that it's now possible to build assembly language programs in 16, 32, and 64-bits modes.
+- Added commands del and rd to regx.bat.
+
 ## [unreleased] 2016-10-19
 ### Fixed
 - Bugs in configure.bat, make.bat, and library.bat, that sometimes caused build failures in Windows XP.
