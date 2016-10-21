@@ -95,6 +95,7 @@
 #    2016-01-07 JFL Do not use /Zp to avoid alignment issues.                 #
 #    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
+#    2016-10-21 JFL Define ML64.EXE default flags.			      #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -123,6 +124,10 @@ LIB=$(WIN64_LIBPATH)		# 64-bits libraries paths
 !IF !DEFINED(CFLAGS)
 CFLAGS=/FAsc /Os /W4 /Zi # Do not use /Zp to avoid alignment issues
 !ENDIF # !DEFINED(CFLAGS)
+
+!IF !DEFINED(AFLAGS)
+AFLAGS=/Cx /Sn /Zi /D_WIN64	# Contrary to the C compiler, the assembler does not define _WINxx variables
+!ENDIF # !DEFINED(AFLAGS)
 
 WINVER=5.2			# First AMD64 Windows is not XP, but XP/64 ~= Server 2003 = Windows 5.2
 MACHINE=X64			# Target CPU = AMD 64-bits X64
