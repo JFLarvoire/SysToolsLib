@@ -3376,8 +3376,8 @@ set "CMD_AFTER="
 set "CMD_BEFORE="
 
 :next_arg
+if not defined ARGS set "ARG=" & set ""ARG"=" & goto :Start
 %POPARG%
-if "!ARG!"=="" goto :Start
 if "!ARG!"=="-?" goto :Help
 if "!ARG!"=="/?" goto :Help
 if "!ARG!"=="-a" %POPARG% & set "CMD_AFTER=!ARG!" & goto next_arg
