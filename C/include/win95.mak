@@ -67,6 +67,7 @@
 #    2015-11-05 JFL Created this file.					      #
 #    2016-09-15 JFL Added WSDKINCLUDE definition.                             #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
+#    2016-10-21 JFL Use the more recent WIN32 assembler, w. more instructions.#
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -79,7 +80,8 @@ T=WIN95				# Target OS
 T_VARS=1	# Make sure OS-type-specific variables are defined only once
 
 CC=$(WIN95_CC)    		# 32-bits C compiler
-AS=$(WIN95_AS)	    		# 32-bits Assembler
+# AS=$(WIN95_AS)    		# 32-bits Assembler
+AS=$(WIN32_AS)	    		# Actually use this one, which is likely to support more instructions
 LK=$(WIN95_LK)		  	# 32-bits Linker
 LB=$(WIN95_LB)	  	 	# 32-bits librarian
 RC=$(WIN95_RC)    		# 32-bits Resource compiler
@@ -91,6 +93,10 @@ MSVCINCLUDE=$(WIN95_VCINC:\=/)  # Path of MSVC compiler include files, without q
 UCRTINCLUDE=$(WIN95_CRTINC:\=/) # Path of MSVC CRT library include files, without quotes, and with forward slashes
 WSDKINCLUDE=$(WIN95_WINSDKINC:\=/) # Path of Windows SDK include files, without quotes, and with forward slashes
 LIB=$(WIN95_LIBPATH)		# 32-bits libraries paths
+
+!IF !DEFINED(AFLAGS)
+AFLAGS=/Cx /Sn /Zim /D_WIN95 "/D_MODEL=flat,stdcall"	# Contrary to the C compiler, the assembler does not define _WINxx variables
+!ENDIF # !DEFINED(AFLAGS)
 
 WINVER=4.0			# Target Windows 95 and NT4
 MACHINE=X86			# Target CPU = Intel 32-bits x86
