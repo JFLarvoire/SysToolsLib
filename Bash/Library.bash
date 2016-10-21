@@ -36,9 +36,7 @@ SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 EXEC=1				# 1=Execute commands; 0=Don't
 
-# LOGDIR=/var/log
-# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Where to log what was done and results
-LOGDIR=/dev
+LOGDIR=/var/log
 LOGFILE=/dev/null		# Where to log what was done and results
 
 # Helper routines to test verbosity levels
