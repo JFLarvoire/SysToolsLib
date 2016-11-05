@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-11-05
+### Changed
+- Updated the make scripts and make files to always reuse the initial script instance, when invoked recursively in subdirectories.
+- C\include\configure.bat now has a -r option for recursively configuring every C subdirectory.
+- C\include\make.bat now automatically uses the top instance log file, avoiding the need to explicitely use the -L option in recursive calls.
+- Clarified "make cleanenv" output: It now displays the actual commands it had to run to cleanup the environment, or nothing if there was no need.
+
+### Fixed
+- Batch\Library.bat: Avoid log file redirection failures in recursive scripts.
+- Several make files had the clean target defined twice, which caused a make warning. (Although it did work fine.)
+- C\include\make.bat displayed a "file not found" error in recursive makes. (Due to incorrect log file handling in this case.)
+- Several configure.*.bat files had the unwanted side effect of creating %OUTDIR%.
+
 ## [unreleased] 2016-10-21
 ### Changed
 - Fixed various bugs and added missing inference rules, so that it's now possible to build assembly language programs in 16, 32, and 64-bits modes.
