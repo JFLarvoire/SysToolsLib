@@ -10,6 +10,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C\include\configure.bat now has a -r option for recursively configuring every C subdirectory.
 - C\include\make.bat now automatically uses the top instance log file, avoiding the need to explicitely use the -L option in recursive calls.
 - Clarified "make cleanenv" output: It now displays the actual commands it had to run to cleanup the environment, or nothing if there was no need.
+- Batch\Library.bat: Indent sub-scripts output in debug mode.
 
 ### Fixed
 - Batch\Library.bat: Avoid log file redirection failures in recursive scripts.
