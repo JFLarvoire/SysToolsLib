@@ -156,6 +156,8 @@
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
 :#                  Added registry access routines.			      #
 :#   2016-10-19 JFL Bug fix: Routine :Exec now preserves initial errorlevel.  #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -440,7 +442,8 @@ goto :eof
 :#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
-:#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
+:#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
+:#                                  Always set using call :Debug.SetLog       #
 :#                  %DEBUG%         Debug mode. 0=Off; 1=On. Use functions    #
 :#                                  Debug.Off and Debug.On to change it.      #
 :#                                  Inherited. Default=0.                     #
@@ -498,6 +501,8 @@ goto :eof
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -594,6 +599,7 @@ set "LOG=call :Echo.Log"
 set ">>LOGFILE=>>%LOGFILE%"
 if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
 if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
+if .%NOREDIR%.==.1. set "LOG=rem" & set ">>LOGFILE=rem" &:# A parent script is already redirecting output. Trying to do it again here would fail. 
 set "ECHO.V=call :Echo.Verbose"
 set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.V=call :EchoVars.Verbose"
@@ -826,12 +832,11 @@ goto EchoArgs.loop
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                                                                            #
-:#  Variables       %LOGFILE%	Log file name.                                #
-:#                  %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
+:#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
 :#                              Inherited from the caller. Default=On.	      #
 :#                  %NOREDIR%   0=Log command output to the log file; 1=Don't #
-:#                              Default: 0                                    #
+:#                              Inherited. Default=0.                         #
 :#                              Useful in cases where the output must be      #
 :#                              shown to the user, and no tee.exe is available.
 :#                  %EXEC.ARGS%	Arguments to recursively pass to subcommands  #
@@ -857,6 +862,8 @@ goto EchoArgs.loop
 :#		    at redirecting output to the log file.		      #
 :#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
 :#                  errorlevel that was there on entrance.                    #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -870,7 +877,6 @@ set "EXEC=call :Exec"
 set "ECHO.X=call :Echo.NoExec"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-if not .%NOREDIR%.==.1. set "NOREDIR=0"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
@@ -933,6 +939,7 @@ if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow
 ) else ( :# For no error, use the quick %TRUE% trick
   set "Exec.RestoreErr=%TRUE.EXE%"
 )
+set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -947,7 +954,7 @@ shift
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
 if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
-  if .%Exec.HaveTee%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
+  if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
 )
 set Exec.Cmd=%*
@@ -967,6 +974,7 @@ set Exec.Cmd=%Exec.Cmd:">&"=">""&"%
 :# If there are output redirections, then cancel any attempt at redirecting output to the log file.
 set "Exec.Cmd1=%Exec.Cmd:"=%" &:# Remove quotes in the command string, to allow quoting the whole string.
 if not "%Exec.Cmd1:>=%"=="%Exec.Cmd1%" set "Exec.Redir="
+if defined Exec.Redir set "NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
 :# Second stage: Convert quoted redirection operators (Ex: ">") to a usable (Ex: >) and a displayable (Ex: ^>) value.
 :# Must be once for each of the four < > | & operators.
 :# Since each operation removes half of ^ escape characters, then insert
@@ -989,8 +997,10 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  set "NOREDIR=%NOREDIR%"
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
+  set "NOREDIR=%NOREDIR0%"
   call :Exec.ShowExitCode
 )
 goto :eof
