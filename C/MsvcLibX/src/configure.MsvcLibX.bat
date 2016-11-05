@@ -34,4 +34,4 @@ if defined OUTDIR (		 :# But if there's a different OUTDIR, use it instead
 %ADD_POST_MAKE_ACTION% set "MSVCLIBX=%BUILT_MSVCLIBX%"
 
 :# Set the system environment variable, so that other CMD windows opened later on inherit it
-%ADD_POST_MAKE_ACTION% setx MSVCLIBX %BUILT_MSVCLIBX% ^>NUL
+%ADD_POST_MAKE_ACTION% setx MSVCLIBX "%BUILT_MSVCLIBX%" ^>NUL
