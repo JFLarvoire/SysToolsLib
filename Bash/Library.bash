@@ -20,7 +20,7 @@
 ###############################################################################
 
 # Global variables
-VERSION="2013-12-16"
+VERSION="2016-11-05"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -36,8 +36,11 @@ SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 EXEC=1				# 1=Execute commands; 0=Don't
 
-LOGDIR=/var/log
-LOGFILE=/dev/null		# Where to log what was done and results
+# LOGDIR=/var/log		# Preferred log file location with root rights
+# LOGDIR=~/log			# Alternate location for non-root users
+# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Where to log what was done and results
+LOGFILE=/dev/null		# Default: Do not write to an actual log file
+LOGDIR=$(dirname "$LOGFILE")
 
 # Helper routines to test verbosity levels
 Quiet() {
