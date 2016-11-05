@@ -16,6 +16,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - Several make files had the clean target defined twice, which caused a make warning. (Although it did work fine.)
 - C\include\make.bat displayed a "file not found" error in recursive makes. (Due to incorrect log file handling in this case.)
 - Several configure.*.bat files had the unwanted side effect of creating %OUTDIR%.
+- Batch\u2w.bat and w2u.bat: Use remplace.exe new option -st instead of -t.
 
 ## [unreleased] 2016-10-21
 ### Changed
