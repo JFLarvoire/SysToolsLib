@@ -10,6 +10,7 @@
 :#  History:                                                                  *
 :#   2015-11-06 JFL Created this script.				      *
 :#   2016-09-27 JFL Correct the final MSVCLIBX if there's a different OUTDIR. *
+:#   2016-11-03 JFL Removed the side effect creating %OUTDIR%.		      *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -26,10 +27,7 @@ for /f "delims=" %%d in ('"pushd .. & cd & popd"') do SET MSVCLIBX=%%d
 :# Define where other dependant libraries should look for MSVCLIBX
 SET "BUILT_MSVCLIBX=%MSVCLIBX%" &:# By default, use the local instance
 if defined OUTDIR (		 :# But if there's a different OUTDIR, use it instead
-  if not exist "%OUTDIR%" md "%OUTDIR%"
-  pushd "%OUTDIR%"
-  set "BUILT_MSVCLIBX=!CD!"
-  popd
+  for %%o in ("%OUTDIR%") do @set "BUILT_MSVCLIBX=%%~fo"
 )
 
 :# Set the local environment variable just before make exits, so that future commands in this CMD window have it.
