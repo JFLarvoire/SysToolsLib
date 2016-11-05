@@ -9,6 +9,7 @@
 :#   2004-10-18 JFL Use %1. instead of "%1" to detect empty arguments.	      #
 :#		    Allows to support long file names within quotes.          #
 :#   2011-01-11 JFL Merged in changes from u2w.bat.			      #
+:#   2016-11-05 JFL Use remplace.exe new option -st instead of -t.	      #
 :#									      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -39,7 +40,7 @@ set QUIET=-q
 goto next_arg
 
 :copytime
-set COPYTIME=-t
+set COPYTIME=-st
 goto next_arg
 
 :noexec
@@ -67,7 +68,7 @@ set IN=%1
 set OUT=%2
 if .%OUT%.==.. if not .%IN%.==.. set OUT=-same
 
-if .%OUT%.==.-same. set COPYTIME=-t
+if .%OUT%.==.-same. set COPYTIME=-st
 
 %EXEC% remplace %QUIET% %COPYTIME% \r\n \n %IN% %OUT%
 

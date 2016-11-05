@@ -13,6 +13,7 @@
 :#   2010-10-14 JFL Added the -q option.				      #
 :#   2011-01-10 JFL Preserve the file time stamp using remplace new -t option.#
 :#   2011-01-11 JFL Added the -X option.				      #
+:#   2016-11-05 JFL Use remplace.exe new option -st instead of -t.	      #
 :#									      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -43,7 +44,7 @@ set QUIET=-q
 goto next_arg
 
 :copytime
-set COPYTIME=-t
+set COPYTIME=-st
 goto next_arg
 
 :noexec
@@ -71,7 +72,7 @@ set IN=%1
 set OUT=%2
 if .%OUT%.==.. if not .%IN%.==.. set OUT=-same
 
-if .%OUT%.==.-same. set COPYTIME=-t
+if .%OUT%.==.-same. set COPYTIME=-st
 
 %EXEC% remplace %QUIET% %COPYTIME% \r?\n \r\n %IN% %OUT%
 
