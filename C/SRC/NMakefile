@@ -2,3 +2,8 @@
 
 cleanenv:
     rem
+
+# Run the configure.bat script in every subdirectory
+config:
+    rem Nothing to do in $(MAKEDIR) as there is no further child level
+
