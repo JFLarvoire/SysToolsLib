@@ -55,11 +55,11 @@
 :#		    include paths and library paths:			      *
 :#                  BIOSLIB	        JFL's BIOSLIB library                 *
 :#                  LODOSLIB	        JFL's LODOSLIB library                *
-:#                  PMODE	        JFL's PMODE library                   *
+:#                  PMODELIB	        JFL's PMODELIB library                *
 :#                  Example:                                                  *
 :#                  %BEGIN_SDK_DEFS%                                          *
 :#                  %USE_SDK% MSVCLIBX                                        *
-:#                  %USE_SDK% BIOSLIB                                        *
+:#                  %USE_SDK% BIOSLIB                                         *
 :#                  %USE_SDK% LODOSLIB                                        *
 :#                  %END_SDK_DEFS%                                            *
 :#                                                                            *
@@ -146,6 +146,11 @@
 :#                  without duplicating searches in each subdirectory.        *
 :#   2016-11-03 JFL Carry through the 16-bits MASM base in recursive runs.    *
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
+:#                  Indent sub-scripts output in debug mode.                  *
+:#                  Avoid repeating useless initializations in sub-instances. *
+:#                  Added options -l and -L.                                  *
+:#                  Changed PMODE variable name to PMODELIB.                  *
+:#                  Fixed recursion to avoid configuring deep level 2^N times.*
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -841,6 +846,7 @@ goto EchoArgs.loop
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
+:#                  Indent sub-scripts output in debug mode.                  *
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -972,10 +978,12 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
   set "NOREDIR=%NOREDIR%"
+  %IF_DEBUG% set "INDENT=%INDENT%  "
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
   set "Exec.ErrorLevel=!ERRORLEVEL!"
   set "NOREDIR=%NOREDIR0%" &:# Sets ERRORLEVEL=1 in Windows XP/64
+  %IF_DEBUG% set "INDENT=%INDENT%"
   call :Exec.ShowExitCode !Exec.ErrorLevel!
 )
 goto :eof
@@ -1560,6 +1568,8 @@ echo Options:
 echo   -?^|-h         This help
 echo   -c CONFIG     Name the output file config.CONFIG.bat
 echo   -d            Debug mode. Display internal variables and function calls
+echo   -l LOGFILE    Log output into a file. Default: Don't
+echo   -L            Disable logging. Default: Use the parent script log file, if any
 echo   -masm PATH    Path to MASM install dir. Default: C:\MASM
 echo   -msvc PATH    Path to MSVC 16-bits tools install dir. Default: C:\MSVC
 echo   -o OUTDIR     Output base directory. Default: .
@@ -1587,6 +1597,8 @@ if "!ARG!"=="/?" goto help
 if "!ARG!"=="-c" %POPARG% & set "CONFIG.BAT=config.!ARG!.bat" & goto next_arg
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto next_arg
 if "!ARG!"=="-h" goto help
+if "!ARG!"=="-l" %POPARG% & call :Debug.SetLog !"ARG"! & goto next_arg
+if "!ARG!"=="-L" call :Debug.SetLog & goto next_arg
 if "!ARG!"=="-masm" %POPARG% & set "MASM=!ARG!" & goto next_arg
 if "!ARG!"=="-msvc" %POPARG% & set "MSVC=!ARG!" & goto next_arg
 if "!ARG!"=="-o" %POPARG% & set "OUTDIR=!ARG!" & goto next_arg
@@ -1683,25 +1695,30 @@ set ADD_POST_MAKE_ACTION=%MACRO% ( %\n%
 ) %/MACRO%
 %IF_DEBUG% set ADD_POST_MAKE_ACTION &:# Display the macro, for debugging changes
 
-:# At this stage, we have all configure.bat mechanics ready, and compilers identified
-:Configure_init_done
+:# Find the conv.exe tool, that we use for some builds
+:# set "CONV="
+:# for /f "delims=" %%p in ('where conv.exe') do @if not defined CONV set "CONV=%%p"
+:# for %%p in (WIN32\conv.exe WIN64\conv.exe) do @if not defined CONV set "CONV=%%p"
 
-:# Call other local and project-specific configure scripts, possibly overriding all the above
-:# Must be placed before the following commands, to allow defining %MSVCLIBX%, %SYSLIB%, %98DDK%, %BOOST%, %PTHREADS%
-:# Make sure the files are invoked in a predictable order: The alphabetic order.
-for %%d in ("%windir%" "%HOME%" ".") do (
-  %FOREACHLINE% %%f in ('dir /b /o "%%~d\configure.*.bat" 2^>NUL') do (
-    %TRUE.EXE% &:# Clear the errorlevel in the likely case that the batch does not do it
-    %DO% call "%%~d\%%~f"
-    if errorlevel 1 (
-      set "ERROR=!ERRORLEVEL!"
-      >&2 %ECHO% configure.bat: "%%~d\%%~f" failed with error !ERROR!
-      del %CONFIG.BAT%
-      exit /b !ERROR!
-    )
-  )
+:# Find the chcp.com tool, which we use further down.
+:# Work around for an XP/64 bug: The 32-bits version of chcp.com is missing
+if exist "%windir%\SysWow64" if not exist "%windir%\SysWow64\chcp.com" (
+  echo Note: Replacing the missing 32-bits %windir%\SysWow64\chcp.com by its 64-bits cousin 
+  copy /y "%windir%\System32\chcp.com" "%windir%\SysWow64\" >NUL
 )
-%ECHOVARS.D% SDK_LIST
+
+:# Get the Windows system Code Page
+call :Reg.GetValue HKLM\SYSTEM\CurrentControlSet\Control\Nls\CodePage ACP WIN.CP
+:# Get the corresponding Character Set
+call :Reg.GetValue HKLM\SOFTWARE\Classes\MIME\Database\Codepage\%WIN.CP% BodyCharset WIN.CS
+if not defined WIN.CS set "WIN.CS=cp%WIN.CP%"
+
+:# Get the DOS cmd.exe Code Page
+for /f "tokens=2 delims=:" %%n in ('chcp') do set "DOS.CP=%%n"
+set "DOS.CP=%DOS.CP: =%" &:# Trim spaces
+:# Get the corresponding Character Set
+call :Reg.GetValue HKLM\SOFTWARE\Classes\MIME\Database\Codepage\%DOS.CP% BodyCharset DOS.CS
+if not defined DOS.CS set "DOS.CS=cp%DOS.CP%"
 
 :# Known SDKs:
 set "SDK.STINCLUDE.NAME=System Tools global C includes"
@@ -1714,8 +1731,8 @@ set "SDK.BIOSLIB.FILE=clibdef.h"
 set "SDK.LODOSLIB.NAME=Low DOS Library"
 set "SDK.LODOSLIB.FILE=dosdrv.h"
 
-set "SDK.PMODE.NAME=x86 Protected Mode library"
-set "SDK.PMODE.FILE=pmode.h"
+set "SDK.PMODELIB.NAME=x86 Protected Mode library"
+set "SDK.PMODELIB.FILE=pmode.h"
 
 set "SDK.SYSLIB.NAME=System Library"
 set "SDK.SYSLIB.FILE=oprintf.h"
@@ -1738,6 +1755,26 @@ set "SDK.PTHREADS2.FILE=include\pthread.h"
 
 set "SDK.BOOST.NAME=Boost C++ libraries"
 set "SDK.BOOST.FILE=boost\preprocessor.hpp"
+
+:# At this stage, we have all configure.bat mechanics ready, and compilers identified
+:Configure_init_done
+
+:# Call other local and project-specific configure scripts, possibly overriding all the above
+:# Must be placed before the following commands, to allow defining %MSVCLIBX%, %SYSLIB%, %98DDK%, %BOOST%, %PTHREADS%
+:# Make sure the files are invoked in a predictable order: The alphabetic order.
+for %%d in ("%windir%" "%HOME%" ".") do (
+  %FOREACHLINE% %%f in ('dir /b /o "%%~d\configure.*.bat" 2^>NUL') do (
+    %TRUE.EXE% &:# Clear the errorlevel in the likely case that the batch does not do it
+    %DO% call "%%~d\%%~f"
+    if errorlevel 1 (
+      set "ERROR=!ERRORLEVEL!"
+      >&2 %ECHO% configure.bat: "%%~d\%%~f" failed with error !ERROR!
+      del %CONFIG.BAT%
+      exit /b !ERROR!
+    )
+  )
+)
+%ECHOVARS.D% SDK_LIST
 
 :# Search for the requested SDKs in the specified dir, then the default install dir, then in other likely places
 %CONFIG%.
@@ -1787,7 +1824,7 @@ if defined HAS_SDK_FLAGS set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS:~1%"
 :# Update 16-bits include and library paths for well-known libraries
 for %%v in (VC16) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
-    :# Do not configure BIOSLIB, LODOSLIB, PMODE variables at this stage, as they'll be needed for BIOS builds only
+    :# Do not configure BIOSLIB, LODOSLIB, PMODELIB variables at this stage, as they'll be needed for BIOS builds only
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
       set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
@@ -1816,9 +1853,9 @@ for %%v in (VC16) do if defined %%v (
       SET "%%v.INCPATH=!%%v.INCPATH!;%LODOSLIB%"
       SET "%%v.LIBPATH=!%%v.LIBPATH!;%LODOSLIB%"
     )
-    if "%%k"=="PMODE" ( :# Protected Mode library
-      SET "%%v.INCPATH=!%%v.INCPATH!;%PMODE%"
-      SET "%%v.LIBPATH=!%%v.LIBPATH!;%PMODE%"
+    if "%%k"=="PMODELIB" ( :# Protected Mode library
+      SET "%%v.INCPATH=!%%v.INCPATH!;%PMODELIB%"
+      SET "%%v.LIBPATH=!%%v.LIBPATH!;%PMODELIB%"
     )
   )
 )
@@ -1912,31 +1949,6 @@ set PATH16=%MSVC%\bin;%PATH0%
 set PATH32=%MSVC32%\bin;%VSIDE%;%VSTOOLS%;%PATH0%
 set PATH64=%MSVC32%\bin\amd64;%VSIDE%\amd64;%VSTOOLS%\amd64;%PATH0%
 
-:# Find the conv.exe tool, that we use for some builds
-:# set "CONV="
-:# for /f "delims=" %%p in ('where conv.exe') do @if not defined CONV set "CONV=%%p"
-:# for %%p in (WIN32\conv.exe WIN64\conv.exe) do @if not defined CONV set "CONV=%%p"
-
-:# Find the chcp.com tool, which we use just below.
-:# Work around for an XP/64 bug: The 32-bits version of chcp.com is missing
-if exist "%windir%\SysWow64" if not exist "%windir%\SysWow64\chcp.com" (
-  echo Note: Replacing the missing 32-bits %windir%\SysWow64\chcp.com by its 64-bits cousin 
-  copy /y "%windir%\System32\chcp.com" "%windir%\SysWow64\" >NUL
-)
-
-:# Get the Windows system Code Page
-call :Reg.GetValue HKLM\SYSTEM\CurrentControlSet\Control\Nls\CodePage ACP WIN.CP
-:# Get the corresponding Character Set
-call :Reg.GetValue HKLM\SOFTWARE\Classes\MIME\Database\Codepage\%WIN.CP% BodyCharset WIN.CS
-if not defined WIN.CS set "WIN.CS=cp%WIN.CP%"
-
-:# Get the DOS cmd.exe Code Page
-for /f "tokens=2 delims=:" %%n in ('chcp') do set "DOS.CP=%%n"
-set "DOS.CP=%DOS.CP: =%" &:# Trim spaces
-:# Get the corresponding Character Set
-call :Reg.GetValue HKLM\SOFTWARE\Classes\MIME\Database\Codepage\%DOS.CP% BodyCharset DOS.CS
-if not defined DOS.CS set "DOS.CS=cp%DOS.CP%"
-
 :# Optional chance to undo the above, or prepend something _ahead_ of them.
 if defined POST_CONFIG_ACTIONS set "POST_CONFIG_ACTIONS=%POST_CONFIG_ACTIONS:¡¡¡¡=^!%" &:# Prepare delayed variables expansion
 %IF_DEBUG% if defined POST_CONFIG_ACTIONS (set POST_CONFIG_ACTIONS) else (echo :# No POST_CONFIG_ACTIONS)
@@ -2028,7 +2040,11 @@ if defined POST_MAKE_ACTIONS (
 %CONFIG% exit /b 0 ^&:# Configuration done successfully
 
 :# Optionally repeat the configuration recursively using the makefile's config pseudo target
-if "%CONFIGURE-ALL%"=="1" %EXEC% %ARG0:configure.bat=make.bat% config
+if "%CONFIGURE-ALL%"=="1" (
+  set "CONFIGURE-ALL=0" &:# Avoid a combinatorial explosion
+  set "MAKEDEPTH=0" &:# Prevent make.bat from trying to rename the log file in the end
+  %EXEC% %ARG0:configure.bat=make.bat% config
+)
 
 :# Configuration file created successfully
 exit /b 0
