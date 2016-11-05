@@ -3,17 +3,21 @@
 :#                                                                            *
 :#  Filename:	    make.bat						      *
 :#                                                                            *
-:#  Description:    Build DosWin.mak 16, 32 and 64 bits targets		      *
+:#  Description:    Front end to nmake, to build 16, 32 and 64 bits targets   *
 :#                                                                            *
-:#  Arguments:	    %1 %2 ...	Optional arguments passed to nmake	      *
+:#  Notes:	    Designed to have a look-and-feel like that of Unix make.  *
 :#                                                                            *
-:#  Notes:	    Builds the 16-bits MS-DOS version if Visual C++ 1.52 is   *
+:#		    Options beginning with a - are interpreted locally.	      *
+:#		    Ideally they should be compatible with that of Unix make. *
+:#		    Options beginning with a / are passed on to nmake. 	      *
+:#		    							      *
+:#		    Builds the 16-bits MS-DOS version if Visual C++ 1.52 is   *
 :#		    installed in its default location in C:\MSVC.	      *
-:#									      *
+:#		    							      *
 :#		    Invokes configure.bat to generate config.bat, if absent.  *
 :#		    See configure.bat header for a description of its action, *
 :#		    and of that of the optional configure.XXX.bat files.      *
-:#									      *
+:#		    							      *
 :#  History:                                                                  *
 :#   2003-03-31 JFL Adapted from previous projects			      *
 :#   2008-02-13 JFL Adapted to Visual Studio 2005			      *
@@ -69,14 +73,20 @@
 :#                  Clear a few variables that pollute the (nmake /P) logs.   *
 :#   2016-10-13 JFL Added support for target cleanenv.                        *
 :#   2016-10-19 JFL Gracefully fail if configuration failed.                  *
-:#   2016-10-19 JFL Bug fix. Must now look for %OS%.mak in %STINCLUDE% dir.   *
+:#   2016-10-20 JFL Bug fix: Must now look for %OS%.mak in %STINCLUDE% dir.   *
+:#   2016-10-31 JFL Bug fix: Avoid a "file not found" error in recursive makes.
+:#                  Define variables NMAKE, BMAKE and BCONF.                  *
+:#   2016-11-02 JFL Automatically inherit the log file in recursive makes.    *
+:#                  Added option -l, and rewrote option -L.                   *
+:#   2016-11-03 JFL Removed variable SHOW_RESULT and added variable MAKEDEPTH.*
+:#   2016-11-04 JFL Fixed routine :CleanBuildEnvironment.		      *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-10-20"
+set "VERSION=2016-11-04"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -341,7 +351,8 @@ goto :eof
 :#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
-:#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
+:#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
+:#                                  Always set using call :Debug.SetLog       #
 :#                  %DEBUG%         Debug mode. 0=Off; 1=On. Use functions    #
 :#                                  Debug.Off and Debug.On to change it.      #
 :#                                  Inherited. Default=0.                     #
@@ -399,6 +410,8 @@ goto :eof
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -495,6 +508,7 @@ set "LOG=call :Echo.Log"
 set ">>LOGFILE=>>%LOGFILE%"
 if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
 if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
+if .%NOREDIR%.==.1. set "LOG=rem" & set ">>LOGFILE=rem" &:# A parent script is already redirecting output. Trying to do it again here would fail. 
 set "ECHO.V=call :Echo.Verbose"
 set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.V=call :EchoVars.Verbose"
@@ -727,12 +741,11 @@ goto EchoArgs.loop
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                                                                            #
-:#  Variables       %LOGFILE%	Log file name.                                #
-:#                  %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
+:#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
 :#                              Inherited from the caller. Default=On.	      #
 :#                  %NOREDIR%   0=Log command output to the log file; 1=Don't #
-:#                              Default: 0                                    #
+:#                              Inherited. Default=0.                         #
 :#                              Useful in cases where the output must be      #
 :#                              shown to the user, and no tee.exe is available.
 :#                  %EXEC.ARGS%	Arguments to recursively pass to subcommands  #
@@ -758,6 +771,8 @@ goto EchoArgs.loop
 :#		    at redirecting output to the log file.		      #
 :#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
 :#                  errorlevel that was there on entrance.                    #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -771,7 +786,6 @@ set "EXEC=call :Exec"
 set "ECHO.X=call :Echo.NoExec"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-if not .%NOREDIR%.==.1. set "NOREDIR=0"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
@@ -834,6 +848,7 @@ if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow
 ) else ( :# For no error, use the quick %TRUE% trick
   set "Exec.RestoreErr=%TRUE.EXE%"
 )
+set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -848,7 +863,7 @@ shift
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
 if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
-  if .%Exec.HaveTee%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
+  if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
 )
 set Exec.Cmd=%*
@@ -868,6 +883,7 @@ set Exec.Cmd=%Exec.Cmd:">&"=">""&"%
 :# If there are output redirections, then cancel any attempt at redirecting output to the log file.
 set "Exec.Cmd1=%Exec.Cmd:"=%" &:# Remove quotes in the command string, to allow quoting the whole string.
 if not "%Exec.Cmd1:>=%"=="%Exec.Cmd1%" set "Exec.Redir="
+if defined Exec.Redir set "NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
 :# Second stage: Convert quoted redirection operators (Ex: ">") to a usable (Ex: >) and a displayable (Ex: ^>) value.
 :# Must be once for each of the four < > | & operators.
 :# Since each operation removes half of ^ escape characters, then insert
@@ -890,8 +906,10 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  set "NOREDIR=%NOREDIR%"
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
+  set "NOREDIR=%NOREDIR0%"
   call :Exec.ShowExitCode
 )
 goto :eof
@@ -1009,7 +1027,7 @@ echo   -cde          Clean Debug Environment variables, if the script was interr
 echo   -d            Run this script in debug mode
 echo   -f MAKEFILE   Make file to use. Default: %MAKEFILE%
 echo   -H [PROGRAM]  Display nmake.exe help (or that of another MSVC32 program)
-echo   -o OS         Use nmake for OS. Default: Use that for %MAKEORIGIN%
+echo   -O OS         Use nmake for OS. Default: Use that for %MAKEORIGIN%
 echo   -u DIRECTORY  Upgrade configure.bat and make.bat scripts in this dir.
 echo   -v            Enable verbose output
 echo   -V            Display %SCRIPT% version
@@ -1045,19 +1063,18 @@ exit /b
 
 :# Run nmake without logging anything, for simple goals like help, clean, etc.
 :nmake [nmake.exe options]
-call :Debug.SetLog &:# Make sure there's no log file
 if not defined MAKEFILE call :GetDefaultMakeFile
 call :GetConfig >NUL 2>NUL :# Get Development tools location. Also defines OUTDIR.
 if errorlevel 1 exit /b
 %ECHOVARS.D% CD MESSAGES OUTDIR
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
-for %%n in (nmake.exe) do set "NMAKE=%%~$PATH:n"
+if not defined NMAKE set "NMAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
 set "NMAKEFLAGS=/NOLOGO /c /s"
 %IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
 :# Clear a few multi-line variables that pollute the (nmake /P) logs
-for %%v in (LF1 LF2 LF3 LF4 LF5 MACRO ON_MACRO_EXIT FUNCTION RETURN) do set "%%v="
-%EXEC% "%NMAKE%" %NMAKEFLAGS% /F %MAKEFILE% %*
+for %%v in (LF1 LF2 LF3 LF4 LF5 MACRO /MACRO ON_MACRO_EXIT FUNCTION RETURN) do set "%%v="
+%EXEC% %NMAKE% %NMAKEFLAGS% /F %MAKEFILE% %*
 exit /b
 
 :#-----------------------------------------------------------------------------
@@ -1098,10 +1115,10 @@ for %%f in (
 :# Delete individual variables with plain names
 for %%v in (
   "ARG" ARG ARG0 BS CONFIG.BAT CR DEBUG DEL DO ECHO EXEC FOREACHLINE FUNCTION FUNCTION0
-  LOG LOGNAME MACRO MACRO.GETEXP NOEXEC NOREDIR ON_MACRO_EXIT POPARG
-  SCRIPT SPATH UPVAR VERBOSE VERSION XDLEVEL
+  LOG MACRO MACRO.GETEXP NOEXEC NOREDIR ON_MACRO_EXIT POPARG
+  SCRIPT SPATH UPVAR VERBOSE VERSION XDLEVEL BMAKE BCONF
   CONFIG.BAT GOAL ISDEF LASTGOAL LOGFILE2 MAKEARGS MAKEFILE MAKEGOALS MAKEORIGIN
-  NEEDMAKEFILE NMAKE NMAKEFLAGS MAKEGOALS SHOW_RESULT POST_MAKE_ACTIONS SUBDIR UPDATE
+  NEEDMAKEFILE NMAKE NMAKEFLAGS MAKEGOALS MAKEDEPTH POST_MAKE_ACTIONS SUBDIR UPDATE
 ) do set "%%v="
 :# Delete individual variables with names with characters that need quoting
 for %%v in (
@@ -1122,7 +1139,7 @@ exit /b
 :CleanBuildEnvironment
 call :GetPID
 set "VARLISTFILE=%TMP%\cleanenv-%PID%.lst"
-if %SHOW_RESULT%==1 ( :# Do this only in the top make file, in case of recursive makes
+if %MAKEDEPTH%==0 ( :# Do this only in the top make file, in case of recursive makes
   if exist "%VARLISTFILE%" del "%VARLISTFILE%"
 )
 set "HAD_CONFIG="
@@ -1130,11 +1147,12 @@ if exist "%CONFIG.BAT%" set "HAD_CONFIG=1"
 call :nmake cleanenv
 if not defined HAD_CONFIG del "%CONFIG.BAT%"
 endlocal & ( :# Return to the shell environment. %Variables% already expanded in the (block) below.
-  if %SHOW_RESULT%==1 ( :# Do this only in the top make file, in case of recursive makes
+  if %MAKEDEPTH%==0 ( :# Do this only in the top make file, in case of recursive makes
     for /f %%v in ('type "%VARLISTFILE%"') do ( :# Note: Do not use %FOREACHLINE%, as the file may contain extra spaces in each line. 
-      %ECHO.V% :# Trying "%%v"
+      %ECHO.D% :# Trying "%%v"
       if defined %%v ( :# Remove variable from the parent shell environment
-	echo %%v
+      	:# Do not use %DO%, as we've deleted most debug variables at this stage
+	echo set "%%v="
 	set "%%v="
       )
     )
@@ -1152,9 +1170,11 @@ set ARGS= %*
 set ARGS=!ARGS: -C %"ARG"%=!
 if "!ARGS:~0,1!"==" " set ARGS=!ARGS:~1!
 %DO% pushd %"ARG"%
-%DO% call make.bat !ARGS!
+%ECHO.V% :# cd %CD%
+%DO% call %BMAKE% !ARGS!
 set "ERROR=%ERRORLEVEL%"
 %DO% popd
+%ECHO.V% :# cd %CD%
 exit /b %ERROR%
 
 :#-----------------------------------------------------------------------------
@@ -1169,9 +1189,15 @@ set "MAKEFILE=%~1" & exit /b 1
 :#-----------------------------------------------------------------------------
 
 :main
-set "CONFIG.BAT=config.%COMPUTERNAME%.bat"
+set "BMAKE="%~f0""	&:# The full pathname to this make.bat script, with quotes
+set "BCONF=%BMAKE:make.bat=configure.bat%" &:# The full pathname of configure.bat
+set "CONFIG.BAT=config.%COMPUTERNAME%.bat" &:# The output file for this make.bat script
 set "POST_MAKE_ACTIONS=" &:# A series of commands to run after the final endlocal after make
-set "SHOW_RESULT=1"
+if not defined MAKEDEPTH ( :# This is the initial make.bat instance. Show the final result.
+  set "MAKEDEPTH=0"
+) else ( :# This is a sub-instance. Do not show the intermediate result.
+  set /a "MAKEDEPTH+=1"
+)
 :# Make command line parsing analysis results
 set "MAKEFILE="
 set "NMAKEFLAGS="	&:# Do not name this MAKEFLAGS, as this confuses nmake
@@ -1183,9 +1209,6 @@ if not defined STINCLUDE ( :# Try getting the copy in the master environment
   for /f "tokens=3" %%v in ('reg query "HKCU\Environment" /v STINCLUDE 2^>NUL') do set "STINCLUDE=%%v"
 )
 set "INCLUDE=%STINCLUDE%" &:# Ensure common make files are found by nmake in the %STINCLUDE% directory
-
-set "LOGNAME=make.log"	&:# Temporary name for the log file. Will be renamed later after the actual goal.
-call :Debug.SetLog      &:# Make sure nothing's logged at first
 
 :next_arg
 if not defined ARGS set "ARG=" & goto go
@@ -1200,9 +1223,9 @@ if "!ARG!"=="-f" %POPARG% & call :LocateMakefile !ARG! & goto next_arg
 if "!ARG!"=="/f" %POPARG% & call :LocateMakefile !ARG! & goto next_arg
 if "!ARG!"=="-h" goto help
 if "!ARG!"=="-H" goto mstool_help
-if "!ARG!"=="-L" set "LOGNAME=" & set "SHOW_RESULT=0" & goto next_arg &:# Not logging is useful when invoked recursively within a make file. In this case don't show intermediate results either.
-if "!ARG!"=="-o" %POPARG% & set "MAKEORIGIN=!ARG!" & goto next_arg
-if "!ARG!"=="-q" set "SHOW_RESULT=0" & goto next_arg
+if "!ARG!"=="-l" %POPARG% & call :Debug.SetLog !"ARG"! & goto next_arg
+if "!ARG!"=="-L" call :Debug.SetLog & goto next_arg &:# Not logging is useful when invoked recursively within a make file. Now automatically detected though.
+if "!ARG!"=="-O" %POPARG% & set "MAKEORIGIN=!ARG!" & goto next_arg
 if "!ARG!"=="-u" %POPARG% & call :update_scripts "!ARG!" & goto :eof
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
@@ -1226,16 +1249,13 @@ if not "%OUTDIR%"=="" if not exist "%OUTDIR%" md "%OUTDIR%" & if errorlevel 1 (
   exit /b 1
 )
 
-:# Put the log file in OUTDIR if defined.
-if defined LOGNAME (
-  if /i not .%LOGNAME%.==.NUL. (
-    if not "%OUTDIR%"=="" set "LOGNAME=%OUTDIR%\%LOGNAME%"
-    if exist "%LOGNAME%" del "%LOGNAME%"
-  )
-) else ( :# Avoid logging during recursive calls
-  set "NOREDIR=1"
-)
-call :Debug.SetLog "%LOGNAME%"
+:# Select a log file
+if not defined LOGFILE ( :# Create one, in OUTDIR if defined
+  set "LOGFILE=make.log"
+  if not "%OUTDIR%"=="" set "LOGFILE=%OUTDIR%\!LOGFILE!"
+  if exist "!LOGFILE!" del "!LOGFILE!"
+  call :Debug.SetLog "!LOGFILE!"
+) &:# else keep using the parent instance log file
 
 :# Start logging by recording the make command.
 %LOG% make %*
@@ -1243,7 +1263,7 @@ call :Debug.SetLog "%LOGNAME%"
 
 :# Log settings from %CONFIG.BAT%
 %LOG% :# -------------------------- %CONFIG.BAT% --------------------------
->>"%LOGFILE%" type %CONFIG.BAT%
+%>>LOGFILE% type %CONFIG.BAT%
 %LOG% :# ----------------------- End of %CONFIG.BAT% ----------------------
 %LOG%
 
@@ -1263,7 +1283,6 @@ if not defined ARG goto done_ra
 if "!ARG:~0,1!"=="/" ( :# This is a switch
   %ECHO.D% :# nmake switch !"ARG"!
   set "NMAKEFLAGS=!NMAKEFLAGS! !ARG!"
-  rem set  MAKEARGS=!MAKEARGS! !ARG!
 ) else ( :# Not a switch, so either a variable definition or a goal
   set "ISDEF="
   for /l %%i in (0,1,20) do if not defined ISDEF if "!ARG:~%%i,1!!ARG:~%%i,1!"=="==" set "ISDEF=1"
@@ -1301,7 +1320,7 @@ if "!ARG:~0,1!"=="/" ( :# This is a switch
   )
 )
 if "!NMAKEFLAGS:~0,1!"==" " set "NMAKEFLAGS=!NMAKEFLAGS:~1!"
-if "!NMAKEARGS:~0,1!"==" " set "NMAKEARGS=!NMAKEARGS:~1!"
+if "!MAKEARGS:~0,1!"==" " set "MAKEARGS=!MAKEARGS:~1!"
 goto next_ra
 :done_ra
 if not defined MAKEGOALS set "NEEDMAKEFILE=1" &:# We do need a make file to build a default target 
@@ -1329,71 +1348,70 @@ if defined NEEDMAKEFILE set MAKEARGS=/f !MAKEFILE! !MAKEARGS!
 
 :# Now run nmake
 set RESULT=Success
-set MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!
-:# set CMD=%MAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
-set CMD=%MAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
-setlocal &:# Clear a few variables that pollute the (nmake /P) logs
-for %%v in (LF1 LF2 LF3 LF4 LF5 ON_MACRO_EXIT) do set "%%v="
+if not defined NMAKE set "NMAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
+:# set CMD=%NMAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
+set CMD=%NMAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
+setlocal &:# Clear a few multi-line variables that pollute the (nmake /P) logs
+for %%v in (LF1 LF2 LF3 LF4 LF5 MACRO /MACRO ON_MACRO_EXIT FUNCTION RETURN) do set "%%v="
 %EXEC% %CMD%
 endlocal & set ERROR=%ERRORLEVEL%
 if not "%ERROR%"=="0" set RESULT=Failure
-%IF_NOEXEC% del %LOGFILE% & goto :eof
+%IF_NOEXEC% if defined LOGFILE del %LOGFILE% & goto :eof
 
 %LOG%
 %LOG% %RESULT%
-
-:# Rename %LOGFILE% after the goal. The goal is the last argument, without the extension.
-if not defined LOGFILE goto :SkipRename
-if .%LOGFILE%.==.NUL. goto :SkipRename
-set LOGFILE2=%LOGFILE%
-set GOAL=
-for %%F in ("%LASTGOAL%") do set "GOAL=%%~nF"
-:# If there's no goal, use the make file name. (Provided it's not a generic makefile.)
-if "%GOAL%"=="" if /i "%MAKEFILE%" neq "nmakefile" for %%F in ("%MAKEFILE%") do set GOAL=%%~nF
-:# If there's still no goal, and the %CD% is something like ...\PROGRAM\SRC, use the word %PROGRAM%
-if "%GOAL%"=="" (
-  for %%f in ("!CD!") do set "CD0=%%~nxf"
-  pushd ..
-  for %%f in ("!CD!") do set "CD1=%%~nxf"
-  popd
-  if /i "!CD0!" equ "src" set "GOAL=!CD1!"
-)
-:# If there's still no goal, maybe the makefile itself has a rule to generate the default goal name
-if "%GOAL%"=="" (
-  :# Gotcha: nmake always displays on stdout: "Started parsing rules in NMakeFile." So redirect stderr.
-  :# Gotcha: The exit code does not survive the 'sub-shell' return. So test it inside, and change the sub-shell output.
-  :# Gotcha: Testing variables in the subshell requires three pairs of ^. So use if errorlevel 1.
-  for /f "delims=" %%g in (
-    '%MAKE% /nologo /s /c /f %MAKEFILE% /x - goal_name 2^>NUL ^& if errorlevel 1 echo :'
-  ) do set "GOAL=%%g"
-  :# ":" is an impossible goal name, flagging the absence of target "goal_name" in the makefile.
-  if "!GOAL!"==":" set "GOAL="
-)
-:# If there's still no goal, give it up and keep the default log file name: make.log.
-if "%GOAL%"=="" goto SkipRename
-:# Normal goal. Rename %LOGFILE%, and display the build log.
-if not "%GOAL%"=="" set LOGFILE2=%GOAL%.log
-if not "%OUTDIR%"=="" set "LOGFILE2=%OUTDIR%\%LOGFILE2%"
-if not "%LOGFILE2%"=="%LOGFILE%" (
-  if exist "%LOGFILE2%" del "%LOGFILE2%"
-  move "%LOGFILE%" "%LOGFILE2%" >nul
-  call :Debug.SetLog "%LOGFILE2%"
-)
-:SkipRename
-
-if %SHOW_RESULT%==1 (
-  echo.>con
-  echo %RESULT% >con
-)
 
 :# Log the post-make actions we're about to do
 :# I'm afraid the %ECHO% methods won't work with multi-line macros, so decomposing the log and echo tasks.
 %LOG%
 %>>LOGFILE% 2>&1 (if defined POST_MAKE_ACTIONS (set POST_MAKE_ACTIONS) else (echo :# No POST_MAKE_ACTIONS))
 if defined POST_MAKE_ACTIONS (%IF_VERBOSE% set POST_MAKE_ACTIONS) else (%IF_DEBUG% echo :# No POST_MAKE_ACTIONS)
+%ECHO.D% make.bat: return %ERROR%
 
+:# Rename %LOGFILE% after the goal. The goal is the last argument, without the extension.
 if .%LOGFILE%.==.NUL. set "LOGFILE="
-if not %ERROR%==0 if defined LOGFILE start notepad "%LOGFILE%"
+if %MAKEDEPTH%==0 if defined LOGFILE ( :# If this is the top-level instance of make.bat, show the final result
+  set GOAL=
+  for %%F in ("%LASTGOAL%") do set "GOAL=%%~nF"
+  :# If there's no goal, use the make file name. (Provided it's not a generic makefile.)
+  if not defined GOAL if /i "%MAKEFILE%" neq "nmakefile" for %%F in ("%MAKEFILE%") do set GOAL=%%~nF
+  :# If there's still no goal, and the %CD% is something like ...\PROGRAM\SRC, use the word %PROGRAM%
+  if not defined GOAL (
+    for %%f in ("!CD!") do set "CD0=%%~nxf"
+    pushd ..
+    for %%f in ("!CD!") do set "CD1=%%~nxf"
+    popd
+    if /i "!CD0!" equ "src" set "GOAL=!CD1!"
+  )
+  :# If there's still no goal, maybe the makefile itself has a rule to generate the default goal name
+  if not defined GOAL (
+    :# Gotcha: nmake always displays on stdout: "Started parsing rules in NMakeFile." So redirect stderr.
+    :# Gotcha: The exit code does not survive the 'sub-shell' return. So test it inside, and change the sub-shell output.
+    :# Gotcha: Testing variables in the subshell requires three pairs of ^. So use if errorlevel 1.
+    for /f "delims=" %%g in (
+      '%NMAKE% /nologo /s /c /f %MAKEFILE% /x - goal_name 2^>NUL ^& if errorlevel 1 echo :'
+    ) do set "GOAL=%%g"
+    :# ":" is an impossible goal name, flagging the absence of target "goal_name" in the makefile.
+    if "!GOAL!"==":" set "GOAL="
+  )
+  :# If there's still no goal, give it up and keep the default log file name: make.log.
+  if defined GOAL ( :# Rename %LOGFILE% after the %GOAL%, and display the build log.
+    set LOGFILE2=!GOAL!.log
+    if defined OUTDIR set "LOGFILE2=%OUTDIR%\!LOGFILE2!"
+    if not "!LOGFILE2!"=="!LOGFILE!" (
+      if exist "!LOGFILE2!" del "!LOGFILE2!"
+      move "!LOGFILE!" "!LOGFILE2!" >nul
+      call :Debug.SetLog "!LOGFILE2!"
+    )
+  )
+)
+
+if %MAKEDEPTH%==0 ( :# If this is the top-level instance of make.bat, show the final result
+  echo.>con
+  echo %RESULT% >con
+)
+
+if %MAKEDEPTH%==0 if not %ERROR%==0 if defined LOGFILE start notepad "%LOGFILE%"
 set "&="
 if defined POST_MAKE_ACTIONS set "&=&"
 endlocal %&% %POST_MAKE_ACTIONS% & exit /b %ERROR%
