@@ -145,13 +145,14 @@
 :#   2016-10-25 JFL Added option -r to configure a project recursively,       *
 :#                  without duplicating searches in each subdirectory.        *
 :#   2016-11-03 JFL Carry through the 16-bits MASM base in recursive runs.    *
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-03"
+set "VERSION=2016-11-05"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -839,6 +840,7 @@ goto EchoArgs.loop
 :#                  errorlevel that was there on entrance.                    #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -892,6 +894,9 @@ goto :eof
 %IF_DEBUG% goto :Echo
 goto :Echo.Log
 
+:Exec.SetErrorLevel %1
+exit /b %1
+
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
@@ -907,13 +912,7 @@ goto :Exec.Start
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
 :# Save the initial errorlevel: Build a command for restoring it later
-if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow.
-  set "Exec.RestoreErr=%COMSPEC% /c exit %ERRORLEVEL%"
-) else if errorlevel 1 ( :# For the common error 1, use the quick %FALSE.EXE% trick
-  set "Exec.RestoreErr=%FALSE.EXE%"
-) else ( :# For no error, use the quick %TRUE% trick
-  set "Exec.RestoreErr=%TRUE.EXE%"
-)
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%"
 set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
@@ -975,15 +974,17 @@ endlocal & if not .%NOEXEC%.==.1. (
   set "NOREDIR=%NOREDIR%"
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
-  set "NOREDIR=%NOREDIR0%"
-  call :Exec.ShowExitCode
+  set "Exec.ErrorLevel=!ERRORLEVEL!"
+  set "NOREDIR=%NOREDIR0%" &:# Sets ERRORLEVEL=1 in Windows XP/64
+  call :Exec.ShowExitCode !Exec.ErrorLevel!
 )
 goto :eof
 
-:Exec.ShowExitCode
-%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %ERRORLEVEL%
-if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %ERRORLEVEL%
-exit /b %ERRORLEVEL%
+:Exec.ShowExitCode %1
+set "Exec.ErrorLevel="
+%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
+exit /b %1
 
 :Exec.End
 
@@ -1694,6 +1695,7 @@ for %%d in ("%windir%" "%HOME%" ".") do (
     %DO% call "%%~d\%%~f"
     if errorlevel 1 (
       set "ERROR=!ERRORLEVEL!"
+      >&2 %ECHO% configure.bat: "%%~d\%%~f" failed with error !ERROR!
       del %CONFIG.BAT%
       exit /b !ERROR!
     )
@@ -1941,6 +1943,7 @@ if defined POST_CONFIG_ACTIONS set "POST_CONFIG_ACTIONS=%POST_CONFIG_ACTIONS:¡¡¡
 %POST_CONFIG_ACTIONS%
 
 :# Generate the %CONFIG.BAT% file, defining variables for use by nmake files.
+for %%c in ("%CONFIG.BAT%") do %ECHO.V% :# Writing %%~fc
 :# Note: nmake variable names cannot contain dots. Use _ instead.
 %CONFIG%.
 %CONFIG% SET "PF32=%PF32%" ^&:# 32-bits Program Files
