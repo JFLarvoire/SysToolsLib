@@ -142,17 +142,21 @@
 :#   2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      *
 :#   2016-10-19 JFL Bug fix: Make sure the exit code is 0 when successful.    *
 :#   2016-10-20 JFL Added a workaround for an XP/64 bug causing build failure.*
+:#   2016-10-25 JFL Added option -r to configure a project recursively,       *
+:#                  without duplicating searches in each subdirectory.        *
+:#   2016-11-03 JFL Carry through the 16-bits MASM base in recursive runs.    *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
-setlocal enableextensions enabledelayedexpansion
-set "VERSION=2016-10-20"
+setlocal EnableExtensions EnableDelayedExpansion
+set "VERSION=2016-11-03"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
 set  ARGS=%*
+
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
 
@@ -413,7 +417,8 @@ goto :eof
 :#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
-:#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
+:#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
+:#                                  Always set using call :Debug.SetLog       #
 :#                  %DEBUG%         Debug mode. 0=Off; 1=On. Use functions    #
 :#                                  Debug.Off and Debug.On to change it.      #
 :#                                  Inherited. Default=0.                     #
@@ -471,6 +476,8 @@ goto :eof
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -567,6 +574,7 @@ set "LOG=call :Echo.Log"
 set ">>LOGFILE=>>%LOGFILE%"
 if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
 if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
+if .%NOREDIR%.==.1. set "LOG=rem" & set ">>LOGFILE=rem" &:# A parent script is already redirecting output. Trying to do it again here would fail. 
 set "ECHO.V=call :Echo.Verbose"
 set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.V=call :EchoVars.Verbose"
@@ -799,12 +807,11 @@ goto EchoArgs.loop
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                                                                            #
-:#  Variables       %LOGFILE%	Log file name.                                #
-:#                  %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
+:#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
 :#                              Inherited from the caller. Default=On.	      #
 :#                  %NOREDIR%   0=Log command output to the log file; 1=Don't #
-:#                              Default: 0                                    #
+:#                              Inherited. Default=0.                         #
 :#                              Useful in cases where the output must be      #
 :#                              shown to the user, and no tee.exe is available.
 :#                  %EXEC.ARGS%	Arguments to recursively pass to subcommands  #
@@ -830,6 +837,8 @@ goto EchoArgs.loop
 :#		    at redirecting output to the log file.		      #
 :#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
 :#                  errorlevel that was there on entrance.                    #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -843,7 +852,6 @@ set "EXEC=call :Exec"
 set "ECHO.X=call :Echo.NoExec"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-if not .%NOREDIR%.==.1. set "NOREDIR=0"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
@@ -906,6 +914,7 @@ if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow
 ) else ( :# For no error, use the quick %TRUE% trick
   set "Exec.RestoreErr=%TRUE.EXE%"
 )
+set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -920,7 +929,7 @@ shift
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
 if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
-  if .%Exec.HaveTee%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
+  if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
 )
 set Exec.Cmd=%*
@@ -940,6 +949,7 @@ set Exec.Cmd=%Exec.Cmd:">&"=">""&"%
 :# If there are output redirections, then cancel any attempt at redirecting output to the log file.
 set "Exec.Cmd1=%Exec.Cmd:"=%" &:# Remove quotes in the command string, to allow quoting the whole string.
 if not "%Exec.Cmd1:>=%"=="%Exec.Cmd1%" set "Exec.Redir="
+if defined Exec.Redir set "NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
 :# Second stage: Convert quoted redirection operators (Ex: ">") to a usable (Ex: >) and a displayable (Ex: ^>) value.
 :# Must be once for each of the four < > | & operators.
 :# Since each operation removes half of ^ escape characters, then insert
@@ -962,8 +972,10 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  set "NOREDIR=%NOREDIR%"
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
+  set "NOREDIR=%NOREDIR0%"
   call :Exec.ShowExitCode
 )
 goto :eof
@@ -1114,6 +1126,7 @@ for /d %%p in (C:\MASM* \MASM* "%PF32%\MASM*" "%PF64%\MASM*") do (
 )
 set "MASM=" & set "VC16.AS=" & goto :find16.done_masm
 :find16.found_masm
+set "VC16.MASM=%MASM%"
 set VC16.AS="%MASM%\BIN\ML.EXE"
 echo DOS	AS	x86	!VC16.AS!
 :find16.done_masm
@@ -1549,6 +1562,7 @@ echo   -d            Debug mode. Display internal variables and function calls
 echo   -masm PATH    Path to MASM install dir. Default: C:\MASM
 echo   -msvc PATH    Path to MSVC 16-bits tools install dir. Default: C:\MSVC
 echo   -o OUTDIR     Output base directory. Default: .
+echo   -r            Recursively configure all subprojects. Uses make config
 echo   -v            Verbose mode. Display what this script does
 echo   -vs PATH      Path to Visual Studio install dir. Default: Latest avail.
 echo   -V            Display %SCRIPT% version
@@ -1575,6 +1589,7 @@ if "!ARG!"=="-h" goto help
 if "!ARG!"=="-masm" %POPARG% & set "MASM=!ARG!" & goto next_arg
 if "!ARG!"=="-msvc" %POPARG% & set "MSVC=!ARG!" & goto next_arg
 if "!ARG!"=="-o" %POPARG% & set "OUTDIR=!ARG!" & goto next_arg
+if "!ARG!"=="-r" set "CONFIGURE-ALL=1" & goto next_arg
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-vs" %POPARG% & set "VSTUDIO=!ARG!" & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
@@ -1593,6 +1608,9 @@ if exist %CONFIG.BAT% del %CONFIG.BAT%
 %CONFIG% :#
 %CONFIG% :# Invoke configure.bat manually if anything changes in the tools config, such as
 %CONFIG% :# installing a Visual Studio update, or updating a configure.XXX.bat script.
+
+:# If this is a recursive all, no need to regenerate variables and rescan the system for compilers, etc.
+if defined ADD_POST_CONFIG_ACTION goto :Configure_init_done
 
 :# Find Program Files directories
 :# Gotcha: When invoked recursively by nmake, both %ProgramFiles% and %ProgramFiles(x86)%
@@ -1663,6 +1681,9 @@ set ADD_POST_MAKE_ACTION=%MACRO% ( %\n%
   %ON_MACRO_EXIT% set "POST_MAKE_ACTIONS=%'!%POST_MAKE_ACTIONS%'!%%'!%MACRO.ARGS:~1%'!%" %/ON_MACRO_EXIT% %\n%
 ) %/MACRO%
 %IF_DEBUG% set ADD_POST_MAKE_ACTION &:# Display the macro, for debugging changes
+
+:# At this stage, we have all configure.bat mechanics ready, and compilers identified
+:Configure_init_done
 
 :# Call other local and project-specific configure scripts, possibly overriding all the above
 :# Must be placed before the following commands, to allow defining %MSVCLIBX%, %SYSLIB%, %98DDK%, %BOOST%, %PTHREADS%
@@ -1857,7 +1878,9 @@ for %%v in (VCIA64 VC64 VCARM VCARM64) do if defined %%v (
 )
 
 :# Define legacy variables until we change all make files to use the generalized names above
+:# Also useful in recursive configurations, where we skip the MS tools search
 set "MSVC=%VC16%" &:# Microsoft Visual C++ 16-bits base path
+set "MASM=%VC16.MASM%" &:# 16-bits assembler base path 
 set "MAPSYM=%VC16.MS%" &:# 16-bits debugging symbols generator 
 
 set VS=VS32
@@ -2000,6 +2023,9 @@ if defined POST_MAKE_ACTIONS (
 :# The config.bat script must explicitly return 0, as in XP some set commands do set errorlevel 1!
 %CONFIG%.
 %CONFIG% exit /b 0 ^&:# Configuration done successfully
+
+:# Optionally repeat the configuration recursively using the makefile's config pseudo target
+if "%CONFIGURE-ALL%"=="1" %EXEC% %ARG0:configure.bat=make.bat% config
 
 :# Configuration file created successfully
 exit /b 0
