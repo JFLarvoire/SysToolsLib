@@ -158,7 +158,8 @@
 :#   2016-10-19 JFL Bug fix: Routine :Exec now preserves initial errorlevel.  #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
-:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
+:#                  Indent sub-scripts output in debug mode.                  #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -866,7 +867,8 @@ goto EchoArgs.loop
 :#                  errorlevel that was there on entrance.                    #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
-:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
+:#                  Indent sub-scripts output in debug mode.                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -998,10 +1000,12 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
   set "NOREDIR=%NOREDIR%"
+  %IF_DEBUG% set "INDENT=%INDENT%  "
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
   set "Exec.ErrorLevel=!ERRORLEVEL!"
   set "NOREDIR=%NOREDIR0%" &:# Sets ERRORLEVEL=1 in Windows XP/64
+  %IF_DEBUG% set "INDENT=%INDENT%"
   call :Exec.ShowExitCode !Exec.ErrorLevel!
 )
 goto :eof
