@@ -10,6 +10,8 @@
 #    2016-10-05 JFL jf.larvoire@hpe.com created this file.                    #
 #    2016-10-11 JFL Adapted for use with make files in the global include dir.#
 #    2016-10-13 JFL Added target cleanenv.                                    #
+#    2016-11-02 JFL Use macro BATMAKE for recursive calls to make.bat.        #
+#    2016-11-03 JFL Added target config.                                      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -23,12 +25,14 @@ MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 
 SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F NMakefile # Recursive call to this make file
+BATMAKE=call $(BMAKE)	# Recursive call to the make.bat script
+BATCONF=call $(BCONF)	# Recursive call to the configure.bat script
 
 # Default goal: Build MsvcLibX in the src subdirectory
 all: MsvcLibX
 
-src MsvcLibX: NUL
-    make.bat -C src -L & if errorlevel 1 exit /b &:# Build the module in dir src, using the current log file 
+src MsvcLibX: NUL	# Build the module in dir src, using the current log file
+    $(BATMAKE) -C src || echo.>con & exit /b &:# The echo. avoids a 5s delay in case of error. no idea why.
 
 # Update the make system scripts in the src subdirectory
 update_all updates: NUL
@@ -44,7 +48,7 @@ $(DIR)\$(FILE): $(STINCLUDE)\$(FILE)
 
 # Erase all output files
 clean mostlyclean distclean:
-    make.bat -L -C src $@ & if errorlevel 1 exit /b
+    $(BATMAKE) -C src $@
     -rd /S /Q lib	>NUL 2>&1
 !IF DEFINED(OUTDIR)
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
@@ -62,7 +66,17 @@ goal_name:
 # Erase all global environment variables created by this build
 VARS=
 cleanenv:
-    @make.bat -L -C src $@ 2>NUL &:# Recursively run in sub-project directories
+    $(BATMAKE) -C src $@ 2>NUL &:# Recursively run in sub-project directories
+
+# Other common goals
+dist zip:
+    $(BATMAKE) -C src $@ &:# Recursively run in the src subdirectory
+
+# Run the configure script in every subdirectory
+config:
+    cd src
+    $(BATCONF)    || exit /b	&:# Force running configure.bat again in the src subdirectory
+    $(BATMAKE) $@ || exit /b	&:# Recursively run make.bat in the src subdirectory
 
 # Display a help screen
 help:
@@ -72,14 +86,11 @@ Nmake definitions:       (Definition must be quoted if it contains spaces)
 
 Targets:
   all                    Build all MsvcLibX library versions (default)
-  clean                  Erase all output files
+  clean                  Delete all files built here, and all backup files
+  distclean              Do a clean, then delete config.*.bat files
   update                 Update one file in src, defined by the FILE variables
   updates                Update all make scripts in directory src
   zip                    Build an MsvcLibX.zip source archive. Requires 7-zip.
 <<
     make -L -C src help
-
-# Other common goals
-dist zip: updates NUL
-    make.bat -L -C src $@ & if errorlevel 1 exit /b
 
