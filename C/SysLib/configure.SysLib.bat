@@ -15,6 +15,7 @@
 :#                  by that on MSVCLIBX, even for building the BIOS version.  *
 :#   2016-09-27 JFL Correct the final SYSLIB if there's a different OUTDIR.   *
 :#   2016-10-07 JFL Avoid useless warnings if the necessary compilers are miss.
+:#   2016-11-03 JFL Removed the side effect creating %OUTDIR%.		      *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -35,10 +36,7 @@ if defined VC16.CC %USE_SDK% LMPTK &:# We only need it for building for DOS
 :# Define where other dependant libraries should look for SYSLIB
 set "BUILT_SYSLIB=%SYSLIB%"    &:# By default, use the local instance
 if defined OUTDIR (		:# But if there's a different OUTDIR, use it instead 
-  if not exist "%OUTDIR%" md "%OUTDIR%"
-  pushd "%OUTDIR%"
-  set "BUILT_SYSLIB=!CD!"
-  popd
+  for %%o in ("%OUTDIR%") do @set "BUILT_SYSLIB=%%~fo"
 )
 
 :# Set the local environment variable just before make exits, so that future commands in this CMD window have it.
