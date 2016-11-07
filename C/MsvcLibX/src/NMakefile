@@ -24,6 +24,8 @@
 #    2016-11-03 JFL Added target config.                                      #
 #		    Updated the cleanenv: script to display the reg command   #
 #		    it uses to delete the global environment variable.	      #
+#    2016-11-07 JFL Place LIBDIR in the parent directory even if OUTDIR defnd.#                                     #
+#		    Do not copy include files to OUTDIR anymore.	      #                                    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -35,7 +37,11 @@
 
 !IF DEFINED(OUTDIR)
 OD=$(OUTDIR)^\
-LIBDIR=$(OUTDIR)\lib
+!IF "$(OUTDIR:\=)"=="$(OUTDIR)"
+LIBDIR=..\$(OUTDIR)\lib	# If OUTDIR is relative, put it in MsvcLibX top directory
+!ELSE
+LIBDIR=$(OUTDIR)\lib    # If OUTDIR is absolute, use it as is
+!ENDIF
 !ELSE
 OD=
 LIBDIR=..\lib
@@ -97,74 +103,74 @@ $(OD)DOS\MsvcLibX.lib: $(OD)DOS\BIN\T\MsvcLibX.lib $(OD)DOS\BIN\S\MsvcLibX.lib $
 $(OD)DOS\DEBUG\MsvcLibX.lib: $(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib $(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib $(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib
     @echo Done building all DOS debug libraries
 
-$(OD)DOS\BIN\T\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\BIN\T\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS tiny release version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\T\%" "MEM=T" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXdt.lib
 
-$(OD)DOS\BIN\S\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\BIN\S\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS small release version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\S\%" "MEM=S" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXds.lib
 
-$(OD)DOS\BIN\L\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\BIN\L\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS large release version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\OBJ\L\%" "MEM=L" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXdl.lib
 
-$(OD)WIN95\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN95\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN95 release version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN95\OBJ\%" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXw95.lib
 
-$(OD)WIN32\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN32\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN32 release version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     set OD=$(OD)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN32\OBJ\%" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXw32.lib
 
-$(OD)WIN64\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN64\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN64 release version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak "DEBUG=0" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN64\OBJ\%" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXw64.lib
 
-$(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\DEBUG\BIN\T\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS tiny debug version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\T\%" "MEM=T" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXdtd.lib
 
-$(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\DEBUG\BIN\S\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS small debug version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\S\%" "MEM=S" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXdsd.lib
 
-$(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)DOS\DEBUG\BIN\L\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library DOS large debug version
     set OBJECTS=$(OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)DOS\DEBUG\OBJ\L\%" "MEM=L" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXdld.lib
 
-$(OD)WIN95\DEBUG\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN95\DEBUG\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN95 debug version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN95\DEBUG\OBJ\%" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXw95d.lib
 
-$(OD)WIN32\DEBUG\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN32\DEBUG\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN32 debug version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN32\DEBUG\OBJ\%" dirs $@
     if exist $@ copy $@ $(LIBDIR)\MsvcLibXw32d.lib
 
-$(OD)WIN64\DEBUG\MsvcLibX.lib: $(LIBDIR) INCDIR NUL
+$(OD)WIN64\DEBUG\MsvcLibX.lib: $(LIBDIR) NUL # INCDIR
     $(HEADLINE) Building MsvcLibX library WIN64 debug version
     set OBJECTS=$(OBJECTS) $(WIN32_OBJECTS)
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak "DEBUG=1" "PROGRAM=MsvcLibX" "OBJECTS=%OBJECTS:+=+$(OD)WIN64\DEBUG\OBJ\%" dirs $@
