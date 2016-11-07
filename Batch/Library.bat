@@ -160,6 +160,7 @@
 :#                  scripts.                                                  #
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
 :#                  Indent sub-scripts output in debug mode.                  #
+:#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -171,7 +172,7 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-05"
+set "VERSION=2016-11-06"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -869,6 +870,7 @@ goto EchoArgs.loop
 :#                  scripts.                                                  #
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
 :#                  Indent sub-scripts output in debug mode.                  #
+:#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -928,6 +930,7 @@ exit /b %1
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 set NOEXEC=0
 set "IF_NOEXEC=if .%NOEXEC%.==.1."
@@ -937,10 +940,9 @@ goto :Exec.Start
 :# Version supporting input and output redirections, and pipes.
 :# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or "2>>"
 :Exec
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
-:# Save the initial errorlevel: Build a command for restoring it later
-set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%"
 set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
@@ -1012,6 +1014,7 @@ goto :eof
 
 :Exec.ShowExitCode %1
 set "Exec.ErrorLevel="
+set "Exec.RestoreErr="
 %IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
 if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
 exit /b %1
@@ -3335,6 +3338,24 @@ call :Func#1
 %FUNCTION0%
 %ECHO% This is function #1
 %RETURN0% Returning from function #1
+
+:#----------------------------------------------------------------------------#
+:# Test %EXEC% and errorlevels, on entry and exit
+
+:testErrorLevel
+for /l %%n in (0,1,2) do (
+  echo.
+  call :Exec.SetErrorLevel %%n
+  echo :# Calling with ERRORLEVEL=!ERRORLEVEL!
+  %EXEC% call :testErrorLevelCallback
+  echo :# Returned with ERRORLEVEL=!ERRORLEVEL!
+)
+exit /b 0
+
+:testErrorLevelCallback
+set ERROR=%ERRORLEVEL%
+%ECHOVARS% ERROR
+exit /b %ERROR%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
