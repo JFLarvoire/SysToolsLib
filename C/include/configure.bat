@@ -151,13 +151,16 @@
 :#                  Added options -l and -L.                                  *
 :#                  Changed PMODE variable name to PMODELIB.                  *
 :#                  Fixed recursion to avoid configuring deep level 2^N times.*
+:#   2016-11-07 JFL Include OUTDIR in LIBPATH for SysToolsLibs built here.    *
+:#                  Commented-put Visual Studio 6 path, tested not to work.   *
+:#                  Bug fix: Detect Visual Studio 8 Windows SDK AMD64 lib.    *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-05"
+set "VERSION=2016-11-07"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -845,8 +848,9 @@ goto EchoArgs.loop
 :#                  errorlevel that was there on entrance.                    #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
-:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
-:#                  Indent sub-scripts output in debug mode.                  *
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
+:#                  Indent sub-scripts output in debug mode.                  #
+:#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -906,6 +910,7 @@ exit /b %1
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 set NOEXEC=0
 set "IF_NOEXEC=if .%NOEXEC%.==.1."
@@ -915,10 +920,9 @@ goto :Exec.Start
 :# Version supporting input and output redirections, and pipes.
 :# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or "2>>"
 :Exec
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
-:# Save the initial errorlevel: Build a command for restoring it later
-set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%"
 set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
@@ -990,6 +994,7 @@ goto :eof
 
 :Exec.ShowExitCode %1
 set "Exec.ErrorLevel="
+set "Exec.RestoreErr="
 %IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
 if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
 exit /b %1
@@ -1221,13 +1226,15 @@ goto :lastvsXP	&:# Skip all Visual Studio versions that don't support WinXP deve
 set "%VS%=" & set "%VC%=" & set "%VC%.BIN="
 :# The Visual C++ subdirectory can be named VC, VC98, or VC7 depending on the VS version.
 for %%s in (%~2) do (
-  for /d %%d in ("%PF64%\%~3\VC*" "%PF32%\%~3\VC*") do if exist "%%d\%%s\cl.exe" (
-    set "%VS%=%%~dpd" &:# Remove the VC* subdir name
-    set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
-    set "%VC%=%%d"
-    set "%VC%.BIN=%%d\%%s"
-    set "%VC%.CC="%%d\%%s\cl.exe""
-    exit /b 0
+  for %%p in (%PF64AND32%) do (
+    for /d %%d in ("%%~p\%~3\VC*") do if exist "%%d\%%s\cl.exe" (
+      set "%VS%=%%~dpd" &:# Remove the VC* subdir name
+      set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
+      set "%VC%=%%d"
+      set "%VC%.BIN=%%d\%%s"
+      set "%VC%.CC="%%d\%%s\cl.exe""
+      exit /b 0
+    )
   )
 )
 exit /b 1
@@ -1243,10 +1250,10 @@ exit /b 1
 %SEARCH_IN% "Microsoft Visual Studio 10.0"	&& goto :foundvs    &:# VS 2010	5.00		5.00
 %SEARCH_IN% "Microsoft Visual Studio 9.0"	&& goto :foundvs    &:# VS 2008	5.00		5.00
 :lastvs95
-%SEARCH_IN% "Microsoft Visual Studio 8"		&& goto :foundvs    &:# VS 2005	4.00		5.00
-%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundoldvs &:# VS 7.1	4.00		4.00 
+%SEARCH_IN% "Microsoft Visual Studio 8"		&& goto :foundvs    &:# VS 2005	4.00		5.00		Tested and known to work fine
+%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundoldvs &:# VS 7.1	4.00		4.00 		Tested. Some problems worked around.
 %SEARCH_IN% "Microsoft Visual Studio .NET"	&& goto :foundoldvs &:# VS 7.0
-%SEARCH_IN% "Microsoft Visual Studio"		&& goto :foundoldvs &:# VS 6
+:# %SEARCH_IN% "Microsoft Visual Studio"	&& goto :foundoldvs &:# VS 6					Tested. MsvcLibX compilation fails. Support 
 SET "%VS%="
 %RETURN0%
 
@@ -1338,6 +1345,8 @@ if /i "!WINSDKPROC!"=="x86" (
   set "SUBDIR=%~1\lib"
 ) else (
   set "SUBDIR=%~1\lib\!WINSDKPROC!"
+  :# Visual Studio 8 platform SDK had the library called AMD64 instead of x86 as in later WinSDKs
+  if "!WINSDKPROC!"=="x64" if not exist "!SUBDIR!" set "SUBDIR=%~1\lib\AMD64" 
 )
 if exist "!SUBDIR!\kernel32.lib" (
   %ECHO.D% :# Found
@@ -1631,7 +1640,7 @@ if defined ADD_POST_CONFIG_ACTION goto :Configure_init_done
 :# is to rely on the fact that the PF32 and PF64 variables defined here are left unchanged.
 :# First checking for symlinks C:\Pgm32 and C:\Pgm64, which I had on some of my systems.
 if not defined PF32   set "PF32=C:\Pgm32"
-if not exist "%PF32%" set "PF32=%ProgramFiles(x86)%"
+if not exist "%PF32%" if defined "ProgramFiles(x86)" set "PF32=%ProgramFiles(x86)%"
 if not exist "%PF32%" set "PF32=%ProgramFiles%"
 
 if not defined PF64   set "PF64=C:\Pgm64"
@@ -1821,17 +1830,21 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
 if defined HAS_SDK_FLAGS set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS:~1%"
 %CONFIG% set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS%" ^&:# SDK detection flags for the C compiler
 
+:# Libraries we build may optionally be output in a subdirectory
+set "\OUTDIR="
+if defined OUTDIR if "!OUTDIR:\=!"=="!OUTDIR!" set "\OUTDIR=\!OUTDIR!"
+
 :# Update 16-bits include and library paths for well-known libraries
 for %%v in (VC16) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     :# Do not configure BIOSLIB, LODOSLIB, PMODELIB variables at this stage, as they'll be needed for BIOS builds only
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%%\OUTDIR%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
-      SET "%%v.LIBPATH=%MSVCLIBX%\lib;!%%v.LIBPATH!"
+      SET "%%v.LIBPATH=%MSVCLIBX%%\OUTDIR%\lib;!%%v.LIBPATH!"
     )
     if "%%k"=="LMPTK" ( :# LanManager 2.1 Programmer's ToolKit
       SET "%%v.INCPATH=!%%v.INCPATH!;%LMPTK%\DOS\NETSRC\H"
@@ -1847,15 +1860,15 @@ for %%v in (VC16) do if defined %%v (
     )
     if "%%k"=="BIOSLIB" ( :# BIOS library
       SET "%%v.INCPATH=!%%v.INCPATH!;%BIOSLIB%"
-      SET "%%v.LIBPATH=!%%v.LIBPATH!;%BIOSLIB%"
+      SET "%%v.LIBPATH=!%%v.LIBPATH!;%BIOSLIB%%\OUTDIR%"
     )
     if "%%k"=="LODOSLIB" ( :# Low DOS library
       SET "%%v.INCPATH=!%%v.INCPATH!;%LODOSLIB%"
-      SET "%%v.LIBPATH=!%%v.LIBPATH!;%LODOSLIB%"
+      SET "%%v.LIBPATH=!%%v.LIBPATH!;%LODOSLIB%\OUTDIR%%"
     )
     if "%%k"=="PMODELIB" ( :# Protected Mode library
       SET "%%v.INCPATH=!%%v.INCPATH!;%PMODELIB%"
-      SET "%%v.LIBPATH=!%%v.LIBPATH!;%PMODELIB%"
+      SET "%%v.LIBPATH=!%%v.LIBPATH!;%PMODELIB%%\OUTDIR%"
     )
   )
 )
@@ -1865,11 +1878,11 @@ for %%v in (VC95 VC32) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%%\OUTDIR%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
-      SET "%%v.LIBPATH=%MSVCLIBX%\lib;!%%v.LIBPATH!"
+      SET "%%v.LIBPATH=%MSVCLIBX%%\OUTDIR%\lib;!%%v.LIBPATH!"
     )
     if "%%k"=="98DDK" ( :# Windows 98 DDK
       :# Gotcha: Do not use %98DDK% here, as it's not expanded correctly in set xxxx32 commands
@@ -1896,11 +1909,11 @@ for %%v in (VCIA64 VC64 VCARM VCARM64) do if defined %%v (
   for %%k in (%SDK_LIST%) do if defined %%k (
     if "%%k"=="SYSLIB" ( :# System library
       SET "%%v.INCPATH=!%%v.INCPATH!;%SYSLIB%"
-      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%\$(BR)"
+      set "%%v.LIBPATH=!%%v.LIBPATH!;%SYSLIB%%\OUTDIR%\$(BR)"
     )
     if "%%k"=="MSVCLIBX" ( :# MSVC Library eXtensions library
       SET "%%v.INCPATH=%MSVCLIBX%\include;!%%v.INCPATH!" &:# Include MsvcLibX's _before_ MSVC's own include files
-      SET "%%v.LIBPATH=%MSVCLIBX%\lib;!%%v.LIBPATH!"
+      SET "%%v.LIBPATH=%MSVCLIBX%%\OUTDIR%\lib;!%%v.LIBPATH!"
     )
     if "%%k"=="GNUEFI" ( :# gnu-efi sources
       SET "%%v.INCPATH=!%%v.INCPATH!;%GNUEFI%\inc"
@@ -2043,7 +2056,7 @@ if defined POST_MAKE_ACTIONS (
 if "%CONFIGURE-ALL%"=="1" (
   set "CONFIGURE-ALL=0" &:# Avoid a combinatorial explosion
   set "MAKEDEPTH=0" &:# Prevent make.bat from trying to rename the log file in the end
-  %EXEC% %ARG0:configure.bat=make.bat% config
+  %EXEC% -L %ARG0:configure.bat=make.bat% config
 )
 
 :# Configuration file created successfully
