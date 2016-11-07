@@ -126,6 +126,7 @@
 #    2016-10-04 JFL Target distclean must delete config.*.bat files.	      #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #    2016-10-20 JFL Added missing inference rules to build .asm programs.     #
+#    2016-11-07 JFL Do not hide any command that's part of a build.           #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -172,7 +173,7 @@ MAKEPATH=$(STINCLUDE)
 # $(OS) = List of target operating systems to build for, separated by spaces
 # Note: The OS variable here conflicts with Windows' %OS%, defaulting to Windows_NT
 !IF "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
-OS=
+OS=/		# Initialize with a recognizable string that we'll remove later
 !IF DEFINED(DOS_CC)
 OS=$(OS) DOS
 !ENDIF
@@ -188,6 +189,8 @@ OS=$(OS) WIN32
 OS=$(OS) WIN64
 !ENDIF
 # Note: Don't attempt to build IA64 or ARM versions by default
+OS=$(OS:/ =)	# Remove the initial / and the first following space
+OS=$(OS:/=)	# Again, in the unlikely case that none of the default OSs matched
 !ENDIF
 
 !IF "$(OS)"=="all"
@@ -499,7 +502,7 @@ Also supports .obj and .res to compile C, C++, ASM, and Windows .RC files.
 all: $(REQS) $(ALL)
 !ELSE # Another scheme for defining all goals, using $(PROGRAMS)
 all: $(REQS) # Having a batch file is necessary for dynamically updating the ...FAILED variables.
-    @cmd /c <<"$(TMP)\build_all.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
+    cmd /c <<"$(TMP)\build_all.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
         @echo off
         setlocal EnableExtensions EnableDelayedExpansion
         set "PROGRAMS=$(PROGRAMS)"
@@ -530,31 +533,31 @@ all: $(REQS) # Having a batch file is necessary for dynamically updating the ...
 !ENDIF
 
 # Dummy targets for dynamically checking common prerequisites
-# Prefix these commands with an @, to avoid getting the word "Error" in the build log.
+ERRMSG=>&2 echo Error: # Use a variable, to avoid getting the word "Error" in the build log when there's no error
 BiosLib_library:
-    @if not defined BIOSLIB echo>con Error: The BiosLib library is not configured & exit /b 1
-    @if not exist %BIOSLIB%\clibdef.h echo>con Error: The BiosLib library is not configured correctly & exit /b 1
-    @if not exist %BIOSLIB%\bios.lib echo>con Error: The BiosLib library must be built first & exit /b 1
+    if not defined BIOSLIB %ERRMSG% The BiosLib library is not configured & exit /b 1
+    if not exist %BIOSLIB%\clibdef.h %ERRMSG% The BiosLib library is not configured correctly & exit /b 1
+    if not exist %BIOSLIB%\bios.lib %ERRMSG% The BiosLib library must be built first & exit /b 1
 
 LoDosLib_library:
-    @if not defined LODOSLIB echo>con Error: The LoDosLib library is not configured & exit /b 1
-    @if not exist %LODOSLIB%\lodos.h echo>con Error: The LoDosLib library is not configured correctly & exit /b 1
-    @if not exist %LODOSLIB%\lodos.lib echo>con Error: The LoDosLib library must be built first & exit /b 1
+    if not defined LODOSLIB %ERRMSG% The LoDosLib library is not configured & exit /b 1
+    if not exist %LODOSLIB%\lodos.h %ERRMSG% The LoDosLib library is not configured correctly & exit /b 1
+    if not exist %LODOSLIB%\lodos.lib %ERRMSG% The LoDosLib library must be built first & exit /b 1
 
 SysLib_library:
-    @if not defined SYSLIB echo>con Error: The SysLib library is not configured & exit /b 1
-    @if not exist %SYSLIB%\oprintf.h echo>con Error: The SysLib library is not configured correctly & exit /b 1
-    @if not exist %SYSLIB%\lib\*.lib echo>con Error: The SysLib library must be built first & exit /b 1
+    if not defined SYSLIB %ERRMSG% The SysLib library is not configured & exit /b 1
+    if not exist %SYSLIB%\oprintf.h %ERRMSG% The SysLib library is not configured correctly & exit /b 1
+    if not exist %SYSLIB%\$(OD)lib\*.lib %ERRMSG% The SysLib library must be built first & exit /b 1
 
 MsvcLibX_library:
-    @if not defined MSVCLIBX echo>con Error: The MsvcLibX library is not configured & exit /b 1
-    @if not exist %MSVCLIBX%\include\msvclibx.h echo>con Error: The MsvcLibX library is not configured correctly & exit /b 1
-    @if not exist %MSVCLIBX%\lib\*.lib echo>con Error: The MsvcLibX library must be built first & exit /b 1
+    if not defined MSVCLIBX %ERRMSG% The MsvcLibX library is not configured & exit /b 1
+    if not exist %MSVCLIBX%\include\msvclibx.h %ERRMSG% The MsvcLibX library is not configured correctly & exit /b 1
+    if not exist %MSVCLIBX%\$(OD)lib\*.lib %ERRMSG% The MsvcLibX library must be built first & exit /b 1
 
-PMode_library:
-    @if not defined PMODE echo>con Error: The PMode library is not configured & exit /b 1
-    @if not exist %PMODE%\pmode.h echo>con Error: The PMode library is not configured correctly & exit /b 1
-    @if not exist %PMODE%\pmode.lib echo>con Error: The PMode library must be built first & exit /b 1
+PModeLib_library:
+    if not defined PMODELIB %ERRMSG% The PModeLib library is not configured & exit /b 1
+    if not exist %PMODELIB%\pmode.h %ERRMSG% The PModeLib library is not configured correctly & exit /b 1
+    if not exist %PMODELIB%\pmode.lib %ERRMSG% The PModeLib library must be built first & exit /b 1
 
 !IF !DEFINED(ZIPFILE)
 ZIPFILE=sources.zip
@@ -562,11 +565,11 @@ ZIPSOURCES=*.c *.cpp *.h *.asm *.inc *Makefile *.mak *.bat *.rc *.def *.manifest
 !ENDIF
 
 $(ZIPFILE): $(ZIPSOURCES)
-    echo>con Building $@ ...
+    $(MSG) Building $@ ...
     if exist $@ del $@
     set PATH=$(PATH);C:\Program Files\7-zip
     7z.exe a $@ $**
-    echo>con ... done
+    $(MSG) ... done
 
 dist zip: $(ZIPFILE)
 
