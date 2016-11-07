@@ -83,13 +83,14 @@
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
 :#                  Indent sub-scripts output in debug mode.                  *
 :#                  Avoid getting the PID if we have it already.              *
+:#   2016-11-07 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-05"
+set "VERSION=2016-11-07"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -776,8 +777,9 @@ goto EchoArgs.loop
 :#                  errorlevel that was there on entrance.                    #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
-:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      *
-:#                  Indent sub-scripts output in debug mode.                  *
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
+:#                  Indent sub-scripts output in debug mode.                  #
+:#   2016-11-07 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -837,6 +839,7 @@ exit /b %1
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 set NOEXEC=0
 set "IF_NOEXEC=if .%NOEXEC%.==.1."
@@ -846,10 +849,9 @@ goto :Exec.Start
 :# Version supporting input and output redirections, and pipes.
 :# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or "2>>"
 :Exec
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
-:# Save the initial errorlevel: Build a command for restoring it later
-set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%"
 set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
@@ -921,6 +923,7 @@ goto :eof
 
 :Exec.ShowExitCode %1
 set "Exec.ErrorLevel="
+set "Exec.RestoreErr="
 %IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
 if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
 exit /b %1
