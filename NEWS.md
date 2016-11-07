@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-11-07
+### Changed
+- Fixed and improved the way C make files and scripts use the optional OUTDIR.
+- C\include\configure.bat: Performance improvements and fixed bugs with very old Visual Studio versions.
+- Batch\Library.bat: Updated the recent %EXEC% entry errorlevel fixes to work with %DO% too.
+
 ## [unreleased] 2016-11-05
 ### Changed
 - Updated the make scripts and make files to always reuse the initial script instance, when invoked recursively in subdirectories.
