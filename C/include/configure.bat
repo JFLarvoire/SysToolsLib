@@ -154,13 +154,14 @@
 :#   2016-11-07 JFL Include OUTDIR in LIBPATH for SysToolsLibs built here.    *
 :#                  Commented-put Visual Studio 6 path, tested not to work.   *
 :#                  Bug fix: Detect Visual Studio 8 Windows SDK AMD64 lib.    *
+:#   2016-11-08 JFL Fixed a bug introduced yesterday, breaking VC detection.  *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-07"
+set "VERSION=2016-11-08"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1227,6 +1228,7 @@ set "%VS%=" & set "%VC%=" & set "%VC%.BIN="
 :# The Visual C++ subdirectory can be named VC, VC98, or VC7 depending on the VS version.
 for %%s in (%~2) do (
   for %%p in (%PF64AND32%) do (
+    :# %ECHO.D% Searching in "%%~p\%~3\VC*\%%s"
     for /d %%d in ("%%~p\%~3\VC*") do if exist "%%d\%%s\cl.exe" (
       set "%VS%=%%~dpd" &:# Remove the VC* subdir name
       set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
@@ -1640,7 +1642,7 @@ if defined ADD_POST_CONFIG_ACTION goto :Configure_init_done
 :# is to rely on the fact that the PF32 and PF64 variables defined here are left unchanged.
 :# First checking for symlinks C:\Pgm32 and C:\Pgm64, which I had on some of my systems.
 if not defined PF32   set "PF32=C:\Pgm32"
-if not exist "%PF32%" if defined "ProgramFiles(x86)" set "PF32=%ProgramFiles(x86)%"
+if not exist "%PF32%" set "PF32=%ProgramFiles(x86)%"
 if not exist "%PF32%" set "PF32=%ProgramFiles%"
 
 if not defined PF64   set "PF64=C:\Pgm64"
