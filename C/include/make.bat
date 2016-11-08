@@ -84,13 +84,14 @@
 :#                  Indent sub-scripts output in debug mode.                  *
 :#                  Avoid getting the PID if we have it already.              *
 :#   2016-11-07 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. *
+:#   2016-11-08 JFL Change back to using variable MAKE, required by nmake<=7.1*
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-07"
+set "VERSION=2016-11-08"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -1080,12 +1081,12 @@ if errorlevel 1 exit /b
 %ECHOVARS.D% CD MESSAGES OUTDIR
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
-if not defined NMAKE set "NMAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
+if not defined MAKE set "MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
 set "NMAKEFLAGS=/NOLOGO /c /s"
 %IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
 :# Clear a few multi-line variables that pollute the (nmake /P) logs
 for %%v in (LF1 LF2 LF3 LF4 LF5 MACRO /MACRO ON_MACRO_EXIT FUNCTION RETURN) do set "%%v="
-%EXEC% %NMAKE% %NMAKEFLAGS% /F %MAKEFILE% %*
+%EXEC% %MAKE% %NMAKEFLAGS% /F %MAKEFILE% %*
 exit /b
 
 :#-----------------------------------------------------------------------------
@@ -1359,9 +1360,9 @@ if defined NEEDMAKEFILE set MAKEARGS=/f !MAKEFILE! !MAKEARGS!
 
 :# Now run nmake
 set RESULT=Success
-if not defined NMAKE set "NMAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
-:# set CMD=%NMAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
-set CMD=%NMAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
+if not defined MAKE set "MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
+:# set CMD=%MAKE% /f %MAKEFILE% /x - %NMAKEFLAGS% %MAKEDEFS% %MAKEGOALS%
+set CMD=%MAKE% %NMAKEFLAGS% MESSAGES=1 %MAKEARGS%
 setlocal &:# Clear a few multi-line variables that pollute the (nmake /P) logs
 for %%v in (LF1 LF2 LF3 LF4 LF5 MACRO /MACRO ON_MACRO_EXIT FUNCTION RETURN) do set "%%v="
 %EXEC% %CMD%
@@ -1400,7 +1401,7 @@ if %MAKEDEPTH%==0 if defined LOGFILE ( :# If this is the top-level instance of m
     :# Gotcha: The exit code does not survive the 'sub-shell' return. So test it inside, and change the sub-shell output.
     :# Gotcha: Testing variables in the subshell requires three pairs of ^. So use if errorlevel 1.
     for /f "delims=" %%g in (
-      '%NMAKE% /nologo /s /c /f %MAKEFILE% /x - goal_name 2^>NUL ^& if errorlevel 1 echo :'
+      '%MAKE% /nologo /s /c /f %MAKEFILE% /x - goal_name 2^>NUL ^& if errorlevel 1 echo :'
     ) do set "GOAL=%%g"
     :# ":" is an impossible goal name, flagging the absence of target "goal_name" in the makefile.
     if "!GOAL!"==":" set "GOAL="
