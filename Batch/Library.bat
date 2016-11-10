@@ -161,6 +161,9 @@
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
 :#                  Indent sub-scripts output in debug mode.                  #
 :#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
+:#   2016-11-09 JFL Bug fix: %RETURN% failed if an UPVAR contained a '?'.     #
+:#                  Added routine :lsort.                                     #
+:#   2016-11-10 JFL Added another implementation for routine :now.            #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -172,7 +175,7 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-06"
+set "VERSION=2016-11-09"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -538,6 +541,8 @@ set "DEBUG.lbrack=["	&:# One left bracket
 set "DEBUG.rbrack=]"	&:# One right bracket
 set "DEBUG.sp= "	&:# One space
 set "DEBUG.tab=	"	&:# One tabulation
+set "DEBUG.quest=?"	&:# One question mark
+set "DEBUG.ast=*"	&:# One asterisk
 set "DEBUG.cr=!CR!"	&:# One carrier return
 set "DEBUG.lf=!LF!"	&:# One line feed
 set "DEBUG.bs=!BS!"	&:# One backspace
@@ -559,6 +564,7 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
       set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
       call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
       set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:?=%%DEBUG.quest%%%'!%"	%# Encode question marks #% %\n%
     ) %\n%
     set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%" %\n%
   ) %\n%
@@ -1811,6 +1817,7 @@ call :trimright "%~1" "%~2"
 :#  Notes 	    Inspired from Tcl list management routines                #
 :#                                                                            #
 :#  History                                                                   #
+:#   2016-11-09 JFL Added routine lsort.                                      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -1867,6 +1874,23 @@ set "%~1=%list%"
 call set "foreach_list=%%%2%%"
 for %%i in (%foreach_list%) do (set "%1=%%i" & %~3)
 %RETURN%
+
+:lsort LIST_NAME [RETVAR]
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1"
+%UPVAR% %RETVAR%
+set "SORTED_LIST="
+%ECHOVARS.D% %~1
+:# No idea why %FOREACHLINE% appends a space to every line
+%FOREACHLINE% %%l in ('^(for %%e in ^(!%~1!^) do @echo %%e^) ^| sort') do set "SORTED_LIST=!SORTED_LIST!%%l"
+if defined SORTED_LIST set "SORTED_LIST=!SORTED_LIST:~0,-1!"
+set "%RETVAR%=!SORTED_LIST!"
+%RETURN%
+
+:list2lines LIST_NAME
+if defined %~1 for %%e in (!%~1!) do (echo.%%e)
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -2683,6 +2707,20 @@ SET %first%=%D:~0,2%
 SET %second%=%D:~3,2%
 SET %third%=%D:~6,4%
 endlocal & SET "YEAR=%yy%" & SET "MONTH=%mm%" & SET "DAY=%dd%" & goto :eof
+
+:#----------------------------------------------------------------------------#
+
+:# Another implementation based on wmic. Not available in early XP versions?
+:# Just as fast as the pure batch version using reg for internationalization.
+
+:noww
+setlocal enableextensions
+for %%i in ("0=Sun" "1=Mon" "2=Tue" "3=Wed" "4=Thu" "5=Fri" "6=Sat") do set "wd%%~i"
+for /f %%i in ('WMIC OS GET LocalDateTime /value') do for /f "tokens=2 delims==" %%j in ("%%i") do set "dt=%%j"
+:# for /f %%i in ('WMIC PATH Win32_LocalTime GET DayOfWeek /value') do for /f "tokens=2 delims==" %%j in ("%%i") do (
+:#   call set "dt=%%wd%%j%% %dt:~,4%-%dt:~4,2%-%dt:~6,2% %dt:~8,2%:%dt:~10,2%:%dt:~12,5%"
+:# )
+endlocal & set "YEAR=%dt:~,4%" & set "MONTH=%dt:~4,2%" & set "DAY=%dt:~6,2%" & set "HOUR=%dt:~8,2%" & set "MINUTE=%dt:~10,2%" & set "SECOND=%dt:~12,2%" & set "MS=%dt:~15,3%"
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
