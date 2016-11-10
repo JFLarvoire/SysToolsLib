@@ -21,13 +21,17 @@
 :#   2011-12-12 JFL Finalized change and fixed bugs.			      #
 :#   2016-10-21 JFL Updated the debugging framework to the latest version.    #
 :#                  Added commands del and rd.      			      #
+:#   2016-11-09 JFL Changed all routines to return correct errorlevels.       #
+:#                  Fixed the display of values containing '%' characters.    #
+:#                  Fixed the display of values containing '?' characters.    #
+:#                  Option -f now also forces deletions.                      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-10-20"
+set "VERSION=2016-11-10"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -305,7 +309,8 @@ goto :eof
 :#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
-:#                  %LOGFILE%       Log file name. Inherited. Default=NUL.    #
+:#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
+:#                                  Always set using call :Debug.SetLog       #
 :#                  %DEBUG%         Debug mode. 0=Off; 1=On. Use functions    #
 :#                                  Debug.Off and Debug.On to change it.      #
 :#                                  Inherited. Default=0.                     #
@@ -363,6 +368,8 @@ goto :eof
 :#                  Added a backspace entity.                                 #
 :#   2015-12-01 JFL Bug fix: %FUNCTION% with no arg did change the exp. mode. #
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -394,6 +401,8 @@ set "DEBUG.lbrack=["	&:# One left bracket
 set "DEBUG.rbrack=]"	&:# One right bracket
 set "DEBUG.sp= "	&:# One space
 set "DEBUG.tab=	"	&:# One tabulation
+set "DEBUG.quest=?"	&:# One question mark
+set "DEBUG.ast=*"	&:# One asterisk
 set "DEBUG.cr=!CR!"	&:# One carrier return
 set "DEBUG.lf=!LF!"	&:# One line feed
 set "DEBUG.bs=!BS!"	&:# One backspace
@@ -415,6 +424,7 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
       set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
       call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
       set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
+      set "DEBUG.VALUE=%'!%DEBUG.VALUE:?=%%DEBUG.quest%%%'!%"	%# Encode question marks #% %\n%
     ) %\n%
     set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%" %\n%
   ) %\n%
@@ -459,6 +469,7 @@ set "LOG=call :Echo.Log"
 set ">>LOGFILE=>>%LOGFILE%"
 if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
 if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
+if .%NOREDIR%.==.1. set "LOG=rem" & set ">>LOGFILE=rem" &:# A parent script is already redirecting output. Trying to do it again here would fail. 
 set "ECHO.V=call :Echo.Verbose"
 set "ECHO.D=call :Echo.Debug"
 set "ECHOVARS.V=call :EchoVars.Verbose"
@@ -691,12 +702,11 @@ goto EchoArgs.loop
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                                                                            #
-:#  Variables       %LOGFILE%	Log file name.                                #
-:#                  %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
+:#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
 :#                              Inherited from the caller. Default=On.	      #
 :#                  %NOREDIR%   0=Log command output to the log file; 1=Don't #
-:#                              Default: 0                                    #
+:#                              Inherited. Default=0.                         #
 :#                              Useful in cases where the output must be      #
 :#                              shown to the user, and no tee.exe is available.
 :#                  %EXEC.ARGS%	Arguments to recursively pass to subcommands  #
@@ -722,6 +732,11 @@ goto EchoArgs.loop
 :#		    at redirecting output to the log file.		      #
 :#   2016-10-19 JFL Bug fix: Make sure the :Exec initialization preserves the #
 :#                  errorlevel that was there on entrance.                    #
+:#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
+:#                  scripts.                                                  #
+:#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
+:#                  Indent sub-scripts output in debug mode.                  #
+:#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -735,7 +750,6 @@ set "EXEC=call :Exec"
 set "ECHO.X=call :Echo.NoExec"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-if not .%NOREDIR%.==.1. set "NOREDIR=0"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
@@ -776,9 +790,13 @@ goto :eof
 %IF_DEBUG% goto :Echo
 goto :Echo.Log
 
+:Exec.SetErrorLevel %1
+exit /b %1
+
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 set NOEXEC=0
 set "IF_NOEXEC=if .%NOEXEC%.==.1."
@@ -788,16 +806,10 @@ goto :Exec.Start
 :# Version supporting input and output redirections, and pipes.
 :# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or "2>>"
 :Exec
+set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
 setlocal EnableExtensions DisableDelayedExpansion
 :Exec.Start
-:# Save the initial errorlevel: Build a command for restoring it later
-if errorlevel 2 ( :# For complex errors, use a sub-shell. Drawback: This is slow.
-  set "Exec.RestoreErr=%COMSPEC% /c exit %ERRORLEVEL%"
-) else if errorlevel 1 ( :# For the common error 1, use the quick %FALSE.EXE% trick
-  set "Exec.RestoreErr=%FALSE.EXE%"
-) else ( :# For no error, use the quick %TRUE% trick
-  set "Exec.RestoreErr=%TRUE.EXE%"
-)
+set "NOREDIR0=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
@@ -812,7 +824,7 @@ shift
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
 if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
-  if .%Exec.HaveTee%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
+  if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
 )
 set Exec.Cmd=%*
@@ -832,6 +844,7 @@ set Exec.Cmd=%Exec.Cmd:">&"=">""&"%
 :# If there are output redirections, then cancel any attempt at redirecting output to the log file.
 set "Exec.Cmd1=%Exec.Cmd:"=%" &:# Remove quotes in the command string, to allow quoting the whole string.
 if not "%Exec.Cmd1:>=%"=="%Exec.Cmd1%" set "Exec.Redir="
+if defined Exec.Redir set "NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
 :# Second stage: Convert quoted redirection operators (Ex: ">") to a usable (Ex: >) and a displayable (Ex: ^>) value.
 :# Must be once for each of the four < > | & operators.
 :# Since each operation removes half of ^ escape characters, then insert
@@ -854,16 +867,23 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
+  set "NOREDIR=%NOREDIR%"
+  %IF_DEBUG% set "INDENT=%INDENT%  "
   %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
-  call :Exec.ShowExitCode
+  set "Exec.ErrorLevel=!ERRORLEVEL!"
+  set "NOREDIR=%NOREDIR0%" &:# Sets ERRORLEVEL=1 in Windows XP/64
+  %IF_DEBUG% set "INDENT=%INDENT%"
+  call :Exec.ShowExitCode !Exec.ErrorLevel!
 )
 goto :eof
 
-:Exec.ShowExitCode
-%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %ERRORLEVEL%
-if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %ERRORLEVEL%
-exit /b %ERRORLEVEL%
+:Exec.ShowExitCode %1
+set "Exec.ErrorLevel="
+set "Exec.RestoreErr="
+%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
+exit /b %1
 
 :Exec.End
 
@@ -892,27 +912,60 @@ exit /b %ERRORLEVEL%
 :#   2010-12-19 JFL Created this routine                                      #
 :#   2011-12-12 JFL Rewrote using findstr. (Executes much faster.)	      #
 :#		    Added support for empty pathnames.                        #
+:#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Quote file pathnames that require it. %1=Input variable. %2=Opt. output variable.
 :condquote
 %FUNCTION% enableextensions enabledelayedexpansion
-set RETVAR=%~2
-if "%RETVAR%"=="" set RETVAR=%~1
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+%UPVAR% %RETVAR%
 set "P=!%~1!"
-:# If the value is empty, don't go any further.
-if not defined P set "P=""" & goto :condquote_ret
-:# Remove double quotes inside P. (Fails if P is empty)
-set "P=%P:"=%"
+:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
+if defined P set "P=!P:"=!"
 :# If the value is empty, don't go any further.
 if not defined P set "P=""" & goto :condquote_ret
 :# Look for any special character that needs quoting
-echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"@" /C:"," /C:";" /C:"[" /C:"]" /C:"{" /C:"}" /C:"=" /C:"'" /C:"+" /C:"`" /C:"~" >NUL
-if not errorlevel 1 set P="%P%"
+echo."!P!"|findstr /C:" " /C:"&" /C:"|" /C:"(" /C:")" /C:"@" /C:"," /C:";" /C:"[" /C:"]" /C:"{" /C:"}" /C:"=" /C:"'" /C:"+" /C:"`" /C:"~" >NUL
+if not errorlevel 1 set P="!P!"
 :condquote_ret
-%UPVAR% %RETVAR%
+set "%RETVAR%=!P!"
 %RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        list						      #
+:#                                                                            #
+:#  Description     List management routines                                  #
+:#                                                                            #
+:#  Arguments                                                                 #
+:#                                                                            #
+:#  Notes 	    Inspired from Tcl list management routines                #
+:#                                                                            #
+:#  History                                                                   #
+:#   2016-11-09 JFL Added routine lsort.                                      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:lsort LIST_NAME [RETVAR]
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1"
+%UPVAR% %RETVAR%
+set "SORTED_LIST="
+%ECHOVARS.D% %~1
+set "LIST=!%~1!"
+:# No idea why %FOREACHLINE% appends a space to every line
+if defined LIST %FOREACHLINE% %%l in ('^(for %%e in ^(!%~1!^) do @echo %%e^) ^| sort') do set "SORTED_LIST=!SORTED_LIST!%%l"
+if defined SORTED_LIST set "SORTED_LIST=!SORTED_LIST:~0,-1!"
+set "%RETVAR%=!SORTED_LIST!"
+%RETURN%
+
+:list2lines LIST_NAME
+if defined %~1 for %%e in (!%~1!) do (echo.%%e)
+exit /b
 
 :#----------------------------------------------------------------------------#
 
@@ -922,7 +975,7 @@ verify other 2>nul
 setlocal enableextensions enabledelayedexpansion
 if errorlevel 1 (
   >&2 echo Error: Unable to enable command extensions.
-  endlocal & set "RETVAL=1" & exit /b
+  endlocal & exit /b 1
 )
 set VAR=before
 if "%VAR%" == "before" (
@@ -931,33 +984,41 @@ if "%VAR%" == "before" (
     >&2 echo Error: Delayed environment variable expansion must be enabled.
     >&2 echo Please restart your cmd.exe shell with the /V option,
     >&2 echo or set HKLM\Software\Microsoft\Command Processor\DelayedExpansion=1
-    endlocal & set "RETVAL=1" & exit /b
+    endlocal & exit /b 1
   )
 )
-endlocal & set "RETVAL=0" & exit /b
+endlocal & exit /b 0
 
 :#----------------------------------------------------------------------------#
 
-:# List subkeys. %1=Parent key pathname.
+:# List subkeys. Args: [-c] [-f] KEY [RETVAR]
 :keys
 :dirs
 %FUNCTION% enableextensions enabledelayedexpansion
 set "PATTERN=*"
 set "OPTS=/k"
+set "KEY="
+set "RETVAR="
 :get_keys_args
 if "%~1"=="" goto got_keys_args
 if "%~1"=="-c" shift & set "OPTS=%OPTS% /c" & goto get_keys_args
 if "%~1"=="-f" shift & set "PATTERN=%~1" & shift & goto get_keys_args
-set "KEY=%~1" & shift & goto get_keys_args
+if not defined KEY set "KEY=%~1" & shift & goto get_keys_args
+if not defined RETVAR set "RETVAR=%~1" & shift & goto get_keys_args
 :got_keys_args
-%ECHOVARS.D% KEY
+%ECHOVARS.D% KEY RETVAR
+if defined RETVAR set "RETVAL="
+:# First check if the key exists
+%EXEC% reg query "%KEY%" ">"NUL
+if errorlevel 1 %RETURN%
+:# OK, so now list subkeys
 set BEFORE=
 if "%FULLPATH%"=="1" set "BEFORE=%KEY%\"
 :# Use reg.exe to get the key information
 set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
-%ECHO.XVD% %CMD%
+%>DEBUGOUT% %ECHO.XVD% %CMD%
 :# For each line in CMD output...
-%FOREACHLINE% %%l in ('%CMD%') do (
+%IF_EXEC% %FOREACHLINE% %%l in ('%CMD%') do (
   set "LINE=%%l"
   set "HEAD=!LINE:~0,2!"
   if "!HEAD!"=="HK" (
@@ -965,37 +1026,52 @@ set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
     if "!NAME!"=="(Default)" set "NAME="
     set "NAME=!BEFORE!!NAME!"
     call :CondQuote NAME
-    echo !NAME!
+    if defined RETVAR (
+      set "RETVAL=!RETVAL! !NAME!"
+    ) else (
+      echo !NAME!
+    )
   )
 )
-%UPVAR% RETVAL
-set "RETVAL=0"
+if defined RETVAR (
+  %UPVAR% %RETVAR%
+  if defined RETVAL set "RETVAL=!RETVAL:~1!"
+  set "%RETVAR%=!RETVAL!"
+)
 %RETURN% 0
 
 :#----------------------------------------------------------------------------#
 
-:# List values. %1=Parent key pathname.
+:# List values. Args: [-/] [-c] [-f] KEY [RETVAR]
 :values
 :files
 %FUNCTION% enableextensions enabledelayedexpansion
 set "DETAILS=0"
 set "PATTERN=*"
 set "OPTS=/v"
+set "KEY="
+set "RETVAR="
 :get_values_args
 if "%~1"=="" goto got_values_args
 if "%~1"=="-/" shift & set "DETAILS=1" & goto get_values_args
 if "%~1"=="-c" shift & set "OPTS=%OPTS% /c" & goto get_values_args
 if "%~1"=="-f" shift & set "PATTERN=%~1" & shift & goto get_values_args
-set "KEY=%~1" & shift & goto get_values_args
+if not defined KEY set "KEY=%~1" & shift & goto get_values_args
+if not defined RETVAR set "RETVAR=%~1" & shift & goto get_values_args
 :got_values_args
 %ECHOVARS.D% KEY
+if defined RETVAR set "RETVAL="
+:# First check if the key exists
+%EXEC% reg query "%KEY%" ">"NUL
+if errorlevel 1 %RETURN%
+:# OK, so now list values
 set BEFORE=
 if "%FULLPATH%"=="1" set "BEFORE=%KEY%\"
 :# Use reg.exe to get the key information
 set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
-%ECHO.XVD% %CMD%
-:# For each line in CMD output... 
-%FOREACHLINE% %%i in ('%CMD%') do (
+%>DEBUGOUT% %ECHO.XVD% %CMD%
+:# For each line in CMD output...
+%IF_EXEC% %FOREACHLINE% %%i in ('%CMD%') do (
   set "LINE=%%i"
   %ECHOVARS.D% LINE
   :# Values are indented by 4 spaces.
@@ -1004,7 +1080,7 @@ set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
   :# But extra lines of multi-lined values are indented by >20 spaces.
   set "HEAD2=!LINE:~0,4!"
   if "!HEAD!"=="    " if not "!HEAD2!"=="    " (
-    :# Some versions of reg.exe use 4 spaces as field separator; others use a TAB. 
+    :# Some versions of reg.exe use 4 spaces as field separator; others use a TAB.
     :# Change the 4-spaces around the REG_XX type word to a TAB.
     set "TOKENS=!LINE:    =	!"
     %ECHOVARS.D% TOKENS
@@ -1018,16 +1094,23 @@ set CMD=reg query "%KEY%" /f !PATTERN! !OPTS!
       %ECHOVARS.D% NAME TYPE VALUE
       if %DETAILS%==0 (
 	set "NAME=!BEFORE!!NAME!"
-	call :CondQuote NAME
-      	echo !NAME!
       ) else (
-      	echo !NAME!/!TYPE!/!VALUE!
+      	set "NAME=!NAME!/!TYPE!/!VALUE!"
+      )
+      if defined RETVAR (
+	call :CondQuote NAME
+	set "RETVAL=!RETVAL! !NAME!"
+      ) else (
+	echo !NAME!
       )
     )
   )
 )
-%UPVAR% RETVAL
-set "RETVAL=0"
+if defined RETVAR (
+  %UPVAR% %RETVAR%
+  if defined RETVAL set "RETVAL=!RETVAL:~1!"
+  set "%RETVAR%=!RETVAL!"
+)
 %RETURN% 0
 
 :#----------------------------------------------------------------------------#
@@ -1040,10 +1123,18 @@ set "RETVAL=0"
 set "KEY=%~1" & shift
 %ECHOVARS.D% KEY
 :# Then call subroutines to get subkeys, then values.
-%FOREACHLINE% %%K in ('%XCALL% dirs "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9') do echo %%~K\
-%FOREACHLINE% %%V in ('%XCALL% files "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9') do echo %%~V
-%UPVAR% RETVAL
-set "RETVAL=0"
+call :dirs !ARGS! SUBKEYS
+if errorlevel 1 %RETURN%
+for %%K in (!SUBKEYS!) do echo %%~K\
+call :files !ARGS! VALUES
+if errorlevel 1 %RETURN%
+for %%V in (!VALUES!) do (
+  if "%%~V"=="" ( :# The default value is returned as ""
+    echo ""
+  ) else (
+    echo.%%~V
+  )
+)
 %RETURN% 0
 
 :#----------------------------------------------------------------------------#
@@ -1068,8 +1159,9 @@ if "%NAME%"=="" (
 ) else (
   set CMD=reg query "%KEY%" /v "%NAME%"
 )
-%ECHO.XVD% %CMD%
+%>DEBUGOUT% %ECHO.XVD% %CMD%
 :# For each line in CMD output...
+set "ERROR=1"
 %FOREACHLINE% %%i in ('%CMD%') do (
   set "LINE=%%i"
   %ECHOVARS.D% LINE
@@ -1094,53 +1186,72 @@ if "%NAME%"=="" (
     set BEFORE=
     if %VERBOSE%==1 set "BEFORE=%KEY%\!NAME! = "
     echo.!BEFORE!!VALUE!
+    set "ERROR=0"
   )
 )
-%UPVAR% RETVAL
-set "RETVAL=%VALUE%"
-%RETURN% 0
+%RETURN% %ERROR%
 
 :#----------------------------------------------------------------------------#
 
 :# Non-recursive show. %1=Parent key pathname.
 :show
+:showdir
 %FUNCTION% enableextensions enabledelayedexpansion
 set "KEY=%~1" & shift
 %ECHOVARS.D% KEY
 :# Then call subroutines to get subkeys, then values.
-%FOREACHLINE% %%K in ('%XCALL% dirs "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9') do (
-  set "SUBKEY=%%K\"
+call :dirs "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 SUBKEYS
+if errorlevel 1 %RETURN%
+for %%K in (!SUBKEYS!) do (
+  set "SUBKEY=%%~K\"
   call :CondQuote SUBKEY
   %ECHO% !SUBKEY! {}
 )
 set "ATTRS= "
-%FOREACHLINE% %%L in ('%XCALL% files -/ "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 ^| sort') do (
-  rem Gotcha: The name can be empty. So prefix the line with 1 extra character, then remove it from the name.
-  for /f "tokens=1,2* delims=/" %%i in ("-%%L") do (
-    set "NAME=%%i"
+call :files -/ "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 VALUES
+if errorlevel 1 %RETURN%
+set NAMES=
+set "VALUES=!VALUES:%%=%%debug.percnt%%!"	&:# Encode percent characters
+set "VALUES=!VALUES:?=%%debug.quest%%!" 	&:# Encode question marks (else the for loop below ignores them)
+for %%V in (!VALUES!) do (
+  set "VALUE=%%~V"
+  :# Gotcha: The name can be empty. So prefix the line with 1 extra character, then remove it from the name.
+  for /f "tokens=1,2* delims=/" %%i in ("-!VALUE!") do (
+    setlocal DisableDelayedExpansion
+    endlocal & set "NAME=%%i" & set "TYPE=%%j" & set "VALUE=%%k"
     set "NAME=!NAME:~1!"
-    set "TYPE=%%j"
-    set "VALUE=%%k"
+    :# %ECHOVARS.D% NAME TYPE VALUE
+    set "NAMES=!NAMES! "!NAME!""
+    set "TYPE[!NAME!]=!TYPE!"
+    call set "VALUE[!NAME!]=!VALUE!"
   )
-  %ECHOVARS.D% NAME TYPE VALUE
+)
+if defined NAMES set "NAMES=!NAMES:~1!"
+call :lsort NAMES
+for %%n in (!NAMES!) do (
+  set "NAME=%%~n"
+  set "TYPE=!TYPE[%%~n]!"
+  set "VALUE=!VALUE[%%~n]!"
+  :# %ECHOVARS.D% NAME TYPE VALUE
   call :CondQuote NAME
   call :CondQuote VALUE
   if %VERBOSE%==1 SET "ATTRS=%ATTRS%type=!TYPE! "
-  %ECHO% !NAME!!ATTRS!!VALUE!
+  %ECHO% !NAME!!ATTRS!!VALUE:%%=%%%%!
 )
-%UPVAR% RETVAL
-set "RETVAL=0"
 %RETURN% 0
 
 :#----------------------------------------------------------------------------#
 
 :# Recursive show. %1=Parent key pathname.
 :tree
+:showtree
 %FUNCTION% enableextensions enabledelayedexpansion
 set "KEY=%~1" & shift
 %ECHOVARS.D% KEY
 :# Then call subroutines to get subkeys, then values.
-%FOREACHLINE% %%K in ('%XCALL% dirs "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9') do (
+call :dirs "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 SUBKEYS
+if errorlevel 1 %RETURN%
+for %%K in (!SUBKEYS!) do (
   set "SUBKEY=%%~K\"
   call :CondQuote SUBKEY
   %ECHO% !SUBKEY! {
@@ -1150,22 +1261,36 @@ set "KEY=%~1" & shift
   %ECHO% }
 )
 set "ATTRS= "
-%FOREACHLINE% %%L in ('%XCALL% files -/ "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 ^| sort') do (
-  rem Gotcha: The name can be empty. So prefix the line with 1 extra character, then remove it from the name.
-  for /f "tokens=1,2* delims=/" %%i in ("-%%L") do (
-    set "NAME=%%i"
+call :files -/ "%KEY%" %1 %2 %3 %4 %5 %6 %7 %8 %9 VALUES
+if errorlevel 1 %RETURN%
+set NAMES=
+set "VALUES=!VALUES:%%=%%debug.percnt%%!"	&:# Encode percent characters
+set "VALUES=!VALUES:?=%%debug.quest%%!" 	&:# Encode question marks (else the for loop below ignores them)
+for %%V in (!VALUES!) do (
+  set "VALUE=%%~V"
+  :# Gotcha: The name can be empty. So prefix the line with 1 extra character, then remove it from the name.
+  for /f "tokens=1,2* delims=/" %%i in ("-!VALUE!") do (
+    setlocal DisableDelayedExpansion
+    endlocal & set "NAME=%%i" & set "TYPE=%%j" & set "VALUE=%%k"
     set "NAME=!NAME:~1!"
-    set "TYPE=%%j"
-    set "VALUE=%%k"
+    :# %ECHOVARS.D% NAME TYPE VALUE
+    set "NAMES=!NAMES! "!NAME!""
+    set "TYPE[!NAME!]=!TYPE!"
+    call set "VALUE[!NAME!]=!VALUE!"
   )
+)
+if defined NAMES set "NAMES=!NAMES:~1!"
+call :lsort NAMES
+for %%n in (!NAMES!) do (
+  set "NAME=%%~n"
+  set "TYPE=!TYPE[%%~n]!"
+  set "VALUE=!VALUE[%%~n]!"
   %ECHOVARS.D% NAME TYPE VALUE
   call :CondQuote NAME
   call :CondQuote VALUE
   if %VERBOSE%==1 SET "ATTRS=%ATTRS%type=!TYPE! "
   %ECHO% !NAME!!ATTRS!!VALUE!
 )
-%UPVAR% RETVAL
-set "RETVAL=0"
 %RETURN% 0
 
 :#----------------------------------------------------------------------------#
@@ -1189,6 +1314,7 @@ if "%NAME%"=="" (
 ) else (
   set CMD=reg delete "%KEY%" /v "%NAME%"
 )
+if "%FORCE%"=="1" set "CMD=!CMD! /f"
 %EXEC% %CMD%
 %RETURN%
 
@@ -1201,6 +1327,7 @@ if "%NAME%"=="" (
 set "KEY=%~1"
 %ECHOVARS.D% KEY
 set CMD=reg delete "%KEY%"
+if "%FORCE%"=="1" set "CMD=!CMD! /f"
 %EXEC% %CMD%
 %RETURN%
 
@@ -1223,9 +1350,9 @@ echo %SCRIPT% version %VERSION%
 echo.
 echo Browse the registry "directories" and "files" using Windows' reg.exe
 echo.
-echo Usage: %ARG0% [options] {command} [command_options ...]
+echo Usage: %ARG0% [GLOBAL_OPTIONS] COMMAND [COMMAND_OPTIONS]
 echo.
-echo Options:
+echo Global options:
 echo   -?^|-h            Display this help screen and exit
 echo   -f               List the full pathname of keys and values
 echo   -v               Verbose output
@@ -1233,13 +1360,20 @@ echo   -V               Display this script version and exit
 echo.
 echo Commands:
 echo   del {path\name}  Delete a key value
-echo   dir {path}       List subkeys/ and values names
+echo   dir {path}       List subkeys/ and values names (1)
 echo   keys {path}      List subkeys names
 echo   rd {path}        Delete a key, and all sub-keys and value
 echo   show {path}      Display all values contents (1)
 echo   tree {path}      Display the whole tree key values contents (1)
 echo   type {path\name} Display the key value content 
-echo   values {path}    List values names
+echo   values {path}    List values names (1)
+echo.
+echo dir, keys, values options:
+echo   -c               Case-sensitive search
+echo   -p PATTERN       Search for a specific pattern. Default: *
+echo.
+echo del, rd options:
+echo   -f               Force deletion without confirmation
 echo.
 echo (1): The unnamed "(Default)" value is displayed as name "".
 echo.
@@ -1249,6 +1383,8 @@ goto :eof
 set "ACTION="
 set "KEY="
 set "OPTS="
+set ">DEBUGOUT=>&2"	&:# Send debug output to stderr, so that it does not interfere with subroutines output capture
+set "FORCE=0"
 
 :next_arg
 if not defined ARGS set "ARG=" & goto :go
@@ -1257,7 +1393,7 @@ if "!ARG!"=="-?" goto :Help
 if "!ARG!"=="/?" goto :Help
 if "!ARG!"=="-c" set "OPTS=%OPTS% -c" & goto :next_arg
 if "!ARG!"=="-d" call :Debug.on & goto :next_arg
-if "!ARG!"=="-f" set "FULLPATH=1" & goto :next_arg
+if "!ARG!"=="-f" set "FULLPATH=1" & set "FORCE=1" & goto :next_arg
 if "!ARG!"=="-p" %POPARG% & set "OPTS=%OPTS% -f %"ARG"%" & goto :next_arg
 if "!ARG!"=="-t" goto test
 if "!ARG!"=="-v" call :Verbose.on & goto :next_arg
@@ -1269,17 +1405,11 @@ if "%KEY%"=="" set "KEY=!ARG!" & goto next_arg
 goto next_arg
 
 :test
-shift
-set "VAR=%~1"
-%ECHOVARS.D% VAR
-call :CondQuote VAR
-%ECHOVARS.D% VAR
 goto :eof
 
 :# Execute the requested command
 :go
 call :check_exts
-if not "%RETVAL%"=="0" exit /b 1
+if errorlevel 1 exit /b
 
 call :%ACTION% "%KEY%"!OPTS!
-
