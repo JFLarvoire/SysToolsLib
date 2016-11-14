@@ -164,6 +164,10 @@
 :#   2016-11-09 JFL Bug fix: %RETURN% failed if an UPVAR contained a '?'.     #
 :#                  Added routine :lsort.                                     #
 :#   2016-11-10 JFL Added another implementation for routine :now.            #
+:#   2016-11-11 JFL Simplified routine :strlen, now 5% faster.                #
+:#                  Added routine :strlen.q. No tracing but twice as fast.    #
+:#   2016-11-12 JFL Added routines :ReplaceChars, :ReplaceDelims, etc.        #
+:#   2016-11-13 JFL Bug fix: Correctly return special characters & | < > ? *  #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -175,7 +179,7 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-09"
+set "VERSION=2016-11-13"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -354,6 +358,7 @@ set ^"\n=%LF3%^^^"	&:# Insert a LF and continue macro on next line
 set "^!=^^^^^^^!"	&:# Define a %!%DelayedExpansion%!% variable
 set "'^!=^^^!"		&:# Idem, but inside a quoted string
 set ">=^^^>"		&:# Insert a redirection character
+set "<=^^^<"		&:# Insert a redirection character
 set "&=^^^&"		&:# Insert a command separator in a macro
 :# Idem, to be expanded twice, for use in macros within macros
 set "^!2=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!"
@@ -510,6 +515,7 @@ goto :eof
 :#   2016-09-01 JFL Bug fix: %RETURN% incorrectly returned empty variables.   #
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
+:#   2016-11-13 JFL Bug fix: Correctly return special characters & | < > ? *  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -553,54 +559,56 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
   set DEBUG.EXITCODE=%!%MACRO.ARGS%!%%\n%
   if defined DEBUG.EXITCODE set DEBUG.EXITCODE=%!%DEBUG.EXITCODE: =%!%%\n%
   if not defined DEBUG.EXITCODE set DEBUG.EXITCODE=%!%DEBUG.ERRORLEVEL%!%%\n%
-  set "DEBUG.SETARGS=" %\n%
-  for %%v in (%!%DEBUG.RETVARS%!%) do ( %\n%
-    set "DEBUG.VALUE=%'!%%%v%'!%" %# We must remove problematic characters in that value #% %\n%
-    if defined DEBUG.VALUE ( %# Else the following lines will generate phantom characters #% %\n%
-      set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Encode percent #% %\n%
-      for %%e in (sp tab cr lf quot) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Encode named character entities #% %\n%
-	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+  for %%l in ("%'!%LF%'!%") do ( %# Make it easy to insert line-feeds in any mode #% %\n%
+    set "DEBUG.SETARGS=""" %# The initial "" makes sure that for loops below never get an empty arg list #% %\n%
+    for %%v in (%!%DEBUG.RETVARS%!%) do ( %\n%
+      set "DEBUG.VALUE=%'!%%%v%'!%" %# We must remove problematic characters in that value #% %\n%
+      if defined DEBUG.VALUE ( %# Else the following lines will generate phantom characters #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Encode percent #% %\n%
+	for %%e in (sp tab cr lf quot amp vert lt gt) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Encode named character entities #% %\n%
+	  set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+	) %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
+	call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
       ) %\n%
-      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
-      call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
-      set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
-      set "DEBUG.VALUE=%'!%DEBUG.VALUE:?=%%DEBUG.quest%%%'!%"	%# Encode question marks #% %\n%
+      set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%"%\n%
     ) %\n%
-    set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%" %\n%
-  ) %\n%
-  if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
-    set "DEBUG.MSG=return %'!%DEBUG.EXITCODE%'!%" %\n%
-    for %%v in (%!%DEBUG.SETARGS%!%) do ( %\n%
-      set "DEBUG.MSG=%'!%DEBUG.MSG%'!% %%DEBUG.amp%% set %%v" %!% %\n%
+    if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
+      set "DEBUG.MSG=return %'!%DEBUG.EXITCODE%'!%" %\n%
+      for /f "delims=" %%v in ("%'!%DEBUG.SETARGS: =%%~l%'!%") do if not %%v=="" ( %# for /f avoids issues with ? and * #% %\n%
+	set "DEBUG.MSG=%'!%DEBUG.MSG%'!% %%DEBUG.amp%% set %%v" %!% %\n%
+      ) %\n%
+      call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+      if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
+	call :Echo.Eval2DebugOut %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      ) else ( %# Output directly here, which is faster #% %\n%
+	for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #% %\n%
+      ) %\n%
+      if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
+	call :Echo.Eval2LogFile %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      ) %\n%
     ) %\n%
-    call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
-    if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-      call :Echo.Eval2DebugOut %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
-    ) else ( %# Output directly here, which is faster #% %\n%
-      for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #% %\n%
-    ) %\n%
-    if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-      call :Echo.Eval2LogFile %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
-    ) %\n%
-  ) %\n%
-  for %%r in (%!%DEBUG.EXITCODE%!%) do ( %# Carry the return values through the endlocal barriers #% %\n%
-    for /f "delims=" %%a in (""" %'!%DEBUG.SETARGS%'!%") do ( %# The initial "" makes sure the body runs even if the arg list is empty #% %\n%
-      endlocal %&% endlocal %&% endlocal %# Exit the RETURN and FUNCTION local scopes #% %\n%
-      if "%'!%%'!%"=="" ( %# Delayed expansion is ON #% %\n%
+    for %%r in (%!%DEBUG.EXITCODE%!%) do ( %# Carry the return values through the endlocal barriers #% %\n%
+      for /f "delims=" %%a in ("%'!%DEBUG.SETARGS%'!%") do ( %\n%
+	endlocal %&% endlocal %&% endlocal %# Exit the RETURN and FUNCTION local scopes #% %\n%
 	set "DEBUG.SETARGS=%%a" %\n%
-	call set "DEBUG.SETARGS=%'!%DEBUG.SETARGS:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
-	for %%v in (%!%DEBUG.SETARGS:~3%!%) do ( %\n%
-	  set %%v %# Set each upvar variable in the caller's scope #% %\n%
+	if "%'!%%'!%"=="" ( %# Delayed expansion is ON #% %\n%
+	  call set "DEBUG.SETARGS=%'!%DEBUG.SETARGS:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+	  for /f "delims=" %%v in ("%'!%DEBUG.SETARGS: =%%~l%'!%") do if not %%v=="" ( %# for /f avoids issues with ? and * #% %\n%
+	    set %%v %# Set each upvar variable in the caller's scope #% %\n%
+	  ) %\n%
+	) else ( %# Delayed expansion is OFF #% %\n%
+	  setlocal EnableDelayedExpansion %\n%
+	  for /f "delims=" %%v in ("%'!%DEBUG.SETARGS: =%%~l%'!%") do if %%v=="" ( %# for /f avoids issues with ? and * #% %\n%
+	    endlocal %\n%
+	  ) else ( %\n%
+	    call set %%v %# Set each upvar variable in the caller's scope #% %\n%
+	  ) %\n%
 	) %\n%
 	set "DEBUG.SETARGS=" %\n%
-      ) else ( %# Delayed expansion is OFF #% %\n%
-	set "DEBUG.hat=^^^^" %# Carets need to be doubled to be set right below #% %\n%
-	for %%v in (%%a) do if not %%v=="" ( %\n%
-	  call set %%v %# Set each upvar variable in the caller's scope #% %\n%
-	) %\n%
-	set "DEBUG.hat=^^" %# Restore the normal value with a single caret #% %\n%
+	exit /b %%r %# Return to the caller #% %\n%
       ) %\n%
-      exit /b %%r %# Return to the caller #% %\n%
     ) %\n%
   ) %\n%
 ) %/MACRO%
@@ -1644,21 +1652,31 @@ EXIT /b
 :#   2010-11-16     Changed.                                                  #
 :#   2012-10-08 JFL Adapted to my %FUNCTION% library.                         #
 :#   2015-11-19 JFL Adapted to new %UPVAR% mechanism.                         #
+:#   2016-11-11 JFL Avoid copying the input string. 5% faster.		      #
+:#                  Added routine :strlen.q. No tracing but twice as fast.    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :strlen stringVar lenVar                -- returns the length of a string
-%FUNCTION% enabledelayedexpansion
-set "RETVAR=%~2"
-if "%RETVAR%"=="" set "RETVAR=RETVAL"
-set "str=A!%~1!" &:# keep the A up front to ensure we get the length and not the upper bound
-		  :# it also avoids trouble in case of empty string
-set "len=0"
-for /L %%A in (12,-1,0) do (
-  set /a "len|=1<<%%A"
-  for %%B in (!len!) do if "!str:~%%B,1!"=="" set /a "len&=~1<<%%A"
+%FUNCTION% EnableDelayedExpansion
+if "%~2"=="" %RETURN% 1 &:# Missing argument
+%UPVAR% %~2
+set "%~2=0"
+if defined %~1 for /l %%b in (12,-1,0) do (
+  set /a "i=(%~2|(1<<%%b))-1"
+  for %%i in (!i!) do if not "!%~1:~%%i!"=="" set /a "%~2=%%i+1"
 )
-set "%RETVAR%=%len%" & %UPVAR% %RETVAR% & %RETURN%
+%RETURN%
+
+:strlen.q stringVar lenVar                -- returns the length of a string
+setlocal EnableDelayedExpansion
+set "len=0"
+if defined %~1 for /l %%b in (12,-1,0) do (
+  set /a "i=(len|(1<<%%b))-1"
+  for %%i in (!i!) do if not "!%~1:~%%i!"=="" set /a "len=%%i+1"
+)
+endlocal & if "%~2" neq "" set "%~2=%len%"
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -1805,6 +1823,102 @@ call :trimleft "%~1" "%~2"
 call :trimright "%~1" "%~2"
 %UPVAR% %~1
 %RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        ReplaceXxxx						      #
+:#                                                                            #
+:#  Description     Replace tricky characters                                 #
+:#                                                                            #
+:#  Arguments                                                                 #
+:#                                                                            #
+:#  Notes 	    '*' '=' ':' cannot be replaced by %VAR:c=repl%            #
+:#                                                                            #
+:#  History                                                                   #
+:#   2016-11-13 JFL Added routine ReplaceChars.                               #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Replace characters
+:# Advantage: Works with CHAR '=' ':' '*' '~'
+:# Advantage: The string can contain LF and '"' characters
+:# Drawback: Does not work with '='.
+:ReplaceChars STRVAR CHAR REPLACEMENT RETVAR 
+setlocal EnableDelayedExpansion
+set "STRING=!%~1!"
+set "REPL=%~3"
+set "RESULT="
+if defined STRING (
+  call :strlen.q STRING SLEN	&:# SLEN = Full string length
+:ReplaceChars.again
+  set "TAIL=!STRING:*%~2=!"	&:# Split STRING into HEAD CHAR TAIL
+  call :strlen.q TAIL TLEN	&:# TLEN = Tail length
+  if !TLEN!==!SLEN! (	:# No more C chars
+    set "RESULT=!RESULT!!TAIL!"
+  ) else (		:# Reached one char
+    set /a "HLEN=SLEN-TLEN-1"	&:# HLEN = Head length
+    for %%h in (!HLEN!) do set "RESULT=!RESULT!!STRING:~0,%%h!!REPL!"
+    if defined TAIL (	:# Then there might be more chars in the tail
+      set "STRING=!TAIL!"	&:# Repeat the same operation for the tail.
+      set "SLEN=!TLEN!"
+      goto :ReplaceChars.again
+    )
+  )
+)
+endlocal & set "%~4=%RESULT%"
+exit /b 0
+
+:# Replace delimiter sets.
+:# Advantage: Simple and fast; Works with CHAR '=' ':' '*'
+:# Drawback: Multiple consecutive CHARs are replaced by a single REPL string.
+:# Drawback: Does not work on strings with LF or '!' characters.
+:ReplaceDelimSets STRVAR CHAR REPLACEMENT RETVAR
+setlocal EnableDelayedExpansion
+set "STRING=[!%~1!]"	&:# Make mure the string does not begin or end with delims
+set "REPL=%~3"
+set "RESULT="
+:ReplaceDelimSets.loop
+for /f "delims=%~2 tokens=1*" %%s in ("!STRING!") do (
+  set "RESULT=!RESULT!%%s"
+  set "TAIL=%%t"
+  if defined TAIL (	 :# Then there might be more chars to replace in the tail
+    set "RESULT=!RESULT!!REPL!"
+    set "STRING=!TAIL!"	&:# Repeat the same operation for the tail.
+    goto :ReplaceDelimSets.loop
+  )
+)
+endlocal & set "%~4=%RESULT:~1,-1%"
+exit /b
+
+:# Replace delimiters.
+:# Inspired by npocmaka post: http://www.dostips.com/forum/viewtopic.php?p=29901#p29901
+:# Advantage: Works with CHAR '=' ':' '*'
+:# Drawback: Does not work on strings with LF or '"' characters.
+:ReplaceDelims STRVAR CHAR REPLACEMENT RETVAR
+setlocal DisableDelayedExpansion
+call set "STRING=[%%%~1%%]"	&:# Make mure the string does not begin or end with delims
+set "REPL=%~3"
+set "RESULT="
+call :strlen.q STRING SLEN	&:# SLEN = Full string length
+:ReplaceDelims.loop
+for /f "delims=%~2 tokens=1*" %%s in ("%STRING%") do (
+  set "HEAD=%%s"
+  set "TAIL=%%t"
+)
+set "RESULT=%RESULT%%HEAD%"
+call :strlen.q HEAD HLEN	&:# HLEN = Head length
+call :strlen.q TAIL TLEN	&:# TLEN = Tail length
+set /a "N=SLEN-HLEN-TLEN"	&:# Number of delimiters in between
+setlocal EnableDelayedExpansion
+for /l %%n in (1,1,%N%) do set "RESULT=!RESULT!!REPL!"
+endlocal & set "RESULT=%RESULT%"
+if defined TAIL (	 :# Then there might be more chars to replace in the tail
+  set "STRING=%TAIL%"	&:# Repeat the same operation for the tail.
+  set "SLEN=%TLEN%"
+  goto :ReplaceDelims.loop
+)
+endlocal & set "%~4=%RESULT:~1,-1%"
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -3394,6 +3508,41 @@ exit /b 0
 set ERROR=%ERRORLEVEL%
 %ECHOVARS% ERROR
 exit /b %ERROR%
+
+:#----------------------------------------------------------------------------#
+:# Test returning tricky characters
+
+:testR2
+%FUNCTION% EnableDelayedExpansion
+%UPVAR% V1
+%UPVAR% S
+%UPVAR% V2
+set "V1=%~1"
+set "S=!STRING!"
+set "V2=%~2"
+%ECHO% :# In testR2
+%ECHOVARS% V1 S V2
+%RETURN%
+
+:testR
+%FUNCTION% EnableDelayedExpansion
+set "STRING=@||&&(())<<>>^^^^,,;;  %^%^!^!**??[[]]==~~''""%^CD%_^!CD^!""
+call :testR2 "With EnableDelayedExpansion" "last but not least"
+%ECHO% :# In testR
+%ECHOVARS% V1 S V2
+
+set "S="
+set "V1="
+set "V2="
+
+setlocal DisableDelayedExpansion
+set  STRING=@^|^|^&^&(())^<^<^>^>^^^^,,;;  %^%^!^!**??[[]]==~~''""%^CD%_!CD!"
+call :testR2 "With DisableDelayedExpansion" "last but not least"
+%ECHO% :# In testR
+%ECHOVARS% V1 S V2
+endlocal
+
+%RETURN%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
