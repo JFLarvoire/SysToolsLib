@@ -1866,7 +1866,7 @@ for %%v in (VC16) do if defined %%v (
     )
     if "%%k"=="LODOSLIB" ( :# Low DOS library
       SET "%%v.INCPATH=!%%v.INCPATH!;%LODOSLIB%"
-      SET "%%v.LIBPATH=!%%v.LIBPATH!;%LODOSLIB%\OUTDIR%%"
+      SET "%%v.LIBPATH=!%%v.LIBPATH!;%LODOSLIB%%\OUTDIR%"
     )
     if "%%k"=="PMODELIB" ( :# Protected Mode library
       SET "%%v.INCPATH=!%%v.INCPATH!;%PMODELIB%"
