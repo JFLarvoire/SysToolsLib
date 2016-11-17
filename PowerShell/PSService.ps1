@@ -980,7 +980,7 @@ if ($Service) {                 # Run the service
     Log "$scriptName -Service # Error at line ${line}: $msg"
   } finally { # Invoked in all cases: Exception or normally by -Stop
     # Cleanup the periodic timer used in the above example
-    Unregister-Event –SourceIdentifier $timerName
+    Unregister-Event -SourceIdentifier $timerName
     $timer.stop()
     ############### End of the service code example. ################
     # Terminate the control pipe handler thread
