@@ -23,8 +23,8 @@
 :#                  Reserved characters that affect batch files:              #
 :#                  Command sequencing (escaped by ^ and ""): & | ( ) < > ^   #
 :#                  Echo control (escaped by enclosing command in ""): @      #
-:#                  Argument delim. (escaped by enclosing in ""): , ; space   #
-:#		    Environment variables (escaped by %): %		      #
+:#                  Argument delim. (escaped by enclosing in ""): , ; = space #
+:#		    Environment variables (escaped by %): %                   #
 :#		    Delayed variables (escaped by ^): !			      #
 :#                  Wildcards: * ?                                            #
 :#                  Some internal commands also use: [ ] { } = ' + ` ~        #
@@ -39,7 +39,7 @@
 :#                  When cmd parses a line, it does the following steps:      #
 :#                  1) Replace %N arguments.                                  #
 :#                  2) Replace %VARIABLES%.                                   #
-:#		    3) Tokenization. Remove command sequencing tokens,        #
+:#		    3) Tokenization. Separate command sequencing tokens,      #
 :#			using "" and ^ as escape characters. (See above)      #
 :#		    4) Replace for %%V variables                              #
 :#		    5) Replace !VARIABLES!.                                   #
@@ -75,8 +75,10 @@
 :#                                                                            #
 :#                  Good practice:                                            #
 :#                  * Use :# for comments instead of rem.                     #
-:#                    + This avoids echoing the comment in echo on mode.      #
+:#                    + The # sign is the standard comment marker for most    #
+:#                       other scripting languages.                           #
 :#                    + This stands out better than the :: used by many.      #
+:#                    + This avoids echoing the comment in echo on mode.      #
 :#                    + Gotcha: A :# comment cannot be at the last line of    #
 :#                       a ( block of code ). Use (rem :# comment) instead.   #
 :#                  * Always enquote args sent, and dequote args received.    #
@@ -104,9 +106,10 @@
 :#                      :MyFunc.End                                           #
 :#                                                                            #
 :#                  Gotcha:                                                   #
-:#                  * It's not possible a call a subroutine from inside a ()  #
-:#                    block. This is because the block is executed in a sub-  #
-:#                    shell.                                                  #
+:#                  * It is not possible a call a subroutine from inside a    #
+:#                    for /f ('command pipeline'). This is because this       #
+:#                     command pipeline is executed in a sub-shell, and has   #
+:#                     no access to the rest of the batch file.               #
 :#                                                                            #
 :#  Author          Jean-François Larvoire, jf.larvoire@hpe.com               #
 :#                                                                            #
@@ -168,6 +171,8 @@
 :#                  Added routine :strlen.q. No tracing but twice as fast.    #
 :#   2016-11-12 JFL Added routines :ReplaceChars, :ReplaceDelims, etc.        #
 :#   2016-11-13 JFL Bug fix: Correctly return special characters & | < > ? *  #
+:#   2016-11-17 JFL Fixed tracing %EXEC% command exit code when exp. disabled.#
+:#		    Several other :Exec bug fixes and perf. improvements.     #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -179,7 +184,7 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-13"
+set "VERSION=2016-11-17"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -827,24 +832,29 @@ goto EchoArgs.loop
 :#                  In DEBUG mode, display the command line and the exit code.#
 :#                  In NOEXEC mode, display the command line, but don't run it.
 :#                                                                            #
-:#  Arguments       -t          Tee all output to the log file if there's a   #
+:#  Arguments       -L          Do not send the output to the log file.       #
+:#                  -t          Tee all output to the log file if there's a   #
 :#                              usable tee.exe. Default: Redirect all >> log. #
 :#                              Known limitation: The exit code is always 0.  #
+:#                  -V          Do not trace the command in verbose mode.     #
 :#                  %*          The command and its arguments                 #
 :#                              Quote redirection operators. Ex:              #
 :#                              %EXEC% find /I "error" "<"logfile.txt ">"NUL  #
+:#                              Note: Quote redirections, NOT file numbers.   #
+:#                              Ex: 2">&"1 will work; "2>&1" will NOT work.   #
 :#                                                                            #
 :#  Functions       Exec.Init	Initialize Exec routines. Call once at 1st    #
 :#                  Exec.Off	Disable execution of commands		      #
 :#                  Exec.On	Enable execution of commands		      #
 :#                  Do          Always execute a command, logging its output  #
 :#                  Exec	Conditionally execute a command, logging it.  #
+:#                  Exec.SetErrorLevel	Change the current ERRORLEVEL	      #
 :#                                                                            #
 :#  Macros          %DO%        Always execute a command, logging its output  #
 :#                  %EXEC%      Conditionally execute a command, logging it.  #
-:#                  %ECHO.X%    Echo and log a string, indented, in -X mode.  #
-:#                  %ECHO.XVD%  Echo a string, indented, in -X or -V or -D    #
-:#                              modes; Log it always.                         #
+:#                  %ECHO.X%    Echo a string indented in -X mode, and log it.#
+:#                  %ECHO.XD%   Idem in -X or -D modes.                       #
+:#                  %ECHO.XVD%  Idem in -X or -V or -D modes.                 #
 :#                              Useful to display commands in cases where     #
 :#                              %EXEC% can't be used, like in for ('cmd') ... #
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
@@ -885,7 +895,14 @@ goto EchoArgs.loop
 :#   2016-11-05 JFL Fixed :Exec bug in XP/64.				      #
 :#                  Indent sub-scripts output in debug mode.                  #
 :#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
-:#                                                                            #
+:#   2016-11-17 JFL Fixed tracing the exit code when caller has exp. disabled.#
+:#		    Added option -V to disable tracing exec in verbose mode.  #
+:#		    Added macro %ECHO.XD%.                                    #
+:#		    Faster and more exact method for separating the %EXEC%    #
+:#		    optional arguments from the command line to run. (The old #
+:#		    method lost non-white batch argument separators = , ; in  #
+:#		    some cases.)                                              #
+:#		                                                              #
 :#----------------------------------------------------------------------------#
 
 call :Exec.Init
@@ -895,7 +912,8 @@ goto :Exec.End
 :Exec.Init
 set "DO=call :Do"
 set "EXEC=call :Exec"
-set "ECHO.X=call :Echo.NoExec"
+set "ECHO.X=call :Echo.X"
+set "ECHO.XD=call :Echo.XD"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
 :# Check if there's a tee.exe program available
@@ -928,14 +946,12 @@ set "EXEC.ARGS=%EXEC.ARGS: -X=% -X"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 goto :eof
 
-:Echo.NoExec
-%IF_NOEXEC% goto :Echo
-goto :eof
-
 :Echo.XVD
-%IF_NOEXEC% goto :Echo
 %IF_VERBOSE% goto :Echo
+:Echo.XD
 %IF_DEBUG% goto :Echo
+:Echo.X
+%IF_NOEXEC% goto :Echo
 goto :Echo.Log
 
 :Exec.SetErrorLevel %1
@@ -944,29 +960,34 @@ exit /b %1
 :# Execute a command, logging its output.
 :# Use for informative commands that should always be run, even in NOEXEC mode. 
 :Do
-set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
-setlocal EnableExtensions DisableDelayedExpansion
-set NOEXEC=0
-set "IF_NOEXEC=if .%NOEXEC%.==.1."
+set "Exec.ErrorLevel=%ERRORLEVEL%" &:# Save the initial errorlevel
+setlocal EnableExtensions DisableDelayedExpansion &:# Clears the errorlevel
+%IF_NOEXEC% call :Exec.On
 goto :Exec.Start
 
 :# Execute critical operations that should not be run in NOEXEC mode.
 :# Version supporting input and output redirections, and pipes.
-:# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or "2>>"
+:# Redirection operators MUST be surrounded by quotes. Ex: "<" or ">" or ">>"
 :Exec
-set "Exec.RestoreErr=call :Exec.SetErrorLevel %ERRORLEVEL%" &:# Save the initial errorlevel: Build a command for restoring it later
-setlocal EnableExtensions DisableDelayedExpansion
+set "Exec.ErrorLevel=%ERRORLEVEL%" &:# Save the initial errorlevel
+setlocal EnableExtensions DisableDelayedExpansion &:# Clears the errorlevel
 :Exec.Start
-set "NOREDIR0=%NOREDIR%"
+set "Exec.NOREDIR=%NOREDIR%"
 set "Exec.Redir=>>%LOGFILE%,2>&1"
 if .%NOREDIR%.==.1. set "Exec.Redir="
 if not defined LOGFILE set "Exec.Redir="
 if /i .%LOGFILE%.==.NUL. set "Exec.Redir="
+set "Exec.IF_VERBOSE=%IF_VERBOSE%"
+:# Record the command-line to execute.
+:# Never comment (set Exec.cmd) lines themselves, to avoid appending extra spaces.
+:# Use %*, but not %1 ... %9, because %N miss non-white argument separators like = , ;
+set Exec.Cmd=%*
 :# Process optional arguments
-set "Exec.GotCmd=Exec.GotCmd"   &:# By default, the command line is %* for :Exec
 goto :Exec.GetArgs
 :Exec.NextArg
-set "Exec.GotCmd=Exec.BuildCmd" &:# An :Exec argument was found, we'll have to rebuild the command line
+:# Remove the %EXEC% argument and following spaces from the head of the command line
+setlocal EnableDelayedExpansion &:# The next line works because no :exec own argument may contain an '=' or a '!'
+for /f "tokens=1* delims= " %%a in ("-!Exec.Cmd:*%1=!") do endlocal & set Exec.Cmd=%%b
 shift
 :Exec.GetArgs
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
@@ -975,15 +996,8 @@ if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
   if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
   goto :Exec.NextArg
 )
-set Exec.Cmd=%*
-goto :%Exec.GotCmd%
-:Exec.BuildCmd
-:# Build the command list. Cannot use %*, which still contains the :Exec switches processed above.
-set Exec.Cmd=%1
-:Exec.GetCmdLoop
-shift
-if not .%1.==.. set Exec.Cmd=%Exec.Cmd% %1& goto :Exec.GetCmdLoop
-:Exec.GotCmd
+if "%~1"=="-V" set "Exec.IF_VERBOSE=if 0==1" & goto :Exec.NextArg :# Do not echo the command in verbose mode
+:# Anything else is part of the command. Prepare to display it and run it.
 :# First stage: Split multi-char ops ">>" "2>" "2>>". Make sure to keep ">" signs quoted every time.
 :# Do NOT use surrounding quotes for these set commands, else quoted arguments will break.
 set Exec.Cmd=%Exec.Cmd:">>"=">"">"%
@@ -992,9 +1006,9 @@ set Exec.Cmd=%Exec.Cmd:">&"=">""&"%
 :# If there are output redirections, then cancel any attempt at redirecting output to the log file.
 set "Exec.Cmd1=%Exec.Cmd:"=%" &:# Remove quotes in the command string, to allow quoting the whole string.
 if not "%Exec.Cmd1:>=%"=="%Exec.Cmd1%" set "Exec.Redir="
-if defined Exec.Redir set "NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
+if defined Exec.Redir set "Exec.NOREDIR=1" &:# make sure child scripts do not try to redirect output again 
 :# Second stage: Convert quoted redirection operators (Ex: ">") to a usable (Ex: >) and a displayable (Ex: ^>) value.
-:# Must be once for each of the four < > | & operators.
+:# Must be done once for each of the four < > | & operators.
 :# Since each operation removes half of ^ escape characters, then insert
 :# enough ^ to still protect the previous characters during the subsequent operations.
 set Exec.toEcho=%Exec.Cmd:"|"=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|%
@@ -1006,7 +1020,7 @@ set Exec.Cmd=%Exec.toEcho%
 set "Exec.Echo=rem"
 %IF_NOEXEC% set "Exec.Echo=echo"
 %IF_DEBUG% set "Exec.Echo=echo"
-%IF_VERBOSE% set "Exec.Echo=echo"
+%Exec.IF_VERBOSE% set "Exec.Echo=echo"
 %>DEBUGOUT% %Exec.Echo%.%INDENT%%Exec.toEcho%
 if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# Constraints at this stage:
@@ -1015,23 +1029,24 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
 endlocal & if not .%NOEXEC%.==.1. (
-  set "NOREDIR=%NOREDIR%"
+  set "NOREDIR=%Exec.NOREDIR%"
   %IF_DEBUG% set "INDENT=%INDENT%  "
-  %Exec.RestoreErr% &:# Restore the errorlevel we had on :Exec entrance
+  call :Exec.SetErrorLevel %Exec.ErrorLevel% &:# Restore the errorlevel we had on :Exec entrance
   %Exec.Cmd%%Exec.Redir%
-  set "Exec.ErrorLevel=!ERRORLEVEL!"
-  set "NOREDIR=%NOREDIR0%" &:# Sets ERRORLEVEL=1 in Windows XP/64
+  call set "Exec.ErrorLevel=%%ERRORLEVEL%%"  &:# Save the new errorlevel set by the command executed
+  set "NOREDIR=%NOREDIR%" &:# Sets ERRORLEVEL=1 in Windows XP/64
   %IF_DEBUG% set "INDENT=%INDENT%"
-  call :Exec.ShowExitCode !Exec.ErrorLevel!
+  call :Exec.TraceExit
 )
-goto :eof
+exit /b
 
-:Exec.ShowExitCode %1
-set "Exec.ErrorLevel="
-set "Exec.RestoreErr="
-%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %1
-if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %1
-exit /b %1
+:Exec.TraceExit
+for %%e in (%Exec.ErrorLevel%) do (
+  set "Exec.ErrorLevel="
+  %IF_DEBUG% %>DEBUGOUT% echo.%INDENT%  exit %%e
+  if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %%e
+  exit /b %%e
+)
 
 :Exec.End
 
@@ -1654,6 +1669,7 @@ EXIT /b
 :#   2015-11-19 JFL Adapted to new %UPVAR% mechanism.                         #
 :#   2016-11-11 JFL Avoid copying the input string. 5% faster.		      #
 :#                  Added routine :strlen.q. No tracing but twice as fast.    #
+:#   2016-11-16 JFL Test just 1 char at each index. 0.6% faster on long strgs.#
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -1664,7 +1680,7 @@ if "%~2"=="" %RETURN% 1 &:# Missing argument
 set "%~2=0"
 if defined %~1 for /l %%b in (12,-1,0) do (
   set /a "i=(%~2|(1<<%%b))-1"
-  for %%i in (!i!) do if not "!%~1:~%%i!"=="" set /a "%~2=%%i+1"
+  for %%i in (!i!) do if not "!%~1:~%%i,1!"=="" set /a "%~2=%%i+1"
 )
 %RETURN%
 
@@ -1673,7 +1689,7 @@ setlocal EnableDelayedExpansion
 set "len=0"
 if defined %~1 for /l %%b in (12,-1,0) do (
   set /a "i=(len|(1<<%%b))-1"
-  for %%i in (!i!) do if not "!%~1:~%%i!"=="" set /a "len=%%i+1"
+  for %%i in (!i!) do if not "!%~1:~%%i,1!"=="" set /a "len=%%i+1"
 )
 endlocal & if "%~2" neq "" set "%~2=%len%"
 exit /b
@@ -3494,6 +3510,10 @@ call :Func#1
 :#----------------------------------------------------------------------------#
 :# Test %EXEC% and errorlevels, on entry and exit
 
+:echoErr
+%ECHO% set "ERRORLEVEL=%ERRORLEVEL%"
+exit /b
+
 :testErrorLevel
 for /l %%n in (0,1,2) do (
   echo.
@@ -3526,7 +3546,7 @@ set "V2=%~2"
 
 :testR
 %FUNCTION% EnableDelayedExpansion
-set "STRING=@||&&(())<<>>^^^^,,;;  %^%^!^!**??[[]]==~~''""%^CD%_^!CD^!""
+set "STRING=@||&&(())<<>>^^^^,,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!""
 call :testR2 "With EnableDelayedExpansion" "last but not least"
 %ECHO% :# In testR
 %ECHOVARS% V1 S V2
@@ -3536,7 +3556,7 @@ set "V1="
 set "V2="
 
 setlocal DisableDelayedExpansion
-set  STRING=@^|^|^&^&(())^<^<^>^>^^^^,,;;  %^%^!^!**??[[]]==~~''""%^CD%_!CD!"
+set  STRING=@^|^|^&^&(())^<^<^>^>^^^^,,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_!CD!"
 call :testR2 "With DisableDelayedExpansion" "last but not least"
 %ECHO% :# In testR
 %ECHOVARS% V1 S V2
