@@ -10,6 +10,9 @@
 #                   Please report any problem in the Issues tab in that       #
 #                   GitHub repository in                                      #
 #                   https://github.com/JFLarvoire/SysToolsLib/issues	      #
+#                   If you do submit a pull request, please add a comment at  #
+#                   the end of this header with the date, your initials, and  #
+#		    a description of the changes. Also update $scriptVersion. #
 #                                                                             #
 #                   The initial version of this script was described in an    #
 #                   article published in the May 2016 issue of MSDN Magazine. #
@@ -77,6 +80,7 @@
 #                   Added a $ServiceDescription string global setting, and    #
 #                   use it for the service registration.                      #
 #                   Added comments about Windows event logs limitations.      #
+#    2016-11-17 RBM Fixed issue #6 Mangled hyphen in final Unregister-Event.  #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -179,7 +183,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-09-19"
+$scriptVersion = "2016-11-17"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
