@@ -166,6 +166,7 @@
 :#   2016-11-06 JFL Updated the 10/19 errorlevel fix to work for DO and EXEC. #
 :#   2016-11-09 JFL Bug fix: %RETURN% failed if an UPVAR contained a '?'.     #
 :#                  Added routine :lsort.                                     #
+:#                  Fixed :condquote, which was severely broken :-(	      #
 :#   2016-11-10 JFL Added another implementation for routine :now.            #
 :#   2016-11-11 JFL Simplified routine :strlen, now 5% faster.                #
 :#                  Added routine :strlen.q. No tracing but twice as fast.    #
@@ -173,7 +174,18 @@
 :#   2016-11-13 JFL Bug fix: Correctly return special characters & | < > ? *  #
 :#   2016-11-17 JFL Fixed tracing %EXEC% command exit code when exp. disabled.#
 :#		    Several other :Exec bug fixes and perf. improvements.     #
-:#                                                                            #
+:#   2016-11-21 JFL Fixed ! quoting and added |&<> quoting to :CondQuote.     #
+:#   2016-11-24 JFL Added %XCALL% for calling functions in a 2nd script inst. #
+:#                  Fixed %EXEC% with commands containing a ^ character.      #
+:#                  Fixed tracing %FUNCTION% arguments with ^ and % chars.    #
+:#                  Updated %POPARG% to work with trick characters ! and ^ in #
+:#                  delayed expansion mode. The old and faster version is now #
+:#		    called %POPSARG%.                                         #
+:#		    Moved character entity definitions from the :Debug section#
+:#		    to the :PopArg section, where they're now needed first.   #
+:#		    Added routine :Prep2ExpandVars allowing to pass any       #
+:#		    tricky string across call or endlocal barriers.           #
+:#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
@@ -184,16 +196,22 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-17"
+set "VERSION=2016-11-23"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
 set "ARGS=%*"
 
+:# Mechanism for calling subroutines in a second external script instance.
+:# Done by %XCALL% :label [arguments]
+if '%1'=='-call' !ARGS:~1! & exit /b
+set XCALL=call "%ARG0%" -call
+
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
 
-set "POPARG=call :PopArg"
+:# Default definitions
+call :PopArg.Init
 call :Macro.Init
 call :Debug.Init
 call :Exec.Init
@@ -212,16 +230,29 @@ goto :eof
 :#                                                                            #
 :#  Function        PopArg                                                    #
 :#                                                                            #
-:#  Description     Pop the first arguments from %ARGS% into %ARG%            #
+:#  Description     Pop the first argument from %ARGS% into %ARG% and %"ARG"% #
 :#                                                                            #
-:#  Arguments       %ARGS%	    Command line arguments                    #
+:#  Macros          %POPARG%        Pop one argument                          #
+:#                  %POPSARG%       Faster version, not supporting ! or ^ val.#
 :#                                                                            #
-:#  Returns         %ARG%           The unquoted argument                     #
+:#  Input           %ARGS%	    Command line arguments                    #
+:#                                                                            #
+:#  Output          %ARG%           The unquoted argument                     #
 :#                  %"ARG"%         The actual argument, possibly quoted      #
+:#                  %ARGS%	    Remaining command line arguments          #
 :#                                                                            #
 :#  Notes 	    Works around the defect of the shift command, which       #
 :#                  pops the first argument from the %* list, but does not    #
 :#                  remove it from %*.                                        #
+:#                  Also works around another defect with tricky characters   #
+:#                  like ! or ^ being lost when variable expansion is on.     #
+:#                                                                            #
+:#                  Important: The performance of this routine is much better #
+:#                  when invoked with variable expansion disabled. This is    #
+:#                  due to the complex processing done to avoid issues with   #
+:#                  tricky characters like ! or ^ when expansion is enabled.  #
+:#                  If you're sure that NONE of the arguments contain such    #
+:#                  tricky characters, then call :PopSimpleArg.               #
 :#                                                                            #
 :#                  Use an inner call to make sure the argument parsing is    #
 :#                  done by the actual cmd.exe parser. This guaranties that   #
@@ -229,6 +260,13 @@ goto :eof
 :#                                                                            #
 :#                  But call itself has a quirk, which requires a convoluted  #
 :#                  workaround to process the /? argument.                    #
+:#                                                                            #
+:#                  Known limitation: After using :PopArg, all consecutive    #
+:#                  argument separators in %ARGS% are replaced by one space.  #
+:#                  For example: "A==B" becomes "A B"                         #
+:#                  This does not change the result of subsequent calls to    #
+:#                  :PopArg, but this prevents from using the tail itself as  #
+:#                  an argument. => Do not use :PopArg to get :Exec args!     #
 :#                                                                            #
 :#                  To do: Detect if the last arg has mismatched quotes, and  #
 :#                  if it does, append one.                                   #
@@ -240,33 +278,149 @@ goto :eof
 :#  History                                                                   #
 :#   2015-04-03 JFL Bug fix: Quoted args with an & inside failed to be poped. #
 :#   2015-07-06 JFL Bug fix: Call quirk prevented inner call from popping /?. #
+:#   2016-11-18 JFL Fixed popping arguments containing % characters.          #
+:#   2016-11-21 JFL Fixed popping quoted arguments containing &|<> characters.#
+:#   2016-11-22 JFL Fixed popping arguments containing ^ characters.          #
+:#   2016-11-24 JFL Updated %POPARG% to work with trick characters ! and ^ in #
+:#                  delayed expansion mode. The old and faster version is now #
+:#		    called %POPSARG%.                                         #
+:#		    Added routine :Prep2ExpandVars allowing to pass any       #
+:#		    tricky string across call or endlocal barriers.           #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
+call :PopArg.Init
+goto PopArg.end
+
+:PopArg.Init
+set "POPARG=call :PopArg"
+set "POPSARG=call :PopSimpleArg"
+
+:# Define a LF variable containing a Line Feed ('\x0A')
+set LF=^
+%# The two blank lines here are necessary. #%
+%# The two blank lines here are necessary. #%
+
+:# Define a CR variable containing a Carriage Return ('\x0D')
+for /f %%a in ('copy /Z %COMSPEC% nul') do set "CR=%%a"
+
+:# Define a BS variable containing a BackSpace ('\x08')
+:# Use prompt to store a  backspace+space+backspace into a DEL variable.
+for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "DEL=%%a"
+:# Then extract the first backspace
+set "BS=%DEL:~0,1%"
+
+:# Define variables for problematic characters, that cause parsing issues
+:# Use the ASCII control character name, or the html entity name.
+:# Warning: The excl and hat characters need different quoting depending on context.
+set  "DEBUG.percnt=%%"	&:# One percent sign
+set  "DEBUG.excl=^!"	&:# One exclamation mark
+set  "DEBUG.hat=^"	&:# One caret, aka. circumflex accent, or hat sign
+set ^"DEBUG.quot=""	&:# One double quote
+set  "DEBUG.apos='"	&:# One apostrophe
+set  "DEBUG.amp=&"	&:# One ampersand
+set  "DEBUG.vert=|"	&:# One vertical bar
+set  "DEBUG.gt=>"	&:# One greater than sign
+set  "DEBUG.lt=<"	&:# One less than sign
+set  "DEBUG.lpar=("	&:# One left parenthesis
+set  "DEBUG.rpar=)"	&:# One right parenthesis
+set  "DEBUG.lbrack=["	&:# One left bracket
+set  "DEBUG.rbrack=]"	&:# One right bracket
+set  "DEBUG.sp= "	&:# One space
+set  "DEBUG.tab=	"	&:# One tabulation
+set  "DEBUG.quest=?"	&:# One question mark
+set  "DEBUG.ast=*"	&:# One asterisk
+set  "DEBUG.cr=!CR!"	&:# One carrier return
+set  "DEBUG.lf=!LF!"	&:# One line feed
+set  "DEBUG.bs=!BS!"	&:# One backspace
+goto :eof
+
 :PopArg
+if "!!"=="" goto :PopArg.Eon
+:PopArg.Eoff
+:PopSimpleArg
 :# Gotcha: The call parser first scans its command line for an unquoted /?.
 :# If it finds one anywhere on the command line, then it ignores the target label and displays call help.
 :# To work around that, we initialize %ARG% and %"ARG"% with an impossible combination of values.
 set "ARG=Yes"
 set ""ARG"=No"
-call :PopArg.Helper %ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
+set "PopArg.ARGS="
+if defined ARGS (
+  setlocal EnableDelayedExpansion
+  for /f "delims=" %%a in ("!ARGS:%%=%%%%!") do endlocal & set ^"PopArg.ARGS=%%a^"
+)
+call :PopArg.Helper %PopArg.ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
 :# Finding that impossible combination now is proof that the call was not executed.
 :# In this case, try again with the /? quoted, to prevent the call parser from processing it.
 :# Note that we can not systematically do this /? enquoting, else it's "/?" that would break the call.
-if "%ARG%"=="Yes" if [%"ARG"%]==[No] call :PopArg.Helper %ARGS:/?="/?"% 
+if "%ARG%"=="Yes" if [%"ARG"%]==[No] call :PopArg.Helper %PopArg.ARGS:/?="/?"%
+set "PopArg.ARGS="
 goto :eof
 :PopArg.Helper
-set "ARG=%~1"	&:# Remove quotes from the argument
-set ""ARG"=%1"	&:# The same with quotes, if any, should we need them
+set "ARG=%~1"		&:# Remove quotes from the argument
+set ^""ARG"=%1^"	&:# The same with quotes, if any, should we need them
+if defined ARG set "ARG=%ARG:^^=^%"
+if defined "ARG" set ^""ARG"=%"ARG":^^=^%^"
 :# Rebuild the tail of the argument line, as shift does not do it
 :# Never quote the set ARGS command, else some complex quoted strings break
 set ARGS=%2
 :PopArg.GetNext
 shift
+if defined ARGS set ^"ARGS=%ARGS:^^=^%^"
 if [%2]==[] goto :eof
 :# Leave quotes in the tail of the argument line
 set ARGS=%ARGS% %2
 goto :PopArg.GetNext
+
+:PopArg.Eon
+setlocal DisableDelayedExpansion
+call :PopArg
+call :Prep2ExpandVars ARG ^""ARG"^" ARGS
+setlocal EnableDelayedExpansion
+for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS!") do (
+  endlocal
+  endlocal
+  set "ARG=%%a"
+  set "ARG=!ARG:~1!"
+  set ^""ARG"=%%b^"
+  set ^""ARG"=!"ARG":~1!^"
+  set ^"ARGS=%%c^"
+  set "ARGS=!ARGS:~1!"
+)
+goto :eof
+
+:# Prepare variables to return from the local scope (with expansion on or off) to a parent scope with expansion on
+:Prep2ExpandVars VAR [VAR ...]
+if "!!"=="" goto :Prep2ExpandVars.Eon
+:Prep2ExpandVars.Eoff	:# The local scope has expansion off
+setlocal EnableDelayedExpansion
+set "VALUE=!%~1!"
+call :Prep2ExpandVars.Eon VALUE
+endlocal & set "%~1=%VALUE%"
+if not [%2]==[] shift & goto :Prep2ExpandVars.Eoff
+goto :eof
+
+:# Prepare variables, assuming the local scope itself has expansion on
+:Prep2ExpandVars.Eon VAR [VAR ...]
+if defined %1 (
+  for %%e in (sp tab cr lf quot amp vert lt gt hat percnt) do ( :# Encode named character entities
+    for %%c in ("!DEBUG.%%e!") do (
+      set "%~1=!%~1:%%~c= DEBUG.%%e !"
+    )
+  )
+  call set "%~1=%%%~1:^!= DEBUG.excl %%" 	& rem :# Encode exclamation points
+  call set "%~1=%%%~1: =^!%%"			& rem :# Encode final expandable entities
+)
+if not [%2]==[] shift & goto :Prep2ExpandVars.Eon
+goto :eof
+
+:# Prepare variables containing pathnames that will be passed as "arguments"
+:PrepArgVars
+set "%~1=!%~1:%%=%%%%!"				&:# Escape percent signs
+if not [%2]==[] shift & goto :PrepArgVars
+goto :eof
+
+:PopArg.end
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -341,13 +495,6 @@ call :Macro.Init
 goto :Macro.End
 
 :Macro.Init
-:# Define a LF variable containing a Line Feed ('\x0A')
-:# The two blank lines below are necessary.
-set LF=^
-
-
-:# End of define Line Feed. The two blank lines above are necessary.
-
 :# LF generator variables, that become an LF after N expansions
 :# %LF1% == %LF% ; %LF2% == To expand twice ; %LF3% == To expand 3 times ; Etc
 :# Starting with LF2, the right # of ^ doubles on every line,
@@ -389,16 +536,6 @@ set "/ON_MACRO_EXIT=') do endlocal %&% %%r"		&:# End the return variables defini
 :#       They should be removed from the released code.
 set "XDLEVEL=0" &:# 0=No macro debug; 1=medium debug; 2=full debug; 3=Even more debug
 set "IF_XDLEVEL=for /f %%' in ('call echo.%%XDLEVEL%%') do if %%' GEQ"
-
-:# While at it, and although this is unrelated to macros, define other useful ASCII control codes
-:# Define a CR variable containing a Carriage Return ('\x0D')
-for /f %%a in ('copy /Z %COMSPEC% nul') do set "CR=%%a"
-
-:# Define a BS variable containing a BackSpace ('\x08')
-:# Use prompt to store a  backspace+space+backspace into a DEL variable.
-for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "DEL=%%a"
-:# Then extract the first backspace
-set "BS=%DEL:~0,1%"
 
 goto :eof
 :Macro.end
@@ -521,6 +658,7 @@ goto :eof
 :#   2016-11-02 JFL Bug fix: Avoid log file redirection failures in recursive #
 :#                  scripts.                                                  #
 :#   2016-11-13 JFL Bug fix: Correctly return special characters & | < > ? *  #
+:#   2016-11-24 JFL Fixed tracing %FUNCTION% arguments with ^ and % chars.    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -534,29 +672,6 @@ if exist echo >&2 echo WARNING: The file "echo" in the current directory will ca
 :# Initialize other debug variables
 set "ECHO=call :Echo"
 set "ECHOVARS=call :EchoVars"
-:# Define variables for problematic characters, that cause parsing issues
-:# Use the ASCII control character name, or the html entity name.
-:# Warning: The excl and hat characters need different quoting depending on context.
-set "DEBUG.percnt=%%"	&:# One percent sign
-set "DEBUG.excl=^!"	&:# One exclamation mark
-set "DEBUG.hat=^"	&:# One caret, aka. circumflex accent, or hat sign
-set ^"DEBUG.quot=""	&:# One double quote
-set "DEBUG.apos='"	&:# One apostrophe
-set "DEBUG.amp=&"	&:# One ampersand
-set "DEBUG.vert=|"	&:# One vertical bar
-set "DEBUG.gt=>"	&:# One greater than sign
-set "DEBUG.lt=<"	&:# One less than sign
-set "DEBUG.lpar=("	&:# One left parenthesis
-set "DEBUG.rpar=)"	&:# One right parenthesis
-set "DEBUG.lbrack=["	&:# One left bracket
-set "DEBUG.rbrack=]"	&:# One right bracket
-set "DEBUG.sp= "	&:# One space
-set "DEBUG.tab=	"	&:# One tabulation
-set "DEBUG.quest=?"	&:# One question mark
-set "DEBUG.ast=*"	&:# One asterisk
-set "DEBUG.cr=!CR!"	&:# One carrier return
-set "DEBUG.lf=!LF!"	&:# One line feed
-set "DEBUG.bs=!BS!"	&:# One backspace
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -651,7 +766,8 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set "ARGS=%%*"%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
   setlocal %!%MACRO.ARGS%!% %\n%
@@ -676,15 +792,16 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=call call :Debug.Entry0 %%0 %%*"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set "ARGS=%%*"%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
     if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-      call :Echo.2DebugOut call %!%FUNCTION.NAME%!% %!%ARGS%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      call :Echo.2DebugOut call %!%FUNCTION.NAME%!% %!%ARGS:%%=%%%%%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
     ) else ( %# Output directly here, which is faster #% %\n%
       echo%!%INDENT%!% call %!%FUNCTION.NAME%!% %!%ARGS%!%%\n%
     ) %\n%
     if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-      call :Echo.2LogFile call %!%FUNCTION.NAME%!% %!%ARGS%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      call :Echo.2LogFile call %!%FUNCTION.NAME%!% %!%ARGS:%%=%%%%%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
     ) %\n%
     call set "INDENT=%'!%INDENT%'!%  " %\n%
   ) %\n%
@@ -773,14 +890,26 @@ goto :Echo.Log
 
 :Echo.Eval2DebugOut %*=String with variables that need to be evaluated first
 :# Must be called with delayed expansion on, so that !variables! within %* get expanded
-:Echo.2DebugOut	%*=String to output to the DEBUGOUT stream
 %>DEBUGOUT% echo.%INDENT%%*
+goto :eof
+
+:Echo.2DebugOut	%*=String to output to the DEBUGOUT stream
+setlocal DisableDelayedExpansion &:# Make sure !variables! do _not_ get expanded
+set ^"ARGS=%*^" &:# ^carets within "quoted" strings get doubled.
+if defined ARGS set ^"ARGS=%ARGS:^^=^%^"
+%>DEBUGOUT% echo.%INDENT%%ARGS%
 goto :eof
 
 :Echo.Eval2LogFile %*=String with variables that need to be evaluated first
 :# Must be called with delayed expansion on, so that !variables! within %* get expanded
-:Echo.2LogFile %*=String to output to the LOGFILE
 %>>LOGFILE% echo.%INDENT%%*
+goto :eof
+
+:Echo.2LogFile %*=String to output to the LOGFILE
+setlocal DisableDelayedExpansion &:# Make sure !variables! do _not_ get expanded
+set ^"ARGS=%*^" &:# ^carets within "quoted" strings get doubled.
+if defined ARGS set ^"ARGS=%ARGS:^^=^%^"
+%>>LOGFILE% echo.%INDENT%%ARGS%
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
@@ -859,6 +988,8 @@ goto EchoArgs.loop
 :#                              %EXEC% can't be used, like in for ('cmd') ... #
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
+:#                  %DOECHO%    Echo and run a command. No logging.           #
+:#                  %DOECHO.D%  Idem, echoing it in debug mode only.          #
 :#                                                                            #
 :#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
@@ -902,6 +1033,8 @@ goto EchoArgs.loop
 :#		    optional arguments from the command line to run. (The old #
 :#		    method lost non-white batch argument separators = , ; in  #
 :#		    some cases.)                                              #
+:#   2016-11-24 JFL Fixed executing commands containing a ^ character.        #
+:#		    Added routine :DoEcho.                                    #
 :#		                                                              #
 :#----------------------------------------------------------------------------#
 
@@ -912,10 +1045,14 @@ goto :Exec.End
 :Exec.Init
 set "DO=call :Do"
 set "EXEC=call :Exec"
+set "DOECHO=call :DoEcho"
+set "DOECHO.D=call :DoEcho.D"
 set "ECHO.X=call :Echo.X"
 set "ECHO.XD=call :Echo.XD"
 set "ECHO.XVD=call :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
+set "XCALL@=%XCALL% :Exec.CallVar"
+set "XEXEC@=%XCALL% :Exec.ExecVar"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
 tee.exe --help >NUL 2>NUL
@@ -981,7 +1118,8 @@ set "Exec.IF_VERBOSE=%IF_VERBOSE%"
 :# Record the command-line to execute.
 :# Never comment (set Exec.cmd) lines themselves, to avoid appending extra spaces.
 :# Use %*, but not %1 ... %9, because %N miss non-white argument separators like = , ;
-set Exec.Cmd=%*
+set ^"Exec.Cmd=%*^" &:# Doubles ^carets within "quoted" strings, and halves those outside
+set ^"Exec.Cmd=%Exec.Cmd:^^=^%^" &:# Fix the # of ^carets within "quoted" strings
 :# Process optional arguments
 goto :Exec.GetArgs
 :Exec.NextArg
@@ -1047,6 +1185,26 @@ for %%e in (%Exec.ErrorLevel%) do (
   if defined LOGFILE %>>LOGFILE% echo.%INDENT%  exit %%e
   exit /b %%e
 )
+
+:Exec.CallVar CMDVAR
+call !%1:%%=%%%%!
+exit /b
+
+:Exec.ExecVar CMDVAR
+call :Exec !%1:%%=%%%%!
+exit /b
+
+:# Echo a command, then run it as it is.
+:DoEcho
+%ECHO% %*
+%*
+goto :eof
+
+:# Echo a command in debug mode, then run it as it is.
+:DoEcho.D
+%>DEBUGOUT% %ECHO.D% %*
+%*
+goto :eof
 
 :Exec.End
 
@@ -1346,6 +1504,28 @@ set "X=Initial value"
 set "X=Modified value" & echo X=!X!
 endlocal
 goto :eof
+
+:#----------------------------------------------------------------------------#
+
+:# Check that cmd extensions work
+:check_exts
+verify other 2>nul
+setlocal EnableExtensions EnableDelayedExpansion
+if errorlevel 1 (
+  >&2 echo Error: Unable to enable command extensions.
+  endlocal & exit /b 1
+)
+set VAR=before
+if "%VAR%" == "before" (
+  set VAR=after
+  if not "!VAR!" == "after" (
+    >&2 echo Error: Delayed environment variable expansion must be enabled.
+    >&2 echo Please restart your cmd.exe shell with the /V option,
+    >&2 echo or set HKLM\Software\Microsoft\Command Processor\DelayedExpansion=1
+    endlocal & exit /b 1
+  )
+)
+endlocal & exit /b 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -2037,32 +2217,39 @@ exit /b
 :#                  See "cmd /?" for information about characters needing to  #
 :#                  be quoted.                                                #
 :#                  I've added "@" that needs quoting if first char in cmd.   #
-:#                  I've removed "!" as quoting does NOT prevent expansions.  #
+:#                                                                            #
+:#                  Although this is not the objective of this function,      #
+:#                  some effort is made to also produce a usable string if    #
+:#                  the input contains characters that are invalid in file    #
+:#                  names. Inner '"' are removed. "|&<>" are quoted.	      #
 :#                                                                            #
 :#  History                                                                   #
 :#   2010-12-19 JFL Created this routine                                      #
 :#   2011-12-12 JFL Rewrote using findstr. (Executes much faster.)	      #
 :#		    Added support for empty pathnames.                        #
+:#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
+:#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Quote file pathnames that require it. %1=Input variable. %2=Opt. output variable.
 :condquote
-%FUNCTION% enableextensions enabledelayedexpansion
-set RETVAR=%~2
-if "%RETVAR%"=="" set RETVAR=%~1
-set "P=!%~1!"
-:# If the value is empty, don't go any further.
-if not defined P set "P=""" & goto :condquote_ret
-:# Remove double quotes inside P. (Fails if P is empty)
-set "P=%P:"=%"
-:# If the value is empty, don't go any further.
-if not defined P set "P=""" & goto :condquote_ret
-:# Look for any special character that needs quoting
-echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"@" /C:"," /C:";" /C:"[" /C:"]" /C:"{" /C:"}" /C:"=" /C:"'" /C:"+" /C:"`" /C:"~" >NUL
-if not errorlevel 1 set P="%P%"
-:condquote_ret
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
 %UPVAR% %RETVAR%
+set "P=!%~1!"
+:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
+if defined P set ^"P=!P:"=!"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs "quoting". See list from (cmd /?).
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="!P!"
+:condquote_ret
+set "%RETVAR%=!P!"
 %RETURN%
 
 :condquote2
@@ -3563,6 +3750,110 @@ call :testR2 "With DisableDelayedExpansion" "last but not least"
 endlocal
 
 %RETURN%
+
+:#----------------------------------------------------------------------------#
+:# Test passing tricky characters
+
+:testC
+%FUNCTION% EnableDelayedExpansion
+:# set "STRING=@(())^^^^,,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!"
+:# set STRING=!STRING!"@||&&(())<<>>^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
+set "STRING0=@||&&(())<<>>^^^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
+set "STRING1=@(()),,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!" &:# Remove ||&&^^<<>> that cause problems when not quoted
+set STRING=!STRING1! "!STRING0!"
+set STRING
+call :testC2 !STRING:%%=%%%%!
+%RETURN%
+
+:testC2
+%DOECHO% setlocal DisableDelayedExpansion
+set ARGLINE=%*
+set ARGLINE
+set ARG#1=%1
+set ARG#2=%2
+set ARG#3=%3
+set ARG#4=%4
+set ARG#
+
+%ECHO% :# Idem with initial ^^caret
+set ^"ARGLINE=%*^"
+set ARGLINE
+set ^"ARG#1=%1^" &:# yes
+set ^"ARG#2=%2^" & echo {%ARG#1%}
+set ^"ARG#3=%3^" & echo {%ARG#2%}
+set ^"ARG#4=%4^"
+set ARG#
+
+endlocal
+
+%DOECHO% setlocal EnableDelayedExpansion
+set ^"ARGLINE=%*^"
+set ARGLINE
+set ARG#1=%1
+set ARG#2=%2
+set ARG#3=%3
+set ARG#4=%4
+set ARG#
+endlocal
+
+%FUNCTION% EnableDelayedExpansion
+set ARGS
+set "STRING0="
+set "STRING1="
+set "STRING=!ARGS!"
+set STRING
+%DOECHO% setlocal DisableDelayedExpansion
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+endlocal
+
+%DOECHO% setlocal EnableDelayedExpansion
+set ARGS=!STRING!
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+%POPARG%
+%ECHOVARS% ARG ^""ARG"^"
+endlocal
+%RETURN%
+
+:# Test preparing tricky arguments for expansion
+:testP
+%FUNCTION% EnableDelayedExpansion
+:# set "STRING=@(())^^^^,,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!"
+:# set STRING=!STRING!"@||&&(())<<>>^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
+set "STRING0=@||&&(())<<>>^^^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
+set "STRING1=@(()),,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!" &:# Remove ||&&^^<<>> that cause problems when not quoted
+set STRING=!STRING1! "!STRING0!"
+set STRING
+setlocal DisableDelayedExpansion
+call :Prep2ExpandVars STRING
+endlocal
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:# Test relative performances of two possible ways to do indirect variable expansion
+
+:call_set
+call set "X=%%windir%%"
+goto :eof
+
+:call_:set
+call :set "X=%%windir%%"
+goto :eof
+
+:set
+set %*
+goto :eof
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
