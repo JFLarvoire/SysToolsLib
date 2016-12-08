@@ -64,51 +64,89 @@
 :#                  inside.                                                   #
 :#   2016-11-23 JFL Factored out routine :Prep2ExpandVars, and use it before  #
 :#                  displaying any name or value. Fixes issues with ! and ^.  #
+:#   2016-12-08 JFL Updated the library framework. Features unchanged.        #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-11-23"
-set "SCRIPT=%~nx0"
-set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
-set "ARG0=%~f0"
-set "ARGS=%*"
+set "VERSION=2016-12-08"
+set "SCRIPT=%~nx0"				&:# Script name
+set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
+set  "ARG0=%~f0"				&:# Script full pathname
+set ^"ARGS=%*^"					&:# Argument line
 
-:# Mechanism for calling subroutines in a second external script instance.
-:# Done by %XCALL% :label [arguments]
-if '%1'=='-call' !ARGS:~1! & exit /b
-set XCALL=call "%ARG0%" -call
+:# Mechanism for calling subroutines in a second instance of a script, from its main instance.
+:# Done by (%XCALL% :label [arguments]), with XCALL defined in the Call module below.
+if '%1'=='-call' !ARGS:~1!& exit /b
 
-:# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
-set FOREACHLINE=for /f "delims=" 
+:# Initialize the most commonly used library components.
+call :Library.Init
 
-:# Default definitions
-call :PopArg.Init
-call :Macro.Init
-call :Debug.Init
-call :Exec.Init
+:# Go process command-line arguments
 goto main
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Function        PopArg                                                    #
+:#  Function	    Library.Init					      #
 :#                                                                            #
-:#  Description     Pop the first argument from %ARGS% into %ARG% and %"ARG"% #
+:#  Description     Initialize the most commonly used library components      #
 :#                                                                            #
-:#  Macros          %POPARG%        Pop one argument                          #
-:#                  %POPSARG%       Faster version, not supporting ! or ^ val.#
+:#----------------------------------------------------------------------------#
+
+:Library.Init
+:# Initialize this library modules definitions.
+:# Each one depends on the preceding ones, so if you need one, you need all the preceding ones as well.
+call :Call.Init			&:# Function calls and argument extraction
+call :Macro.Init		&:# Inline macros generation
+call :Debug.Init		&:# Debug routines
+call :Exec.Init			&:# Conditional execution routines
+
+:# FOREACHLINE macro. (Changes the delimiter to none to catch the whole lines.)
+set FOREACHLINE=for /f "delims="
+
+:# HOME variable. For analogy with Unix systems.
+if not defined HOME set "HOME=%HOMEDRIVE%%HOMEPATH%"
+
+goto :eof
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Input           %ARGS%	    Command line arguments                    #
+:#  Module	    Call						      #
 :#                                                                            #
-:#  Output          %ARG%           The unquoted argument                     #
+:#  Description     Manage function calls and argument extraction             #
+:#                                                                            #
+:#  Functions	    PopArg          Pop the first argument from %ARGS% into   #
+:#				     %ARG% and %"ARG"%			      #
+:#		    PopSimpleArg    Simpler and faster version, incompatible  #
+:#                                   with ! or ^ characters in ARG values.    #
+:#		    Prep2ExpandVars Prepare variables to return from the      #
+:#		 		    local scope (with expansion on or off)    #
+:#				    to a parent scope with expansion on.      #
+:#		    PrepArgVars     Prepare variables containing pathnames    #
+:#				    that will be passed as arguments.	      #
+:#                                                                            #
+:#  Macros	    %POPARG%        Pop one argument using :PopArg            #
+:#                  %POPSARG%       Pop one argument using :PopSimpleArg      #
+:#                  %LCALL%         Call a routine in this library, either    #
+:#                                   locally, or from an outside script.      #
+:#                  %XCALL%         Call an outside script routine, from      #
+:#                                   another instance of that outside script. #
+:#                  %XCALL@%        Idem, but with all args stored in one var.#
+:#                                                                            #
+:#  Variables	    %ARG%           The unquoted argument                     #
 :#                  %"ARG"%         The actual argument, possibly quoted      #
 :#                  %ARGS%	    Remaining command line arguments          #
 :#                                                                            #
-:#  Notes 	    Works around the defect of the shift command, which       #
-:#                  pops the first argument from the %* list, but does not    #
-:#                  remove it from %*.                                        #
+:#                  %CR%            An ASCII Carrier Return character '\x0D'  #
+:#                  %LF%            An ASCII Line Feed character '\x0A'       #
+:#                  %BS%            An ASCII Back Space character '\x08'      #
+:#                  %FF%            An ASCII Form Feed character '\x0C'       #
+:#                                                                            #
+:#  Notes 	    PopArg works around the defect of the shift command,      #
+:#                  which pops the first argument from the %* list, but does  #
+:#                  not remove it from %*.                                    #
 :#                  Also works around another defect with tricky characters   #
 :#                  like ! or ^ being lost when variable expansion is on.     #
 :#                                                                            #
@@ -119,7 +157,7 @@ goto main
 :#                  If you're sure that NONE of the arguments contain such    #
 :#                  tricky characters, then call :PopSimpleArg.               #
 :#                                                                            #
-:#                  Use an inner call to make sure the argument parsing is    #
+:#                  Uses an inner call to make sure the argument parsing is   #
 :#                  done by the actual cmd.exe parser. This guaranties that   #
 :#                  arguments are split exactly as shift would have done.     #
 :#                                                                            #
@@ -136,9 +174,8 @@ goto main
 :#                  To do: Detect if the last arg has mismatched quotes, and  #
 :#                  if it does, append one.                                   #
 :#                  Right now such mismatched quotes will cause an error here.#
-:#                  It is easily feasible to work around this, but this is    #
-:#                  useless as passing back an invalid argument like this     #
-:#                  will only cause more errors further down.                 #
+:#                  Do not work around this error to only pass back the bad   #
+:#                  argument, as this will only cause more errors further down#
 :#                                                                            #
 :#  History                                                                   #
 :#   2015-04-03 JFL Bug fix: Quoted args with an & inside failed to be poped. #
@@ -151,15 +188,21 @@ goto main
 :#		    called %POPSARG%.                                         #
 :#		    Added routine :Prep2ExpandVars allowing to pass any       #
 :#		    tricky string across call or endlocal barriers.           #
+:#   2016-12-01 JFL Added a %FF% Form Feed character variable.                #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-call :PopArg.Init
-goto PopArg.end
+call :Call.Init
+goto Call.end
 
-:PopArg.Init
-set "POPARG=call :PopArg"
-set "POPSARG=call :PopSimpleArg"
+:Call.Init
+if not defined LCALL set "LCALL=call"	&:# Macro to call functions in this library
+set "POPARG=%LCALL% :PopArg"
+set "POPSARG=%LCALL% :PopSimpleArg"
+
+:# Mechanism for calling subroutines in a second external instance of the top script.
+set ^"XCALL=call "!ARG0!" -call^"	&:# This is the top script's (or this lib's if called directly) ARG0
+set ^"XCALL@=!XCALL! :CallVar^"		&:# Indirect call, with the label and arguments in a variable
 
 :# Define a LF variable containing a Line Feed ('\x0A')
 set LF=^
@@ -175,7 +218,10 @@ for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do r
 :# Then extract the first backspace
 set "BS=%DEL:~0,1%"
 
-:# Define variables for problematic characters, that cause parsing issues
+:# Define a FF variable containing a Form Feed ('\x0C')
+for /f %%A in ('cls') do set "FF=%%A"
+
+:# Define variables for problematic characters, that cause parsing issues.
 :# Use the ASCII control character name, or the html entity name.
 :# Warning: The excl and hat characters need different quoting depending on context.
 set  "DEBUG.percnt=%%"	&:# One percent sign
@@ -198,12 +244,13 @@ set  "DEBUG.ast=*"	&:# One asterisk
 set  "DEBUG.cr=!CR!"	&:# One carrier return
 set  "DEBUG.lf=!LF!"	&:# One line feed
 set  "DEBUG.bs=!BS!"	&:# One backspace
+set  "DEBUG.ff=!FF!"	&:# One form feed
 goto :eof
 
 :PopArg
 if "!!"=="" goto :PopArg.Eon
 :PopArg.Eoff
-:PopSimpleArg
+:PopSimpleArg :# Will corrupt result if expansion is on and ARG contains ^ or ! characters.
 :# Gotcha: The call parser first scans its command line for an unquoted /?.
 :# If it finds one anywhere on the command line, then it ignores the target label and displays call help.
 :# To work around that, we initialize %ARG% and %"ARG"% with an impossible combination of values.
@@ -222,7 +269,7 @@ if "%ARG%"=="Yes" if [%"ARG"%]==[No] call :PopArg.Helper %PopArg.ARGS:/?="/?"%
 set "PopArg.ARGS="
 goto :eof
 :PopArg.Helper
-set "ARG=%~1"	&:# Remove quotes from the argument
+set "ARG=%~1"		&:# Remove quotes from the argument
 set ^""ARG"=%1^"	&:# The same with quotes, if any, should we need them
 if defined ARG set "ARG=%ARG:^^=^%"
 if defined "ARG" set ^""ARG"=%"ARG":^^=^%^"
@@ -285,11 +332,16 @@ set "%~1=!%~1:%%=%%%%!"				&:# Escape percent signs
 if not [%2]==[] shift & goto :PrepArgVars
 goto :eof
 
-:PopArg.end
+:# Indirect call, with the label and arguments in a variable
+:CallVar CMDVAR
+call !%1:%%=%%%%!
+exit /b
+
+:Call.end
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Function        Inline macro functions                                    #
+:#  Module          Macro						      #
 :#                                                                            #
 :#  Description     Tools for defining inline functions,                      #
 :#                  also known as macros by analogy with Unix shells macros   #
@@ -297,7 +349,7 @@ goto :eof
 :#  Macros          %MACRO%         Define the prolog code of a macro         #
 :#                  %/MACRO%        Define the epilog code of a macro         #
 :#                                                                            #
-:#  Variables       %LF%            A Line Feed ASCII character '\x0A'        #
+:#  Variables       %LF1%           A Line Feed ASCII character '\x0A'        #
 :#                  %LF2%           Generates a LF when expanded twice        #
 :#                  %LF3%           Generates a LF when expanded 3 times      #
 :#                                  Etc...                                    #
@@ -407,7 +459,7 @@ goto :eof
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Function        Debug routines					      #
+:#  Module	    Debug						      #
 :#                                                                            #
 :#  Description     A collection of debug routines                            #
 :#                                                                            #
@@ -535,8 +587,8 @@ goto :Debug.End
 if exist echo >&2 echo WARNING: The file "echo" in the current directory will cause problems. Please delete it and retry.
 :# Inherited variables from the caller: DEBUG, VERBOSE, INDENT, >DEBUGOUT
 :# Initialize other debug variables
-set "ECHO=call :Echo"
-set "ECHOVARS=call :EchoVars"
+set "ECHO=%LCALL% :Echo"
+set "ECHOVARS=%LCALL% :EchoVars"
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -568,7 +620,7 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
       if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
 	call :Echo.Eval2DebugOut %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
       ) else ( %# Output directly here, which is faster #% %\n%
-	for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #% %\n%
+	for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #%%\n%
       ) %\n%
       if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
 	call :Echo.Eval2LogFile %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
@@ -598,15 +650,15 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
   ) %\n%
 ) %/MACRO%
 :Debug.Init.2
-set "LOG=call :Echo.Log"
+set "LOG=%LCALL% :Echo.Log"
 set ">>LOGFILE=>>%LOGFILE%"
 if not defined LOGFILE set "LOG=rem" & set ">>LOGFILE=rem"
 if .%LOGFILE%.==.NUL. set "LOG=rem" & set ">>LOGFILE=rem"
 if .%NOREDIR%.==.1. set "LOG=rem" & set ">>LOGFILE=rem" &:# A parent script is already redirecting output. Trying to do it again here would fail. 
-set "ECHO.V=call :Echo.Verbose"
-set "ECHO.D=call :Echo.Debug"
-set "ECHOVARS.V=call :EchoVars.Verbose"
-set "ECHOVARS.D=call :EchoVars.Debug"
+set "ECHO.V=%LCALL% :Echo.Verbose"
+set "ECHO.D=%LCALL% :Echo.Debug"
+set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
+set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -632,7 +684,7 @@ set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
   call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
-  set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
+  if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
   setlocal %!%MACRO.ARGS%!% %\n%
@@ -654,11 +706,11 @@ goto :eof
 set "DEBUG=1"
 set "DEBUG.ENTRY=:Debug.Entry"
 set "IF_DEBUG=if .%DEBUG%.==.1."
-set "FUNCTION0=call call :Debug.Entry0 %%0 %%*"
+set "FUNCTION0=%LCALL% call :Debug.Entry0 %%0 %%*"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
   call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
-  set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
+  if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
     if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
       call :Echo.2DebugOut call %!%FUNCTION.NAME%!% %!%ARGS:%%=%%%%%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
@@ -674,7 +726,7 @@ set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
   setlocal %!%MACRO.ARGS%!% %\n%
 ) %/MACRO%
-set "RETURN0=call :Debug.Return0 & exit /b"
+set "RETURN0=%LCALL% :Debug.Return0 & exit /b"
 :# Macro for displaying comments on the return log line
 set RETURN#=set "RETURN#ERR=%'!%ERRORLEVEL%'!%" %&% %MACRO% ( %\n%
   set RETVAL=%!%MACRO.ARGS:~1%!%%\n%
@@ -685,8 +737,8 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=% -d"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Reverse the above optimization
-set "ECHO.D=call :Echo.Debug"
-set "ECHOVARS.D=call :EchoVars.Debug"
+set "ECHO.D=%LCALL% :Echo.Debug"
+set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 goto :eof
 
 :Debug.Entry0
@@ -734,8 +786,8 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=% -v"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Reverse the above optimization
-set "ECHO.V=call :Echo.Verbose"
-set "ECHOVARS.V=call :EchoVars.Verbose"
+set "ECHO.V=%LCALL% :Echo.Verbose"
+set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 goto :eof
 
 :# Echo and log a string, indented at the same level as the debug output.
@@ -818,7 +870,7 @@ goto EchoArgs.loop
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Function        Exec                                                      #
+:#  Module	    Exec                                                      #
 :#                                                                            #
 :#  Description     Run a command, logging its output to the log file.        #
 :#                                                                            #
@@ -826,7 +878,14 @@ goto EchoArgs.loop
 :#                  In DEBUG mode, display the command line and the exit code.#
 :#                  In NOEXEC mode, display the command line, but don't run it.
 :#                                                                            #
-:#  Arguments       -L          Do not send the output to the log file.       #
+:#  Functions       Exec.Init	Initialize Exec routines. Call once at 1st    #
+:#                  Exec.Off	Disable execution of commands		      #
+:#                  Exec.On	Enable execution of commands		      #
+:#                  Do          Always execute a command, logging its output  #
+:#                  Exec	Conditionally execute a command, logging it.  #
+:#                  Exec.SetErrorLevel	Change the current ERRORLEVEL	      #
+:#                                                                            #
+:#  Exec Arguments  -L          Do not send the output to the log file.       #
 :#                  -t          Tee all output to the log file if there's a   #
 :#                              usable tee.exe. Default: Redirect all >> log. #
 :#                              Known limitation: The exit code is always 0.  #
@@ -837,13 +896,6 @@ goto EchoArgs.loop
 :#                              Note: Quote redirections, NOT file numbers.   #
 :#                              Ex: 2">&"1 will work; "2>&1" will NOT work.   #
 :#                                                                            #
-:#  Functions       Exec.Init	Initialize Exec routines. Call once at 1st    #
-:#                  Exec.Off	Disable execution of commands		      #
-:#                  Exec.On	Enable execution of commands		      #
-:#                  Do          Always execute a command, logging its output  #
-:#                  Exec	Conditionally execute a command, logging it.  #
-:#                  Exec.SetErrorLevel	Change the current ERRORLEVEL	      #
-:#                                                                            #
 :#  Macros          %DO%        Always execute a command, logging its output  #
 :#                  %EXEC%      Conditionally execute a command, logging it.  #
 :#                  %ECHO.X%    Echo a string indented in -X mode, and log it.#
@@ -853,8 +905,11 @@ goto EchoArgs.loop
 :#                              %EXEC% can't be used, like in for ('cmd') ... #
 :#                  %IF_EXEC%   Execute a command if _not_ in NOEXEC mode     #
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
-:#                  %DOECHO%    Echo and run a command. No logging.           #
-:#                  %DOECHO.D%  Idem, echoing it in debug mode only.          #
+:#                  %_DO%       Echo and run a command. No opts. No logging.  #
+:#                  %_DO.D%     Idem, echoing it in debug mode only.          #
+:#                  %XEXEC%     Call :Exec from an external scriptlet, such   #
+:#                               one in a (for /f in ('commands')) block.     #
+:#                  %XEXEC@%    Idem, but with all args stored in one var.    #
 :#                                                                            #
 :#  Variables       %NOEXEC%	Exec mode. 0=Execute commands; 1=Don't. Use   #
 :#                              functions Exec.Off and Exec.On to change it.  #
@@ -899,7 +954,7 @@ goto EchoArgs.loop
 :#		    method lost non-white batch argument separators = , ; in  #
 :#		    some cases.)                                              #
 :#   2016-11-24 JFL Fixed executing commands containing a ^ character.        #
-:#		    Added routine :DoEcho.                                    #
+:#		    Added routine :_Do.                                       #
 :#		                                                              #
 :#----------------------------------------------------------------------------#
 
@@ -908,15 +963,16 @@ goto :Exec.End
 
 :# Global variables initialization, to be called first in the main routine
 :Exec.Init
-set "DO=call :Do"
-set "EXEC=call :Exec"
-set "DOECHO=call :DoEcho"
-set "DOECHO.D=call :DoEcho.D"
-set "ECHO.X=call :Echo.X"
-set "ECHO.XD=call :Echo.XD"
-set "ECHO.XVD=call :Echo.XVD"
+set "DO=%LCALL% :Do"
+set "EXEC=%LCALL% :Exec"
+set "_DO=%LCALL% :_Do"
+set "_DO.D=%LCALL% :_Do.D"
+set "ECHO.X=%LCALL% :Echo.X"
+set "ECHO.XD=%LCALL% :Echo.XD"
+set "ECHO.XVD=%LCALL% :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-set "XCALL@=%XCALL% :Exec.CallVar"
+:# Execute commands
+set "XEXEC=%XCALL% :Exec"
 set "XEXEC@=%XCALL% :Exec.ExecVar"
 :# Check if there's a tee.exe program available
 set "Exec.HaveTee=0"
@@ -1051,22 +1107,18 @@ for %%e in (%Exec.ErrorLevel%) do (
   exit /b %%e
 )
 
-:Exec.CallVar CMDVAR
-call !%1:%%=%%%%!
-exit /b
-
 :Exec.ExecVar CMDVAR
 call :Exec !%1:%%=%%%%!
 exit /b
 
 :# Echo a command, then run it as it is.
-:DoEcho
+:_Do
 %ECHO% %*
 %*
 goto :eof
 
 :# Echo a command in debug mode, then run it as it is.
-:DoEcho.D
+:_Do.D
 %>DEBUGOUT% %ECHO.D% %*
 %*
 goto :eof
@@ -1182,7 +1234,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
     :#         We override this by looking further down for the summary line with the number of keys found.
     :#         When the key is invalid, that summary line is not displayed.
     :#         If it is displayed, and if its value is 0, then ignore the errorlevel 1 here.
-    if not defined ERROR %DOECHO.D% set "ERROR=!LINE:~12!"
+    if not defined ERROR %_DO.D% set "ERROR=!LINE:~12!"
   ) else if "!HEAD!"=="HK" (
     if "!NAME!"=="(Default)" set "NAME="
     set "NAME=!BEFORE!!NAME!"
@@ -1218,7 +1270,7 @@ for /f "tokens=1* delims=:" %%a in ("!LINE!") do (
   set PART2=%%b
   %ECHOVARS.D% PART1 PART2
   if defined PART2 if not "!PART2: 0=!"=="!PART2!" (
-    %DOECHO.D% set "ERROR=0"
+    %_DO.D% set "ERROR=0"
     exit /b 0
   )
 )
@@ -1258,7 +1310,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
   :# Special case of the exit code, appended to the data as a uniquely formatted text line " ERRORLEVEL N"
   if "!LINE:~0,12!"=="/ERRORLEVEL/" (
     if not defined ERROR (
-      %DOECHO.D% set "ERROR=!LINE:~12!" & rem :# May also be forced to 0 when a 0-file count is detected below
+      %_DO.D% set "ERROR=!LINE:~12!" & rem :# May also be forced to 0 when a 0-file count is detected below
       echo.!LINE!
     )
     set "IDENTIFIED=1"
@@ -1356,7 +1408,7 @@ set CMD=:GetValues "!KEY!" !OPTS!
     set "VALUE=!VALUE:~1!" &:# Remove the - inserted above, possibly leaving an empty value
     %ECHOVARS.D% NAME TYPE VALUE
     if "!TYPE!"=="ERRORLEVEL" ( :# Special case of the exit code
-      %DOECHO.D% set "ERROR=!VALUE!"
+      %_DO.D% set "ERROR=!VALUE!"
     ) else (			:# General case of all REG_* values
       if %DETAILS%==0 (
 	set "OUTPUT=!BEFORE!!NAME!"
@@ -1454,7 +1506,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
   for /f "delims=" %%m in ("!LINE!") do endlocal & endlocal & set "LINE=%%m"
   %ECHOVARS.D% LINE
   :# Special case of the exit code, appended to the data as a uniquely formatted text line " ERRORLEVEL N"
-  if "!LINE:~0,12!"==" ERRORLEVEL " %DOECHO.D% set "ERROR=!LINE:~12!"
+  if "!LINE:~0,12!"==" ERRORLEVEL " %_DO.D% set "ERROR=!LINE:~12!"
   :# Values are indented by 4 spaces.
   set "HEAD=!LINE:~0,4!"
   set "LINE=!LINE:~4!"
