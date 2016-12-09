@@ -4,26 +4,54 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-12-09
+### Changed
+- Batch/Library.bat:
+   - Added the ability to source Library.bat from another batch script.
+   - Added routine :Prep2ExpandVars, useful for passing variables across endlocal barriers.
+- C/SRC/sector.cpp and gpt.cpp:
+   - Reformated the source to modern coding standards.
+   - Improved the partition size formating readability.
+   - Use the same units (GB, not GiB, etc) for disk and partition sizes.
+   - Added options -H and -I to control the disk and partition size SI unit.
+   - In gpt.cpp, added options -t and -x to control the sector number base (10 or 16).
+   - Added many new partition types.
+   - Added option -V to display the version.
+
+### Fixed
+- C/include/configure.bat and make.bat: Numerous fixes.
+- PowerShell/PSService.ps1: Fixed incorrect hyphen.
+- Batch/Library.bat:
+   - %RETURN% failed if an UPVAR value contained a '?'.
+   - %EXEC% exit code was not displayed correctly when called with expansion disabled.
+   - %EXEC% failed if commands contained a ^.
+   - %FUNCTION% incorrectly displayed arguments containing ^!% in debug mode.
+   - %POPARG% now correctly handles trick characters ^!% correctly in all expansion modes.
+- Batch/regx.bat:
+   - Restructured to fix serious issues if value names or values contained tricky characters like: ^!%
+   - The -X option now works correctly.
+   - Enumerating 0 sub-keys in a valid key does not return an error anymore.
+
 ## [unreleased] 2016-11-07
 ### Changed
 - Fixed and improved the way C make files and scripts use the optional OUTDIR.
-- C\include\configure.bat: Performance improvements and fixed bugs with very old Visual Studio versions.
-- Batch\Library.bat: Updated the recent %EXEC% entry errorlevel fixes to work with %DO% too.
+- C/include/configure.bat: Performance improvements and fixed bugs with very old Visual Studio versions.
+- Batch/Library.bat: Updated the recent %EXEC% entry errorlevel fixes to work with %DO% too.
 
 ## [unreleased] 2016-11-05
 ### Changed
 - Updated the make scripts and make files to always reuse the initial script instance, when invoked recursively in subdirectories.
-- C\include\configure.bat now has a -r option for recursively configuring every C subdirectory.
-- C\include\make.bat now automatically uses the top instance log file, avoiding the need to explicitely use the -L option in recursive calls.
+- C/include/configure.bat now has a -r option for recursively configuring every C subdirectory.
+- C/include/make.bat now automatically uses the top instance log file, avoiding the need to explicitely use the -L option in recursive calls.
 - Clarified "make cleanenv" output: It now displays the actual commands it had to run to cleanup the environment, or nothing if there was no need.
-- Batch\Library.bat: Indent sub-scripts output in debug mode.
+- Batch/Library.bat: Indent sub-scripts output in debug mode.
 
 ### Fixed
-- Batch\Library.bat: Avoid log file redirection failures in recursive scripts.
+- Batch/Library.bat: Avoid log file redirection failures in recursive scripts.
 - Several make files had the clean target defined twice, which caused a make warning. (Although it did work fine.)
-- C\include\make.bat displayed a "file not found" error in recursive makes. (Due to incorrect log file handling in this case.)
+- C/include/make.bat displayed a "file not found" error in recursive makes. (Due to incorrect log file handling in this case.)
 - Several configure.*.bat files had the unwanted side effect of creating %OUTDIR%.
-- Batch\u2w.bat and w2u.bat: Use remplace.exe new option -st instead of -t.
+- Batch/u2w.bat and w2u.bat: Use remplace.exe new option -st instead of -t.
 
 ## [unreleased] 2016-10-21
 ### Changed
@@ -50,13 +78,13 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ### Changed
 - Updated the make system for building the SysLib library, and programs depending on it.
-- Batch\trouve.bat: Added options -d, -l, -L.
+- Batch/trouve.bat: Added options -d, -l, -L.
   Allows finding files containing a string (or not), without getting every matching line.
 
 ## [unreleased] 2016-10-12
 ### Added
 - The SysLib library can now be built in Linux, and used in Linux programs.
-- Recursive Unix make files in C\, and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
+- Recursive Unix make files in C/, and C/MsvcLibX/, allowing to rebuild all C libraries and tools with a single make command.
 
 ## [unreleased] 2016-10-11
 ### Changed
@@ -66,7 +94,7 @@ Added proxy scripts in each subdirectory to avoid having to add C/INCLUDE to the
 
 ## [unreleased] 2016-10-08
 ### Added
-- Recursive Windows make files in C\ and C\MsvcLibX\, allowing to rebuild all C libraries and tools with a single make command.
+- Recursive Windows make files in C/ and C/MsvcLibX/, allowing to rebuild all C libraries and tools with a single make command.
 
 ### Changed
 - Debug macro DEBUG_ON() now sets the debug level, and a new DEBUG_MORE() increases it.  
@@ -107,7 +135,7 @@ Added proxy scripts in each subdirectory to avoid having to add C/INCLUDE to the
    - Also search for configure.*.bat in %windir% and %HOME%. Allows to globally define your own preferences.
    - Added a -o option to set the OUTDIR variable.  
      (Recommended: In test VMs accessing the host sources, set it in a "%windir%\configure.system.bat" script.)
-- PowerShell\PSService.ps1:
+- PowerShell/PSService.ps1:
    - Added a $ServiceDescription string global setting, and use it for the service registration.
 
 ### Fixed
@@ -116,7 +144,7 @@ Added proxy scripts in each subdirectory to avoid having to add C/INCLUDE to the
 - C/MsvcLibX/src/main.c: Fixed a bug that caused empty "" arguments to be lost in UTF-8 programs.  
   This affected remplace.exe and redo.exe.
 - C/*/dos.mak: Fixed an issue that caused double goal definition warnings, for DOS builds of programs that have their own .mak file.
-- PowerShell\PSService.ps1: Fixed issue #5 starting services with a name that begins with a number.
+- PowerShell/PSService.ps1: Fixed issue #5 starting services with a name that begins with a number.
 
 ## [1.5] 2016-09-15
 ### Changed
@@ -139,7 +167,7 @@ Added proxy scripts in each subdirectory to avoid having to add C/INCLUDE to the
    - Bug fix: Detect and report output buffer overflows.
    - Convert short WIN32 paths to long paths.
    - Resize output buffers, to avoid wasting lots of memory.
-- PowerShell\PSService.ps1: Fixed issue #4 detecting the System account. Now done in a language-independent way.
+- PowerShell/PSService.ps1: Fixed issue #4 detecting the System account. Now done in a language-independent way.
 
 ## [unreleased] 2016-09-05
 ### Changed
@@ -247,17 +275,17 @@ Publicly released on github.com
 
 ## [1.3] - 2015-09-24
 ### Added
-- PowerShell\IESec.ps1			Test Internet if Explorer Enhanced Security is enabled
-- PowerShell\Rename-Networks.ps1	Rename networks consistently on HP servers with many NICs
-- PowerShell\Window.ps1			Move and resize windows
-- PowerShell\PSService.ps1		A template for a Windows service written in pure PowerShell
+- PowerShell/IESec.ps1			Test Internet if Explorer Enhanced Security is enabled
+- PowerShell/Rename-Networks.ps1	Rename networks consistently on HP servers with many NICs
+- PowerShell/Window.ps1			Move and resize windows
+- PowerShell/PSService.ps1		A template for a Windows service written in pure PowerShell
 
 ### Changed
-- Tcl\cfdt.tcl		Added the --from option to copy the time of another file
-- Tcl\ilo.tcl		Allow specifying the list of systems in an @inputfile.  
+- Tcl/cfdt.tcl		Added the --from option to copy the time of another file
+- Tcl/ilo.tcl		Allow specifying the list of systems in an @inputfile.  
 			Improved routine DnsSearchList, to avoid dependancy on twapi in most cases.				    
 			Improved heuristics to distinguish system and ilo names.
-- C\SRC\configure.bat	Fix the detection of the Microsoft Assembler
+- C/SRC/configure.bat	Fix the detection of the Microsoft Assembler
 
 ## [1.2] - 2014-12-11
 ### Changed
