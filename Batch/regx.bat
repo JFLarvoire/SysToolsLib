@@ -64,14 +64,14 @@
 :#                  inside.                                                   #
 :#   2016-11-23 JFL Factored out routine :Prep2ExpandVars, and use it before  #
 :#                  displaying any name or value. Fixes issues with ! and ^.  #
-:#   2016-12-08 JFL Updated the library framework. Features unchanged.        #
+:#   2016-12-12 JFL Updated the library framework. Features unchanged.        #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-08"
+set "VERSION=2016-12-12"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -618,12 +618,12 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
       ) %\n%
       call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
       if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-	call :Echo.Eval2DebugOut %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+	%!%LCALL%!% :Echo.Eval2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
       ) else ( %# Output directly here, which is faster #% %\n%
 	for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #%%\n%
       ) %\n%
       if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-	call :Echo.Eval2LogFile %!%DEBUG.MSG%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+	%!%LCALL%!% :Echo.Eval2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
       ) %\n%
     ) %\n%
     for %%r in (%!%DEBUG.EXITCODE%!%) do ( %# Carry the return values through the endlocal barriers #% %\n%
@@ -706,19 +706,20 @@ goto :eof
 set "DEBUG=1"
 set "DEBUG.ENTRY=:Debug.Entry"
 set "IF_DEBUG=if .%DEBUG%.==.1."
-set "FUNCTION0=%LCALL% call :Debug.Entry0 %%0 %%*"
+set "FUNCTION0=call %LCALL% :Debug.Entry0 %%0 %%*"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
   call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
   if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
+    set DEBUG.MSG=call %!%FUNCTION.NAME%!% %!%ARGS%!%%\n%
     if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-      call :Echo.2DebugOut call %!%FUNCTION.NAME%!% %!%ARGS:%%=%%%%%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      %!%LCALL%!% :Echo.2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
     ) else ( %# Output directly here, which is faster #% %\n%
-      echo%!%INDENT%!% call %!%FUNCTION.NAME%!% %!%ARGS%!%%\n%
+      echo%!%INDENT%!% %!%DEBUG.MSG%!%%\n%
     ) %\n%
     if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-      call :Echo.2LogFile call %!%FUNCTION.NAME%!% %!%ARGS:%%=%%%%%!%%# Use a helper routine, as delayed redirection does not work #%%\n%
+      %!%LCALL%!% :Echo.2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
     ) %\n%
     call set "INDENT=%'!%INDENT%'!%  " %\n%
   ) %\n%
@@ -730,7 +731,7 @@ set "RETURN0=%LCALL% :Debug.Return0 & exit /b"
 :# Macro for displaying comments on the return log line
 set RETURN#=set "RETURN#ERR=%'!%ERRORLEVEL%'!%" %&% %MACRO% ( %\n%
   set RETVAL=%!%MACRO.ARGS:~1%!%%\n%
-  call :Debug.Return0 %!%RETURN#ERR%!% %\n%
+  %!%LCALL%!% :Debug.Return0 %!%RETURN#ERR%!% %\n%
   %ON_MACRO_EXIT% set "INDENT=%'!%INDENT%'!%" %/ON_MACRO_EXIT% %&% set "RETURN#ERR=" %&% exit /b %\n%
 ) %/MACRO%
 set "EXEC.ARGS= %EXEC.ARGS%"
@@ -805,28 +806,26 @@ goto :Echo.Log
 %IF_DEBUG% goto :Echo
 goto :Echo.Log
 
-:Echo.Eval2DebugOut %*=String with variables that need to be evaluated first
-:# Must be called with delayed expansion on, so that !variables! within %* get expanded
-%>DEBUGOUT% echo.%INDENT%%*
+:Echo.Eval2DebugOut %1=Name of string, with !variables! that need to be evaluated first
+setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
+set "STRING=!%1!" &:# !variables! not yet expanded; They will be on next line
+%>DEBUGOUT% echo.%INDENT%%STRING%
 goto :eof
 
-:Echo.2DebugOut	%*=String to output to the DEBUGOUT stream
-setlocal DisableDelayedExpansion &:# Make sure !variables! do _not_ get expanded
-set ^"ARGS=%*^" &:# ^carets within "quoted" strings get doubled.
-if defined ARGS set ^"ARGS=%ARGS:^^=^%^"
-%>DEBUGOUT% echo.%INDENT%%ARGS%
+:Echo.2DebugOut	%1=Name of string to output to the DEBUGOUT stream
+setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
+%>DEBUGOUT% echo.%INDENT%!%1!
 goto :eof
 
-:Echo.Eval2LogFile %*=String with variables that need to be evaluated first
-:# Must be called with delayed expansion on, so that !variables! within %* get expanded
-%>>LOGFILE% echo.%INDENT%%*
+:Echo.Eval2LogFile %1=Name of string, with variables that need to be evaluated first
+setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
+set "STRING=!%1!" &:# !variables! not yet expanded; They will be on next line
+%>>LOGFILE% echo.%INDENT%%STRING%
 goto :eof
 
-:Echo.2LogFile %*=String to output to the LOGFILE
-setlocal DisableDelayedExpansion &:# Make sure !variables! do _not_ get expanded
-set ^"ARGS=%*^" &:# ^carets within "quoted" strings get doubled.
-if defined ARGS set ^"ARGS=%ARGS:^^=^%^"
-%>>LOGFILE% echo.%INDENT%%ARGS%
+:Echo.2LogFile %1=Name of string to output to the LOGFILE
+setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
+%>>LOGFILE% echo.%INDENT%!%1!
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
