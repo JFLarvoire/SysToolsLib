@@ -22,7 +22,8 @@
 #		    Added target config.                                      #
 #		    Updated the cleanenv: script to display the reg command   #
 #		    it uses to delete the global environment variable.	      #
-#    2016-11-07 JFL Do not copy include files to OUTDIR anymore.	      #                                    #
+#    2016-11-07 JFL Do not copy include files to OUTDIR anymore.	      #
+#    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -102,7 +103,10 @@ MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 
 # Default goal: Generate all versions
-syslib_default: all
+syslib_default: headline all
+
+headline:
+    $(HEADLINE) Building all SysLib library versions
 
 ALL = \
 !IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
@@ -153,7 +157,6 @@ ALL = \
      explain_win64_reqs \
 !ENDIF
 !ENDIF
-     # INCDIR
 
 syslib.lib: \
 !IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
@@ -333,17 +336,6 @@ $(LIBDIR):
     $(MSG) Creating directory $(LIBDIR)
     md $(LIBDIR)
 
-# Copy the include files to $(OUTDIR)
-INCDIR:
-!IF DEFINED(OUTDIR)
-    :# Update the include files from ..\include to $(OUTDIR)\include
-    xcopy /C /D /Y *.h $(OUTDIR)\ &:# Make sure this line does not end with a backslash
-    :# Then remove the include files there that have been deleted from here
-    for %%h in ("$(OUTDIR)\*.h") do @if not exist ".\%%~nxh" echo Deleting "$(OUTDIR)\%%~nxh" & del "$(OUTDIR)\%%~nxh"
-!else
-    rem :# No need to copy anything when using the default output directories
-!ENDIF
-
 lib\bios: $(LIBDIR)\SysLibbt.lib
 
 $(LIBDIR)\SysLibbt.lib: $(OD)BIOS\BIN\T\SysLib.lib $(LIBDIR)
@@ -351,7 +343,6 @@ $(LIBDIR)\SysLibbt.lib: $(OD)BIOS\BIN\T\SysLib.lib $(LIBDIR)
 
 $(OD)BIOS\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dos: lib\dosT lib\dosS lib\dosL
@@ -364,7 +355,6 @@ $(LIBDIR)\SysLibdt.lib: $(OD)DOS\BIN\T\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dosS: $(LIBDIR)\SysLibds.lib
@@ -374,7 +364,6 @@ $(LIBDIR)\SysLibds.lib: $(OD)DOS\BIN\S\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\BIN\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=S" dirs $@
 
 lib\dosL: $(LIBDIR)\SysLibdl.lib
@@ -384,7 +373,6 @@ $(LIBDIR)\SysLibdl.lib: $(OD)DOS\BIN\L\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\BIN\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=L" dirs $@
 
 lib\win95: $(LIBDIR)\SysLibw95.lib
@@ -394,7 +382,6 @@ $(LIBDIR)\SysLibw95.lib: $(OD)WIN95\SysLib.lib $(LIBDIR)
 
 $(OD)WIN95\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN95 release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
 lib\win32: $(LIBDIR)\SysLibw32.lib
@@ -404,7 +391,6 @@ $(LIBDIR)\SysLibw32.lib: $(OD)WIN32\SysLib.lib $(LIBDIR)
 
 $(OD)WIN32\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN32 release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
 lib\ia64: $(LIBDIR)\SysLibia64.lib
@@ -414,7 +400,6 @@ $(LIBDIR)\SysLibia64.lib: $(OD)IA64\SysLib.lib $(LIBDIR)
 
 $(OD)IA64\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library IA64 release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\IA64.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
 lib\win64: $(LIBDIR)\SysLibw64.lib
@@ -424,7 +409,6 @@ $(LIBDIR)\SysLibw64.lib: $(OD)WIN64\SysLib.lib $(LIBDIR)
 
 $(OD)WIN64\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN64 release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
 lib\arm: $(LIBDIR)\SysLiba32.lib
@@ -434,7 +418,6 @@ $(LIBDIR)\SysLiba32.lib: $(OD)ARM\SysLib.lib $(LIBDIR)
 
 $(OD)ARM\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM release version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
 
@@ -445,7 +428,6 @@ $(LIBDIR)\SysLibbtd.lib: $(OD)BIOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
 
 $(OD)BIOS\Debug\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dos\debug: lib\dosT\debug lib\dosS\debug lib\dosL\debug
@@ -458,7 +440,6 @@ $(LIBDIR)\SysLibdtd.lib: $(OD)DOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dosS\debug: $(LIBDIR)\SysLibdsd.lib
@@ -468,7 +449,6 @@ $(LIBDIR)\SysLibdsd.lib: $(OD)DOS\Debug\BIN\S\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\BIN\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=S" dirs $@
 
 lib\dosL\debug: $(LIBDIR)\SysLibdld.lib
@@ -478,7 +458,6 @@ $(LIBDIR)\SysLibdld.lib: $(OD)DOS\Debug\BIN\L\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\BIN\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=L" dirs $@
 
 lib\win32\debug: $(LIBDIR)\SysLibw32d.lib
@@ -488,7 +467,6 @@ $(LIBDIR)\SysLibw32d.lib: $(OD)WIN32\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN32\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN32 debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 lib\win95\debug: $(LIBDIR)\SysLibw95d.lib
@@ -498,7 +476,6 @@ $(LIBDIR)\SysLibw95d.lib: $(OD)WIN95\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN95\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN95 debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 lib\ia64\debug: $(LIBDIR)\SysLibia64d.lib
@@ -508,7 +485,6 @@ $(LIBDIR)\SysLibia64d.lib: $(OD)IA64\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)IA64\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library IA64 debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\IA64.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 lib\win64\debug: $(LIBDIR)\SysLibw64d.lib
@@ -518,7 +494,6 @@ $(LIBDIR)\SysLibw64d.lib: $(OD)WIN64\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN64\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN64 debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 lib\arm\debug: $(LIBDIR)\SysLiba32d.lib
@@ -528,7 +503,6 @@ $(LIBDIR)\SysLiba32d.lib: $(OD)ARM\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)ARM\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM debug version
-    rem call make.bat -L $@
     $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 # Dummy target, to build a source archive
