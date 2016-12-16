@@ -64,14 +64,14 @@
 :#                  inside.                                                   #
 :#   2016-11-23 JFL Factored out routine :Prep2ExpandVars, and use it before  #
 :#                  displaying any name or value. Fixes issues with ! and ^.  #
-:#   2016-12-12 JFL Updated the library framework. Features unchanged.        #
+:#   2016-12-16 JFL Updated the library framework. Features unchanged.        #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-12"
+set "VERSION=2016-12-16"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -436,9 +436,10 @@ set "&2=^^^^^^^^^^^^^^^&"
 
 set "MACRO=for %%$ in (1 2) do if %%$==2"				&:# Prolog code of a macro
 set "/MACRO=else setlocal enableDelayedExpansion %&% set MACRO.ARGS="	&:# Epilog code of a macro
+set "ENDMACRO=endlocal"	&:# Ends the macro local scope started in /MACRO. Necessary before macro exit.
 
 set "ON_MACRO_EXIT=for /f "delims=" %%r in ('echo"	&:# Begin the return variables definitions 
-set "/ON_MACRO_EXIT=') do endlocal %&% %%r"		&:# End the return variables definitions
+set "/ON_MACRO_EXIT=') do %ENDMACRO% %&% %%r"		&:# End the return variables definitions
 
 :# Primitive macro debugging definitions
 :# Macros, usable anywhere, including within other macros, for conditionally displaying debug information
@@ -727,12 +728,11 @@ set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
   setlocal %!%MACRO.ARGS%!% %\n%
 ) %/MACRO%
-set "RETURN0=%LCALL% :Debug.Return0 & exit /b"
+set "RETURN0=call %LCALL% :Debug.Return0 %%ERRORLEVEL%% & exit /b"
 :# Macro for displaying comments on the return log line
-set RETURN#=set "RETURN#ERR=%'!%ERRORLEVEL%'!%" %&% %MACRO% ( %\n%
-  set RETVAL=%!%MACRO.ARGS:~1%!%%\n%
-  %!%LCALL%!% :Debug.Return0 %!%RETURN#ERR%!% %\n%
-  %ON_MACRO_EXIT% set "INDENT=%'!%INDENT%'!%" %/ON_MACRO_EXIT% %&% set "RETURN#ERR=" %&% exit /b %\n%
+set RETURN#=call set "RETURN.ERR=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
+  %LCALL% :Debug.Return# %# Redirections can't work in macro. Do it in a function. #% %\n%
+  for %%r in (%!%RETURN.ERR%!%) do %ENDMACRO% %&% set "RETURN.ERR=" %&% call set "INDENT=%%INDENT:~2%%" %&% exit /b %%r %\n%
 ) %/MACRO%
 set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=% -d"
@@ -758,11 +758,18 @@ endlocal
 set "INDENT=%INDENT%  "
 goto :eof
 
-:Debug.Return0 %1=Optional exit code
-%>DEBUGOUT% echo %INDENT%return !RETVAL!
-if defined LOGFILE %>>LOGFILE% echo %INDENT%return !RETVAL!
+:Debug.Return0 %1=Exit code
+%>DEBUGOUT% echo %INDENT%return %1
+if defined LOGFILE %>>LOGFILE% echo %INDENT%return %1
 set "INDENT=%INDENT:~0,-2%"
 exit /b %1
+
+:Debug.Return# :# %RETURN.ERR% %MACRO.ARGS%
+setlocal DisableDelayedExpansion
+%>DEBUGOUT% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
+if defined LOGFILE %>>LOGFILE% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
+endlocal
+goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
 
 :# Routine to set the VERBOSE mode, in response to the -v argument.
 :Verbose.Off
@@ -799,11 +806,13 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%*
 goto :eof
 
 :Echo.Verbose
+:Echo.V
 %IF_VERBOSE% goto :Echo
 goto :Echo.Log
 
 :Echo.Debug
-%IF_DEBUG% goto :Echo
+:Echo.D
+%IF_DEBUG% %>DEBUGOUT% echo.%INDENT%%*
 goto :Echo.Log
 
 :Echo.Eval2DebugOut %1=Name of string, with !variables! that need to be evaluated first
@@ -884,10 +893,13 @@ goto EchoArgs.loop
 :#                  Exec	Conditionally execute a command, logging it.  #
 :#                  Exec.SetErrorLevel	Change the current ERRORLEVEL	      #
 :#                                                                            #
-:#  Exec Arguments  -L          Do not send the output to the log file.       #
+:#  Exec Arguments  -l          Log the output to the log file.               #
+:#                  -L          Do not send the output to the log file. (Dflt)#
 :#                  -t          Tee all output to the log file if there's a   #
-:#                              usable tee.exe. Default: Redirect all >> log. #
+:#                              usable tee.exe.                               #
 :#                              Known limitation: The exit code is always 0.  #
+:#                  -e          Always echo the command.		      #
+:#                  -v          Trace the command in verbose mode. (Default)  #
 :#                  -V          Do not trace the command in verbose mode.     #
 :#                  %*          The command and its arguments                 #
 :#                              Quote redirection operators. Ex:              #
@@ -906,6 +918,7 @@ goto EchoArgs.loop
 :#                  %IF_NOEXEC% Execute a command in NOEXEC mode only         #
 :#                  %_DO%       Echo and run a command. No opts. No logging.  #
 :#                  %_DO.D%     Idem, echoing it in debug mode only.          #
+:#                  %_DO.XVD%   Idem, echoing it in -X or -V or -D modes only.#
 :#                  %XEXEC%     Call :Exec from an external scriptlet, such   #
 :#                               one in a (for /f in ('commands')) block.     #
 :#                  %XEXEC@%    Idem, but with all args stored in one var.    #
@@ -920,9 +933,14 @@ goto EchoArgs.loop
 :#                  %EXEC.ARGS%	Arguments to recursively pass to subcommands  #
 :#                              with the same execution options conventions.  #
 :#                                                                            #
-:#  Notes           This framework can't be used from inside () blocks.       #
-:#                  This is because these blocks are executed separately      #
-:#                  in a child shell.                                         #
+:#  Notes           %EXEC% can't be used from inside ('command') blocks.      #
+:#                  This is because these blocks are executed separately in   #
+:#                  a child shell. Use %XEXEC% or %XEXEC@% instead.	      #
+:#		    These macros rely on the %XCALL% mechanism for calling    #
+:#		    subroutines in a second instance of a script. They depend #
+:#		    on the following line being present after the ARGS	      #
+:#		    variable definition at the top of your script:	      #
+:#		    if '%1'=='-call' !ARGS:~1!& exit /b			      #
 :#                                                                            #
 :#  History                                                                   #
 :#   2010-05-19 JFL Created this routine.                                     #
@@ -954,6 +972,8 @@ goto EchoArgs.loop
 :#		    some cases.)                                              #
 :#   2016-11-24 JFL Fixed executing commands containing a ^ character.        #
 :#		    Added routine :_Do.                                       #
+:#   2016-12-13 JFL Rewrote _DO as a pure macro.                              #
+:#   2016-12-15 JFL Changed the default to NOT redirecting the output to log. #
 :#		                                                              #
 :#----------------------------------------------------------------------------#
 
@@ -964,19 +984,23 @@ goto :Exec.End
 :Exec.Init
 set "DO=%LCALL% :Do"
 set "EXEC=%LCALL% :Exec"
-set "_DO=%LCALL% :_Do"
-set "_DO.D=%LCALL% :_Do.D"
 set "ECHO.X=%LCALL% :Echo.X"
 set "ECHO.XD=%LCALL% :Echo.XD"
 set "ECHO.XVD=%LCALL% :Echo.XVD"
 if not .%NOEXEC%.==.1. set "NOEXEC=0"
-:# Execute commands
+:# Quick and simple DO macros, supporting a single command, no redirections, no tricky chars!
+set _DO=%MACRO%     ( %LCALL% :Echo     %!%MACRO.ARGS%!% %&% %ON_MACRO_EXIT%%!%MACRO.ARGS%!%%/ON_MACRO_EXIT% ) %/MACRO%
+set _DO.D=%MACRO%   ( %LCALL% :Echo.D   %!%MACRO.ARGS%!% %&% %ON_MACRO_EXIT%%!%MACRO.ARGS%!%%/ON_MACRO_EXIT% ) %/MACRO%
+set _DO.XD=%MACRO%  ( %LCALL% :Echo.XD  %!%MACRO.ARGS%!% %&% %ON_MACRO_EXIT%%!%MACRO.ARGS%!%%/ON_MACRO_EXIT% ) %/MACRO%
+set _DO.XVD=%MACRO% ( %LCALL% :Echo.XVD %!%MACRO.ARGS%!% %&% %ON_MACRO_EXIT%%!%MACRO.ARGS%!%%/ON_MACRO_EXIT% ) %/MACRO%
+:# Execute commands from another instance of the main script
 set "XEXEC=%XCALL% :Exec"
 set "XEXEC@=%XCALL% :Exec.ExecVar"
 :# Check if there's a tee.exe program available
-set "Exec.HaveTee=0"
-tee.exe --help >NUL 2>NUL
-if not errorlevel 1 set "Exec.HaveTee=1"
+:# set "Exec.HaveTee=0"
+:# tee.exe --help >NUL 2>NUL
+:# if not errorlevel 1 set "Exec.HaveTee=1"
+for %%t in (tee.exe) do set "Exec.tee=%%~$PATH:t"
 :# Initialize ERRORLEVEL with known values
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
 set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
@@ -1030,11 +1054,12 @@ set "Exec.ErrorLevel=%ERRORLEVEL%" &:# Save the initial errorlevel
 setlocal EnableExtensions DisableDelayedExpansion &:# Clears the errorlevel
 :Exec.Start
 set "Exec.NOREDIR=%NOREDIR%"
-set "Exec.Redir=>>%LOGFILE%,2>&1"
-if .%NOREDIR%.==.1. set "Exec.Redir="
-if not defined LOGFILE set "Exec.Redir="
-if /i .%LOGFILE%.==.NUL. set "Exec.Redir="
-set "Exec.IF_VERBOSE=%IF_VERBOSE%"
+set "Exec.Redir="				&:# The selected redirection. Default: none
+set "Exec.2Redir=>>%LOGFILE%,2>&1"		&:# What to change it to, to enable redirection
+if .%NOREDIR%.==.1. set "Exec.2Redir="		&:# Several cases forbid redirection
+if not defined LOGFILE set "Exec.2Redir="
+if /i .%LOGFILE%.==.NUL. set "Exec.2Redir="
+set "Exec.IF_VERBOSE=%IF_VERBOSE%"		&:# Echo the command in verbose mode
 :# Record the command-line to execute.
 :# Never comment (set Exec.cmd) lines themselves, to avoid appending extra spaces.
 :# Use %*, but not %1 ... %9, because %N miss non-white argument separators like = , ;
@@ -1048,12 +1073,15 @@ setlocal EnableDelayedExpansion &:# The next line works because no :exec own arg
 for /f "tokens=1* delims= " %%a in ("-!Exec.Cmd:*%1=!") do endlocal & set Exec.Cmd=%%b
 shift
 :Exec.GetArgs
+if "%~1"=="-l" set "Exec.Redir=%Exec.2Redir%" & goto :Exec.NextArg :# Do send the output to the log file
 if "%~1"=="-L" set "Exec.Redir=" & goto :Exec.NextArg :# Do not send the output to the log file
-if "%~1"=="-t" if defined LOGFILE ( :# Tee the output to the log file
+if "%~1"=="-t" if defined Exec.2Redir ( :# Tee the output to the log file
   :# Warning: This prevents from getting the command exit code!
-  if .%Exec.HaveTee%.==.1. if not .%NOREDIR%.==.1. set "Exec.Redir= 2>&1 | tee.exe -a %LOGFILE%"
+  if defined Exec.tee set "Exec.Redir= 2>&1 | %Exec.tee% -a %LOGFILE%"
   goto :Exec.NextArg
 )
+if "%~1"=="-e" set "Exec.IF_VERBOSE=if 1==1" & goto :Exec.NextArg :# Always echo the command
+if "%~1"=="-v" set "Exec.IF_VERBOSE=%IF_VERBOSE%" & goto :Exec.NextArg :# Echo the command in verbose mode
 if "%~1"=="-V" set "Exec.IF_VERBOSE=if 0==1" & goto :Exec.NextArg :# Do not echo the command in verbose mode
 :# Anything else is part of the command. Prepare to display it and run it.
 :# First stage: Split multi-char ops ">>" "2>" "2>>". Make sure to keep ">" signs quoted every time.
@@ -1109,18 +1137,6 @@ for %%e in (%Exec.ErrorLevel%) do (
 :Exec.ExecVar CMDVAR
 call :Exec !%1:%%=%%%%!
 exit /b
-
-:# Echo a command, then run it as it is.
-:_Do
-%ECHO% %*
-%*
-goto :eof
-
-:# Echo a command in debug mode, then run it as it is.
-:_Do.D
-%>DEBUGOUT% %ECHO.D% %*
-%*
-goto :eof
 
 :Exec.End
 
