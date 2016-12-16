@@ -30,13 +30,17 @@
 :#                  Added option -v.                                          #
 :#   2013-04-05 JFL Added support for the gnuwin32 and mingw ports.           #
 :#   2016-10-11 JFL Added options -d, -l, -L.                                 #
+:#   2016-12-15 JFL Added routine :FindInPath, to allow finding targets       #
+:#                  even when running a copy of this script not in the PATH.  #
+:#                  Changed the output filtering, to correct only file names. #
+:#                  Fixed a bug with UnxUtils' version of find and grep.      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-10-11"
+set "VERSION=2016-12-15"
 set "SCRIPT=%~nx0"
 set "SCRIPT_DRIVE=%~d0"
 set "SCRIPT_PATH=%~dp0" & set "SCRIPT_PATH=!SCRIPT_PATH:~0,-1!"
@@ -45,6 +49,7 @@ set  ARGS=%*
 
 set FUNCTION=rem
 set RETURN=goto :eof
+set FOREACHLINE=for /f "delims="
 goto main
 
 :# Quote file pathnames that require it. %1=Input variable. %2=Opt. output variable.
@@ -72,12 +77,21 @@ endlocal & set "%RETVAR%=%P%"
 :# This is useful, because some of my VMs do dot have a copy of the tools,
 :# but instead have the host's tools directory in their PATH.
 
+:FindInPath %1=SubDir %2=RetVar
+%FUNCTION% FindInPath %1 %2
+setlocal EnableExtensions DisableDelayedExpansion
+for %%s in (%1) do for %%r in ("%%~$PATH:s") do set "RESULT=%%~dpr"	&:# Keep only the parent path
+if defined RESULT set "RESULT=%RESULT:~0,-1%"	&:# Remove the trailing \
+endlocal & set "%~2="%RESULT%""
+%RETURN%
+
 :# Search for the ezwinport.sourceforge.net port of a Unix program.
 :ezWinPorts %1=program. Returns variable %1 set to the exe full pathname.
 :# Search in the standard location, or underneath this script directory.
+call :FindInPath ezWinPorts IN_PATH
 set "SUBDIRS=Win32"
 if "%PROCESSOR_ARCHITECTURE%"=="AMD64" set "SUBDIRS=Win64 Win32"
-for %%p in ("%SCRIPT_PATH%" "%SCRIPT_DRIVE%" "C:") do (
+for %%p in ("%SCRIPT_PATH%" %IN_PATH% %SCRIPT_DRIVE% C:) do (
   for %%s in (%SUBDIRS%) do (
     if .%DEBUG%.==.1. echo Checking "%%~p\ezWinPorts\%%~s\bin\%~1.exe"
     if exist "%%~p\ezWinPorts\%%~s\bin\%~1.exe" (
@@ -93,7 +107,8 @@ goto :eof
 :# Search for the unxutils.sourceforge.net port of a Unix program.
 :UnxUtils %1=program. Returns variable %1 set to the exe full pathname.
 :# Search in the standard location, or underneath this script directory.
-for %%p in ("%SCRIPT_PATH%" "%SCRIPT_DRIVE%" "C:") do (
+call :FindInPath UnxUtils IN_PATH
+for %%p in ("%SCRIPT_PATH%" %IN_PATH% %SCRIPT_DRIVE% C:) do (
   if .%DEBUG%.==.1. echo Checking "%%~p\UnxUtils\usr\local\wbin\%~1.exe"
   if exist "%%~p\UnxUtils\usr\local\wbin\%~1.exe" (
     set "%~1=%%~p\UnxUtils\usr\local\wbin\%~1.exe"
@@ -107,7 +122,8 @@ goto :eof
 :# Search for the gnuwin32.sourceforge.net port of a Unix program.
 :GnuWin32 %1=program. Returns variable %1 set to the exe full pathname.
 :# Search in the standard location, or underneath this script directory.
-for %%p in ("%SCRIPT_PATH%" "%SCRIPT_DRIVE%" "C:") do (
+call :FindInPath GnuWin32 IN_PATH
+for %%p in ("%SCRIPT_PATH%" %IN_PATH% %SCRIPT_DRIVE% C:) do (
   if .%DEBUG%.==.1. echo Checking "%%~p\GnuWin32\bin\%~1.exe"
   if exist "%%~p\GnuWin32\bin\%~1.exe" (
     set "%~1=%%~p\GnuWin32\bin\%~1.exe"
@@ -261,7 +277,33 @@ if defined NAME set "FINDOPTS=%FINDOPTS% %NAME%"
 :# Note: The "" around {} are necessary to support pathnames with spaces.
 :# 2013-04-03 JFL Removed one pair of "quotes" around {}, as the third pair caused the ezWinPorts grep to fail.
 set CMDLINE=%find% %FROM% %FINDOPTS% -exec %grep%%GREPOPTS% -- %1 "{}" %NUL% ";"
+:# 2016-12-15 JFL Add that pair back, but for UnxUtils only, which fails without it for files with spaces in their name.
+if not "%grep:UnxUtils=%"=="%grep%" set CMDLINE=%CMDLINE:"{}"="""{}"""%
 if %VERBOSE%==1 echo %CMDLINE%
 if %VERBOSE%==0 if %NOEXEC%==1 echo %CMDLINE%
-if %NOEXEC%==0 %CMDLINE% %FILTER%
-
+:# Filter the output, to change Unix / in the files paths to Windows \
+:# The output is structured like: PATHNAME:LINE
+:# Problem: The PATHNAME itself may contain a : after the drive name.
+:# This does not always occur. For example the default path is .
+setlocal DisableDelayedExpansion
+if %NOEXEC%==0 %FOREACHLINE% %%l in ('%CMDLINE%') do (
+  set "LINE=%%l"
+  setlocal EnableDelayedExpansion
+  if "!LINE:~1,1!"==":" (	:# The file pathname begins with a drive name
+    set "HEAD=!LINE:~0,2!"
+    set "TAIL=!LINE:~2!"
+  ) else (			:# The file pathname is a relative name
+    set "HEAD="
+    set "TAIL=!LINE!"
+  )
+  for /f "tokens=1* delims=:" %%n in ("!TAIL!") do (
+    setlocal DisableDelayedExpansion
+    set "NAME=%%n"
+    set "TEXT=%%o"
+  )
+  setlocal EnableDelayedExpansion
+  echo !HEAD!!NAME:/=\!:!TEXT!
+  endlocal
+  endlocal
+  endlocal
+)
