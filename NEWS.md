@@ -4,6 +4,28 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-12-16
+### Changed
+- C/include/configure.bat:
+   - Updated the batch library framework.
+   - Configure sub-projects recursively by default. 
+   - Added option -R to prevent recursion if desired.
+   - Fixed displaying the output of sub-instances of this script.
+   - Avoid duplicate searches of MS tools in sub-instances, and of our own libs in some cases. (Known bug: We're still searching our own libraries multiple times in many cases.)
+   - Added option -p to request setting persistent library path variables. By default, don't.
+- C/include/make.bat:
+   - Updated the batch library framework.
+   - Improved the heuristic to detect pseudo-targets that need not be logged. (Ex: clean)
+   - Added option -q to force running nmake without capturing its output. (Default for pseudo-targets)
+   - Added option -Q to force capturing nmake output into TARGET.log. (Default for real targets)
+- Batch/regx.bat: Updated the batch debugging framework.
+- Batch/trouve.bat: Improved output filtering to convert / to \ only in file names, and fixed a few bugs.
+
+### Fixed
+- Batch/Library.bat:
+   - Fixed issues when sourcing this library from another script.
+   - Changed %EXEC% to not capture commands output by default. Fixes a usability bug: Not %EXEC% without options is fully transparent.
+
 ## [unreleased] 2016-12-09
 ### Changed
 - Batch/Library.bat:
