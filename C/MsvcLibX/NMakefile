@@ -60,8 +60,12 @@ clean mostlyclean distclean:
     -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
 
 # Output the default goal name for make.bat
-goal_name:
+list_goal goal_name:
     echo MsvcLibX
+
+# Display the list of sub-directories to build
+list_dirs:
+    echo src
 
 # Erase all global environment variables created by this build
 VARS=
@@ -92,5 +96,5 @@ Targets:
   updates                Update all make scripts in directory src
   zip                    Build an MsvcLibX.zip source archive. Requires 7-zip.
 <<
-    make -L -C src help
+    make -C src help
 

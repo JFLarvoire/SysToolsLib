@@ -88,8 +88,8 @@ clean mostlyclean distclean:
     -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
 
 # Output the default goal name for make.bat
-goal_name:
-    echo Build
+goal_name list_goal:
+    echo SysToolsLib
 
 # Dummy target, to build a source archive
 dist zip: NUL
@@ -197,6 +197,10 @@ release:
 config:
     for %%f in ($(DIRS)) do cd "$(MAKEDIR)" && cd "%%f" && $(BATCONF) && $(BATMAKE) $@ || exit /b &:# Recursively run in sub-project directories
     cd "$(MAKEDIR)"
+
+# Display the list of sub-directories to build
+list_dirs:
+    @for %%f in ($(DIRS)) do @echo %%f
 
 # Display a help screen
 help:
