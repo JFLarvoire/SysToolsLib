@@ -18,13 +18,17 @@
 :#   2016-11-03 JFL Removed the side effect creating %OUTDIR%.		      *
 :#   2016-11-07 JFL Removed the dependency on OUTDIR.			      *
 :#                  Immediately set the system environment.		      *
+:#   2016-11-08 JFL Removed the dependency on OUTDIR.			      *
+:#   2016-11-16 JFL Allow using a predefined alias for this lib base path.    *
+:#   2016-12-16 JFL Only use setx if requested by user, with PERSISTENT_VARS. *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 :# Get the full pathname of the SysLib library work directory
-set "SYSLIB=%CD%"
+if defined SYSLIB if not exist SysLib.h set "SYSLIB=" &:# Allow overriding with another alias name, but ignore invalid overrides
+if not defined SYSLIB set "SYSLIB=%CD%" &:# Default: Use the current directory
 
 :# Declare the SDKs and libraries we need
 %BEGIN_SDK_DEFS%
@@ -39,4 +43,4 @@ if defined VC16.CC %USE_SDK% LMPTK &:# We only need it for building for DOS
 %ADD_POST_MAKE_ACTION% set "SYSLIB=%SYSLIB%"
 
 :# Set the system environment variable, so that other CMD windows opened later on inherit it
-setx SYSLIB "%SYSLIB%" >NUL
+if defined PERSISTENT_VARS setx SYSLIB "%SYSLIB%" >NUL
