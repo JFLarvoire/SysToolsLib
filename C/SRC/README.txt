@@ -24,7 +24,7 @@ and Linux standard C libraries. Since then, the same sources are used for
 building my system management tools for all supported OS/processor targets.
 
 Jean-François Larvoire
-2015-12-16
+2016-12-31
 
 
 System tools
@@ -50,7 +50,8 @@ whichinc.exe	Search for include files.
 1clip.exe	Pipe Windows clipboard contents into a program. [Win] Ex: 1clip | sort
 2clip.exe	Pipe a program output into Windows clipboard. [Win] Ex: dir | 2clip
 chars.exe	Display a table with all 8-bit characters.
-conv.exe	Convert from/to various character sets.	 
+conv.exe	Convert from/to various character sets.
+deffeed.exe	Remove form feeds, replacing then with new lines.
 detab.exe	Remove tabulations, replacing them with spaces.
 dump.exe	Hexadecimal dump.
 lessive.exe	Remove blank characters from the end of lines.
@@ -62,9 +63,12 @@ tee.exe		Duplicate stdin into two or more output streams.
 clocks.exe	Measure the system clock frequency, and the resolution of various timing functions. [All]
 cpuid.exe	Identify the processor, and display its various capabilities.
 driver.exe	Enumerate Windows services and drivers [Win]
+gpt.exe		Display GUID Partition Tables
 inicomp.exe	Compare .INI files, after internally sorting sections and definitions. [All]
+msgbox.exe	Display various types of Windows message boxes. Useful in batch files. [Win]
 sector.exe	Display or copy disk sectors. Decode or modify the MBR partition table.
 smbios.exe	Dump SMBIOS structures
+uuid.exe	Get the SMBIOS system UUID, or generate new UUIDs.
 
 
 Common features

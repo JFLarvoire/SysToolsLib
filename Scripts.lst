@@ -10,6 +10,7 @@ Batch\AddPaths.bat
 Batch\b64dec.bat
 Batch\DIRCC.BAT
 Batch\DIRDIR.BAT
+Batch\Disconnect.bat
 Batch\echoargs.bat
 Batch\ERRORLEV.BAT
 Batch\flvcache.bat
@@ -32,6 +33,8 @@ Batch\trouve.bat
 Batch\u2a.bat
 Batch\u2w.bat
 Batch\w2u.bat
+Batch\x.bat
+Batch\xfind.bat
 Batch\zap.bat
 Batch\zapbaks.bat
 PowerShell\Disable-IPv6Components.ps1

@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2016-12-31
+### Added
+- C/SRC/msgbox.c: A tool for displaying various types of Windows Message Boxes from batch files.
+
 ## [unreleased] 2016-12-16
 ### Changed
 - C/include/configure.bat:
@@ -85,10 +89,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - Bugs in configure.bat, make.bat, and library.bat, that sometimes caused build failures in Windows XP.
 
 ## [unreleased] 2016-10-18
-### Added
-- Tcl/nlines.tcl: A tool for counting non-commented source lines.
-
-## [1.6.2] - 2016-10-13
+c## [1.6.2] - 2016-10-13
 ### Added
 - C/SysLib/: A directory, with a new System Management library. See the README there for details.
 - C/SRC/sector.cpp: Source for building sector.exe, a tool for raw hard disk I/O.

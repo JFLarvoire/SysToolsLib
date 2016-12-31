@@ -29,6 +29,7 @@ PROGRAMS = \
   dump.exe        \
   gpt.exe         \
   lessive.exe     \
+  msgbox.exe      \
   redo.exe        \
   remplace.exe    \
   sector.exe      \
@@ -96,6 +97,9 @@ ZIPSOURCES =		 \
   macros.cpp             \
   make.bat               \
   Makefile               \
+  msgbox.c               \
+  msgbox.mak             \
+  msgnames.h             \
   README.txt             \
   redo.c                 \
   redo.mak               \
