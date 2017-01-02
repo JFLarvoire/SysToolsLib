@@ -21,6 +21,8 @@
 *		    							      *
 *   History:								      *
 *    2010-07-09 JFL Created this module. 				      *
+*    2016-12-31 JFL Renamed AddDictValue as NewDictValue, as documented above.*
+*    2017-01-02 JFL Adapted to use SysToolsLib's debugm.h definitions.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -47,7 +49,7 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2);
 void *dictnode_tree_callback(dictnode *node, void *ref);
 
 /* Declare public static routines */
-extern void *AddDictValue(dict_t *dict, char *key, void *value);
+extern void *NewDictValue(dict_t *dict, char *key, void *value);
 extern void DeleteDictValue(dict_t *dict, char *key, void (*cb)(void *value));
 extern void *DictValue(dict_t *dict, char *key);
 
@@ -63,14 +65,14 @@ typedef struct {
 TREE_DEFINE_PROCS(dictnode);							\
 										\
 int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {				\
-  TREE_ENTRY((TREE_S(TREE_CMP(dictnode)) "(%p, %p)\n", pn1, pn2));		\
+  TREE_ENTRY((TREE_V(TREE_CMP(dictnode)) "(%p, %p)\n", pn1, pn2));		\
   TREE_IF_DEBUG({                                                               \
     char key1[80] = "NULL";			                                \
     char key2[80] = "NULL";			                                \
-    if (debug) {								\
+    if (iDebug) {								\
       if (pn1) _snprintf(key1, sizeof(key1), "\"%s\"", pn1->pszKey);		\
       if (pn2) _snprintf(key2, sizeof(key2), "\"%s\"", pn2->pszKey);		\
-      printf("%*sstrcmp(%s, %s)\n", indent, "", key1, key2);			\
+      printf("%*sstrcmp(%s, %s)\n", iIndent, "", key1, key2);			\
     }										\
   })                                                                            \
   TREE_RETURN_INT(strcmp(pn1->pszKey, pn2->pszKey));				\
@@ -88,7 +90,7 @@ void *dictnode_tree_callback(dictnode *node, void *ref) {			\
   return (s->cb)(node->pszKey, node->pData, s->ref);                            \
 }                                                                               \
                                                                                 \
-void *AddDictValue(dict_t *dict, char *key, void *value) {                      \
+void *NewDictValue(dict_t *dict, char *key, void *value) {                      \
   dictnode *node = calloc(1, sizeof(dictnode));                                 \
   if (node) {                                                                   \
     node->pszKey = _strdup(key);                                                \
