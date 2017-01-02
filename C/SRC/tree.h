@@ -58,6 +58,8 @@
 *		    							      *
 *   History:								      *
 *    2010-07-06 JFL Created this module. 				      *
+*    2017-01-02 JFL Adapted to use SysToolsLib's debugm.h definitions.	      *
+*                   Do not use _flushall(), as it also flushes input files!   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -72,8 +74,9 @@
 
 /* Debug macros */
 #define TREE_S(arg) #arg /* Stringizing operator (Convert a token to a string) */
+#define TREE_V(arg) TREE_S(arg)  /* Valueizing operator (Get the value of a macro expression) */
 #define TREE_CAT(arg1, arg2) arg1##arg2 /* Concatenation operator */
-#if defined(_DEBUG)
+#if defined(_DEBUG) && !defined(_MSDOS) /* These macros cause error "out of macro expansion space" with VC++ 1.52 */
 #define TREE_IF_DEBUG(tokens) tokens
 #define TREE_ENTRY(args) TREE_LOG_ENTRY args
 #define TREE_RETURN(result) return TREE_LOG_RETURN(result)
@@ -299,7 +302,7 @@ node_t *TREE_MERGE_HALVES##node_t(node_t *left, node_t *right) {		\
 										\
 node_t *TREE_FIRST_##node_t(node_t *root) {					\
   TREE_ENTRY((TREE_S(TREE_FIRST_##node_t) "(%p)\n", root));			\
-  while (root->sbbt_left) root = root->sbbt_left;				\
+  if (root) while (root->sbbt_left) root = root->sbbt_left;			\
   TREE_RETURN(root);								\
 }										\
 										\
@@ -320,7 +323,7 @@ node_t *TREE_NEXT_##node_t(node_t *root, node_t *n, node_t *next) {		\
 										\
 node_t *TREE_LAST_##node_t(node_t *root) {					\
   TREE_ENTRY((TREE_S(TREE_LAST_##node_t) "(%p)\n", root));			\
-  while (root->sbbt_right) root = root->sbbt_right;				\
+  if (root) while (root->sbbt_right) root = root->sbbt_right;			\
   TREE_RETURN(root);								\
 }										\
 										\
@@ -366,41 +369,42 @@ void *TREE_RFOREACH_##node_t(node_t *root, TREE_##node_t##_CB *function, void *r
 TREE_IF_DEBUG(									\
 void TREE_LOG_ENTRY(char *format, ...) {					\
   va_list args;									\
-  if (debug) {									\
+  if (iDebug) {									\
     va_start(args, format);							\
-    printf("%*s", indent, "");							\
+    printf("%*s", iIndent, "");							\
     vprintf(format, args);							\
-    _flushall();								\
+    fflush(stdout);								\
+    va_end(args);								\
   }										\
-  indent += 2;									\
+  iIndent += 2;									\
 }										\
 										\
 node_t *TREE_LOG_RETURN(node_t *result) {					\
-  if (debug) {									\
+  if (iDebug) {									\
     char buf[80];								\
     TREE_SPRINT(node_t)(buf, sizeof(buf), result);				\
-    printf("%*sreturn %p (%s)\n", indent, "", result, buf);			\
-    _flushall();								\
+    printf("%*sreturn %p (%s)\n", iIndent, "", result, buf);			\
+    fflush(stdout);								\
   }										\
-  indent -= 2;									\
+  iIndent -= 2;									\
   return result;								\
 }										\
 										\
 void *TREE_LOG_RETURN_PVOID(void *result) {					\
-  if (debug) {									\
-    printf("%*sreturn %p\n", indent, "", result);				\
-    _flushall();								\
+  if (iDebug) {									\
+    printf("%*sreturn %p\n", iIndent, "", result);				\
+    fflush(stdout);								\
   }										\
-  indent -= 2;									\
+  iIndent -= 2;									\
   return result;								\
 }										\
 										\
 int TREE_LOG_RETURN_INT(int result) {						\
-  if (debug) {									\
-    printf("%*sreturn %d\n", indent, "", result);				\
-    _flushall();								\
+  if (iDebug) {									\
+    printf("%*sreturn %d\n", iIndent, "", result);				\
+    fflush(stdout);								\
   }										\
-  indent -= 2;									\
+  iIndent -= 2;									\
   return result;								\
 }										\
 )										\
