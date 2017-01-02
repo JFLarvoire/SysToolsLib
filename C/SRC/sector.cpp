@@ -75,6 +75,8 @@
 *		    Added options -H and -I to control the disk size SI unit. *
 *		    Version 3.7.					      *
 *		                                                              *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.7"
