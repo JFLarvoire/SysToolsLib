@@ -302,7 +302,9 @@ char *processFile(char *argname, dict_t *sections) {
     /* Else it's an item line */
     pc2 = strchr(pc, '=');
     if (!pc2) {
-      if (!strncmp(pc, "Windows Registry Editor", 23)) { /* regedit .reg files header. Version varies. */
+      if (   !strncmp(pc, "Windows Registry Editor", 23)
+      	  || !strncmp(pc, "REGEDIT", 7)
+      	  ) { /* regedit .reg files header. Version varies. */
 	NewDictValue(items, ".reg Header", strdup(pc));
       	continue;
       }
