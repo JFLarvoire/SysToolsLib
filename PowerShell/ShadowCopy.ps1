@@ -41,6 +41,7 @@
 #    2016-05-11 JFL Fixed the number of trimesters calculation.               #
 #    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
 #    2016-06-20 JFL Increase that to a 4th week, to get a more regular scale. #
+#    2017-01-04 JFL Removed alias eval, changed back to Invoke-Expression.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -218,7 +219,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-06-20"
+$scriptVersion = "2017-01-04"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -931,7 +932,7 @@ Function Quote(
 	    }
 	    "ScriptBlock" {
 	      $name = $item.Label
-	      $value = Quote (eval "`$_ = `$var ; $($item.DisplayEntry.Value)")
+	      $value = Quote (Invoke-Expression "`$_ = `$var ; $($item.DisplayEntry.Value)")
 	    }
 	    "default" {
 	      Write-Error "Unsupported ValueType: $($item.DisplayEntry.ValueType)"
@@ -1735,9 +1736,9 @@ Process {
     $ShadowCopies = @()
     if (($_.WmiShadowCopy -is [System.Management.ManagementObject]) -and ($_.WmiShadowCopy.__CLASS -eq "Win32_ShadowCopy")) {
       $ShadowCopies = @($_) # This already is a Shadow Copy object made by this script
-    } elseif (eval 'try {$ID = [guid]$_; $true} catch {$false}') {
+    } elseif (Invoke-Expression 'try {$ID = [guid]$_; $true} catch {$false}') {
       $ShadowCopies = Get-ShadowCopy -ID $ID
-    } elseif (eval 'try {$Date = [DateTime]$_; $true} catch {$false}') {
+    } elseif (Invoke-Expression 'try {$Date = [DateTime]$_; $true} catch {$false}') {
       $ShadowCopies = Get-ShadowCopy -Date $Date
     } else {
       $ShadowCopies = Get-ShadowCopy -Drive $_
