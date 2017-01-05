@@ -21,8 +21,9 @@
 *		    							      *
 *		    Usage:						      *
 * "public" macros:                                                            *
-*   TREE_FIELDS(struct_node_t) Called once in each node structure definition. *
-*   TREE_DEFINE_TYPES(node_t)  Called once for each type of tree, in each file*
+*   NODE_FIELDS(struct_node_t) Called once in each node structure definition. *
+*   TREE_FIELDS(struct_node_t) Called once in each tree structure definition. *
+*   TREE_DEFINE_TYPES(node_t)  Called once for each type of tree, in all files.
 *   TREE_DEFINE_PROCS(node_t)  Called once for each type of tree, in ONE file.*
 *                                                                             *
 * inline public functions: (With NODE_T changed to the node type name)        *
@@ -42,12 +43,16 @@
 * Example:                                                                    *
 *   #include "tree.h"                                                         *
 *   typedef struct _node {                                                    *
-*     TREE_FIELDS(struct _node); // The tree-specific fields.                 *
+*     NODE_FIELDS(struct _node); // The tree-specific fields.                 *
 *     char *key; // Any number of fields. For example this will be a key,     *
 *     int data;  // and this will be an integer data field.                   *
 *   } node;                                                                   *
-*   TREE_DEFINE_TYPES(node);                                                  *
-*   TREE_DEFINE_PROCS(node);                                                  *
+*   typedef struct _tree {                                                    *
+*     TREE_FIELDS(struct _node); // The tree-specific fields.		      *
+*     // Optional global property fields				      *
+*   } tree;                                                                   *
+*   TREE_DEFINE_TYPES(tree, node);                                            *
+*   TREE_DEFINE_PROCS(tree, node);                                            *
 *   int TREE_CMP(node)(node *n1, node *n2) {return strcmp(n1->key, n2->key);} *
 *   node *new_node() {node = calloc(1, sizeof(node)); ...; return node; }     *
 *   main() {                                                                  *
@@ -60,6 +65,7 @@
 *    2010-07-06 JFL Created this module. 				      *
 *    2017-01-02 JFL Adapted to use SysToolsLib's debugm.h definitions.	      *
 *                   Do not use _flushall(), as it also flushes input files!   *
+*    2017-01-04 JFL Allow defining global tree properties.            	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -94,14 +100,20 @@
 /* A balanced tree can never be perfectly balanced */
 #define TREE_DELTA_MAX 1 /* The maximum unbalance between sides */
 #define TREE_DELTA(node) /* Compute that unbalance */				\
-  (( (((node)->sbbt_left)  ? (node)->sbbt_left->sbbt_depth  : 0))		\
-   - (((node)->sbbt_right) ? (node)->sbbt_right->sbbt_depth : 0))		\
+  (  (((node)->sbbt_left)  ? (node)->sbbt_left->sbbt_depth  : 0)		\
+   - (((node)->sbbt_right) ? (node)->sbbt_right->sbbt_depth : 0) )		\
 
 /* The tree-specific fields to add to a tree node */
-#define TREE_FIELDS(struct_node_t)						\
+#define NODE_FIELDS(struct_tree_t, struct_node_t)				\
   struct_node_t	*sbbt_left;							\
   struct_node_t	*sbbt_right;							\
-  int		sbbt_depth
+  struct_tree_t *sbbt_tree;							\
+  int		 sbbt_depth							\
+
+/* The tree-specific fields to add to a tree object */
+#define TREE_FIELDS(struct_tree_t, struct_node_t)				\
+  struct_node_t *sbbt_root;							\
+  int            sbbt_length							\
 
 /* The tree descriptor type */
 #define TREE(node_t) TREE_OF_##node_t
@@ -115,14 +127,9 @@
 #define TREE_PRINT(node_t) TREE_PRINT_##node_t
 #define TREE_SPRINT(node_t) TREE_SPRINT_##node_t
 
-#define TREE_DEFINE_TYPES(node_t)						\
+#define TREE_DEFINE_TYPES(tree_t, node_t)					\
 										\
-typedef struct node_t;								\
 typedef void *TREE_##node_t##_CB(node_t *n, void *ref);				\
-typedef struct {								\
-  node_t *root;									\
-  int length;									\
-} TREE(node_t);									\
 										\
 /* The user-provided comparison routine */					\
 										\
@@ -156,60 +163,61 @@ extern int TREE_LOG_RETURN_INT(int result);					\
 										\
 /* Declare and define public inline functions. */				\
 										\
-inline TREE(node_t) *new_##node_t##_tree() {					\
-  TREE(node_t) *tree = calloc(1, sizeof(node_t));				\
+extern inline tree_t *new_##node_t##_tree() {					\
+  tree_t *tree = calloc(1, sizeof(node_t));					\
   return tree;									\
 }										\
 										\
-inline void add_##node_t(TREE(node_t) *tree, node_t *n) {			\
-  tree->root = TREE_ADD_##node_t(tree->root, n);				\
-  tree->length += 1;								\
+extern inline void add_##node_t(tree_t *tree, node_t *n) {			\
+  n->sbbt_tree = tree; /* Back link into the tree this node belongs to now */	\
+  tree->sbbt_root = TREE_ADD_##node_t(tree->sbbt_root, n);			\
+  tree->sbbt_length += 1;							\
 }										\
 										\
-inline void remove_##node_t(TREE(node_t) *tree, node_t *n) {			\
-  tree->length -= 1;								\
-  tree->root = TREE_REMOVE_##node_t(tree->root, n);				\
+extern inline void remove_##node_t(tree_t *tree, node_t *n) {			\
+  tree->sbbt_length -= 1;							\
+  tree->sbbt_root = TREE_REMOVE_##node_t(tree->sbbt_root, n);			\
 }										\
 										\
-inline node_t *get_##node_t(TREE(node_t) *tree, node_t *n) {			\
-  return TREE_GET_##node_t(tree->root, n);					\
+extern inline node_t *get_##node_t(tree_t *tree, node_t *n) {			\
+  return TREE_GET_##node_t(tree->sbbt_root, n);					\
 }										\
 										\
-inline node_t *first_##node_t(TREE(node_t) *tree) {				\
-  return TREE_FIRST_##node_t(tree->root);					\
+extern inline node_t *first_##node_t(tree_t *tree) {				\
+  return TREE_FIRST_##node_t(tree->sbbt_root);					\
 }										\
 										\
-inline node_t *next_##node_t(TREE(node_t) *tree, node_t *n) {			\
-  return TREE_NEXT_##node_t(tree->root, n, 0);				    	\
+extern inline node_t *next_##node_t(tree_t *tree, node_t *n) {			\
+  return TREE_NEXT_##node_t(tree->sbbt_root, n, 0);			    	\
 }										\
 										\
-inline node_t *last_##node_t(TREE(node_t) *tree) {				\
-  return TREE_LAST_##node_t(tree->root);					\
+extern inline node_t *last_##node_t(tree_t *tree) {				\
+  return TREE_LAST_##node_t(tree->sbbt_root);					\
 }										\
 										\
-inline node_t *prev_##node_t(TREE(node_t) *tree, node_t *n) {			\
-  return TREE_PREV_##node_t(tree->root, n, 0);					\
+extern inline node_t *prev_##node_t(tree_t *tree, node_t *n) {			\
+  return TREE_PREV_##node_t(tree->sbbt_root, n, 0);				\
 }										\
 										\
-inline int num_##node_t(TREE(node_t) *tree) {					\
-  return tree->length;								\
+extern inline int num_##node_t(tree_t *tree) {					\
+  return tree->sbbt_length;							\
 }										\
 										\
-inline int depth_##node_t(TREE(node_t) *tree) {					\
-  return tree->root->sbbt_depth;						\
+extern inline int depth_##node_t(tree_t *tree) {				\
+  return tree->sbbt_root->sbbt_depth;						\
 }										\
 										\
-inline void *foreach_##node_t(TREE(node_t) *tree, TREE_##node_t##_CB *function, void *ref) {	\
-  return TREE_FOREACH_##node_t(tree->root, function, ref);			\
+extern inline void *foreach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
+  return TREE_FOREACH_##node_t(tree->sbbt_root, function, ref);			\
 }										\
 										\
-inline void *rforeach_##node_t(TREE(node_t) *tree, TREE_##node_t##_CB *function, void *ref) {	\
-  return TREE_RFOREACH_##node_t(tree->root, function, ref);			\
+extern inline void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
+  return TREE_RFOREACH_##node_t(tree->sbbt_root, function, ref);		\
 }										\
 
 /* Private routines, to be defined once in one file for each tree type. */
 
-#define TREE_DEFINE_PROCS(node_t)						\
+#define TREE_DEFINE_PROCS(tree_t, node_t)					\
 										\
 node_t *TREE_ADD_##node_t(node_t *root, node_t *n) {				\
   TREE_ENTRY((TREE_S(TREE_ADD_##node_t) "(%p, %p)\n", root, n));		\
