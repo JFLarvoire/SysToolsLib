@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *  Filename         inicomp.c                                                 *
 *                                                                             *
@@ -15,16 +15,23 @@
 *    2012-10-18 JFL Added my name in the help. Version 1.2.1.                 *
 *    2014       JFL Started rewrite using dict.h.                             *
 *    2017-01-02 JFL Finished restructuration using dict.h.		      *
-*                   Added option -V. Version 2.0.                             *
+*                   Added option -V.		                              *
+*    2017-01-04 JFL Use case-independant NewIDict().			      *
+*                   Made this a UTF-8 application.                            *
+*                   Added support for Linux.                                  *
+*                   Version 2.0.                                              *
 *                                                                             *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2017-01-02"
+#define PROGRAM_DATE    "2017-01-04"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
+
+#define _UTF8_SOURCE		/* Support file names with Unicode characters */
+#define _GNU_SOURCE		/*  */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,9 +82,10 @@ DICT_DEFINE_PROCS();
 
 #define PATHNAME_SIZE FILENAME_MAX
 
+/* These are standard routines, but Microsoft thinks not */
+#define strdup _strdup
 /* These are non standard routines, but the leading _ is annoying */
 #define strlwr _strlwr
-#define strdup _strdup
 #define stricmp _stricmp
 
 #endif
@@ -96,6 +104,28 @@ DICT_DEFINE_PROCS();
 
 #endif
 
+/************************* Unix-specific definitions *************************/
+
+#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+
+#if defined(__CYGWIN64__)
+#define OS_NAME "Cygwin64"
+#elif defined(__CYGWIN32__)
+#define OS_NAME "Cygwin"
+#elif defined(__linux__)
+#define OS_NAME "Linux"
+#else
+#define OS_NAME "Unix"
+#endif
+
+#define LINESIZE 1024		/* Maximum line size */
+
+#define PATHNAME_SIZE FILENAME_MAX
+
+#define stricmp strcasecmp
+
+#endif /* __unix__ */
+
 /********************** End of OS-specific definitions ***********************/
 
 #define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME
@@ -107,6 +137,12 @@ typedef enum {EQUAL, FILE1, FILE2} outstate;
 int verbose = FALSE;
 int compBlanks = FALSE;
 int ignoreCase = TRUE;
+dict_t *NewAdHocDict(void) {
+  if (ignoreCase)
+    return NewIDict();
+  else
+    return NewDict();
+}
 
 /* Function prototypes */
 
@@ -140,15 +176,15 @@ void usage(void);
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
-void main(int argc, char *argv[])
+int main(int argc, char *argv[])
     {
     int i;
     char *f1arg = NULL;         /* File 1 name provided */
     char *f2arg = NULL;         /* File 2 name provided */
     char *name1;                /* File 1 name found */
     char *name2;                /* File 2 name found */
-    dict_t *dict1 = NewDict();	/* File 1 sections dictionary */
-    dict_t *dict2 = NewDict();	/* File 2 sections dictionary */
+    dict_t *dict1;		/* File 1 sections dictionary */
+    dict_t *dict2;		/* File 2 sections dictionary */
 
     for (i=1; i<argc; i++)
         {
@@ -168,6 +204,11 @@ void main(int argc, char *argv[])
             if (streq(argv[i]+1, "c"))
                 {
                 ignoreCase = FALSE;
+                continue;
+                }
+            if (streq(argv[i]+1, "C"))
+                {
+                ignoreCase = TRUE;
                 continue;
                 }
             DEBUG_CODE(
@@ -213,6 +254,9 @@ void main(int argc, char *argv[])
         usage();
         }
 
+    dict1 = NewAdHocDict();	/* File 1 sections dictionary */
+    dict2 = NewAdHocDict();	/* File 2 sections dictionary */
+
     /* Sort files */
 
     name1 = processFile(f1arg, dict1);
@@ -222,7 +266,7 @@ void main(int argc, char *argv[])
 
     compare(name1, dict1, name2, dict2);
 
-    exit(0);
+    return 0;
     }
 
 /*----------------------------------------------------------------------------+
@@ -273,7 +317,7 @@ char *processFile(char *argname, dict_t *sections) {
   /* Read it & classify lines */
 
   nl = 0;
-  items = NewDict();
+  items = NewAdHocDict();
   NewDictValue(sections, "", items);	/* The initial unnamed section */
   while (fgets(line, LINESIZE, f)) {
     nl += 1;
@@ -294,7 +338,7 @@ char *processFile(char *argname, dict_t *sections) {
       }
       *(pc2) = '\0';
       trimRight(pc);
-      items = NewDict();
+      items = NewAdHocDict();
       NewDictValue(sections, pc, items);
       continue;
     }
@@ -663,7 +707,9 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
+#ifdef _MSC_VER
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+#endif
 
 void *printSectNameCB(char *pszName, void *pValue, void *pRef)
     {
@@ -671,7 +717,9 @@ void *printSectNameCB(char *pszName, void *pValue, void *pRef)
     return NULL;
     }
 
+#ifdef _MSC_VER
 #pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
+#endif
 
 void printSectName(char *name)
     {
@@ -690,17 +738,21 @@ void printSectName(char *name)
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
+#ifdef _MSC_VER
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+#endif
  
 void *printItemCB(char *pszName, void *pValue, void *pRef)
     {
     printf("    %s", pszName);
-    if (pValue) printf(" = %s", pValue);
+    if (pValue) printf(" = %s", (char *)pValue);
     printf("\n");
     return NULL;
     }
 
+#ifdef _MSC_VER
 #pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
+#endif
  
 void *printItem(dictnode *pi)
     {
@@ -729,14 +781,23 @@ inicomp version " VERSION "\n\
 \n\
 Compare two .ini files, section by section, and item by item.\n\
 \n\
-Usage: inicomp [switches] {file1[.ini]} {file2[.ini]}\n\
+Usage: inicomp [switches] FILE1[.ini] FILE2[.ini]\n\
 \n\
 Switches:\n\
   -b   Include spaces in item values comparisons. Default: Ignore them.\n\
-  -c   Account for case in comparisons. Default: Ignore case.\n\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+  -c   Account for case in sections and items names comparisons.\n\
+  -C   Ignore case in names comparisons. Default.\n\
+\n"
+#ifdef _MSDOS
+"Author: Jean-Francois Larvoire"
+#else
+"Author: Jean-François Larvoire"
+#endif
+" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+#ifdef __unix__
+"\n"
+#endif
+);
     exit(0);
     }
 
