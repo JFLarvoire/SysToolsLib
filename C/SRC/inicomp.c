@@ -4,7 +4,18 @@
 *                                                                             *
 *  Description      Compare two .INI files                                    *
 *                                                                             *
-*  Notes                                                                      *
+*  Notes            In July 2010, I started a redesign of the program.        *
+*                   The goal was to gain performance, by replacing the old    *
+*                   linked lists with self-balancing binary trees.            *
+*                   The performance of linked lists was good when comparing   *
+*                   small .ini files, like the old Windows 9x win.ini and     *
+*                   system.ini. But it was becoming unacceptably slow when    *
+*                   comparing tens of MB-long exported registry trees.        *
+*                   The project stalled for several years, until I completed  *
+*                   it while traveling back from Christmas 2016 vacations.    *
+*                                                                             *
+*                   To do:                                                    *
+*                   - Convert all file encodings to UTF8 data.		      *
 *                                                                             *
 *  History                                                                    *
 *    1993-09-28 JFL Created this program.                                     *
@@ -12,13 +23,19 @@
 *                   Changed version to 1.1, although the feature are the same.*
 *    2010-06-08 JFL Added options -d and -v.                                  *
 *                   Added progress feedback while processing huge files.      *
-*    2012-10-18 JFL Added my name in the help. Version 1.2.1.                 *
-*    2014       JFL Started rewrite using dict.h.                             *
+*    2010-07-09 JFL Started rewrite using dict.h. (Program does not build)    *
+*    2012-10-18 JFL Added my name in the help.				      *
 *    2017-01-02 JFL Finished restructuration using dict.h.		      *
 *                   Added option -V.		                              *
 *    2017-01-04 JFL Use case-independant NewIDict().			      *
-*                   Made this a UTF-8 application.                            *
+*                   Made this a UTF-8 app. supporting non-ASCII file names.   *
 *                   Added support for Linux.                                  *
+*    2017-01-05 JFL Added support for quoted value names, that may contain '='.
+*                   Added support for \ continuation lines.                   *
+*    2017-01-06 JFL Quoted value strings may also continue on multiple lines. *
+*                   Use multimaps instead of dicts (aka. maps) to avoid       *
+*		    issues when encountering duplicate names. (This happens!) *
+*    2017-01-07 JFL Count line ending with \r\r\n as two lines.               *
 *                   Version 2.0.                                              *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -26,12 +43,12 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2017-01-04"
+#define PROGRAM_DATE    "2017-01-07"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
-#define _UTF8_SOURCE		/* Support file names with Unicode characters */
-#define _GNU_SOURCE		/*  */
+#define _UTF8_SOURCE		/* Enable MsvcLibX support for file names with Unicode characters */
+#define _GNU_SOURCE		/* Else Linux does not define strdup() in string.h */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,8 +75,6 @@ DICT_DEFINE_PROCS();
 
 #define OS_NAME "OS/2"
 
-#define LINESIZE 256		/* Maximum line size */
-
 #define PATHNAME_SIZE 260	/* FILENAME_MAX incorrect in stdio.h */
 
 #endif
@@ -78,8 +93,6 @@ DICT_DEFINE_PROCS();
 #define OS_NAME "Win32"
 #endif
 
-#define LINESIZE 1024		/* Maximum line size */
-
 #define PATHNAME_SIZE FILENAME_MAX
 
 /* These are standard routines, but Microsoft thinks not */
@@ -95,8 +108,6 @@ DICT_DEFINE_PROCS();
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
 #define OS_NAME "DOS"
-
-#define LINESIZE 256        /* Maximum line size */
 
 #define PATHNAME_SIZE FILENAME_MAX
 
@@ -118,8 +129,6 @@ DICT_DEFINE_PROCS();
 #define OS_NAME "Unix"
 #endif
 
-#define LINESIZE 1024		/* Maximum line size */
-
 #define PATHNAME_SIZE FILENAME_MAX
 
 #define stricmp strcasecmp
@@ -137,15 +146,26 @@ typedef enum {EQUAL, FILE1, FILE2} outstate;
 int verbose = FALSE;
 int compBlanks = FALSE;
 int ignoreCase = TRUE;
-dict_t *NewAdHocDict(void) {
+
+/* Define multimap dictionaries */
+
+int cmpvalue(void *p1, void *p2) {
+  return strcmp(p1, p2);
+}
+int cmpivalue(void *p1, void *p2) {
+  return _stricmp(p1, p2);
+}
+
+dict_t *NewAdHocDict(void) { /* Actually create multimaps, as we may encounter duplicate item names */
   if (ignoreCase)
-    return NewIDict();
+    return NewIMMap(cmpivalue);
   else
-    return NewDict();
+    return NewMMap(cmpvalue);
 }
 
 /* Function prototypes */
 
+int IsSwitch(char *pszArg);
 char *processFile(char *argname, dict_t *sections);
 char *trimLeft(char *s);
 char *trimRight(char *s);
@@ -154,10 +174,12 @@ int compStringNB(const char *s1, const char *s2);
 int compString(const char *s1, const char *s2);
 int compare(char *name1, dict_t *tree1, char *name2, dict_t *tree2);
 void newOutState(outstate *pold, outstate new, char *name1, char *name2);
+void *printSectCB(char *pszName, void *pValue, void *pRef);
 void *printSectNameCB(char *pszName, void *pValue, void *pRef);
 void printSectName(char *name);
 void *printItemCB(char *pszName, void *pValue, void *pRef);
 void *printItem(dictnode *pi);
+void outOfMem(void);
 void usage(void);
 
 /*----------------------------------------------------------------------------+
@@ -172,7 +194,7 @@ void usage(void);
 |   Output:         None                                                      |
 |                                                                             |
 |   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|    1993-09-29 JFL Initial implementation                                    |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -188,7 +210,7 @@ int main(int argc, char *argv[])
 
     for (i=1; i<argc; i++)
         {
-        if ((argv[i][0] == '-') || (argv[i][0] == '/')) /* It's a switch */
+        if (IsSwitch(argv[i])) /* It's a switch */
             {
             if (   streq(argv[i]+1, "help")
                 || streq(argv[i]+1, "h")
@@ -262,6 +284,15 @@ int main(int argc, char *argv[])
     name1 = processFile(f1arg, dict1);
     name2 = processFile(f2arg, dict2);
 
+DEBUG_CODE(
+    /* Print all data gathered so far */
+    printf("***************************************************************\n");
+    ForeachDictValue(dict1, printSectCB, NULL);
+    printf("***************************************************************\n");
+    ForeachDictValue(dict2, printSectCB, NULL);
+    printf("***************************************************************\n");
+)
+
     /* Display differences */
 
     compare(name1, dict1, name2, dict2);
@@ -269,30 +300,122 @@ int main(int argc, char *argv[])
     return 0;
     }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    IsSwitch						      |
+|                                                                             |
+|   Description:    Test if an argument is a command-line switch.             |
+|                                                                             |
+|   Parameters:     char *pszArg	    Would-be argument		      |
+|                                                                             |
+|   Return value:   TRUE or FALSE					      |
+|                                                                             |
+|   Notes:								      |
+|                                                                             |
+|   History:								      |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg)
+    {
+    return (   (*pszArg == '-')
+#ifndef __unix__
+            || (*pszArg == '/')
+#endif
+           ); /* It's a switch */
+    }
+
+/*---------------------------------------------------------------------------*\
+|		    							      |
+|  Function         getLine                                                   |
+|		    							      |
+|  Description      Read a line, growing the buffer, if needed to get it all  |
+|		    							      |
+|  Input            char **pBuf		Address of output buffer pointer      |
+|                   size_t *pBufSize	Address of output buffer size	      |
+|		    FILE *f		Input file handle		      |
+|		    size_t offset	Offset to write in the output buffer  |
+|		    long *pNLines	Address of optional line counter      |
+|		    							      |
+|  Output           Final address of the line read, or NULL if error.	      |
+|		    							      |
+|  History                                                                    |
+|    2017-01-06 JFL Initial implementation                                    |
+|		    							      |
+\*---------------------------------------------------------------------------*/
+
+/* Read a line, growing the buffer if needed to get the full line */
+char *getLine(char **pBuf, size_t *pBufSize, FILE *f, size_t offset, long *pNLines) {
+  char *line = *pBuf + offset;
+  size_t l;
+  long nl = 0;
+
+  if (!fgets(line, (int)(*pBufSize - offset), f)) return NULL;
+  l = strlen(line);
+  if (pNLines) {
+    nl = *pNLines += 1;
+    if ((verbose) && ((nl % 10000) == 0)) {
+      fprintf(stderr, "Line %ld: %s", nl, line);
+      if (l && (line[l-1] != '\n')) fprintf(stderr, "\n");
+    }
+  }
+  /* Check if the buffer is too small, and needs to be extended to get the full line */
+  while (((offset+l) == (*pBufSize-1)) && (line[l-1] != '\n')) {
+    DEBUG_PRINTF(("Line %ld overflowed. Expanding buffer to %ld bytes: %s\n", nl, (unsigned long)*pBufSize*2, line));
+    *pBuf = realloc(*pBuf, *pBufSize *= 2); /* Double its size, to avoid doing this too often */
+    if (!*pBuf) outOfMem();
+    line = *pBuf + offset;
+    if (!fgets(line+l, (int)(*pBufSize-(offset+l)), f)) break;
+    l += strlen(line+l);
+  }
+  /* When lines end with \r\r\n, most editors (but not Notepad) count that as extra lines */
+  if (pNLines) {
+    size_t i = 1;
+    if ((i <= l) && (line[l-i] == '\n')) i += 1; /* Skip the final \n */
+    if ((i <= l) && (line[l-i] == '\r')) i += 1; /* Skip the normal \r before that \n */
+    for ( ; (i <= l) && (line[l-i] == '\r'); i++) *pNLines += 1; /* If there are other \r, count extra lines */
+  }
+  return line;
+}
+
 /*----------------------------------------------------------------------------+
 |                                                                             |
-|   Function:       processFile                                               |
+|  Function         processFile                                               |
 |                                                                             |
-|   Description:    Digest a .INI file. Build sorted lists of sections & items|
+|  Description      Digest a .INI file. Build sorted lists of sections & items|
 |                                                                             |
-|   Input:          char *argname    File name received from the command line |
+|  Input            char *argname    File name received from the command line |
 |                   dict_t *sections Dictionary of all sections               |
 |                                                                             |
-|   Output:         Pointer to the actual name of the .INI file analysed      |
+|  Output           Pointer to the actual name of the .INI file analysed      |
 |                                                                             |
-|   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|  History                                                                    |
+|    1993-09-29 JFL Initial implementation                                    |
+|    2016-01-05 JFL Added support for quoted value names, that may contain '='.
+|                   Added support for continuation lines.                     |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
+#define LINESIZE 256	/* Initial maximum line size. Will grow if needed */
+			/* Some registry paths are longer than 256 characters */
+			/* Must not be too large, else the small DOS version will fail to work */
+
 char *processFile(char *argname, dict_t *sections) {
-  char line[LINESIZE];
+  size_t lineSize = LINESIZE;
+  char *line;
   long nl;
   char *pc;
   char *pc2;
-  FILE *f;
+  FILE *f = NULL;
   char *fname;
   dict_t *items;
+  size_t l;
+  int iRegEdit = 0;	/* REGEDIT .reg file version */
+  char bom[4];
+  char *pszEncoding = "Windows";
+
+  line = malloc(lineSize);
+  if (!line) outOfMem();
 
   /* Open file */
 
@@ -303,37 +426,70 @@ char *processFile(char *argname, dict_t *sections) {
   }
   fname = strdup(line);
 
-  f = fopen(fname, "r");
+  f = fopen(fname, "rb");
   if (!f) {
     printf("Can't open file %s.\n", fname);
     exit(1);
   }
 
-  DEBUG_CODE(
-    if (iDebug) fprintf(stderr, "\n\n");
-  )
+  DEBUG_PRINTF(("\n\n"));
   if (verbose) fprintf(stderr, "Reading %s\n", fname);
+
+  /* Check the encoding */
+  /* TO DO: Use that information to convert the input data to UTF8 */
+  l = fread(bom, 1, sizeof(bom), f);
+  if (!strncmp(bom, "\xEF\xBB\xBF", 3)) {
+    pszEncoding = "UTF8";
+    fseek(f, 3L, SEEK_SET);
+  } else if (   !strncmp(bom, "\xFF\xFE", 2)
+	     || ((l >= 4) && !bom[1] && !bom[3])) {
+    pszEncoding = "UTF16";
+bad_encoding:
+    fprintf(stderr, "Error: File %s is encoded as %s. Please convert it to ANSI or UTF8 first.\n", fname, pszEncoding);
+    exit(1);
+  } else if (   !strncmp(bom, "\xFE\xFF", 2)
+	     || ((l >= 4) && !bom[0] && !bom[2])) {
+    pszEncoding = "UTF16BE";
+    goto bad_encoding;
+  } else { /* Assume this is in the default Windows encoding */
+    rewind(f);
+  }
 
   /* Read it & classify lines */
 
   nl = 0;
   items = NewAdHocDict();
   NewDictValue(sections, "", items);	/* The initial unnamed section */
-  while (fgets(line, LINESIZE, f)) {
-    nl += 1;
-    if ((verbose) && ((nl % 1000) == 0)) fprintf(stderr, "Line %ld\n", nl);
+  while (getLine(&line, &lineSize, f, 0, &nl)) {
+    l = strlen(line);
+    /* Check if the line ends with an \, showing that there's a continuation line */
+check_if_continuation_line:
+    if (l && line[l-1] == '\n') line[--l] = '\0'; /* Trim the final \n */
+    while (l && line[l-1] == '\r') {line[--l] = '\0';} /* Trim all \r before that \n */
+    if (l && line[l-1] == '\\') { /* There is a continuation line */
+      size_t i;
+      line[--l] = '\0';				  /* Trim the final \ */
+      getLine(&line, &lineSize, f, l, &nl);
+      i = l;
+      while (line[l] == ' ') {
+      	for (i = l; (line[i] = line[i+1]) != '\0'; i += 1) ;	/* Move the line ahead by 1 char */
+      }
+      l = i;				/* Record the new line length */
+      goto check_if_continuation_line;
+    }
+
     trimRight(line);                    /* Remove trailing blanks and \n */
     pc = trimLeft(line);                /* Skip blanks */
     if (!*pc || (*pc == ';')) continue; /* Ignore blank lines & comments */
 
-    /* TO DO: Process continuation lines with a trailing \ */
+    DEBUG_PRINTF(("Line %lu %s\n", nl, line));
 
     if (*pc == '[') {                   /* If it's a section */
       pc += 1;				/* Skip the '[' */
       pc = trimLeft(pc);                /* Skip blanks */
-      pc2 = strchr(pc, ']');
+      pc2 = strrchr(pc, ']');
       if (!pc2) {
-	printf("Error in file %s line %ld:\n%s\n", fname, nl, line);
+	fprintf(stderr, "Error in file %s line %ld: Missing end of section name:\n%s\n", fname, nl, line);
 	continue;                   /* If no ], try next line */
       }
       *(pc2) = '\0';
@@ -344,22 +500,76 @@ char *processFile(char *argname, dict_t *sections) {
     }
 
     /* Else it's an item line */
-    pc2 = strchr(pc, '=');
+    if (*pc == '"') {	/* It's a quoted name */
+      pc2 = pc += 1;		/* Skip the opening quote */
+search_end_of_quoted_name:
+      for ( ; *pc2 && (*pc2 != '"'); pc2 += 1) {	/* Search the closing quote */
+      	if (*pc2 == '\\') pc2 += 1; /* Skip any escaped character. Ex: \" or \\ */
+      }
+      if (*pc2 == '"') {
+      	*pc2 = '\0';		/* Remove the closing quote */
+      	pc2 = strchr(pc2+1, '=');
+      } else {	/* The quoted name continues on next line (rare, but happens) */
+      	char *line0 = line;
+      	*(pc2++) = '\\'; /* Record an escaped new line */
+      	*(pc2++) = '\n';
+      	*pc2 = '\0';
+      	getLine(&line, &lineSize, f, pc2-line, &nl);
+      	if (line != line0) {
+      	  pc += (line-line0);
+      	  pc2 += (line-line0);
+      	}
+      	goto search_end_of_quoted_name;
+      }
+    } else {		/* Unquoted name */
+      pc2 = strchr(pc, '=');
+      if (pc2) *pc2 = '\0';	/* Remove the equal sign */
+      trimRight(pc);
+    }
     if (!pc2) {
-      if (   !strncmp(pc, "Windows Registry Editor", 23)
-      	  || !strncmp(pc, "REGEDIT", 7)
+      if (   sscanf(pc, "Windows Registry Editor Version %d", &iRegEdit)
+      	  || sscanf(pc, "REGEDIT%d", &iRegEdit)
       	  ) { /* regedit .reg files header. Version varies. */
-	NewDictValue(items, ".reg Header", strdup(pc));
+	NewDictValue(items, "", strdup(pc));
       	continue;
       }
-      printf("Unexpected (continuation?) line in file %s line %ld:\n%s\n", fname, nl, line);
+      fprintf(stderr, "Error in file %s line %ld: Unexpected (continuation?) line:\n%s\n", fname, nl, line);
       continue;
     }
-    *(pc2++) = '\0';
-    trimRight(pc);
-    pc2 = trimLeft(pc2);
+    pc2 = trimLeft(pc2+1);
+    if (iRegEdit && (*pc2 == '"')) { /* It's a quoted value */
+      char *pc3;
+      pc3 = pc2 += 1;			/* Skip the opening quote */
+search_end_of_quoted_value:
+      for ( ; *pc3 && (*pc3 != '"'); pc3 += 1) { /* Search the closing quote */
+      	if (*pc3 == '\\') pc3 += 1; /* Skip any escaped character. Ex: \" or \\ */
+      }
+      if (*pc3 == '"') {	/* We reached the end of string */
+      	*pc3 = '\0';			/* Remove the closing quote */
+      } else {			/* The string continues on next line */
+      	char *line0 = line;
+      	if (*(pc3-1) != '\n') { /* The first line had its \n trimmed above */
+#if defined(_MSDOS) || defined(_WIN32)
+	  *(pc3++) = '\r';
+#endif
+	  *(pc3++) = '\n';
+	  *pc3 = '\0';
+	}
+      	getLine(&line, &lineSize, f, pc3-line, &nl);
+      	if (line != line0) {
+      	  pc += (line-line0);
+      	  pc2 += (line-line0);
+      	  pc3 += (line-line0);
+      	}
+      	goto search_end_of_quoted_value;
+      }
+    }
     NewDictValue(items, pc, strdup(pc2));
   }
+
+  /* Cleanup */
+  fclose(f);
+  free(line);
 
   return fname;
 }
@@ -430,26 +640,25 @@ int compItem(dictnode *i1, dictnode *i2)
 
 /*----------------------------------------------------------------------------+
 |                                                                             |
-|   Function:       compStringNB                                              |
+|  Function         compStringNB                                              |
 |                                                                             |
-|   Description:    Compare two strings, possibly ignoring blanks and/or case |
+|  Description      Compare two strings, possibly ignoring blanks and/or case |
 |                                                                             |
-|   Input:          char *s1        String 1                                  |
+|  Input            char *s1        String 1                                  |
 |                   char *s2        String 2                                  |
 |                                                                             |
-|   Output:          0 if string1 = string2                                   |
+|  Output            0 if string1 = string2                                   |
 |                   <0 if string1 < string2                                   |
 |                   >0 if string1 > string2                                   |
 |                                                                             |
-|   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|  History                                                                    |
+|    1993-09-29 JFL Initial implementation                                    |
+|    2017-01-05 JFL Removed the dependancy on the LINESIZE constant.          |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
 int compStringNB(const char *s1, const char *s2)
     {
-    char line1[LINESIZE];
-    char line2[LINESIZE];
     const char *p1;
     char *p2;
     char c;
@@ -460,11 +669,22 @@ int compStringNB(const char *s1, const char *s2)
         }
     else
         {
+        char *line1, *line2;
+        int dif;
+
+        line1 = malloc(strlen(s1) + 1);
+        if (!line1) outOfMem();
+        line2 = malloc(strlen(s2) + 1);
+        if (!line2) outOfMem();
+
         for (p1=s1, p2=line1; (c=*p1) != 0; p1++) if (c != ' ') *(p2++) = c;
         *p2 = '\0';
         for (p1=s2, p2=line2; (c=*p1) != 0; p1++) if (c != ' ') *(p2++) = c;
         *p2 = '\0';
-        return compString(line1, line2);
+        dif = compString(line1, line2);
+        free(line1);
+        free(line2);
+        return dif;
         }
     }
 
@@ -482,7 +702,7 @@ int compStringNB(const char *s1, const char *s2)
 |                   >0 if string1 > string2                                   |
 |                                                                             |
 |   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|    1993-09-29 JFL Initial implementation                                    |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -521,8 +741,11 @@ int compare(char *name1, dict_t *tree1, char *name2, dict_t *tree2)
     dictnode *i01, *i02;
     outstate os;
     int sdone = FALSE;
+    unsigned long nc = 0;	/* Number of comparisons done */
 
     printf("Comparing .ini files %s and %s\n", name1, name2); /* Similar message to that of fc.exe */
+    fflush(stdout);
+    fflush(stderr);
 
     os = EQUAL;
 
@@ -569,6 +792,10 @@ int compare(char *name1, dict_t *tree1, char *name2, dict_t *tree2)
         i01 = i02 = NULL;
 	for (i1=FirstDictValue(s1), i2=FirstDictValue(s2); i1 || i2; )
             {
+	    nc += 1;
+	    if ((verbose) && ((nc % 10000) == 0)) fprintf(stderr, 
+	      "Processing value %lu: %s\\%s\n", nc, n1->pszKey, (i1 ? i1->pszKey : i2->pszKey)
+	    );
             DEBUG_PRINTF(("// Comparing values \"%s\" and \"%s\"\n", (i1 ? i1->pszKey : "(null)"), (i2 ? i2->pszKey : "(null)")));
             if (!i1 || !i2) /* We're sure at least one of them is not NULL */
                 {
@@ -660,7 +887,7 @@ int compare(char *name1, dict_t *tree1, char *name2, dict_t *tree2)
 |                    from which lines are currently being displayed.          |
 |                                                                             |
 |   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|    1993-09-29 JFL Initial implementation                                    |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -703,7 +930,7 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 |   Output:         None                                                      |
 |                                                                             |
 |   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|    1993-09-29 JFL Initial implementation                                    |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -714,6 +941,13 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 void *printSectNameCB(char *pszName, void *pValue, void *pRef)
     {
     printf("\n[%s]\n", pszName);
+    return NULL;
+    }
+
+void *printSectCB(char *pszName, void *pValue, void *pRef)
+    {
+    printf("\n[%s]\n", pszName);
+    ForeachDictValue(pValue, printItemCB, pRef);
     return NULL;
     }
 
@@ -735,6 +969,7 @@ void printSectName(char *name)
 |  History                                                                    |
 |    1993-09-29 JFL Initial implementation                                    |
 |    2017-01-01 JFL Rewritten to be usable as a dict_t enumeration callback.  |
+|    2017-01-05 JFL Quote names containing spaces or =.                       |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -744,8 +979,26 @@ void printSectName(char *name)
  
 void *printItemCB(char *pszName, void *pValue, void *pRef)
     {
-    printf("    %s", pszName);
-    if (pValue) printf(" = %s", (char *)pValue);
+    char *pszValue = pValue;
+    if (   *pszName				/* If the name is not empty */
+        && !pszName[strcspn(pszName, "= \t")]   /* and if there are no spaces or = in the name */
+    ) {
+      printf("    %s", pszName);
+    } else {
+      printf("    \"%s\"", pszName);
+    }
+    if (pszValue) {
+      size_t l = strlen(pszValue);
+      if (   !l					/* If the value is empty */
+      	  || pszValue[strcspn(pszValue, "\r\n")]/* or if it spans multiple lines */
+      	  || isspace(pszValue[0])		/* or if it begins with a space */
+      	  || (l && isspace(pszValue[l-1]))	/* or if it ends with a space */
+      ) {
+	printf(" = \"%s\"", pszValue);
+      } else {
+	printf(" = %s", pszValue);
+      }
+    }
     printf("\n");
     return NULL;
     }
@@ -761,6 +1014,27 @@ void *printItem(dictnode *pi)
 
 /*----------------------------------------------------------------------------+
 |                                                                             |
+|   Function:       outOfMem                                                  |
+|                                                                             |
+|   Description:    Display an error message and abort                        |
+|                                                                             |
+|   Input:          None                                                      |
+|                                                                             |
+|   Output:         None                                                      |
+|                                                                             |
+|   Updates:                                                                  |
+|    1993-09-29 JFL Initial implementation                                    |
+|                                                                             |
++----------------------------------------------------------------------------*/
+
+void outOfMem(void)
+    {
+    printf("Out of memory.\n");
+    exit(1);
+    }
+
+/*----------------------------------------------------------------------------+
+|                                                                             |
 |   Function:       usage                                                     |
 |                                                                             |
 |   Description:    Display a brief online help, describing the command line  |
@@ -770,7 +1044,7 @@ void *printItem(dictnode *pi)
 |   Output:         None                                                      |
 |                                                                             |
 |   Updates:                                                                  |
-|     93/09/29 JFL  Initial implementation                                    |
+|    1993-09-29 JFL Initial implementation                                    |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -785,8 +1059,10 @@ Usage: inicomp [switches] FILE1[.ini] FILE2[.ini]\n\
 \n\
 Switches:\n\
   -b   Include spaces in item values comparisons. Default: Ignore them.\n\
-  -c   Account for case in sections and items names comparisons.\n\
-  -C   Ignore case in names comparisons. Default.\n\
+  -c   Use case sensitive comparisons for sections and items names.\n\
+  -C   Use case insensitive comparisons. (Default)\n\
+  -v   Verbose node. Display extra progress information.\n\
+  -V   Display this program version and exit.\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
