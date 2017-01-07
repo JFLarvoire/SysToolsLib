@@ -24,6 +24,8 @@
 *    2016-12-31 JFL Renamed AddDictValue as NewDictValue, as documented above.*
 *    2017-01-02 JFL Adapted to use SysToolsLib's debugm.h definitions.	      *
 *    2017-01-04 JFL Added case-independant NewIDict().			      *
+*    2017-01-06 JFL Added an optional data compatison routine for multimaps.  *
+*		    Create with NewMMap(datacmp) or NewIMMap(datacmp).	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,6 +57,7 @@ typedef struct _dictnode {
 typedef struct _dict_t {
   TREE_FIELDS(struct _dict_t, struct _dictnode);
   int (*keycmp)(const char *s1, const char *s2); /* Key comparison routine */
+  int (*datacmp)(void *p1, void *p2); /* Data comparison routine for multimaps */
 } dict_t;
 
 /* Define types and declare functions for handling a tree of such structures */
@@ -81,6 +84,8 @@ typedef struct {
 TREE_DEFINE_PROCS(dict_t, dictnode);						\
 										\
 int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {				\
+  dict_t *tree = (pn1 && pn1->sbbt_tree) ? pn1->sbbt_tree : (pn2 ? pn2->sbbt_tree : NULL);	\
+  int dif = 0;									\
   TREE_ENTRY((TREE_V(TREE_CMP(dictnode)) "(%p, %p)\n", pn1, pn2));		\
   TREE_IF_DEBUG({                                                               \
     char key1[80] = "NULL";			                                \
@@ -89,15 +94,19 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {				\
     if (iDebug) {								\
       if (pn1) snprintf(key1, sizeof(key1), "\"%s\"", pn1->pszKey);		\
       if (pn2) snprintf(key2, sizeof(key2), "\"%s\"", pn2->pszKey);		\
-      if (pn1 && pn1->sbbt_tree && pn1->sbbt_tree->keycmp) {			\
-      	if (pn1->sbbt_tree->keycmp == strcmp) pszKeyCmp = "strcmp";		\
-	else if (pn1->sbbt_tree->keycmp == _stricmp) pszKeyCmp = "stricmp";	\
+      if (tree) {								\
+      	if (tree->keycmp == strcmp) pszKeyCmp = "strcmp";			\
+	else if (tree->keycmp == _stricmp) pszKeyCmp = "stricmp";		\
 	else pszKeyCmp = "???";							\
       }										\
       DEBUG_PRINTF(("%s(%s, %s)\n", pszKeyCmp, key1, key2));			\
     }										\
   })                                                                            \
-  TREE_RETURN_INT(pn1->sbbt_tree->keycmp(pn1->pszKey, pn2->pszKey));		\
+  if (tree) {									\
+    dif = tree->keycmp(pn1->pszKey, pn2->pszKey);				\
+    if (!dif && tree->datacmp) dif = tree->datacmp(pn1->pData, pn2->pData);	\
+  }										\
+  TREE_RETURN_INT(dif);								\
 }										\
                                                                                 \
 TREE_IF_DEBUG(                                                                  \
@@ -116,9 +125,30 @@ void *NewDictValue(dict_t *dict, char *key, void *value) {                      
   dictnode *node = calloc(1, sizeof(dictnode));                                 \
   TREE_ENTRY(("NewDictValue(%p, \"%s\", %p)\n", dict, key, value));		\
   if (node) {                                                                   \
+    dictnode *oldNode;                                                          \
     node->pszKey = strdup(key);                                                 \
     node->pData = value;                                                        \
-    add_dictnode(dict, node);                                                   \
+    oldNode = get_dictnode(dict, node);                                         \
+    if (oldNode) {	/* This is a duplicate of an existing node */		\
+      free(node);                                                               \
+      node = oldNode;		/* Refer to the old node */                     \
+    } else {                                                                    \
+      add_dictnode(dict, node); /* Register the new node in the tree */         \
+    }                                                                           \
+  }                                                                             \
+  TREE_RETURN(node);                                                            \
+}                                                                               \
+                                                                                \
+void *SetDictValue(dict_t *dict, char *key, void *value) { /* Simple maps only */ \
+  dictnode *node;                                                               \
+  dictnode refNode = {0};                                                       \
+  TREE_ENTRY(("SetDictValue(%p, \"%s\", %p)\n", dict, key, value));		\
+  refNode.pszKey = key;                                                         \
+  node = get_dictnode(dict, &refNode);                                          \
+  if (node) {                                                                   \
+    refNode.pData = value;                                                      \
+  } else {                                                                      \
+    node = NewDictValue(dict, key, value);                                      \
   }                                                                             \
   TREE_RETURN(node);                                                            \
 }                                                                               \
@@ -158,6 +188,24 @@ extern inline dict_t *NewDict(void) {
 extern inline dict_t *NewIDict(void) {
   dict_t *dict = new_dictnode_tree();
   if (dict) dict->keycmp = _stricmp;	/* Case-independant key comparison */
+  return dict;
+}
+
+extern inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = strcmp;		/* Case-dependant key comparison */
+    dict->datacmp = datacmp;		/* Data comparison */
+  }
+  return dict;
+}
+
+extern inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = _stricmp;		/* Case-independant key comparison */
+    dict->datacmp = datacmp;		/* Data comparison */
+  }
   return dict;
 }
 
