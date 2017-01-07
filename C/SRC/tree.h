@@ -12,11 +12,15 @@
 *		    A macro inserts tree-specific fields in that tree node    *
 *		    structure. These fields all have the sbbt_ prefix.        *
 *		    							      *
+*		    The TREE_ADD macro does not check for duplicates.	      *
+*		    This can be useful for defining multimaps.		      *
+*		    Else, for simple maps, it's the user's responsibility     *
+*		    to prevent the creation of duplicates.		      *
+*		    							      *
 *		    Known issues:					      *
 *		    - The TREE_DEFINE_* macros will fail if the node type     *
 *		      passed by the user has the same name as one of the      *
 *                     variables used internally by the macro.                 *
-*		    - The TREE_ADD macro does not check for duplicates.	      *
 *		    							      *
 *		    							      *
 *		    Usage:						      *
