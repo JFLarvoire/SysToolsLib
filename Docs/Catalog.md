@@ -112,7 +112,9 @@ chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
 echoargs.bat	| DW-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	| `echoargs.bat how" many args "here?`
 EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	|
 errorlev.bat	| D--	| Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)		|
+inicomp.exe	| DWL	| Compare .ini or .reg files. Useful to detect changes in the Windows registry.		| `inicomp server1.reg server2.reg`
 MakeZip.bat	| -W-	| Create a zip file, based on a list of files in an input file. Uses 7-zip.		| `makezip tools.lst` &:# Builds tools.zip.
+msgbox.exe      | -W-   | Display various types of message boxes, and return answers to the batch.		| `msgbox -x -c "About to erase your disk"`
 nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
 PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
 tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Windows to run *.tcl files as command-line scripts.	 |
@@ -165,6 +167,6 @@ Option | Description
   -V   | Display the script or program version and exit.
   -X   | No-eXec mode: Display what the program would do, but don't do it.
        |
-  -A   | Force ANSI encoding output. (Windows only)
-  -O   | Force OEM encoding output. (Windows only)
+  -A   | Force ANSI encoding (aka. Windows System Code Page) output. (Windows only)
+  -O   | Force OEM encoding (aka. DOS Code Page) output. (Windows only)
   -U   | Force UTF8 encoding output. (Windows only)
