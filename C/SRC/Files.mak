@@ -28,6 +28,7 @@ PROGRAMS = \
   driver.exe      \
   dump.exe        \
   gpt.exe         \
+  inicomp.exe     \
   lessive.exe     \
   msgbox.exe      \
   redo.exe        \
@@ -51,6 +52,7 @@ UNIX_PROGRAMS = \
   dirc            \
   dirsize         \
   dump            \
+  inicomp         \
   lessive         \
   redo            \
   remplace        \
@@ -93,6 +95,7 @@ ZIPSOURCES =		 \
   exe.bat                \
   Files.mak              \
   gpt.cpp		 \
+  inicomp.c              \
   lessive.c              \
   macros.cpp             \
   make.bat               \
