@@ -35,18 +35,23 @@
 |                                                                             |
 |   Return value:   Pointer to the full pathname, or NULL if error	      |
 |                                                                             |
-|   Notes:								      |
+|   Notes:	    Warning: Windows' GetFullPathname and MSVC's _fullpath    |
+|		    trim trailing dots and spaces from the path.	      |
+|		    This derived function reproduces the bug.		      |
+|                   The caller MUST add trailing dots & spaces back if needed.|
 |                                                                             |
 |   History:								      |
 |    2014-03-25 JFL Created this routine.				      |
+|    2017-01-30 JFL Fixed bug when the output buffer is allocated here.	      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
 char *_fullpathU(char *absPath, const char *relPath, size_t maxLength) {
   char *absPath0 = absPath;
   DWORD n;
-  if (!absPath) {
-    absPath = malloc(UTF8_PATH_MAX); /* Worst case for UTF-8 is 4 bytes/Unicode character */
+  if (!absPath) { /* Then allocate a buffer for the output string */
+    maxLength = UTF8_PATH_MAX;
+    absPath = malloc(maxLength); /* Worst case for UTF-8 is 4 bytes/Unicode character */
     if (!absPath) return NULL;
   }
   n = GetFullPathNameU(relPath, (DWORD)maxLength, absPath, NULL);
