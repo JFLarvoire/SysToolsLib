@@ -4,17 +4,20 @@
 *									      *
 *   Description:    Main routine for WIN32 UTF-8 programs		      *
 *                                                                             *
-*   Notes:	    							      *
+*   Notes:	    TO DO: Also set the environment with _setenvp() ?	      *
 *		    							      *
 *   History:								      *
 *    2014-03-03 JFL Created this module.				      *
 *    2016-09-20 JFL Bug fix: Empty arguments "" did not get recorded.	      *
+*    2017-02-05 JFL Redesigned to override libc's _setargv(). This avoids     *
+*                   having to encapsulate the main() routine with one here.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define _UTF8_SOURCE
+#define _CRT_SECURE_NO_WARNINGS /* Avoid depreciation warnings */
 
 #include <stdio.h>
 #include "msvclibx.h"
@@ -33,7 +36,7 @@
 |   Parameters      LPSTR pszCmdLine    NUL-terminated argument line          |
 |                   char *pszArg[]      Array of arguments pointers           |
 |                                                                             |
-|   Returns         int argc            Number of arguments found             |
+|   Returns         int argc            Number of arguments found. -1 = Error |
 |                                                                             |
 |   Notes           MSVC library startup \" parsing rule is:                  |
 |                   2N backslashes + " ==> N backslashes and begin/end quote  |
@@ -53,6 +56,7 @@
 |                   convenient, but incompatible with MSVC argument parsing.  |
 |                   Removed the limitation on the # of arguments.             |
 |                   Made the code compatible with ANSI and UTF-8 encodings.   |
+|    2017-02-05 JFL Check memory allocation errors, and if so return -1.      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
@@ -67,11 +71,13 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
   int iArg = FALSE;	/* TRUE = inside an argument; FALSE = between arguments */
 
   ppszArg = (char **)malloc((argc+1)*sizeof(char *));
+  if (!ppszArg) return -1;
 
   /* Make a local copy of the argument line */
   /* Break down the local copy into standard C arguments */
 
   pszCopy = malloc(lstrlen(pszCmdLine) + 1);
+  if (!pszCopy) return -1;
   /* Copy the string, managing quoted characters */
   for (i=0, j=0, c0='\0'; ; i++) {
     c = pszCmdLine[i];
@@ -84,6 +90,7 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
       iArg = TRUE;
       ppszArg[argc++] = pszCopy+j;
       ppszArg = (char **)realloc(ppszArg, (argc+1)*sizeof(char *));
+      if (!ppszArg) return -1;
       pszCopy[j] = c0 = '\0';
     }
     if (c == '\\') {	    /* Escaped character in string (maybe) */
@@ -116,30 +123,86 @@ int BreakArgLine(LPSTR pszCmdLine, char ***pppszArg) {
   return argc;
 }
 
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    _setargv						      |
+|									      |
+|   Description	    Msft standard CRT routine for parsing the command line.   |
+|									      |
+|   Parameters	    char *_acmdln	Command line parameters.	      |
+|									      |
+|   Returns	    __argc = Number of arguments. -1 = Error.		      |
+|		    __argv = Array of arguments				      |
+|		    _pgmptr = The program pathname			      |
+|									      |
+|   Notes	    When linked in, replaces the default routine from the CRT.|
+|		    							      |
+|   History								      |
+|    2001-09-25 JFL Created this routine				      |
+|    2016-12-31 JFL Changed the return type from void to int, else the WIN64  |
+|                   version fails with message:				      |
+|		    runtime error R6008 - not enough space for arguments      |
+|    2017-02-05 JFL Adapted for UTF-8 arguments initialization.		      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
-int _mainU0(void) {
+/* Global CRT variables defined in stdlib.h */
+/* Do not include stdlib.h here, to avoid getting unwanted macros hiding these */
+_CRTIMP extern int __argc;
+_CRTIMP extern char **__argv;
+_CRTIMP extern char *_acmdln;
+_CRTIMP extern char *_pgmptr;
+
+int _initU(void); /* Forward reference */
+
+int _setargv(void) {
+  int err = _initU();
+  if (err) return err;
+  __argc = BreakArgLine(_acmdln, &__argv);
+  _pgmptr = __argv[0];
+  return __argc;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    _initU						      |
+|									      |
+|   Description	    UTF-8 program initializations			      |
+|									      |
+|   Parameters	    None						      |
+|									      |
+|   Returns	    0=Success. -1 = Error.				      |
+|		    _acmdln = UTF-8 command line			      |
+|		    codePage = Console Code Page			      |
+|		    							      |
+|   Notes	    Forcibly linked in C programs that define _UTF8_SOURCE,   |
+|		    etc, which drags in _setargv() above with it.	      |
+|		    							      |
+|   History								      |
+|    2017-02-05 JFL Adapted from the abandonned _mainU0 routine.	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int _initU(void) {
   LPWSTR lpwCommandLine;
-  char *pszCommandLine;
   int n;
-  char **argv;
-  int argc;
   WCHAR wc;
 
-  /* Get the command line */  
+  /* Get the Unicode command line */  
   lpwCommandLine = GetCommandLineW();
   /* Trim tail spaces */
   n = lstrlenW(lpwCommandLine);
-  while (n && (wc = lpwCommandLine[n-1]) && ((wc == L' ') || (wc == L'\t'))) lpwCommandLine[--n] = L'\0';
+  while (n && ((wc = lpwCommandLine[n-1]) != L'\0') && ((wc == L' ') || (wc == L'\t'))) lpwCommandLine[--n] = L'\0';
   /* Allocate space for the UTF8 copy */
   n += 1;	/* Count the final NUL */
-  pszCommandLine = malloc(4 * n); /* Worst case */ /* Assume this can't fail at this stage */
+  _acmdln = malloc(4 * n); /* Worst case */
+  if (!_acmdln) return -1; /* Memory allocation failed */
   /* Convert the Unicode command line to UTF-8 */
   n = WideCharToMultiByte(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			  0,			/* dwFlags, */
 			  lpwCommandLine,	/* lpWideCharStr, */
 			  n,			/* cchWideChar, */
-			  pszCommandLine,	/* lpMultiByteStr, */
+			  _acmdln,		/* lpMultiByteStr, */
 			  (4 * n),		/* cbMultiByte, */
 			  NULL,			/* lpDefaultChar, */
 			  NULL			/* lpUsedDefaultChar */
@@ -147,19 +210,16 @@ int _mainU0(void) {
   if (!n) {
 #undef fprintf /* Use the real fprintf, to avoid further conversion errors! */
     fprintf(stderr, "Warning: Can't convert the argument line to UTF-8\n");
-    pszCommandLine[0] = '\0';
+    _acmdln[0] = '\0';
   }
-  realloc(pszCommandLine, n+1); /* Resize the memory block to fit the UTF-8 line */
-
-  argc = BreakArgLine(pszCommandLine, &argv);
+  realloc(_acmdln, n+1); /* Resize the memory block to fit the UTF-8 line */
+  /* Should not fail since we make it smaller */
 
   /* Record the console code page, to allow converting the output accordingly */
   codePage = GetConsoleOutputCP();
 
-  return _mainU(argc, argv);
+  return 0;
 }
-
-#pragma warning(default:4706)
 
 #endif /* defined(_WIN32) */
 

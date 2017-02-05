@@ -13,6 +13,7 @@
 *    2016-09-15 JFL Added macro WINSDK_INCLUDE_FILE for Windows SDK.	      *
 *    2016-09-20 JFL Added workaround preventing warnings in WIN95 builds.     *
 *    2016-09-28 JFL Can also be included by MS' Resource Compiler.            *
+*    2017-02-05 JFL Changed the UTF-8 programs initialization method.         *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -84,30 +85,6 @@ extern int MultiByteToWidePath(UINT nCodePage, LPCSTR pszName, LPWSTR pwszName, 
 #define __pragma(x)
 #endif /* (_MSC_VER <= 1400) */
 
-/* Support for UTF-8 command lines */
-#if defined(_WIN32)
-#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
-#if defined(_MSC_VER) && (_MSC_VER <= 1400) /* For Visual C++ versions up to Visual Studio 2005 */
-#define main \
-main(int argc, char *argv[]) { \
-  if (argc < 0) argv++; /* No-op line preventing the unreferenced formal parameter warning */ \
-  return _mainU0(); \
-} \
-int _mainU
-#else /* (_MSC_VER > 1400) */
-#define main \
-__pragma(warning(disable:4100))	/* Ignore the unreferenced formal parameter warning */ \
-main(int argc, char *argv[]) { \
-  return _mainU0(); \
-} \
-__pragma(warning(default:4100)) /* Restore the unreferenced formal parameter warning */ \
-int _mainU
-#endif /* (_MSC_VER <= 1400) */
-extern int _mainU0(void);	/* Generate a UTF-8 argv[], and call _mainU */
-extern int _mainU(int argc, char *argv[]);	/* UTF-8 main routine */
-#endif /* defined(_UTF8_SOURCE) ... */
-#endif /* defined(_WIN32) */
-
 /* Macros for working around the lack of a #include_next directive */
 #define MSVCLIBX_CONCAT1(a,b) a##b /* Concatenate the raw arguments */
 #define MSVCLIBX_CONCAT(a,b) MSVCLIBX_CONCAT1(a,b) /* Substitute the arguments, then concatenate the values */
@@ -117,6 +94,21 @@ extern int _mainU(int argc, char *argv[]);	/* UTF-8 main routine */
 #define MSVC_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(MSVCINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* C compiler include files */
 #define UCRT_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(UCRTINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* C runtime library include files */
 #define WINSDK_INCLUDE_FILE(relpath) MSVCLIBX_STRINGIZE(MSVCLIBX_CONCAT(WSDKINCLUDE,MSVCLIBX_CONCAT(/,relpath))) /* Windows SDK include files */
+
+/* Support for external linker symbols */
+#if defined(_WIN64)
+#define PUBLIC_SYMBOL_NAME(s) s
+#else /* _MSDOS or _WIN32 */
+#define PUBLIC_SYMBOL_NAME(s) _##s
+#endif
+
+/* Support for UTF-8 command lines */
+#if defined(_WIN32)
+#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+/* Force linking in MsvcLibX' UTF-8 initialization module */
+#pragma comment(linker, "/include:" MSVCLIBX_STRINGIZE(PUBLIC_SYMBOL_NAME(_initU)))
+#endif /* defined(_UTF8_SOURCE) ... */
+#endif /* defined(_WIN32) */
 
 /* Prevent an incompatibility with <winsock.h>. See MsvcLibX' "sys/time.h" for explanations. */
 #define _WINSOCKAPI_   /* Prevent the inclusion of winsock.h in windows.h */
