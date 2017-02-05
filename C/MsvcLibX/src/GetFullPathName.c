@@ -29,7 +29,10 @@
 |                                                                             |
 |   Return value:   The length of the full pathname, or 0 if error	      |
 |                                                                             |
-|   Notes:								      |
+|   Notes:	    Warning: Windows' GetFullPathname trims trailing dots and |
+|		    spaces from the path.				      |
+|		    This derived function reproduces the bug.		      |
+|                   The caller MUST add trailing dots & spaces back if needed.|
 |                                                                             |
 |   History:								      |
 |    2014-02-07 JFL Created this routine.				      |
