@@ -70,6 +70,7 @@ struct timespec {
   time_t tv_sec;	/* Seconds */
   int tv_nsec;		/* Signed count of nanoseconds */
 };
+#define _TIMESPEC_DEFINED /* Some packages test this before redefining it */
 
 #endif /* !defined(_STRUCT_TIMESPEC) */
 #endif /* !defined(_UCRT) */
