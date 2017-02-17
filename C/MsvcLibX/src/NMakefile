@@ -24,9 +24,11 @@
 #    2016-11-03 JFL Added target config.                                      #
 #		    Updated the cleanenv: script to display the reg command   #
 #		    it uses to delete the global environment variable.	      #
-#    2016-11-07 JFL Place LIBDIR in the parent directory even if OUTDIR defnd.#
+#    2016-11-07 JFL Place LIBDIR in the parent directory even if OUTDIR defnd.#               
 #		    Do not copy include files to OUTDIR anymore.	      #
 #    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
+#    2017-02-16 JFL Default goals now depend on the existence of their        #
+#		    corresponding make file.				      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -53,28 +55,28 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 
 # Default goal: Generate all versions
 all: headline \
-!IF DEFINED(DOS_CC)
+!IF DEFINED(DOS_CC) && EXIST("$(STINCLUDE)\DOS.mak")
      $(OD)DOS\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN95_CC)
+!IF DEFINED(WIN95_CC) && EXIST("$(STINCLUDE)\WIN95.mak")
      $(OD)WIN95\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN32_CC)
+!IF DEFINED(WIN32_CC) && EXIST("$(STINCLUDE)\WIN32.mak")
      $(OD)WIN32\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN64_CC)
+!IF DEFINED(WIN64_CC) && EXIST("$(STINCLUDE)\WIN64.mak")
      $(OD)WIN64\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(DOS_CC)
+!IF DEFINED(DOS_CC) && EXIST("$(STINCLUDE)\DOS.mak")
      $(OD)DOS\DEBUG\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN95_CC)
+!IF DEFINED(WIN95_CC) && EXIST("$(STINCLUDE)\WIN95.mak")
      $(OD)WIN95\DEBUG\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN32_CC)
+!IF DEFINED(WIN32_CC) && EXIST("$(STINCLUDE)\WIN32.mak")
      $(OD)WIN32\DEBUG\MsvcLibX.lib \
 !ENDIF
-!IF DEFINED(WIN64_CC)
+!IF DEFINED(WIN64_CC) && EXIST("$(STINCLUDE)\WIN64.mak")
      $(OD)WIN64\DEBUG\MsvcLibX.lib \
 !ENDIF
 
@@ -196,14 +198,14 @@ clean mostlyclean distclean:
     -for /f "delims=" %f in ('dir /b /s ..\*.zip *.log 2^>NUL') do @del "%f"
     rem # Delete files built by the DOS.mak, WIN32.mak, WIN64.mak make files
     rem # But make DOS.mak will fail if 16-bit tools are missing. Workaround:
-    -$(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak clean
+    -if exist $(STINCLUDE)\DOS.mak $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\DOS.mak clean
     if exist $(OD)DOS rd /s /q $(OD)DOS
     rem # No such problem with the others, but just in case, do the same.
-    -$(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak clean
+    -if exist $(STINCLUDE)\WIN95.mak $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN95.mak clean
     if exist $(OD)WIN95 rd /s /q $(OD)WIN95
-    -$(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak clean
+    -if exist $(STINCLUDE)\WIN32.mak $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN32.mak clean
     if exist $(OD)WIN32 rd /s /q $(OD)WIN32
-    -$(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak clean
+    -if exist $(STINCLUDE)\WIN64.mak $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak clean
     if exist $(OD)WIN64 rd /s /q $(OD)WIN64
 !IF DEFINED(OUTDIR)
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
