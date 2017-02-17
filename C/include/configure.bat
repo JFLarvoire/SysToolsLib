@@ -162,13 +162,14 @@
 :#                  Avoid duplicate searches of MS tools in sub-instances.    *
 :#                  (To do: Avoid searching our own libraries multiple times.)*
 :#                  Added option -p to set persistent library path variables. *
+:#   2017-02-15 JFL Added a mechanism for adding user-defined libraries.      *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-16"
+set "VERSION=2017-02-15"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -2121,6 +2122,19 @@ for %%v in (VC16) do if defined %%v (
       SET "%%v.INCPATH=!%%v.INCPATH!;%PMODELIB%"
       SET "%%v.LIBPATH=!%%v.LIBPATH!;%PMODELIB%%\OUTDIR%"
     )
+    :# Generic mechanism for user-defined libraries
+    if defined SDK.%%k.INCPATH (
+      for %%i in (!SDK.%%k.INCPATH!) do (
+	SET "%%v.INCPATH=!%%v.INCPATH!;!%%k!\%%i"
+      	if [%%i]==[.] SET "%%v.INCPATH=!%%v.INCPATH:~0,-2!
+      )
+    )
+    if defined SDK.%%k.LIBPATH (
+      for %%i in (!SDK.%%k.LIBPATH!) do (
+	SET "%%v.LIBPATH=!%%v.LIBPATH!;!%%k!%\OUTDIR%\%%i"
+      	if [%%i]==[.] SET "%%v.LIBPATH=!%%v.LIBPATH:~0,-2!
+      )
+    )
   )
 )
 
@@ -2152,6 +2166,19 @@ for %%v in (VC95 VC32) do if defined %%v (
       SET "%%v.INCPATH=!%%v.INCPATH!;%BOOST%"
       SET "%%v.LIBPATH=!%%v.LIBPATH!;%BOOST%\stage\lib"
     )
+    :# Generic mechanism for user-defined libraries
+    if defined SDK.%%k.INCPATH (
+      for %%i in (!SDK.%%k.INCPATH!) do (
+	SET "%%v.INCPATH=!%%v.INCPATH!;!%%k!\%%i"
+      	if [%%i]==[.] SET "%%v.INCPATH=!%%v.INCPATH:~0,-2!
+      )
+    )
+    if defined SDK.%%k.LIBPATH (
+      for %%i in (!SDK.%%k.LIBPATH!) do (
+	SET "%%v.LIBPATH=!%%v.LIBPATH!;!%%k!%\OUTDIR%\%%i"
+      	if [%%i]==[.] SET "%%v.LIBPATH=!%%v.LIBPATH:~0,-2!
+      )
+    )
   )
 )
 
@@ -2176,6 +2203,19 @@ for %%v in (VCIA64 VC64 VCARM VCARM64) do if defined %%v (
     if "%%k"=="BOOST" ( :# Boost C++ libraries
       SET "%%v.INCPATH=!%%v.INCPATH!;%BOOST%"
       SET "%%v.LIBPATH=!%%v.LIBPATH!;%BOOST%\stage\lib"
+    )
+    :# Generic mechanism for user-defined libraries
+    if defined SDK.%%k.INCPATH (
+      for %%i in (!SDK.%%k.INCPATH!) do (
+	SET "%%v.INCPATH=!%%v.INCPATH!;!%%k!\%%i"
+      	if [%%i]==[.] SET "%%v.INCPATH=!%%v.INCPATH:~0,-2!
+      )
+    )
+    if defined SDK.%%k.LIBPATH (
+      for %%i in (!SDK.%%k.LIBPATH!) do (
+	SET "%%v.LIBPATH=!%%v.LIBPATH!;!%%k!%\OUTDIR%\%%i"
+      	if [%%i]==[.] SET "%%v.LIBPATH=!%%v.LIBPATH:~0,-2!
+      )
     )
   )
 )
