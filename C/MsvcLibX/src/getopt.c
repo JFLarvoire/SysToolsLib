@@ -68,11 +68,9 @@ static void warnx(const char *fmt, ...) {
         va_end(ap);
 }
 
-/* 2016-09-15 JFL End of changes */
-
-#if HAVE_NBTOOL_CONFIG_H && !HAVE_GETOPT_LONG && !HAVE_DECL_OPTIND
 #define REPLACE_GETOPT
-#endif
+
+/* 2016-09-15 JFL End of changes */
 
 #ifdef REPLACE_GETOPT
 #ifdef __weak_alias
@@ -330,10 +328,7 @@ start:
  * [eventually this will replace the real getopt]
  */
 int
-getopt(nargc, nargv, options)
-	int nargc;
-	char * const *nargv;
-	const char *options;
+getopt(int nargc, char * const *nargv, const char *options)
 {
 	int retval;
 
@@ -349,7 +344,7 @@ getopt(nargc, nargv, options)
 		 */
 		if (nonopt_end != -1) {
 			permute_args(nonopt_start, nonopt_end, optind,
-				       nargv);
+				       (char **)nargv);
 			optind -= nonopt_end - nonopt_start;
 		}
 		nonopt_start = nonopt_end = -1;
