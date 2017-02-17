@@ -28,7 +28,9 @@
 extern "C" {
 #endif
 
-#define snprintf _snprintf /* This one _is_ standard */
+#define snprintf _snprintf	/* This one _is_ standard */
+#define popen _popen		/* This one _is_ standard */
+#define pclose _pclose		/* This one _is_ standard */
 
 /************************ MS-DOS-specific definitions ************************/
 
