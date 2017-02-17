@@ -29,6 +29,7 @@
 #    2016-09-08 JFL Added basename.obj and dirname.obj.		 	      #
 #    2016-09-12 JFL Added WIN32_OBJECTS, and several WIN32 UTF-8 routines.    #
 #    2016-10-11 JFL moved debugm.h to SysToolsLib global C include dir.       #
+#    2017-02-16 JFL Added open.obj.    			                      #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -63,6 +64,7 @@ OBJECTS = \
     +mkdir.obj			\
     +mkdtemp.obj		\
     +mkstemp.obj		\
+    +open.obj			\
     +readlink.obj		\
     +realpath.obj		\
     +spawn.obj			\
@@ -109,6 +111,8 @@ $(I)\dirent.h: $(I)\inttypes.h $(I)\sys\stat.h
 $(I)\error.h: $(I)\msvclibx.h 
 
 # $(I)\fadvise.h:  
+
+$(I)\fcntl.h: $(I)\msvclibx.h 
 
 $(I)\fnmatch.h: $(I)\msvclibx.h 
 
@@ -228,6 +232,8 @@ mkdir.c: $(I)\MsvcLibX.h $(I)\sys\stat.h
 mkdtemp.c: $(I)\unistd.h
 
 mkstemp.c: $(I)\unistd.h
+
+open.c: $(I)\MsvcLibX.h $(I)\fcntl.h $(CI)\debugm.h
 
 pwd.c: $(I)\pwd.h 
 
