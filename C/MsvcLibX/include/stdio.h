@@ -10,6 +10,7 @@
 *    2014-06-03 JFL Created this file.					      *
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
 *    2015-12-09 JFL Alias fputs to fputsU, and vfprintf to vfprintfU.	      *
+*    2017-03-01 JFL Added more standard routines MS thinks are proprietary.   *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -28,9 +29,13 @@
 extern "C" {
 #endif
 
-#define snprintf _snprintf	/* This one _is_ standard */
-#define popen _popen		/* This one _is_ standard */
-#define pclose _pclose		/* This one _is_ standard */
+/* These are standard routines, but Microsoft thinks not */
+#define fdopen _fdopen
+#define fileno	_fileno
+#define pclose _pclose
+#define popen _popen
+#define snprintf _snprintf
+#define tempnam _tempnam
 
 /************************ MS-DOS-specific definitions ************************/
 
