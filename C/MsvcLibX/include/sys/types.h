@@ -10,6 +10,7 @@
 *    2014-05-26 JFL Created this file.                                        *
 *    2014-06-06 JFL Moved mode_t & off*_t definitions here, from sys\stat.h.  *
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
+*    2017-02-28 JFL Redefine pid_t as an int in all cases: It's more standard.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,7 +53,7 @@ typedef int pid_t;  /* The pid is the PSP segment. MSVC's process.h defines it a
 typedef unsigned long DWORD; /* Don't include <windows.h> to get DWORD definition, as this draws too much,
 				including things we want to override in other parts of MsvcLibX */
 
-typedef DWORD pid_t;        /* Windows defines it as a DWORD */
+typedef int pid_t;        /* Windows defines it as a DWORD, which is the same size as in int, in both WIN32 and WIN64 */
 
 #endif /* defined(_WIN32) */
 
