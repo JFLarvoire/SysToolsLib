@@ -108,6 +108,7 @@
 #    2016-10-04 JFL Use the shell PID to generate unique temp file names.     #
 #		    Display messages only if variable MESSAGES is defined.    #
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
+#    2017-03-02 JFL Fixed src2objs.bat and use it indirectly via src2objs.mak.#
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -823,12 +824,9 @@ OBJECTS=
 EXENAME=$(PROGRAM).com
 !ENDIF
 
-# TO DO: Rewrite src2obj.bat, and include it here as an inline file.
+# If needed, convert the SOURCES list to an OBJECTS list
 !IF DEFINED(SOURCES) && !DEFINED(OBJECTS)
-!  IF [$(COMSPEC) /V /c src2objs -o $(O)\$(PROGRAM).mak $(SOURCES)]==0
-!    MESSAGE Getting generated object list from $(O)\$(PROGRAM).mak.
-!    INCLUDE $(O)\$(PROGRAM).mak
-!  ENDIF
+!  INCLUDE src2objs.mak # Convert the SOURCES list to an OBJECTS list
 !ENDIF
 
 # Dependencies for the specified program
