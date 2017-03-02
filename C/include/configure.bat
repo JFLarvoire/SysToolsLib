@@ -163,13 +163,17 @@
 :#                  (To do: Avoid searching our own libraries multiple times.)*
 :#                  Added option -p to set persistent library path variables. *
 :#   2017-02-15 JFL Added a mechanism for adding user-defined libraries.      *
+:#   2017-02-24 JFL Added option -E to delete environment variable STINCLUDE. *
+:#                  Add %SPATH% to the STINCLUDE search paths.                *
+:#   2017-02-28 JFL Bug fix: Recursion did not work if the path had spaces.   *
+:#   2017-03-01 JFL Added variable IGNORE_NMAKEFILE.                          *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-02-15"
+set "VERSION=2017-03-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1477,21 +1481,21 @@ for %%s in (%~2) do (
 )
 exit /b 1
 
-:lastvs								    &:#		Min SUBSYSVER	Default SUBSYSVER
-%SEARCH_IN% "Microsoft Visual Studio 16.0"	&& goto :foundvs    &:# VS 16
-%SEARCH_IN% "Microsoft Visual Studio 15.0"	&& goto :foundvs    &:# VS 15
-%SEARCH_IN% "Microsoft Visual Studio 14.0"	&& goto :foundvs    &:# VS 2015
+:lastvs	&:#  VS Installation directory					AKA.   _MSC_VER	 Min SUBSYSVER	Default SUBSYSVER	Notes
+%SEARCH_IN% "Microsoft Visual Studio 16.0"	&& goto :foundvs    &:# VS TBD
+%SEARCH_IN% "Microsoft Visual Studio 15.0"	&& goto :foundvs    &:# VS 2017	  2000
+%SEARCH_IN% "Microsoft Visual Studio 14.0"	&& goto :foundvs    &:# VS 2015	  1900
 :# %SEARCH_IN% "Microsoft Visual Studio 13.0"	&& goto :foundvs    &:# N/A
 :lastvsXP
-%SEARCH_IN% "Microsoft Visual Studio 12.0"	&& goto :foundvs    &:# VS 2013	5.01		6.00
-%SEARCH_IN% "Microsoft Visual Studio 11.0"	&& goto :foundvs    &:# VS 2012	5.00		5.00
-%SEARCH_IN% "Microsoft Visual Studio 10.0"	&& goto :foundvs    &:# VS 2010	5.00		5.00
-%SEARCH_IN% "Microsoft Visual Studio 9.0"	&& goto :foundvs    &:# VS 2008	5.00		5.00
+%SEARCH_IN% "Microsoft Visual Studio 12.0"	&& goto :foundvs    &:# VS 2013	  1800	    5.01	    6.00
+%SEARCH_IN% "Microsoft Visual Studio 11.0"	&& goto :foundvs    &:# VS 2012	  1700	    5.00	    5.00
+%SEARCH_IN% "Microsoft Visual Studio 10.0"	&& goto :foundvs    &:# VS 2010	  1600	    5.00	    5.00
+%SEARCH_IN% "Microsoft Visual Studio 9.0"	&& goto :foundvs    &:# VS 2008	  1500	    5.00	    5.00
 :lastvs95
-%SEARCH_IN% "Microsoft Visual Studio 8"		&& goto :foundvs    &:# VS 2005	4.00		5.00		Tested and known to work fine
-%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundoldvs &:# VS 7.1	4.00		4.00 		Tested. Some problems worked around.
-%SEARCH_IN% "Microsoft Visual Studio .NET"	&& goto :foundoldvs &:# VS 7.0
-:# %SEARCH_IN% "Microsoft Visual Studio"	&& goto :foundoldvs &:# VS 6					Tested. MsvcLibX compilation fails. Support 
+%SEARCH_IN% "Microsoft Visual Studio 8"		&& goto :foundvs    &:# VS 2005	  1400	    4.00	    5.00	Tested and known to work fine
+%SEARCH_IN% "Microsoft Visual Studio .NET 2003"	&& goto :foundoldvs &:# VS 7.1	  1310	    4.00	    4.00	Tested. Some problems worked around.
+%SEARCH_IN% "Microsoft Visual Studio .NET"	&& goto :foundoldvs &:# VS 7.0	  1300
+:# %SEARCH_IN% "Microsoft Visual Studio"	&& goto :foundoldvs &:# VS 6	  1200					Tested. MsvcLibX compilation fails. Unsupported. 
 SET "%VS%="
 %RETURN0%
 
@@ -1815,16 +1819,17 @@ echo Options:
 echo   -?^|-h         This help
 echo   -c CONFIG     Name the output file config.CONFIG.bat
 echo   -d            Debug mode. Display internal variables and function calls
+echo   -E            Ignore environment variable STINCLUDE, and redefine it
 echo   -l LOGFILE    Log output into a file. Default: Don't
 echo   -L            Disable logging. Default: Use the parent script log file, if any
 echo   -masm PATH    Path to MASM install dir. Default: C:\MASM
 echo   -msvc PATH    Path to MSVC 16-bits tools install dir. Default: C:\MSVC
 echo   -o OUTDIR     Output base directory. Default: .
-echo   -p            Set persistent project path variables in HKCU\Environment.
-echo   -r            Recursively configure all subprojects. Default.
-echo   -R            Do not recursively configure all subprojects.
+echo   -p            Set persistent project path variables in HKCU\Environment
+echo   -r            Recursively configure all subprojects. Default
+echo   -R            Do not recursively configure all subprojects
 echo   -v            Verbose mode. Display what this script does
-echo   -vs PATH      Path to Visual Studio install dir. Default: Latest avail.
+echo   -vs PATH      Path to Visual Studio install dir. Default: Latest avail
 echo   -V            Display %SCRIPT% version
 echo.
 exit /b 0
@@ -1846,6 +1851,7 @@ if "!ARG!"=="-?" goto help
 if "!ARG!"=="/?" goto help
 if "!ARG!"=="-c" %POPARG% & set "CONFIG.BAT=config.!ARG!.bat" & goto next_arg
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto next_arg
+if "!ARG!"=="-E" set "STINCLUDE=" & goto next_arg
 if "!ARG!"=="-h" goto help
 if "!ARG!"=="-l" %POPARG% & call :Debug.SetLog !"ARG"! & goto next_arg
 if "!ARG!"=="-L" call :Debug.SetLog & goto next_arg
@@ -2043,6 +2049,7 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
     :# but not available in parent nmake environment.
     if not defined %%v call :Reg.GetValue HKCU\Environment %%v %%v :# Get value from the master environment in the registry
     if defined %%v call :lappend PATH_LIST "!%%v!"
+    if "%%v"=="STINCLUDE" call :lappend PATH_LIST "%SPATH%" &rem :# configure.bat normally is in the STINCLUDE dir
     if defined MY_SDKS for %%s in (%MY_SDKS%) do call :lappend PATH_LIST "%%~s\!DIR!"
     call :lappend PATH_LIST ..\!DIR!
     call :lappend PATH_LIST "%PF64%\!DIR!"
@@ -2327,10 +2334,12 @@ for %%s in (
   %CONFIG% SET "%%k_WINSDKINC=!%%l.WINSDKINC!" ^&:# Microsoft Windows %%m SDK Include directory
 )
 
-:# Output base directory
-if defined OUTDIR (
-  %CONFIG%.
-  %CONFIG% SET "OUTDIR=%OUTDIR%" ^&:# Output base directory
+:# A few special variables
+for %%v in (OUTDIR IGNORE_NMAKEFILE) do (
+  if defined %%v (
+    %CONFIG%.
+    %CONFIG% SET "%%v=!%%v!" ^&:# Output base directory
+  )
 )
 
 if defined POST_MAKE_ACTIONS (
@@ -2347,11 +2356,13 @@ set _DO.XVD=%MACRO% ( %ECHO.XVD% %!%MACRO.ARGS:~1%!% %&% %!%MACRO.ARGS:~1%!% ) %
 
 :# Optionally repeat the configuration recursively using the makefile's config pseudo target
 if "%RECURSE%"=="1" (
-  set CMD=call %ARG0:configure.bat=make.bat% list_dirs
+  set CMD=call "%ARG0:configure.bat=make.bat%" list_dirs
+  %ECHOVARS.D% CMD
+  set ">DEBUGOUT=>&2"
   %FOREACHLINE% %%d in ('%XCALL% :Do -V !CMD! 2^>NUL') do if exist "%%d" (
     %ECHO.V% :# Configuring %%d
     %_DO.XD% pushd "%%d"
-    %EXEC% -V call %ARG0%
+    %EXEC% -V call "%ARG0%"
     %_DO.XD% popd
   )
 )
