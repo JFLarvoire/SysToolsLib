@@ -96,13 +96,19 @@
 :#		    or \ is assumed to be a pseudo-target not to be logged.   *
 :#		    Added options -q and -Q to set the output capture manually.
 :#   2016-12-16 JFL Updated the batch library framework.		      *
+:#   2017-02-22 JFL Look for default make files in the STINCLUDE directory.   *
+:#                  Added option -U to undefine variables.		      *
+:#   2017-02-24 JFL Renamed the special "goal_name" as "module_name".         *
+:#                  Use this module_name earlier when making the log file name.
+:#                  Default to the current directory name as the last resort. *
+:#   2017-03-01 JFL Added variable IGNORE_NMAKEFILE.                          *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-16"
+set "VERSION=2017-03-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1228,16 +1234,22 @@ del "%lock%" 2>nul
 :#----------------------------------------------------------------------------#
 
 :GetDefaultMakeFile
-if exist NMakeFile (
+%FUNCTION%
+%UPVAR% MAKEFILE
+set "NMAKEFILE=NMakeFile"
+if "%IGNORE_NMAKEFILE%"=="1" set "NMAKEFILE=:" &:# An impossible name
+if exist %NMAKEFILE% (
   set "MAKEFILE=NMakeFile"	&rem :# Default make file name
 ) else if exist All.mak (
   set "MAKEFILE=All.mak"	&rem :# Most powerful one, that can build for all MS OS versions
 ) else if exist DosWin.mak (
   set "MAKEFILE=DosWin.mak"	&rem :# Previous version of the same, more complex and less powerfull
+) else if exist "%SPATH%\All.mak" (
+  set "MAKEFILE="%SPATH%\All.mak""  &rem :# Most powerful one, that can build for all MS OS versions
 ) else (
   set "MAKEFILE=NMakeFile"	&rem :# Revert to the default, even though we know it's not there
 )
-goto :eof
+%RETURN%
 
 :#-----------------------------------------------------------------------------
 
@@ -1314,13 +1326,17 @@ exit /b
 :# Run nmake without logging anything, for simple goals like help, clean, etc.
 :nmake [nmake.exe options]
 %FUNCTION%
-if not defined MAKEFILE call :GetDefaultMakeFile
+if not defined MAKEFILE (
+  call :GetDefaultMakeFile
+) else (
+  %ECHOVARS.D% MAKEFILE
+)
 call :GetConfig >NUL 2>NUL :# Get Development tools location. Also defines OUTDIR.
 if errorlevel 1 %RETURN%
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
 if not defined MAKE set "MAKE=!%MAKEORIGIN%_CC:CL.EXE=nmake.exe!" &:# Includes enclosing quotes
-%ECHOVARS.D% CD MESSAGES OUTDIR MAKEORIGIN PATH %MAKEORIGIN%_CC
+%ECHOVARS.D% CD MESSAGES OUTDIR MAKEORIGIN PATH INCLUDE %MAKEORIGIN%_CC
 set "NMAKEFLAGS=/NOLOGO /c /s"
 %IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
 :# Clear a few multi-line variables that pollute the (nmake /P) logs
@@ -1483,14 +1499,18 @@ if "!ARG!"=="-O" %POPARG% & set "MAKEORIGIN=!ARG!" & goto next_arg
 if "!ARG!"=="-q" set "LIGHTMAKE=1" & goto next_arg
 if "!ARG!"=="-Q" set "LIGHTMAKE=0" & goto next_arg
 if "!ARG!"=="-u" %POPARG% & call :update_scripts "!ARG!" & goto :eof
+if "!ARG!"=="-U" %POPARG% & set "%ARG%=" & goto next_arg
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.Off & goto next_arg
 :# Special targets that need special handling
 if "!ARG!"=="cleanenv" goto :CleanBuildEnvironment &:# This routine exits directly
 if not "LIGHTMAKE"=="0" (
-  for %%t in (help clean mostlyclean distclean goal_name) do (
-    if "!ARG!"=="%%t" call :nmake !ARG! & exit /b
+  for %%t in (help clean mostlyclean distclean module_name) do (
+    if "!ARG!"=="%%t" (
+      call :GetConfig
+      call :nmake !ARG! & exit /b
+    )
   )
   :# Any goal that begins with "list_" and that contains no . or \ 
   if not "!ARG:list_=!"=="!ARG!" if "!ARG:.=!"=="!ARG!" if "!ARG:\=!"=="!ARG!" call :nmake !ARG! & exit /b
@@ -1636,8 +1656,21 @@ if .%LOGFILE%.==.NUL. set "LOGFILE="
 if %MAKEDEPTH%==0 if defined LOGFILE ( :# If this is the top-level instance of make.bat, show the final result
   set GOAL=
   for %%F in ("%LASTGOAL%") do set "GOAL=%%~nF"
-  :# If there's no goal, use the make file name. (Provided it's not a generic makefile.)
-  if not defined GOAL if /i "%MAKEFILE%" neq "nmakefile" for %%F in ("%MAKEFILE%") do set GOAL=%%~nF
+  :# If there's no goal, maybe the makefile itself has a rule to generate the default log file name
+  if not defined GOAL (
+    :# Gotcha: nmake always displays on stdout: "Started parsing rules in NMakeFile." So redirect stderr.
+    :# Gotcha: The exit code does not survive the 'sub-shell' return. So test it inside, and change the sub-shell output.
+    :# Gotcha: Testing variables in the subshell requires three pairs of ^. So use if errorlevel 1.
+    for %%m in (%MAKE%) do set "MAKE=%%~sm" &rem :# Get the short name, else the following invokation fails
+    %ECHO.D% !MAKE! /nologo /s /c /f %MAKEFILE% /x - module_name
+    for /f "delims=" %%g in (
+      '!MAKE! /nologo /s /c /f %MAKEFILE% /x - module_name 2^>NUL ^& if errorlevel 1 echo :'
+    ) do set "GOAL=%%g"
+    :# ":" is an impossible goal name, flagging the absence of target "module_name" in the makefile.
+    if "!GOAL!"==":" set "GOAL="
+  )
+  :# If there's still no goal, use the make file name. (Provided it's not a generic makefile.)
+  if not defined GOAL for %%F in (%MAKEFILE%) do if /i "%%~nxF" neq "NMakefile" if /i "%%~nxF" neq "All.mak" set GOAL=%%~nF
   :# If there's still no goal, and the %CD% is something like ...\PROGRAM\SRC, use the word %PROGRAM%
   if not defined GOAL (
     for %%f in ("!CD!") do set "CD0=%%~nxf"
@@ -1646,27 +1679,19 @@ if %MAKEDEPTH%==0 if defined LOGFILE ( :# If this is the top-level instance of m
     popd
     if /i "!CD0!" equ "src" set "GOAL=!CD1!"
   )
-  :# If there's still no goal, maybe the makefile itself has a rule to generate the default goal name
-  if not defined GOAL (
-    :# Gotcha: nmake always displays on stdout: "Started parsing rules in NMakeFile." So redirect stderr.
-    :# Gotcha: The exit code does not survive the 'sub-shell' return. So test it inside, and change the sub-shell output.
-    :# Gotcha: Testing variables in the subshell requires three pairs of ^. So use if errorlevel 1.
-    for /f "delims=" %%g in (
-      '%MAKE% /nologo /s /c /f %MAKEFILE% /x - goal_name 2^>NUL ^& if errorlevel 1 echo :'
-    ) do set "GOAL=%%g"
-    :# ":" is an impossible goal name, flagging the absence of target "goal_name" in the makefile.
-    if "!GOAL!"==":" set "GOAL="
+  %ECHOVARS.D% GOAL
+  :# If there's still no goal, use the current directory name.
+  if not defined GOAL set "GOAL=!CD0!"
+  %ECHOVARS.D% GOAL
+  :# Rename %LOGFILE% after the %GOAL%, and display the build log.
+  set LOGFILE2=!GOAL!.log
+  if defined OUTDIR set "LOGFILE2=%OUTDIR%\!LOGFILE2!"
+  if not "!LOGFILE2!"=="!LOGFILE!" (
+    if exist "!LOGFILE2!" del "!LOGFILE2!"
+    move "!LOGFILE!" "!LOGFILE2!" >nul
+    call :Debug.SetLog "!LOGFILE2!"
   )
-  :# If there's still no goal, give it up and keep the default log file name: make.log.
-  if defined GOAL ( :# Rename %LOGFILE% after the %GOAL%, and display the build log.
-    set LOGFILE2=!GOAL!.log
-    if defined OUTDIR set "LOGFILE2=%OUTDIR%\!LOGFILE2!"
-    if not "!LOGFILE2!"=="!LOGFILE!" (
-      if exist "!LOGFILE2!" del "!LOGFILE2!"
-      move "!LOGFILE!" "!LOGFILE2!" >nul
-      call :Debug.SetLog "!LOGFILE2!"
-    )
-  )
+  %ECHOVARS.D% LOGFILE
 )
 
 if %MAKEDEPTH%==0 ( :# If this is the top-level instance of make.bat, show the final result
