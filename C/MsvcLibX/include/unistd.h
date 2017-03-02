@@ -17,6 +17,8 @@
 *		    versions to macros.					      *
 *    2014-06-30 JFL Moved PATH_MAX definition to limits.h.		      *
 *    2016-08-25 JFL Implemented ResolveLinksA().			      *
+*    2017-03-01 JFL Added more standard routines MS thinks are proprietary.   *
+*		    Added routine getpagesize().			      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,8 +36,15 @@
 #include "dirent.h"	/* Define pid_t and getppid(). */
 #include <direct.h>	/* For functions like _chdir() and _getcwd() */
 #include <process.h>	/* For _getpid() */
+#include <io.h>		/* For low level I/O functions like read() & write() */
 
 /* Microsoft tools think these are non standard, but they are standard! */
+#define close	_close
+#define dup	_dup
+#define dup2	_dup2
+#define isatty	_isatty
+#define read	_read
+#define write	_write
 /* #define getcwd	 _getcwd */
 /* #define chdir	 _chdir */
 /* Actually use the improved versions in MsvcLibX */
@@ -62,8 +71,6 @@ int chdir(const char *path);
 /* These are non standard indeed, but the leading _ is annoying */ 
 #define getdrive _getdrive
 #define chdrive	 _chdrive
-
-#include <io.h>		/* For low level I/O functions like read() & write() */
 
 /* Microsoft tools think access is non standard, but it is standard! */
 #if defined(_MSDOS)
@@ -177,6 +184,13 @@ int ResolveLinksU(const char *path, char *buf, size_t bufsize);	/* Resolve pathn
 #define STDIN_FILENO    0       /* Standard input file number */
 #define STDOUT_FILENO   1       /* Standard output file number */
 #define STDERR_FILENO   2       /* Standard error file number */
+
+/* Virtual Memory */
+#if defined(_MSDOS)
+#define getpagesize() 4096	/* No virtual memory. Return a reasonable default for the 80386. */
+#elif defined(_WIN32)
+int getpagesize(void);
+#endif
 
 #endif /* _UNISTD_H */
 
