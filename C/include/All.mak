@@ -42,8 +42,8 @@
 #		    PROGRAM	The node name of the program to build. Opt.   #
 #									      #
 #		    In the absence of a {prog}.mak file, or if one of the     #
-#		    generic targets is used, then the default Files.mak is    #
-#		    used instead. Same definitions.			      #
+#		    generic targets is used, then the default Dirs.mak or     #
+#		    Files.mak are used instead. Same definitions.	      #
 #									      #
 #		    Note that these sub-make files are designed to be	      #
 #		    OS-independant. The goal is to reuse them to build	      #
@@ -127,8 +127,13 @@
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #    2016-10-20 JFL Added missing inference rules to build .asm programs.     #
 #    2016-11-07 JFL Do not hide any command that's part of a build.           #
+#    2017-02-22 JFL Added mechanism to build subprojects defined in Files.mak.#
+#		    Avoid building OS targets with no corresp. make file.     #
+#                   Allow building a makefile-defined executable.	      #
+#    2017-02-28 JFL Bug fix: Enclose all $(MAKEPATH) references in "quotes".  #
+#    2017-03-02 JFL Added the CLEAN_DIRS and CLEAN_FILES variables.           #
 #		    							      #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
@@ -174,18 +179,18 @@ MAKEPATH=$(STINCLUDE)
 # Note: The OS variable here conflicts with Windows' %OS%, defaulting to Windows_NT
 !IF "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
 OS=/		# Initialize with a recognizable string that we'll remove later
-!IF DEFINED(DOS_CC)
+!IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\DOS.mak")
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
+!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) && EXIST("$(MAKEPATH)\WIN95.mak") # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
 !IF ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
 !ENDIF
 !ENDIF
-!IF DEFINED(WIN32_CC)
+!IF DEFINED(WIN32_CC) && EXIST("$(MAKEPATH)\WIN32.mak")
 OS=$(OS) WIN32
 !ENDIF
-!IF DEFINED(WIN64_CC)
+!IF DEFINED(WIN64_CC) && EXIST("$(MAKEPATH)\WIN64.mak")
 OS=$(OS) WIN64
 !ENDIF
 # Note: Don't attempt to build IA64 or ARM versions by default
@@ -195,24 +200,24 @@ OS=$(OS:/=)	# Again, in the unlikely case that none of the default OSs matched
 
 !IF "$(OS)"=="all"
 OS=
-!IF DEFINED(DOS_CC)
-!IF EXIST("$(MAKEPATH)\bios.mak")
+!IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\bios.mak")
 OS=$(OS) BIOS
 !ENDIF
+!IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\dos.mak")
 OS=$(OS) DOS
 !ENDIF
-!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
+!IF DEFINED(WIN95_CC) && DEFINED(WIN32_CC) && EXIST("$(MAKEPATH)\WIN95.mak") # Do not combine with next line, else there's a syntax error if WIN95_CC is not defined.
 !IF ($(WIN95_CC) != $(WIN32_CC)) # CC paths have "quotes" already
 OS=$(OS) WIN95
 !ENDIF
 !ENDIF
-!IF DEFINED(WIN32_CC)
+!IF DEFINED(WIN32_CC) && EXIST("$(MAKEPATH)\WIN32.mak")
 OS=$(OS) WIN32
 !ENDIF
 !IF DEFINED(IA64_CC) && EXIST("$(MAKEPATH)\IA64.mak")
 OS=$(OS) IA64
 !ENDIF
-!IF DEFINED(WIN64_CC)
+!IF DEFINED(WIN64_CC) && EXIST("$(MAKEPATH)\WIN64.mak")
 OS=$(OS) WIN64
 !ENDIF
 !IF DEFINED(ARM_CC) && EXIST("$(MAKEPATH)\ARM.mak")
@@ -300,106 +305,128 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 # Inference rule to build a simple program. Build BIOS, DOS, Win32, and Win64 versions.
 .c.com:
     @echo Applying inference rule .c.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
 
 .c.exe:
     @echo Applying inference rule .c.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
 
 .cpp.com:
     @echo Applying inference rule .cpp.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
 
 .cpp.exe:
     @echo Applying inference rule .cpp.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
 
 .asm.exe:
     @echo Applying inference rule .asm.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+
+# Inference rule to build a makefile-defined executable. Build BIOS, DOS, Win32, and Win64 versions.
+.mak.exe:
+    @echo Applying inference rule .mak.exe:
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
 
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.lib:
     @echo Applying inference rule .mak.lib:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
 
 # Inference rule to build a simple program. Build BIOS, DOS, Win32, and Win64 debug versions.
 {.\}.c{Debug\}.com:
     @echo Applying inference rule {.\}.c{Debug\}.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.c{Debug\}.exe:
     @echo Applying inference rule {.\}.c{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
 
 {.\}.cpp{Debug\}.com:
     @echo Applying inference rule {.\}.cpp{Debug\}.com:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.cpp{Debug\}.exe:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
 
 {.\}.asm{Debug\}.exe:
     @echo Applying inference rule {.\}.c{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+
+# Inference rule to build a makefile-defined executable. Build BIOS, DOS, Win32, and Win64 versions.
+{.\}.mak{Debug\}.exe:
+    @echo Applying inference rule {.\}.mak{Debug\}.exe:
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
 
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.lib:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
-    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\BIOS.mak  $(MAKEDEFS) $(OD)BIOS\$@
-    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\DOS.mak   $(MAKEDEFS) $(OD)DOS\$@
-    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN95.mak $(MAKEDEFS) $(OD)WIN95\$@
-    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN32.mak $(MAKEDEFS) $(OD)WIN32\$@
-    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\IA64.mak  $(MAKEDEFS) $(OD)IA64\$@
-    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\WIN64.mak $(MAKEDEFS) $(OD)WIN64\$@
-    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f $(MAKEPATH)\ARM.mak   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFBIOS)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFDOS)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
+    $(IFWIN95) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
+    $(IFWIN32) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
+    $(IFIA64)  $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
+    $(IFWIN64) $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
+    $(IFARM)   $(MAKE) /$(MAKEFLAGS) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
 
 # Inference rules to build something for DOS, WIN32 and WIN64 respectively
 # Get them from their respective DOS.mak, WIN32.mak, WIN64.mak make files, etc.
@@ -435,73 +462,30 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 default: all
 
-# Erase all output files
-clean mostlyclean distclean:
-    if exist $(MAKEPATH)\BIOS.mak  $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\BIOS.mak clean
-    if exist $(MAKEPATH)\DOS.mak   $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\DOS.mak clean
-    if exist $(MAKEPATH)\WIN95.mak $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\WIN95.mak clean
-    if exist $(MAKEPATH)\WIN32.mak $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\WIN32.mak clean
-    if exist $(MAKEPATH)\IA64.mak  $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\IA64.mak clean
-    if exist $(MAKEPATH)\WIN64.mak $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\WIN64.mak clean
-    if exist $(MAKEPATH)\ARM.mak   $(MAKE) /$(MAKEFLAGS) /c /s /f $(MAKEPATH)\ARM.mak clean
-!IF DEFINED(OUTDIR)
-    -rd /S /Q $(OUTDIR)	>NUL 2>&1
-!ENDIF
-    -del /Q *.bak	>NUL 2>&1
-    -del /Q *~		>NUL 2>&1
-    -del /Q *.log	>NUL 2>&1
-    -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
-
-# Convert sources from Windows to Unix formats
-UNIXTEMP=$(TMP)\$(PROGRAM)
-w2u:
-    echo Converting sources into Unix format, in $(UNIXTEMP) >con
-    -rd /S /Q $(UNIXTEMP) >nul
-    md $(UNIXTEMP)
-    for %%F in ($(SOURCES) *.h *Makefile *.mak go go.bat make.bat *.htm) do call w2u %%F $(UNIXTEMP)\%%~nxF
-
-# Help message describing the targets
-help:
-    copy << con
-Nmake definitions:     (Definition must be quoted if it contains spaces)
-  DEBUG=1              Generate the debug version. <==> Target in a Debug\ dir.
-  MEM=L                Build the DOS version w. large memory model. Dflt: T or S
-  OS=BIOS DOS WIN95 WIN32 WIN64   List of target OSs to build for
-  WINVER=4.0           Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
-
-Targets:
-  all                    Build all available sources
-  clean                  Erase all output files in BIOS, DOS, WIN32, WIN64
-  {prog}.exe             Build BIOS and DOS versions of {prog}.com
-  Debug\{prog}.exe       Build BIOS and DOS versions of the same
-  {prog}.exe             Build DOS, WIN32, and WIN64 versions of {prog}.exe
-  Debug\{prog}.exe       Build DOS, WIN32, and WIN64 debug versions of the same
-  BIOS\{prog}.com        Build the BIOS release version of {prog}.com
-  BIOS\Debug\{prog}.com  Build the BIOS debug version of {prog}.com
-  DOS\{prog}.com         Build the DOS release version of {prog}.com
-  DOS\Debug\{prog}.com   Build the DOS debug version of {prog}.com
-  DOS\{prog}.exe         Build the DOS release version of {prog}.exe
-  DOS\Debug\{prog}.exe   Build the DOS debug version of {prog}.exe
-  WIN95\{prog}.exe       Build the WIN95 release version of {prog}.exe
-  WIN95\Debug\{prog}.exe Build the WIN95 debug version of {prog}.exe
-  WIN32\{prog}.exe       Build the WIN32 release version of {prog}.exe
-  WIN32\Debug\{prog}.exe Build the WIN32 debug version of {prog}.exe
-  WIN64\{prog}.exe       Build the WIN64 release version of {prog}.exe
-  WIN64\Debug\{prog}.exe Build the WIN64 debug version of {prog}.exe
-  w2u                    Convert all sources to Unix format, into $(UNIXTEMP)
-  zip                    Make a zip file with all sources
-
-Also supports .obj and .res to compile C, C++, ASM, and Windows .RC files.
-<<NOKEEP
-
 !IF EXIST("Files.mak")
-!  INCLUDE Files.mak
+!  INCLUDE Files.mak	# Set variable DIRS, SOURCES, ALL, MODULE, CLEAN_DIRS, CLEAN_FILES, etc
 !ENDIF
 
-!IF DEFINED(ALL)
-all: $(REQS) $(ALL)
+!IF DEFINED(DIRS)
+# List sub-directories to build, one per line
+list_dirs:
+    for %%d in ($(DIRS)) do @echo %%~d
+
+# Build individual modules in the specified subdirectories
+$(DIRS): NUL
+    rem &:# Build the module in dir $@, using the current log file
+    $(BMAKE) -C $@ || $(MSG) $@ build failed. Error !ERRORLEVEL! & exit /b
+!ENDIF
+
+!IF DEFINED(MODULE) # Defined in Files.mak
+module_name:
+    @echo $(MODULE)
+!ENDIF
+
+!IF DEFINED(ALL) || DEFINED(DIRS)
+all: $(REQS) $(DIRS) $(ALL)
 !ELSE # Another scheme for defining all goals, using $(PROGRAMS)
-all: $(REQS) # Having a batch file is necessary for dynamically updating the ...FAILED variables.
+all: $(REQS) # Having a batch file is necessary for dynamically updating the *FAILED variables.
     cmd /c <<"$(TMP)\build_all.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
         @echo off
         setlocal EnableExtensions EnableDelayedExpansion
@@ -577,3 +561,75 @@ dist zip: $(ZIPFILE)
 list_programs:
     @set PROGRAMS=$(PROGRAMS)
     @if defined PROGRAMS echo $(PROGRAMS)
+
+# Erase all output files
+clean mostlyclean distclean:
+!IF DEFINED(DIRS)
+    for %%d in ($(DIRS)) do @$(BMAKE) -C %%d $@ 
+!ENDIF
+    if exist "$(MAKEPATH)\BIOS.mak"  $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\BIOS.mak" clean
+    if exist "$(MAKEPATH)\DOS.mak"   $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\DOS.mak" clean
+    if exist "$(MAKEPATH)\WIN95.mak" $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\WIN95.mak" clean
+    if exist "$(MAKEPATH)\WIN32.mak" $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\WIN32.mak" clean
+    if exist "$(MAKEPATH)\IA64.mak"  $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\IA64.mak" clean
+    if exist "$(MAKEPATH)\WIN64.mak" $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\WIN64.mak" clean
+    if exist "$(MAKEPATH)\ARM.mak"   $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\ARM.mak" clean
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+    -del /Q *.bak	>NUL 2>&1
+    -del /Q *~		>NUL 2>&1
+    -del /Q *.log	>NUL 2>&1
+    -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
+!IF DEFINED(CLEAN_DIRS) # Then clean each directory, and remove it if empty
+    -for %%d in ($(CLEAN_DIRS)) do @pushd %%d & $(SUBMAKE) $@ & popd & rd %%d 2>NUL
+!ENDIF
+!IF DEFINED(CLEAN_FILES) # Then clean each file
+    -for %%d in ($(CLEAN_FILES)) do @if exist %%d del %%d >NUL 2>&1
+!ENDIF
+!IF DEFINED(DISTCLEAN_FILES) # Then clean each file
+    -if "$@"=="distclean" for %%d in ($(DISTCLEAN_FILES)) do @if exist %%d del %%d >NUL 2>&1
+!ENDIF
+
+# Convert sources from Windows to Unix formats
+UNIXTEMP=$(TMP)\$(PROGRAM)
+w2u:
+    echo Converting sources into Unix format, in $(UNIXTEMP) >con
+    -rd /S /Q $(UNIXTEMP) >nul
+    md $(UNIXTEMP)
+    for %%F in ($(SOURCES) *.h *Makefile *.mak go go.bat make.bat *.htm) do call w2u %%F $(UNIXTEMP)\%%~nxF
+
+# Help message describing the targets
+help:
+    copy << con
+Nmake definitions:     (Definition must be quoted if it contains spaces)
+  DEBUG=1              Generate the debug version. <==> Target in a Debug\ dir.
+  MEM=L                Build the DOS version w. large memory model. Dflt: T or S
+  OS=BIOS DOS WIN95 WIN32 WIN64   List of target OSs to build for
+  WINVER=4.0           Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
+
+Targets:
+  all                    Build all available sources
+  clean                  Erase all output files in BIOS, DOS, WIN32, WIN64
+  {prog}.com             Build BIOS and DOS versions of {prog}.com
+  {prog}.exe             Build DOS and all Windows versions of {prog}.com
+  Debug\{prog}.exe       Build BIOS and DOS versions of the same
+  {prog}.exe             Build DOS, WIN32, and WIN64 versions of {prog}.exe
+  Debug\{prog}.exe       Build DOS, WIN32, and WIN64 debug versions of the same
+  BIOS\{prog}.com        Build the BIOS release version of {prog}.com
+  BIOS\Debug\{prog}.com  Build the BIOS debug version of {prog}.com
+  DOS\{prog}.com         Build the DOS release version of {prog}.com
+  DOS\Debug\{prog}.com   Build the DOS debug version of {prog}.com
+  DOS\{prog}.exe         Build the DOS release version of {prog}.exe
+  DOS\Debug\{prog}.exe   Build the DOS debug version of {prog}.exe
+  WIN95\{prog}.exe       Build the WIN95 release version of {prog}.exe
+  WIN95\Debug\{prog}.exe Build the WIN95 debug version of {prog}.exe
+  WIN32\{prog}.exe       Build the WIN32 release version of {prog}.exe
+  WIN32\Debug\{prog}.exe Build the WIN32 debug version of {prog}.exe
+  WIN64\{prog}.exe       Build the WIN64 release version of {prog}.exe
+  WIN64\Debug\{prog}.exe Build the WIN64 debug version of {prog}.exe
+  w2u                    Convert all sources to Unix format, into $(UNIXTEMP)
+  zip                    Make a zip file with all sources
+
+Also supports .obj and .res to compile C, C++, ASM, and Windows .RC files.
+<<NOKEEP
