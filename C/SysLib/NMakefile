@@ -24,6 +24,7 @@
 #		    it uses to delete the global environment variable.	      #
 #    2016-11-07 JFL Do not copy include files to OUTDIR anymore.	      #
 #    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
+#    2017-02-24 JFL Renamed the special "goal_name" as "module_name".	      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -246,8 +247,8 @@ debug\syslib.lib: \
 !ENDIF
 !ENDIF
 
-# Output the default goal name for make.bat
-goal_name:
+# Default log file name, etc
+module_name:
     echo syslib
 
 # Rules for checking dynamic dependancies, and explaining static ones
