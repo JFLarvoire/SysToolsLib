@@ -103,13 +103,18 @@
 #    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
 #    2016-10-20 JFL Added missing inference rules to build .asm programs.     #
 #    2016-10-21 JFL Allow having distinct flags for ML.EXE and ML64.EXE.      #
+#    2017-02-26 JFL Store the list of object files to use for making libraries#
+#		    in a *.lst file. This avoids having too long line issues. #
+#    2017-03-02 JFL Added the actual commands for building $(B)\$(EXENAME).   #
+#		    Fixed issues when the current directory contains spaces.  #
+#		    Fixed src2objs.bat and use it indirectly via src2objs.mak.#
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.
-.SUFFIXES: .exe .obj .asm .c .r .cpp .res .rc .def .manifest .mak
+.SUFFIXES: .exe .obj .asm .c .r .cpp .res .rc .def .manifest .mak .bsc .sbr
 
 ###############################################################################
 #									      #
@@ -342,6 +347,11 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
+.mak.exe:
+    @echo Applying $(T).mak inference rule .mak.exe:
+    $(HEADLINE) Building $(@F) $(T) $(DM) version
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" dirs $(B)\$(*F).exe
+
 .mak.lib:
     @echo Applying $(T).mak inference rule .mak.lib:
     $(HEADLINE) Building $(@F) $(T) $(DM) version
@@ -426,6 +436,17 @@ SUBMAKE=$(MAKE) /$(MAKEFLAGS) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     @echo Applying $(T).mak inference rule {$$(S)\}.asm{$$(R)\DEBUG\}.exe:
     $(HEADLINE) Building $(@F) $(T) debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+
+# Inference rules to build a makefile-defined program, inferring the debug mode from the output path specified.
+{$(S)\}.mak{$(R)\}.exe:
+    @echo Applying $(T).mak inference rule {$$(S)\}.mak{$$(R)\}.exe:
+    $(HEADLINE) Building $(@F) $(T) release version
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" dirs $@
+
+{$(S)\}.mak{$(R)\DEBUG\}.exe:
+    @echo Applying $(T).mak inference rule {$$(S)\}.mak{$$(R)\DEBUG\}.exe:
+    $(HEADLINE) Building $(@F) $(T) debug version
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" dirs $@
 
 # Inference rules to build a library, inferring the debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.lib:
@@ -530,9 +551,12 @@ BSCFLAGS=/nologo
 {$(O)\}.mak{$(B)\}.lib:
     @echo Applying $(T).mak inference rule {$$(O)\}.mak{$$(B)\}.lib:
     $(MSG) Creating $(B)\$(@F) ...
+    copy <<$(L)\$(*B).LST NUL
+$(OBJECTS:+=)
+<<KEEP
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /OUT:$@ $(OBJECTS:+=) || $(REPORT_FAILURE)
+    $(LB) /OUT:$@ @$(L)\$(*B).LST || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 ###############################################################################
@@ -560,24 +584,40 @@ OBJECTS=
 EXENAME=$(PROGRAM).exe	# Both DOS and Windows expect this extension.
 !ENDIF
 
-# TO DO: Rewrite src2obj.bat, and include it here as an inline file.
+# If needed, convert the SOURCES list to an OBJECTS list
 !IF DEFINED(SOURCES) && !DEFINED(OBJECTS)
-!  IF [$(COMSPEC) /V /c src2objs -o $(O)\$(PROGRAM).mak $(SOURCES)]==0
-!    MESSAGE Getting generated object list from $(O)\$(PROGRAM).mak.
-!    INCLUDE $(O)\$(PROGRAM).mak
-!  ENDIF
+!  INCLUDE src2objs.mak # Convert the SOURCES list to an OBJECTS list
 !ENDIF
 
-# Dependencies for the specified program
+# Generic rule to build program
 $(B)\$(EXENAME): $(OBJECTS:+=)
+    @echo Applying $(T).mak inference rule $$(B)\$$(EXENAME) build rule:
+    $(MSG) Linking $(B)\$(@F) ...
+    set LIB=$(LIB)
+    set PATH=$(PATH)
+    copy << $(L)\$(*B).LNK
+$**
+$(LIBS)
+/OUT:$@
+$(STUB)
+/SUBSYSTEM:$(SUBSYSTEM)
+$(LFLAGS)
+<<NOKEEP
+    @echo "	type $(L)\$(*B).LNK"
+    @$(COMSPEC) /c "type $(L)\$(*B).LNK"
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
+    $(MSG) ... done.
 
 # Generic rule to build a library
 $(B)\$(PROGRAM).lib: $(OBJECTS:+=)
     @echo Applying $$(B)\$$(PROGRAM).lib build rule:
     $(MSG) Creating $@ ...
+    copy <<$(L)\$(*B).LST NUL
+$(OBJECTS:+=)
+<<KEEP
     if exist $@ del $@
     set PATH=$(PATH)
-    $(LB) /OUT:$@ $(OBJECTS:+=) || $(REPORT_FAILURE)
+    $(LB) /OUT:$@ @$(L)\$(*B).LST || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 !ENDIF # if DEFINED(PROGRAM)
@@ -600,7 +640,7 @@ dirs: $(B) $(O) $(L) files
 
 files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT)
 
-$(UTF8_BOM_FILE): $(THIS_MAKEFILE)
+$(UTF8_BOM_FILE): "$(THIS_MAKEFILE)"
     $(MSG) Generating file $@
     cscript //E:JScript //nologo << $@
 	var args = WScript.Arguments;
@@ -615,7 +655,7 @@ $(UTF8_BOM_FILE): $(THIS_MAKEFILE)
 	WScript.Quit(0);
 <<NOKEEP
 
-$(REMOVE_UTF8_BOM): $(THIS_MAKEFILE)
+$(REMOVE_UTF8_BOM): "$(THIS_MAKEFILE)"
     $(MSG) Generating script $@
     copy <<$@ NUL
 	@echo off
@@ -630,7 +670,7 @@ $(REMOVE_UTF8_BOM): $(THIS_MAKEFILE)
 	)
 <<KEEP
 
-$(CONV_SCRIPT): $(THIS_MAKEFILE)	# Poor man's version of conv.exe, limited to what this make file needs
+$(CONV_SCRIPT): "$(THIS_MAKEFILE)"	# Poor man's version of conv.exe, limited to what this make file needs
     $(MSG) Generating script $@
     copy <<$@ NUL
 	@if (@Language == @Batch) @then /* NOOP for Batch; Begins a comment for JScript.
