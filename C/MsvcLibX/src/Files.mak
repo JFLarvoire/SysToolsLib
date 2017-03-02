@@ -30,6 +30,8 @@
 #    2016-09-12 JFL Added WIN32_OBJECTS, and several WIN32 UTF-8 routines.    #
 #    2016-10-11 JFL moved debugm.h to SysToolsLib global C include dir.       #
 #    2017-02-16 JFL Added open.obj.    			                      #
+#    2017-02-27 JFL Added getpagesize.obj. 		                      #
+#    2017-03-02 JFL Removed references to files removed earlier.              #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -52,8 +54,10 @@ OBJECTS = \
     +fopen.obj			\
     +fstat64i32.obj		\
     +fstat64.obj		\
+    +fullpath.obj		\
     +getcwd.obj			\
     +getopt.obj			\
+    +getpagesize.obj		\
     +getppid.obj		\
     +gettimeofday.obj		\
     +iconv.obj			\
@@ -85,13 +89,6 @@ WIN32_OBJECTS = \
     +GetFileAttributesEx.obj	\
     +GetFullPathName.obj	\
     +GetLongPathName.obj	\
-    +fullpath.obj		\
-
-# GnuLib routines that I mistakenly defined here
-REMOVED_OBJECTS = \
-    +error.obj      \
-    +initmain.obj   \
-    +xnmalloc.obj   \
 
 ###############################################################################
 #			Include files dependancies			      #
@@ -179,8 +176,6 @@ dirname.c: $(I)\libgen.h
 
 err2errno.c: $(I)\MsvcLibX.h $(CI)\debugm.h
 
-error.c: $(I)\config.h $(I)\error.h
-
 filetime.c: $(I)\sys\stat.h
 
 fnmatch.c: $(CI)\debugm.h $(I)\fnmatch.h
@@ -205,6 +200,8 @@ GetLongPathNameU.c: $(I)\windowsU.h $(I)\limits.h
 
 getopt.c: $(I)\getopt.h
 
+getpagesize.c: $(I)\MsvcLibX.h $(I)\unistd.h
+
 # getppid.c:
 
 gettimeofday.c: $(I)\MsvcLibX.h $(I)\time.h $(I)\sys\time.h
@@ -212,8 +209,6 @@ gettimeofday.c: $(I)\MsvcLibX.h $(I)\time.h $(I)\sys\time.h
 grp.c: $(I)\grp.h 
 
 iconv.c: $(I)\iconv.h
-
-initmain.c: $(I)\config.h
 
 lstat32.c: lstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h $(I)\unistd.h
 
@@ -256,6 +251,4 @@ uname.c: $(I)\MsvcLibX.h $(I)\sys\utsname.h
 utime.c: $(CI)\debugm.h $(I)\unistd.h $(I)\utime.h $(I)\sys\time.h
 
 xfreopen.c: $(I)\xfreopen.h
-
-xnmalloc.c: $(I)\config.h
 
