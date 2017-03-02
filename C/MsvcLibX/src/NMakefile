@@ -29,6 +29,7 @@
 #    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
 #    2017-02-16 JFL Default goals now depend on the existence of their        #
 #		    corresponding make file.				      #
+#    2017-02-24 JFL The clean target now also cleans the central $(LIBDIR).   #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -208,9 +209,13 @@ clean mostlyclean distclean:
     -if exist $(STINCLUDE)\WIN64.mak $(MAKE) /$(MAKEFLAGS) /f $(STINCLUDE)\WIN64.mak clean
     if exist $(OD)WIN64 rd /s /q $(OD)WIN64
 !IF DEFINED(OUTDIR)
-    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+    -rd /S /Q $(OUTDIR) >NUL 2>&1
 !ENDIF
     -if "$@"=="distclean" del /Q config.*.bat >NUL 2>&1
+    rem # Remove the libraries copies in the central $(LIBDIR), and delete it if empty
+    -if exist $(LIBDIR)\MsvcLibX*.lib del $(LIBDIR)\MsvcLibX*.lib
+    -if exist $(LIBDIR) rd $(LIBDIR) >NUL 2>&1
+    
 
 # Dummy target, to build a source archive
 dist zip:
