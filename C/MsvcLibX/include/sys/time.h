@@ -19,7 +19,9 @@
 *    2014-05-30 JFL Added the workaround for the conflict with <winsock.h>.   *
 *    2014-06-03 JFL Moved struct timespec definition from sys/stat.h.         *
 *		    Added macros TIMEVAL_TO_TIMESPEC & TIMESPEC_TO_TIMEVAL.   *
+*    2015-12-04 JFL Bug fix: With VS14/VC19, the UCRT defines timespec.       *
 *    2016-07-06 JFL Avoid error if winsocks2.h has been previously included.  *
+*    2017-02-26 JFL Updated the 2015-12-04 fix if _CRT_NO_TIME_T is defined.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -61,7 +63,7 @@ struct timeval {
 #endif /* !defined(_STRUCT_TIMEVAL) */
 
 /* 2015-12-04 JFL Bug fix: With VS14/VC19, the UCRT defines timespec, with a long tv_nsec */
-#ifndef _UCRT
+#if (!defined(_UCRT)) || defined(_CRT_NO_TIME_T) /* The UCRT does not define it if _CRT_NO_TIME_T is defined */
 #ifndef _STRUCT_TIMESPEC
 #define _STRUCT_TIMESPEC
 
