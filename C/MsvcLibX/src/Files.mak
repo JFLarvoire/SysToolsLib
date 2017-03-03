@@ -32,6 +32,7 @@
 #    2017-02-16 JFL Added open.obj.    			                      #
 #    2017-02-27 JFL Added getpagesize.obj. 		                      #
 #    2017-03-02 JFL Removed references to files removed earlier.              #
+#    2017-03-03 JFL Added fwrite.obj.   		                      #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -55,6 +56,7 @@ OBJECTS = \
     +fstat64i32.obj		\
     +fstat64.obj		\
     +fullpath.obj		\
+    +fwrite.obj			\
     +getcwd.obj			\
     +getopt.obj			\
     +getpagesize.obj		\
@@ -187,6 +189,8 @@ fstat64.c: fstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h 
 fstat64i32.c: fstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\MsvcLibX.h $(I)\sys\stat.h $(I)\stdint.h
 
 fullpath.c: $(I)\stdlib.h $(I)\limits.h
+
+fwrite.c: $(I)\MsvcLibX.h  $(I)\stdio.h $(I)\iconv.h $(I)\unistd.h
 
 getcwd.c: $(CI)\debugm.h $(I)\unistd.h
 
