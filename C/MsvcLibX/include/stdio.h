@@ -11,6 +11,7 @@
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
 *    2015-12-09 JFL Alias fputs to fputsU, and vfprintf to vfprintfU.	      *
 *    2017-03-01 JFL Added more standard routines MS thinks are proprietary.   *
+*    2017-03-03 JFL Added fputc() and fwrite() series of functions.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -64,17 +65,34 @@ extern "C" {
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
 
-#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
-#define vfprintf vfprintfU	/* For outputing UTF-8 strings */
-#define fprintf fprintfU	/* For outputing UTF-8 strings */
-#define printf printfU		/* For outputing UTF-8 strings */
-#define fputs fputsU		/* For outputing UTF-8 strings */
 /* The UTF-8 output routines are defined in iconv.c */
 extern int vfprintfU(FILE *f, const char *pszFormat, va_list vl);
 extern int fprintfU(FILE *f, const char *pszFormat, ...);
 extern int printfU(const char *pszFormat, ...);
 extern int fputsU(const char *buf, FILE *f);
 extern UINT codePage;
+#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+#define vfprintf vfprintfU	/* For outputing UTF-8 strings */
+#define fprintf fprintfU	/* For outputing UTF-8 strings */
+#define printf printfU		/* For outputing UTF-8 strings */
+#define fputs fputsU		/* For outputing UTF-8 strings */
+#endif
+
+/* fputc() alternatives */
+extern int fputcM(int c, FILE *f, UINT cp);
+extern int fputcA(int c, FILE *f);
+extern int fputcU(int c, FILE *f);
+#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+#define fputc fputcU		/* For outputing UTF-8 bytes */
+#endif
+
+/* fwrite() alternatives */
+extern size_t fwriteM(const void *buf, size_t itemSize, size_t nItems, FILE *stream, UINT cp);
+extern size_t fwriteA(const void *buf, size_t itemSize, size_t nItems, FILE *stream);
+extern size_t fwriteU(const void *buf, size_t itemSize, size_t nItems, FILE *stream);
+extern size_t fwriteUH(const void *buf, size_t itemSize, size_t nItems, FILE *stream);
+#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+#define fwrite fwriteUH
 #endif
 
 /* Define functions fseeko and ftello */
@@ -93,8 +111,6 @@ extern UINT codePage;
   #define fseeko64 _fseeki64	/* _CONCAT(_fseeki64,_NS_SUFFIX) */
   #define ftello64 _ftelli64	/* _CONCAT(_ftelli64,_NS_SUFFIX) */
 #endif
-
-#define fileno _fileno	/* Avoid a warning about the deprecated name */
 
 #endif /* defined(_WIN32) */
 
