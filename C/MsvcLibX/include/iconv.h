@@ -9,6 +9,7 @@
 *		    							      *
 *   History:								      *
 *    2014-02-27 JFL Created this file.					      *
+*    2017-03-03 JFL Added routine ConvertBuf().				      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -35,7 +36,8 @@
 
 #include <windows.h>
 
-int ConvertString(char *buf, size_t nBytes, UINT cpFrom, UINT cpTo, LPCSTR lpDefaultChar);
+int ConvertBuf(const char *pFromBuf, size_t nFromBufSize, UINT cpFrom, char *pToBuf, size_t nToBufSize, UINT cpTo, LPCSTR lpDefaultChar);
+int ConvertString(char *buf, size_t nBufSize, UINT cpFrom, UINT cpTo, LPCSTR lpDefaultChar);
 int CountCharacters(const char *string, UINT cp);
 char *DupAndConvert(const char *string, UINT cpFrom, UINT cpTo, LPCSTR lpDefaultChar);
 
