@@ -8,6 +8,7 @@
 *                                                                             *
 *   History:								      *
 *    2017-02-28 JFL Created this file.					      *
+*    2017-03-03 JFL Added the prototype for strndup().			      *
 *									      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -26,6 +27,9 @@ extern "C" {
 
 /* These are standard routines, but Microsoft thinks not */
 #define strdup _strdup		/* This one _is_ standard */
+
+/* Additional routines in MsvcLibX */
+char *strndup(const char *s, size_t size); 
 
 /************************ MS-DOS-specific definitions ************************/
 
