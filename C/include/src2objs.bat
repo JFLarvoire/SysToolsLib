@@ -11,13 +11,14 @@
 :#   2010-04-07 JFL Created this batch.                                       *
 :#   2017-03-01 JFL Streamlined the code.                                     *
 :#   2017-03-02 JFL Added VERSION and option -V.                              *
+:#   2017-03-03 JFL Output two distinct variables: OBJECTS and PLUSOBJS       *
 :#                                                                            *
 :#      © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-03-02"
+set "VERSION=2017-03-03"
 set ARG0=%0
 goto :main
 
@@ -54,6 +55,7 @@ goto :go
 
 :go
 set "OBJECTS="
+set "+OBJECTS="
 set "ERR=0"
 
 set "OBJ[.c]=obj"
@@ -75,8 +77,10 @@ for %%s in (%1) do (
     set "OBJECT=%PLUS%%OBJPATH\%%%~ns.!OBJ!
     if not defined OBJECTS (
       set "OBJECTS=!OBJECT!"
+      set "+OBJECTS=+!OBJECT!"
     ) else (
       set "OBJECTS=!OBJECTS! !OBJECT!"
+      set "+OBJECTS=!+OBJECTS! +!OBJECT!"
     )
   )
 )
@@ -84,4 +88,5 @@ shift
 goto :next
 :done
 echo OBJECTS=%OBJECTS%
+echo PLUSOBJS=%+OBJECTS%
 exit /b %ERR%
