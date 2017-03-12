@@ -4,6 +4,24 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2017-03-12
+### Added
+- C/include/configure.bat, make.bat: Added support for Visual Studio 2017
+- C/include/src2obj.bat, src2obj.mak: Allows declaring SOURCES instead of OBJECTS in Files.mak. Much simpler to use. See example in C/MsvcLibX/Files.mak.
+- C/include/All.mak: Use variable DIRS from Files.mak to recurse into all the subdirectories to build.
+- C/MsvcLibX/src/open.c: New UTF-8 version of open().
+- C/MsvcLibX/src/getpagesize.c: New UTF-8 version of getpagesize().
+- Added UTF-8 versions of fputc() and fwrite().
+- Added configuration variable IGNORE_NMAKEFILE for dealing with unwanted NMakefile homonyms.
+
+### Changed
+- UTF-8 programs now write 16-bits Unicode to the console. This allows displaying any Unicode character, even if it's not in the current code page.
+  When stdout is redirected to a pipe or a file, the output is still converted to the current code page. This is the same as cmd.exe's own behaviour.
+- Redesigned UTF-8 programs initialization. Now compatible with any main() routine declaration, with 0 or 2 or 3 arguments.
+- configure.bat and make.bat do not automatically set persistent environment variables with the library paths. This did more harm than good, when dealing with multiple copies of the libraries.
+  It's possible to revert to the old behaviour by defining PERSISTENT_VARS first.
+- Many small changes and bug fixes.
+
 ## [1.7] 2017-01-09
 ### Added
 - C/SRC/inicomp.c: A tool for comparing .ini or .reg files.
