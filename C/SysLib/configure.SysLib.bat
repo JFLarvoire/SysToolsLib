@@ -21,6 +21,7 @@
 :#   2016-11-08 JFL Removed the dependency on OUTDIR.			      *
 :#   2016-11-16 JFL Allow using a predefined alias for this lib base path.    *
 :#   2016-12-16 JFL Only use setx if requested by user, with PERSISTENT_VARS. *
+:#   2017-03-12 JFL Don't automatically set the SYSLIB variable.              *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -40,7 +41,7 @@ if defined VC16.CC %USE_SDK% LMPTK &:# We only need it for building for DOS
 %END_SDK_DEFS%
 
 :# Set the local environment variable just before make exits, so that future commands in this CMD window have it.
-%ADD_POST_MAKE_ACTION% set "SYSLIB=%SYSLIB%"
+if defined PERSISTENT_VARS %ADD_POST_MAKE_ACTION% set "SYSLIB=%SYSLIB%"
 
 :# Set the system environment variable, so that other CMD windows opened later on inherit it
 if defined PERSISTENT_VARS setx SYSLIB "%SYSLIB%" >NUL
