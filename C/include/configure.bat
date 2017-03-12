@@ -170,13 +170,14 @@
 :#                  NMakefile homonyms.                                       *
 :#   2017-03-05 JFL Added variable LOGDIR to control where to store the log.  *
 :#   2017-03-10 JFL Added support for Visual Studio 2017.		      *
+:#   2017-03-12 JFL Defining variable OS limits builds to that OS list.       *
 :#                                                                            *
 :#      © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-03-10"
+set "VERSION=2017-03-12"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -2447,7 +2448,9 @@ for %%s in (
 set "COMMENT[OUTDIR]=Output base directory"
 set "COMMENT[LOGDIR]=Log file directory"
 set "COMMENT[IGNORE_NMAKEFILE]=Do not use the NMakefile here"
-for %%v in (OUTDIR LOGDIR IGNORE_NMAKEFILE) do (
+set "COMMENT[OS]=Limit builds to these target Operating Systems"
+if "%OS%"=="Windows_NT" set "OS=" &:# This is the Windows' homonym default, same as undefined for us here.
+for %%v in (OUTDIR LOGDIR IGNORE_NMAKEFILE OS) do (
   if defined %%v (
     %CONFIG%.
     %CONFIG% SET "%%v=!%%v!" ^&:# !COMMENT[%%v]!
