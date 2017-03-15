@@ -75,7 +75,7 @@ REQS_WIN64=1
 REQS_WIN64=0
 !ENDIF
 
-!IF "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
+!IF !DEFINED(OS) || "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
 OS=
 !IF $(REQS_BIOS)
 OS=$(OS) BIOS
