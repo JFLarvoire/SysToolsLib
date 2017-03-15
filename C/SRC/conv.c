@@ -41,13 +41,16 @@
 *    2016-09-13 JFL Added new routine IsSameFile to detect equiv. pathnames.  *
 *    2016-09-14 JFL Make sure the debug stream is always in text mode.	      *
 *    2016-09-15 JFL Fixed several warnings. V 1.4.2.			      *
+*    2017-03-15 JFL Changed the default console output encoding to Unicode.   *
+*		    Changed the arguments syntax, to simply type encoded files.
+*		    Autodetect the input encoding by default. V 2.0.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4.2"
-#define PROGRAM_DATE    "2016-09-15"
+#define PROGRAM_VERSION "2.0"
+#define PROGRAM_DATE    "2017-03-15"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -61,6 +64,7 @@
 #include <utime.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <iconv.h>
 
 /* Use MsvcLibX Library's debugging macros */
 #include "debugm.h"
@@ -76,48 +80,48 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32		/*  Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-/*  if defined, the following flags inhibit the definitions in windows.h */
-#define NOGDICAPMASKS	  /*  CC_*, LC_*, PC_*, CP_*, TC_*, RC_ */
-#define NOVIRTUALKEYCODES /*  VK_* */
-#define NOWINMESSAGES	  /*  WM_*, EM_*, LB_*, CB_* */
-#define NOWINSTYLES	  /*  WS_*, CS_*, ES_*, LBS_*, SBS_*, CBS_* */
-#define NOSYSMETRICS	  /*  SM_* */
-#define NOMENUS 	  /*  MF_* */
-#define NOICONS 	  /*  IDI_* */
-#define NOKEYSTATES	  /*  MK_* */
-#define NOSYSCOMMANDS	  /*  SC_* */
-#define NORASTEROPS	  /*  Binary and Tertiary raster ops */
-#define NOSHOWWINDOW	  /*  SW_* */
-/*  #define OEMRESOURCE	     // OEM Resource values */
-#define NOATOM		  /*  Atom Manager routines */
-#define NOCLIPBOARD	  /*  Clipboard routines */
-#define NOCOLOR 	  /*  Screen colors */
-#define NOCTLMGR	  /*  Control and Dialog routines */
-#define NODRAWTEXT	  /*  DrawText() and DT_* */
-#define NOGDI		  /*  All GDI defines and routines */
-#define NOKERNEL	  /*  All KERNEL defines and routines */
-/*  #define NOUSER		  // All USER defines and routines */
-/*  #define NONLS		  // All NLS defines and routines */
-#define NOMB		  /*  MB_* and MessageBox() */
-#define NOMEMMGR	  /*  GMEM_*, LMEM_*, GHND, LHND, associated routines */
-#define NOMETAFILE	  /*  typedef METAFILEPICT */
-#define NOMINMAX	  /*  Macros min(a,b) and max(a,b) */
-#define NOMSG		  /*  typedef MSG and associated routines */
-#define NOOPENFILE	  /*  OpenFile(), OemToAnsi, AnsiToOem, and OF_* */
-#define NOSCROLL	  /*  SB_* and scrolling routines */
-#define NOSERVICE	  /*  All Service Controller routines, SERVICE_ equates, etc. */
-#define NOSOUND 	  /*  Sound driver routines */
-#define NOTEXTMETRIC	  /*  typedef TEXTMETRIC and associated routines */
-#define NOWH		  /*  SetWindowsHook and WH_* */
-#define NOWINOFFSETS	  /*  GWL_*, GCL_*, associated routines */
-#define NOCOMM		  /*  COMM driver routines */
-#define NOKANJI 	  /*  Kanji support stuff. */
-#define NOHELP		  /*  Help engine interface. */
-#define NOPROFILER	  /*  Profiler interface. */
-#define NODEFERWINDOWPOS  /*  DeferWindowPos routines */
-#define NOMCX		  /*  Modem Configuration Extensions */
+/* if defined, the following flags inhibit the definitions in windows.h */
+#define NOGDICAPMASKS	  /* CC_*, LC_*, PC_*, CP_*, TC_*, RC_ */
+#define NOVIRTUALKEYCODES /* VK_* */
+#define NOWINMESSAGES	  /* WM_*, EM_*, LB_*, CB_* */
+#define NOWINSTYLES	  /* WS_*, CS_*, ES_*, LBS_*, SBS_*, CBS_* */
+#define NOSYSMETRICS	  /* SM_* */
+#define NOMENUS 	  /* MF_* */
+#define NOICONS 	  /* IDI_* */
+#define NOKEYSTATES	  /* MK_* */
+#define NOSYSCOMMANDS	  /* SC_* */
+#define NORASTEROPS	  /* Binary and Tertiary raster ops */
+#define NOSHOWWINDOW	  /* SW_* */
+/* #define OEMRESOURCE	     // OEM Resource values */
+#define NOATOM		  /* Atom Manager routines */
+#define NOCLIPBOARD	  /* Clipboard routines */
+#define NOCOLOR 	  /* Screen colors */
+#define NOCTLMGR	  /* Control and Dialog routines */
+#define NODRAWTEXT	  /* DrawText() and DT_* */
+#define NOGDI		  /* All GDI defines and routines */
+#define NOKERNEL	  /* All KERNEL defines and routines */
+/* #define NOUSER		  // All USER defines and routines */
+/* #define NONLS		  // All NLS defines and routines */
+#define NOMB		  /* MB_* and MessageBox() */
+#define NOMEMMGR	  /* GMEM_*, LMEM_*, GHND, LHND, associated routines */
+#define NOMETAFILE	  /* typedef METAFILEPICT */
+#define NOMINMAX	  /* Macros min(a,b) and max(a,b) */
+#define NOMSG		  /* typedef MSG and associated routines */
+#define NOOPENFILE	  /* OpenFile(), OemToAnsi, AnsiToOem, and OF_* */
+#define NOSCROLL	  /* SB_* and scrolling routines */
+#define NOSERVICE	  /* All Service Controller routines, SERVICE_ equates, etc. */
+#define NOSOUND 	  /* Sound driver routines */
+#define NOTEXTMETRIC	  /* typedef TEXTMETRIC and associated routines */
+#define NOWH		  /* SetWindowsHook and WH_* */
+#define NOWINOFFSETS	  /* GWL_*, GCL_*, associated routines */
+#define NOCOMM		  /* COMM driver routines */
+#define NOKANJI 	  /* Kanji support stuff. */
+#define NOHELP		  /* Help engine interface. */
+#define NOPROFILER	  /* Profiler interface. */
+#define NODEFERWINDOWPOS  /* DeferWindowPos routines */
+#define NOMCX		  /* Modem Configuration Extensions */
 #include <windows.h>
 
 #include <io.h>
@@ -132,9 +136,9 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define OS_NAME "Win32"
 #endif
 
-/*  Define WIN32 replacements for common Standard C library functions. */
+/* Define WIN32 replacements for common Standard C library functions. */
 #define malloc(size) (void *)LocalAlloc(LMEM_FIXED, size)
-#define realloc(pBuf, l) (void *)LocalReAlloc((HLOCAL)pBuf, l, LMEM_MOVEABLE)	/*  Returns fixed memory, despite the flag name. */
+#define realloc(pBuf, l) (void *)LocalReAlloc((HLOCAL)pBuf, l, LMEM_MOVEABLE)	/* Returns fixed memory, despite the flag name. */
 #define free(pBuf) LocalFree((HLOCAL)pBuf)
 #define strlwr CharLower
 #define strcmp lstrcmp
@@ -148,13 +152,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #define SAMENAME strieq		/* File name comparison routine */
 
-/*  Avoid deprecation warnings */
-#define tempnam	_tempnam
-#define strdup	_strdup
-#define dup	_dup
-#define fdopen	_fdopen
-#define fileno	_fileno
-
 #include <Tchar.h>
 #include <strsafe.h>
 
@@ -163,10 +160,10 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...);
 #define FAIL(msg) fail("%s", msg);
 #define WIN32FAIL(msg) fail("Error %d: %s", GetLastError(), msg)
 
-/*  Define easy to use functions for reading registry values, compatible with old versions of Windows */
-LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf, size_t nBufSize); /*  Returns the string size, or (-error). */
+/* Define easy to use functions for reading registry values, compatible with old versions of Windows */
+LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf, size_t nBufSize); /* Returns the string size, or (-error). */
 
-/*  My favorite string comparison routines. */
+/* My favorite string comparison routines. */
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 #define strieq(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
@@ -186,6 +183,8 @@ LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf,
 
 #define BLOCKSIZE (4096)	/* Number of characters that will be allocated in each loop. */
 
+#define CP_AUTODETECT ((UINT)-2)
+
 /* Global variables */
 
 int iVerbose = 0;
@@ -198,11 +197,11 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
   int n = 0;
 
   va_start(vl, pszFormat);
-  n += vfprintf(stderr, pszFormat, vl);    /*  Not thread-safe on WIN32 ?!? */
+  n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
   va_end(vl);
   fprintf(stderr, "\n");
 
-  /*  Remove the incomplete output file, if any */
+  /* Remove the incomplete output file, if any */
   if (df && (df != stdout)) {
     fclose(df);
     if (pszOutName) unlink(pszOutName);
@@ -222,6 +221,7 @@ int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			int iBOM);
 size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
+int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -246,11 +246,11 @@ char szUsage[] = "\
 \n\
 conv version " PROGRAM_VERSION " " PROGRAM_DATE "\n\
 \n\
-Convert characters from various character sets.\n\
+Convert characters from one character set to another.\n\
 \n\
 Usage:\n\
 \n\
-    conv [OPTIONS] [ICS [OCS [INFILE [OUTFILE|-same]]]]\n\
+    conv [OPTIONS] [[ICS [OCS]] INFILE [OUTFILE|-same]]\n\
 \n\
 Options:\n\
   -?        This help\n\
@@ -267,19 +267,20 @@ Options:\n\
   -v        Display verbose information\n\
   -V        Display this program version\n\
 \n\
-ICS = Input Character Set, or code page number. Default = Windows code page\n\
+ICS = Input Character Set, or code page number. Default = Detect input encoding\n\
 OCS = Output Character Set, or code page number. Default = cmd.exe code page\n\
 INFILE = Input file pathname. Default or \"-\" = Read from stdin\n\
 OUTFILE = Output file pathname. Default or \"-\" = Write to stdout\n\
 \n\
 Character Sets: One of the following codes, or a code page number such as 1252\n\
-  .         Console Active CP (CP %d in this shell)    (default)\n\
+  ?         Autodetect the input data encoding (default for input)\n\
+  .         Console Active CP (CP %d in this shell) (default for output)\n\
   w         Windows System CP (CP %d on this system)\n\
   d         DOS default CP    (CP %d on this system)\n\
   m         Macintosh CP      (CP %d on this system)\n\
   7         UTF-7             (CP 65000)\n\
   8         UTF-8             (CP 65001)\n\
-  16        UTF-16            (CP 1200)\n\
+  u         UTF-16            (CP 1200)\n\
   s         Symbol            (CP 42)\n\
 \n\
 If one of the symbolic character sets above is specified, also decodes the\n\
@@ -310,23 +311,23 @@ void usage(int iRet) {
 #pragma warning(disable:4706)	/* Ignore the "assignment within conditional expression" warning */
 
 int __cdecl main(int argc, char *argv[]) {
-  size_t  nRead = 0;		/*  Number of characters read in one loop. */
-  size_t  nTotal = 0;		/*  Total number of characters read. */
+  size_t  nRead = 0;		/* Number of characters read in one loop. */
+  size_t  nTotal = 0;		/* Total number of characters read. */
   size_t  nBufSize = BLOCKSIZE;
   char   *pszBuffer = (char*)malloc(BLOCKSIZE);
   int     i;
-  char   *pszInType = NULL;	/*  Input character set Windows/Mac/DOS/UTF-8 */
-  char   *pszOutType = NULL;	/*  Output character set Windows/Mac/DOS/UTF-8 */
-  int     iBOM = 0;		/*  1=Output BOM; -1=Output NO BOM; 0=unchanged */
-  FILE *sf = NULL;		/*  Source file handle */
-  char *pszInName = NULL;	/*  Source file name */
+  char   *pszInType = NULL;	/* Input character set Windows/Mac/DOS/UTF-8 */
+  char   *pszOutType = NULL;	/* Output character set Windows/Mac/DOS/UTF-8 */
+  int     iBOM = 0;		/* 1=Output BOM; -1=Output NO BOM; 0=unchanged */
+  FILE *sf = NULL;		/* Source file handle */
+  char *pszInName = NULL;	/* Source file name */
   char szBakName[FILENAME_MAX+1];
-  int iSameFile = FALSE;	/*  Modify the input file in place. */
-  int iBackup = FALSE;		/*  With iSameFile, back it up first. */
-  int iCopyTime = FALSE;	/*  If true, set the out file time = in file time. */
+  int iSameFile = FALSE;	/* Modify the input file in place. */
+  int iBackup = FALSE;		/* With iSameFile, back it up first. */
+  int iCopyTime = FALSE;	/* If true, set the out file time = in file time. */
   struct stat sInTime = {0};
   char *pszPathCopy = NULL;
-  char *pszDirName = NULL;	/*  Output file directory */
+  char *pszDirName = NULL;	/* Output file directory */
 
   if (!pszBuffer) {
 fail_no_mem:
@@ -357,6 +358,10 @@ fail_no_mem:
       if (streq(pszOpt, "?")) {		/* -?: Help */
       	usage(0);
       }
+      if (streq(pszOpt, "A")) {		/* Output ANSI */
+	pszOutType = "a";
+	continue;
+      }
       if (streq(pszOpt, "b")) {		/* -b: Output a BOM */
 	iBOM = 1;
 	continue;
@@ -376,12 +381,24 @@ fail_no_mem:
 	continue;
       }
 #endif
+      if (streq(pszOpt, "O")) {		/* Output OEM type */
+	pszOutType = "o";
+	continue;
+      }
       if (streq(pszOpt, "same")) {	/* -same: Output to the input file */
 	iSameFile = TRUE;
 	continue;
       }
       if (streq(pszOpt, "st")) {	/* -t: Copy the input file time to the output file */
 	iCopyTime = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "u")) {		/* Output UTF16 */
+	pszOutType = "u";
+	continue;
+      }
+      if (streq(pszOpt, "U")) {		/* Output UTF8 */
+	pszOutType = "8";
 	continue;
       }
       if (streq(pszOpt, "v")) {		/* -v: Verbose */
@@ -392,14 +409,14 @@ fail_no_mem:
 	printf("%s\n", version());
 	exit(0);
       }
-      /*  Unsupported switches are ignored */
+      /* Unsupported switches are ignored */
       continue;
     }
-    if (!pszInType) {
+    if ((!pszInType) && isEncoding(pszArg, NULL, NULL)) {
 	pszInType = pszArg;
 	continue;
     }
-    if (!pszOutType) {
+    if ((!pszOutType) && isEncoding(pszArg, NULL, NULL)) {
 	pszOutType = pszArg;
 	continue;
     }
@@ -411,7 +428,8 @@ fail_no_mem:
 	pszOutName = pszArg;
 	continue;
     }
-    /*  Unexpected arguments are ignored */
+    /* Unexpected arguments are ignored */
+    fprintf(stderr, "Warning: Unexpected argument ignored: %s\n", pszArg);
   }
 
   /* Report what the message stream is */
@@ -424,7 +442,7 @@ fail_no_mem:
   )
 
   if (!pszInType) {
-      pszInType = "w";
+      pszInType = "?";	/* Detect the input data encoding */
   }
   if (!pszOutType) {
       pszOutType = ".";
@@ -436,12 +454,17 @@ fail_no_mem:
 #if defined(_MSDOS) || defined(_WIN32)
   _setmode( _fileno( stdin ), _O_BINARY );
   fflush(stdout); /* Make sure any previous output is done in text mode */
-  _setmode( _fileno( stdout ), _O_BINARY );
+  if ((*pszOutType == '.') && isatty(1)) {
+    pszOutType = "8"; /* Convert to UTF-8 to output Unicode to the console, that MsvcLibX initialized in wide mode */
+    if (!iBOM) iBOM = -1; /* Remove the BOM, which is not correctly interpreted by the console */
+  } else {
+    _setmode( _fileno( stdout ), _O_BINARY );
+  }
 #endif
 
   if ((!pszInName) || streq(pszInName, "-")) {
     sf = stdin;
-    iSameFile = FALSE;	/*  Meaningless in this case. Avoid issues below. */
+    iSameFile = FALSE;	/* Meaningless in this case. Avoid issues below. */
   } else {
     sf = fopen(pszInName, "rb");
     if (!sf) fail("Can't open file %s\n", pszInName);
@@ -449,7 +472,7 @@ fail_no_mem:
   }
   if ((!pszOutName) || streq(pszOutName, "-")) {
     if (!iSameFile) df = stdout;
-  } else { /*  Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
+  } else { /* Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
     iSameFile = IsSameFile(pszInName, pszOutName);
   }
   if (iSameFile) {
@@ -500,58 +523,45 @@ fail_no_mem:
       }
       nBufSize += BLOCKSIZE;
     }
-    Sleep(0);	    /*  Release end of time-slice */
+    Sleep(0);	    /* Release end of time-slice */
+  }
+  if (*pszInType == '?') { /* Then detect the input data encoding, using the Unicode BOM */
+    /* https://en.wikipedia.org/wiki/Byte_order_mark */
+    if ((nTotal >= 3) && !strncmp(pszBuffer, "\xEF\xBb\xBF", 3)) { /* UTF-8 BOM */
+      pszInType = "8";
+    } else if ((nTotal >= 4) && (!strncmp(pszBuffer, "\x2B\x2F\x76", 3)) && strchr("\x38\x39\x2B\x2F", pszBuffer[3])) { /* UTF-7 BOM */
+      pszInType = "7";
+    } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFF\xFE", 2)) { /* UTF-16 BOM */
+      pszInType = "u";
+    } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFE\xFF", 2)) { /* UTF-16 BE BOM */
+      pszInType = "1201";
+    } else { /* No Unicode BOM */
+      /* TO DO: Do a more thorough analysis, for example to detect UTF-8 without BOM */
+      pszInType = "w"; /* Default: Assume it's the default Windows encoding */
+    }
+    verbose((mf, "Detected input character set: %s\n", pszInType));
   }
   if (nTotal > 0) {
-    size_t nOutBufSize = 2*nTotal + 4;	/*  Size may double for ansi -> utf8 cases */
-    size_t nOutputSize;		/*  Size actually used in the out. buf. */
+    size_t nOutBufSize = 2*nTotal + 4;	/* Size may double for ansi -> utf8 cases */
+    size_t nOutputSize;		/* Size actually used in the out. buf. */
     char *pszOutBuf = (char*)malloc(nOutBufSize);
-    char *pszCharEnc = NULL;	/*  Character encoding */
+    char *pszCharEnc = NULL;	/* Character encoding */
 
     if (!pszOutBuf) goto fail_no_mem;
 
-    /*  Optionally decode mime encoded words left in */
-    switch (tolower(*pszInType)) {
-      case 'd':
-	pszCharEnc = "ms-dos";
-	break;
-      case 'm':
-	pszCharEnc = "macintosh";
-	break;
-      case 's':
-	pszCharEnc = "symbol";
-	break;
-      case 'w':
-	pszCharEnc = "windows-1252";
-	break;
-      default:
-	if (sscanf(pszInType, "%d", &i)) {
-	  switch (i) {
-	    case 7:
-	      pszCharEnc = "utf-7";
-	      break;
-	    case 8:
-	      pszCharEnc = "utf-8";
-	      { /*  Workaround for the unknown \xC3\x20 sequence: Use \xC3\xA0 instead. */
-		size_t n;
-		for (n=0; n<(nTotal-1); n++)
-		    if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) pszBuffer[++n] = '\xA0';
-	      }
-	      break;
-	    case 16:
-	      pszCharEnc = "utf-16";
-	      break;
-	    default:
-	      break;
-	  }
-	}
-	break;
-    }
+    /* Optionally decode mime encoded words left in */
+    isEncoding(pszInType, NULL, &pszCharEnc);
     if (pszCharEnc) {
+      if (streq(pszCharEnc, "utf-8")) { /* Workaround for the unknown \xC3\x20 sequence: Use \xC3\xA0 instead. */
+	size_t n;
+	for (n=0; n<(nTotal-1); n++) {
+	  if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) pszBuffer[++n] = '\xA0';
+	}
+      }
       nTotal = MimeWordDecode(pszBuffer, nTotal, pszCharEnc);
     }
 
-    /*  Use Windows' character set conversion routine. */
+    /* Use Windows' character set conversion routine. */
     nOutputSize = ConvertCharacterSet(pszBuffer, nTotal, pszOutBuf, nOutBufSize,
 					    pszInType, pszOutType, iBOM);
 
@@ -664,7 +674,7 @@ int is_redirected(FILE *f)
 	   );
     }
 
-#ifdef _WIN32		/*  Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -700,14 +710,14 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...) {
 	    FORMAT_MESSAGE_IGNORE_INSERTS,
 	    NULL,
 	    dwErr,
-	    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /*  Default language */
+	    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
 	    (LPTSTR) &lpMsgBuf,
 	    0,
-	    NULL ))	{ /*  Display both the error code and the description string. */
+	    NULL ))	{ /* Display both the error code and the description string. */
 	hRes = StringCbPrintf(szErrorMsg, sizeof(szErrorMsg),
 		                  _T("Error %ld: %s"), dwErr, lpMsgBuf);
-	LocalFree( lpMsgBuf ); /*  Free the buffer. */
-    } else { /*  Error, we did not find a description string for this error code. */
+	LocalFree( lpMsgBuf ); /* Free the buffer. */
+    } else { /* Error, we did not find a description string for this error code. */
 	hRes = StringCbPrintf(szErrorMsg, sizeof(szErrorMsg), _T("Error %ld: "), dwErr);
     }
     if (SUCCEEDED(hRes)) {
@@ -726,7 +736,7 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...) {
     return _tprintf(_T("%s"), szErrorMsg);
 }
 
-#endif /*  defined(_WIN32) */
+#endif /* defined(_WIN32) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -749,10 +759,10 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-#ifdef _WIN32		/*  Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-#ifndef CP_UTF16	/*  Not defined in WinNls.h for Windows SDK 8.1 */
-#define CP_UTF16 1200	/*  "Unicode UTF-16, little endian byte order (BMP of ISO 10646); available only to managed applications" */
+#ifndef CP_UTF16	/* Not defined in WinNls.h for Windows SDK 8.1 */
+#define CP_UTF16 1200	/* "Unicode UTF-16, little endian byte order (BMP of ISO 10646); available only to managed applications" */
 #endif
 
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
@@ -760,90 +770,26 @@ int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszInputSet, char *pszOutputSet,
 			int iBOM)
     {
-    wchar_t *pszWideBuf;             /*  Intermediate buffer for wide characters. */
-    size_t nWideSize = (2*nInputSize) + 4; /*  Size in bytes of that wide buffer. */
+    wchar_t *pszWideBuf;             /* Intermediate buffer for wide characters. */
+    size_t nWideSize = (2*nInputSize) + 4; /* Size in bytes of that wide buffer. */
     UINT uCPin=0, uCPout=0;
     int nWide, nOut;
 
     DEBUG_FPRINTF((mf, "ConvertCharacterSet(pszIn, %ld, pszOut, %ld, %s, %s, %d)\n", \
            (long)nInputSize, (long)nOutputSize, pszInputSet, pszOutputSet, iBOM));
 
-    switch (tolower(*pszInputSet)) {	/*  "w" <==> "win" <==> "Windows" */
-      case '.':
-	uCPin = GetConsoleOutputCP();
-	break;
-      case 'w':
-	uCPin = CP_ACP;		/*  ANSI */
-	break;
-      case 'm':
-	uCPin = CP_MACCP;	/*  Mac */
-	break;
-      case 'd':
-	uCPin = CP_OEMCP;	/*  DOS */
-	break;
-      case 's':
-	uCPin = CP_SYMBOL;	/*  Symbol */
-	break;
-      default:
-	if (!sscanf(pszInputSet, "%u", &uCPin)) {
-	  FAIL("Unknown input character set");
-	}
-	switch (uCPin) {
-	  case 7:
-	    uCPin = CP_UTF7;	/*  UTF-7 */
-	    break;
-	  case 8:
-	    uCPin = CP_UTF8;	/*  UTF-8 */
-	    break;
-	  case 16:
-	    uCPin = CP_UTF16;	/*  UTF-16 */
-	    break;
-	  default:
-	    break;
-	}
-	break;
+    if (!isEncoding(pszInputSet, &uCPin, NULL)) {
+      FAIL("Unknown input character set");
     }
-    switch (tolower(*pszOutputSet)) {
-      case '.':
-	uCPout = GetConsoleOutputCP();
-	break;
-      case 'w':
-	uCPout = CP_ACP;	/*  ANSI */
-	break;
-      case 'm':
-	uCPout = CP_MACCP;	/*  Mac */
-	break;
-      case 'd':
-	uCPout = CP_OEMCP;	/*  DOS */
-	break;
-      case 's':
-	uCPout = CP_SYMBOL;	/*  Symbol */
-	break;
-      default:
-	if (!sscanf(pszOutputSet, "%u", &uCPout)) {
-	  FAIL("Unknown output character set");
-	}
-	switch (uCPout) {
-	  case 7:
-	    uCPout = CP_UTF7;	/*  UTF-7 */
-	    break;
-	  case 8:
-	    uCPout = CP_UTF8;	/*  UTF-8 */
-	    break;
-	  case 16:
-	    uCPout = CP_UTF16;	/*  UTF-16 */
-	    break;
-	  default:
-	    break;
-	}
-	break;
+    if (!isEncoding(pszOutputSet, &uCPout, NULL)) {
+      FAIL("Unknown output character set");
     }
 
     verbose((mf, "uCPin = %d , uCPout = %d\n", (int)uCPin, (int)uCPout));
 
     /* Allocate a buffer for an intermediate UTF-16 string */
     pszWideBuf = (wchar_t *)malloc(nWideSize);
-    pszWideBuf += 1;	/*  Leave room for adding a BOM if needed */
+    pszWideBuf += 1;	/* Leave room for adding a BOM if needed */
     nWideSize -= 2;
 
     /* Convert to intermediate wide characters */
@@ -864,29 +810,29 @@ int ConvertCharacterSet(char *pszInput, size_t nInputSize,
     case CP_UTF7:
     case CP_UTF8:
     case CP_UTF16:
-      break;	/*  Apply the user request for all Unicode encodings */
-    default:	/*  Any other code page requires removing the BOM, if any */
+      break;	/* Apply the user request for all Unicode encodings */
+    default:	/* Any other code page requires removing the BOM, if any */
       iBOM = -1;
       break;
     }
 #pragma warning(disable:4428)	/* Ignore the "universal-character-name encountered in source" warning */
     switch (iBOM) {
     case -1:
-      if (*pszWideBuf == L'\uFEFF') {	/*  If there's a BOM, then remove it */
+      if (*pszWideBuf == L'\uFEFF') {	/* If there's a BOM, then remove it */
       	pszWideBuf += 1;
       	nWideSize -= 2;
       	nWide -= 1;
       }
       break;
     case 1:
-      if (*pszWideBuf != L'\uFEFF') {	/*  If there's no BOM, then add one */
+      if (*pszWideBuf != L'\uFEFF') {	/* If there's no BOM, then add one */
       	pszWideBuf -= 1;
       	nWideSize += 2;
       	*pszWideBuf = L'\uFEFF';
       	nWide += 1;
       }
       break;
-    case 0:				/*  Leave the BOM (if present) unchanged */
+    case 0:				/* Leave the BOM (if present) unchanged */
     default:
       break;
     }
@@ -949,13 +895,13 @@ size_t Base64Decode(
     decoder[alphabet[i]] = (char)i;
   }
 
-  nOutputSize -= 1; /*  Reserver 1 byte for the final NUL. */
+  nOutputSize -= 1; /* Reserver 1 byte for the final NUL. */
   char_count = 0;
   bits = 0;
   while (nInputSize-- && nOutputSize) {
     c = *(pszInput++);
-    if (c == '=') break; /*  End of Mime sequence */
-    if (!inalphabet[c]) continue; /*  Ignore error silently */
+    if (c == '=') break; /* End of Mime sequence */
+    if (!inalphabet[c]) continue; /* Ignore error silently */
     bits |= decoder[c];
     char_count++;
     if (char_count == 4) {
@@ -972,7 +918,7 @@ size_t Base64Decode(
     }
   }
   if (nOutputSize) switch (char_count) {
-    case 1: /*  Error: base64 encoding incomplete: at least 2 bits missing */
+    case 1: /* Error: base64 encoding incomplete: at least 2 bits missing */
       break;
     case 2:
       *(pszOutput++) = (char)(bits >> 10);
@@ -1033,7 +979,7 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
   char *pszBuf2 = (char*)malloc(nBufSize + 1);
   char *pszHeader = (char*)malloc(strlen(pszCharEnc) + 8);
   char *psz00, *psz0, *psz1, *psz20, *psz2;
-  char cEnc; /*  Character encoding. Q or B. */
+  char cEnc; /* Character encoding. Q or B. */
   size_t nHeader;
   char c;
   size_t n;
@@ -1049,30 +995,30 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
   psz00 = psz0 = pszBuf2;
   psz20 = psz2 = pszBuf;
 
-  /*  Scan the input data and decode it. */
+  /* Scan the input data and decode it. */
   while ((psz1 = stristr(psz0, pszHeader)))
   {
     DEBUG_FPRINTF((mf, "while(): psz0=%d, psz1=%d, psz2=%d\n", psz0-psz00, psz1-psz00, psz2-psz20));
     if ((size_t)(psz0-psz00) >= nBufSize) FAIL("Oops, went too far!");
-    /*  Copy input up to the Mime word header. */
+    /* Copy input up to the Mime word header. */
     n = psz1-psz0;
     strncpy(psz2, psz0, n);
     psz0 += n + nHeader;
     psz2 += n;
-    /*  We've seen case for such words in quoted strings. Remove the opening quote. */
+    /* We've seen case for such words in quoted strings. Remove the opening quote. */
     if (n && (*(psz2-1) == '"')) psz2 -= 1;
-    /*  Get the encoding byte. */
+    /* Get the encoding byte. */
     cEnc = *(psz0++);
-    if (*(psz0++) != '?') /*  Skip the second ? */
+    if (*(psz0++) != '?') /* Skip the second ? */
       fail("Bad Mime encoded-word header: %20.20s", psz0-(nHeader+2));
-    /*  Get the rest of the encoded word. */
+    /* Get the rest of the encoded word. */
     for (psz1=psz0; (c=*psz1)>' '; psz1++) ;
     n = psz1-psz0;
     DEBUG_FPRINTF((mf, "Encoding: psz0=%d, psz1=%d, psz2=%d\n", psz0-psz00, psz1-psz00, psz2-psz20));
-    /*  Decode the word */
+    /* Decode the word */
     switch (toupper(cEnc))
     {
-    case 'Q': /*  Quoted-printable */
+    case 'Q': /* Quoted-printable */
       for ( ; psz0 < psz1; psz0++)
       {
         DEBUG_FPRINTF((mf, "for(): psz0=%d, psz1=%d, psz2=%d\n", psz0-psz00, psz1-psz00, psz2-psz20));
@@ -1098,7 +1044,7 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
 	}
       }
       break;
-    case 'B': /*  Base64 */
+    case 'B': /* Base64 */
       psz2 += Base64Decode(psz2, nBufSize-(psz2-psz20), psz0, n);
       psz0 += n;
       break;
@@ -1106,21 +1052,21 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
       FAIL("Unexpected character encoding");
       break;
     }
-    /*  Skip the following separator spaces if there's another encoded word afterwards */
+    /* Skip the following separator spaces if there's another encoded word afterwards */
     psz1 = psz0;
     while (isspace(*psz1)) psz1++;
     if (!strncmp(psz1, "=?", 2)) psz0 = psz1;
   }
-  /*  Output the end of the data, if any */
+  /* Output the end of the data, if any */
   n = nBufSize-(psz0-psz00);
   memcpy(psz2, psz0, n);
   psz2 += n;
 
-  /*  Cleanup */
+  /* Cleanup */
   free(pszBuf2);
   free(pszHeader);
 
-  return psz2-psz20; /*  The output length. */
+  return psz2-psz20; /* The output length. */
 }
 
 #pragma warning(default:4706)	/* Restore the "assignment within conditional expression" warning */
@@ -1150,8 +1096,8 @@ size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc)
 LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf, size_t nBufSize) {
   DWORD dwSize = (DWORD)nBufSize;
   HKEY hKey;
-  LONG lErr;			/*  Win32 error */
-  DWORD dwType;			/*  Actual type of the value read */
+  LONG lErr;			/* Win32 error */
+  DWORD dwType;			/* Actual type of the value read */
 
   lErr = RegOpenKey(rootKey, pszKey, &hKey);
   if (lErr) return lErr;
@@ -1169,9 +1115,9 @@ LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf,
   if (dwSize && pszBuf[dwSize-1]) {
     printf("Adding the missing NUL\n");
     if (nBufSize > dwSize) {
-      pszBuf[dwSize] = '\0';	/*  Add a terminating NUL */
+      pszBuf[dwSize] = '\0';	/* Add a terminating NUL */
     } else {
-      return ERROR_MORE_DATA;	/*  Buffer is too small to store the terminating NUL */
+      return ERROR_MORE_DATA;	/* Buffer is too small to store the terminating NUL */
     }
   }
 #endif
@@ -1274,3 +1220,88 @@ IsSameFile_done:
   return iSameFile; 
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    isEncoding						      |
+|									      |
+|   Description     Check if if an argument refers to a charater encoding     |
+|									      |
+|   Parameters:     char *pszEncoding	    Input string               	      |
+|                   UINT *pCP               If not NULL, output the code page |
+|                   char **ppszMime   	    If not MULL, output the mime type |
+|                   							      |
+|   Returns	    1 = It is an encoding; 0 It's not 			      |
+|									      |
+|   Notes	    Avoids duplicating the code for input & output args.      |
+|		    							      |
+|   History								      |
+|    2017-03-15 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
+  UINT cp = CP_UNDEFINED;
+  char *pszMime = NULL;
+  /* Check if it's a 1-character shortcut */
+  if (pszEncoding[0] && !pszEncoding[1]) {
+    switch (tolower(pszEncoding[0])) {
+    case '?':			/* Autodetect the encoding */
+      cp = CP_AUTODETECT;
+      break;
+    case '.':			/* Console CP */
+    case 'c':			/* Console CP */
+      cp = GetConsoleOutputCP();
+      break;
+    case '0':			/* ANSI = Windows GUI CP */
+    case 'a':			/* ANSI = Windows GUI CP */
+    case 'w':			/* ANSI = Windows GUI CP */
+      cp = CP_ACP;		/* ANSI */
+      pszMime = "windows-1252";
+      break;
+    case '1':			/* DOS = Default console CP */
+    case 'd':			/* DOS = Default console CP */
+    case 'o':			/* OEM = Default console CP */
+      cp = CP_OEMCP;		/* DOS */
+      pszMime = "ms-dos";
+      break;
+    case '2':			/* Mac CP */
+    case 'm':			/* Mac CP */
+      cp = CP_MACCP;		/* Mac */
+      pszMime = "macintosh";
+      break;
+    case 's':			/* Symbol CP */
+      cp = CP_SYMBOL;		/* Symbol */
+      pszMime = "symbol";
+      break;
+    case '7':			/* UTF-7 */
+      cp = CP_UTF7;		/* UTF-7 */
+      pszMime = "utf-7";
+      break;
+    case '8':			/* UTF-8 */
+      cp = CP_UTF8;		/* UTF-8 */
+      pszMime = "utf-8";
+      break;
+    case 'u':			/* UTF-16 */
+      cp = CP_UTF16;		/* UTF-16 */
+      pszMime = "utf-16";
+      break;
+    }
+    if (cp != CP_UNDEFINED) {
+      if (pCP) *pCP = cp;
+      if (ppszMime) *ppszMime = pszMime;
+      return TRUE;
+    }
+  }
+  /* Check if the string is an integer from 0 to 65535 */
+  if (sscanf(pszEncoding, "%u", &cp)) {
+    char buf[32];
+    sprintf(buf, "%u", cp);
+    if ((!strcmp(buf, pszEncoding)) && (cp <  65536)) {
+      if (pCP) *pCP = cp;
+      if (ppszMime) *ppszMime = NULL;
+      return TRUE;
+    }
+  }
+  /* Unrecognized string */
+  return FALSE;
+}
