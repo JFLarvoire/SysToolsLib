@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename:	    tee.c						      *
 *									      *
@@ -10,15 +10,18 @@
 *    2012-10-24 JFL Created this program.				      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-09-23 JFL Minor tweak to avoid a warning.	                      *
+*    2017-03-15 JFL Changed to a UTF-8 app, to support non-ASCII file names.  *
 *                                                                             *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.2"
-#define PROGRAM_DATE    "2016-09-23"
+#define PROGRAM_VERSION "1.1"
+#define PROGRAM_DATE    "2017-03-15"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+
+#define _UTF8_SOURCE	/* Enable MsvcLibX support for file names with Unicode characters */
 
 #include <stdio.h>
 #include <string.h>
@@ -189,8 +192,6 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-#define stringize(s) #s
-
 void usage(int iErr)
     {
     printf("\
@@ -205,7 +206,11 @@ Options:\n\
 \n\
 Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
 \n"
+#if defined(_MSDOS)
 "Author: Jean-Francois Larvoire"
+#else
+"Author: Jean-François Larvoire"
+#endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 , GetDefaultBufSize());
     exit(iErr);
