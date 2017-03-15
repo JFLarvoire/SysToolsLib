@@ -60,6 +60,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #endif
 
 #include <windows.h>		/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
+#include <iconv.h>              /* For the codePage variable */
 
 #define cp codePage		/* Initial console code page in iconv.c */
 
