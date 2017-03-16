@@ -11,13 +11,15 @@
 *    1995-11-03 JFL jf.larvoire@hp.com created this program.		      *
 *    2015-01-08 JFL Fix output for Linux, including when encoding is UTF-8.   *
 *		    Version 1.1.					      *
+*    2017-03-06 JFL Added an optional code page argument for Windows.         *
+*		    Version 1.2.					      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2015-01-08"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2017-03-06"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -38,6 +40,8 @@
 #else
 #define OS_NAME "Win32"
 #endif
+
+#include <windows.h>
 
 #endif /* _WIN32 */
 
@@ -85,6 +89,10 @@ void usage(void);
 int main(int argc, char *argv[])
     {
     int i, j;
+#ifdef _WIN32
+    int iCP = 0;
+    DWORD dwCP0 = GetConsoleOutputCP();
+#endif
 #ifdef __unix__
     int isUTF8 = FALSE;
     char *pszLang = getenv("LANG");
@@ -116,8 +124,18 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
 	continue;
 	}
+#ifdef _WIN32
+    if (!iCP) {
+      iCP = atoi(arg);
+      continue;
+    }
+#endif
     fprintf(stderr, "Unrecognized argument %s. Ignored.\n", arg);
     }
+
+#ifdef _WIN32
+    if (iCP) SetConsoleOutputCP(iCP);
+#endif
 
     for (j=0; j<16; j++)
 	{
@@ -181,15 +199,23 @@ int main(int argc, char *argv[])
 	printf("\n");
 	}
 
+#ifdef _WIN32
+    if (iCP) SetConsoleOutputCP(dwCP0);
+#endif
+
     return 0;
     }
 
 void usage(void)
     {
     printf("chars version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
-\n\
-Usage: chars [SWITCHES]\n\
-\n\
+\n"
+#ifdef _WIN32
+"Usage: chars [SWITCHES] [CODEPAGE]\n"
+#else
+"Usage: chars [SWITCHES]\n"
+#endif
+"\n\
 Switches:\n\
   -h|--help|-?  Display this help screen.\n\
   -V|--version  Display this program version and exit.\n\
@@ -199,5 +225,3 @@ Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 
     exit(0);
     }
-
-
