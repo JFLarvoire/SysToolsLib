@@ -1,0 +1,96 @@
+###############################################################################
+#									      #
+#   File name	    NMakefile						      #
+#									      #
+#   Description     An NMake file for making all SysToolLib libs & programs   #
+#									      #
+#   Notes	    make.bat looks for a default nmake file called NMakeFile. #
+#									      #
+#   History								      #
+#    2016-10-05 JFL jf.larvoire@hpe.com created this file.                    #
+#    2016-10-11 JFL Adapted for use with make files in the global include dir.#
+#    2016-10-13 JFL Added targets cleanenv and release.                       #
+#    2016-10-14 JFL Fixed bugs in the inline release script.                  #
+#    2016-11-02 JFL Use macro BATMAKE for recursive calls to make.bat.        #
+#    2016-11-03 JFL Added target config.                                      #
+#		    Updated the cleanenv: script to display the reg command   #
+#		    it uses to delete the global environment variable.	      #
+#    2017-03-16 JFL Resurrected this file, necessary to make release.         #
+#		    							      #
+#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+!INCLUDE <All.mak>
+
+# Create an MsvcLibX binary release
+release:
+    call <<"$(TMP)\MsvcLibX-release-$(PID).bat"
+	@echo off
+	setlocal EnableExtensions EnableDelayedExpansion
+	
+	:# Set the output file name
+	pushd .. & set "ZIP=!CD!\SysTools.zip" & popd
+	
+	:# Build the program list
+	set "QUIET_MAKE=1" &:# Tell All.mak, etc, to skip low priority information messages
+	%FOREACHLINE% %%f in ('$(BMAKE) -C SRC list_programs') do set "PROGRAMS=%%f"
+	$(MSG) PROGRAMS = (!PROGRAMS!)
+	if not defined PROGRAMS ($(MSG) Error: Can't get the programs list. & exit 1)
+	
+	:# List scripts from Scripts.lst
+	pushd ..
+	for %%l in (Bash Batch PowerShell Tcl) do (
+	  set "%%l=:" &:# The list must not be empty, else the search will fail in the second part.
+	  for /f "delims=" %%f in ('find /i "%%l\" ^<Scripts.lst') do (
+	    echo From Scripts.lst: %%f
+	    set %%l=!%%l! "%%~nxf"
+	  )
+	  :# Also add the libraries from ScriptLibs.lst, but only if not already defined in Scripts.lst.
+	  for /f "delims=" %%f in ('find /i "%%l\" ^<ScriptLibs.lst') do (
+	    echo From ScriptsLibs.lst: %%f
+	    set "FOUND=" & for %%p in (!%%l!) do if %%p=="%%~nxf" set "FOUND=1"
+	    if not defined FOUND set %%l=!%%l! "%%~nxf"
+	  )
+	  set "%%l=!%%l:~1!" &:# Remove the initial colon we put in at first
+	  if defined %%l set "%%l=!%%l:~1!" & rem :# Remove the separator space added with each append
+	  set "LIST=(!%%l!)"
+	  $(MSG) %%l = !LIST!
+	)
+	popd
+	
+	:# Rebuild a new zip file
+	set PATH=%PATH%;C:\Program Files\7-zip
+	if exist "%ZIP%" del "%ZIP%"
+	$(MSG) Creating "%ZIP%"
+
+	:# Select the programs to use.
+	for %%d in (WIN95 WINXP WIN32) do ( :# May be overriden by setting PROGRAMS_DIR before running make release.
+	  if not defined PROGRAMS_DIR if exist SRC\%%d (
+	    pushd SRC\%%d & set "PROGRAMS_DIR=!CD!" & popd
+	  )
+	)
+	if not exist "%PROGRAMS_DIR%" ($(MSG) Error: Can't find the programs directory. & exit 1) &:# Also fails if it's not defined
+
+	:# Add programs
+	$(MSG) Adding programs from %PROGRAMS_DIR%
+	pushd "%PROGRAMS_DIR%"
+	7z.exe -- a "%ZIP%" !PROGRAMS!
+	popd
+	
+	:# Add scripts for each language
+	for %%l in (Bash Batch PowerShell Tcl) do if defined %%l (
+	  pushd ..\%%l
+	  $(MSG) Adding %%l scripts from !CD!
+	  7z.exe -- a "%ZIP%" !%%l!
+	  popd
+	)
+	
+	:# Add the doc files
+	$(MSG) Adding README
+	pushd ..\Docs
+	7z.exe a "%ZIP%" Catalog.md
+	7z.exe rn "%ZIP%" Catalog.md README.md
+	popd
+<<
+
