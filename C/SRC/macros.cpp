@@ -357,7 +357,11 @@ int main(int argc, char *argv[])
   PRINTVAL(=__OS2);
   PRINTVAL(=__OS2__);
 
+  PRINTVAL(=WINDOWS);
   PRINTVAL(=_WINDOWS);
+  PRINTVAL(=__WINDOWS);
+  PRINTVAL(=__WINDOWS__);
+
   PRINTVAL(=_WINDLL);
   PRINTVAL(=_DLL);
   PRINTVAL(=_MANAGED);
