@@ -120,13 +120,16 @@
 *    2016-05-10 JFL Added option -F/--force to overwrite read-only files.     *
 *		    Version 3.5.    					      *
 *    2016-09-13 JFL Minor tweaks to fix compilation in Linux.                 *
+*    2017-01-30 JFL Improved mkdirp(), to avoid useless error messages.       *
+*                   Added a workaround for the WIN32 _fullpath() bug.         *
+*		    Version 3.5.1.    					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5"
-#define PROGRAM_DATE    "2016-09-13"
+#define PROGRAM_VERSION "3.5.1"
+#define PROGRAM_DATE    "2017-01-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -194,6 +197,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define _filelength(hFile) _filelengthi64(hFile)
 
+/* Front-end to _fullpath, with work around for trail spaces bug */
+char *fullpath(char *absPath, const char *relPath, size_t maxLength);  
+
 #endif /* _WIN32 */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -209,6 +215,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define NODENAME_SIZE 13		/* 8.3 name length = 8+1+3+1 = 13 */
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
+#define fullpath _fullpath
+
 #endif /* _MSDOS */
 
 /************************* OS/2-specific definitions *************************/
@@ -223,6 +231,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define PATHNAME_SIZE CCHMAXPATH	/* FILENAME_MAX incorrect in stdio.h */
 #define NODENAME_SIZE CCHMAXPATHCOMP
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
+
+#define fullpath _fullpath
 
 #endif /* _OS2 */
 
@@ -267,8 +277,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /* Redefine Microsoft-specific routines */
 off_t _filelength(int hFile);
-#define _fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
-
+#define fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
 #define LocalFileTime localtime
 
 #endif /* __unix__ */
@@ -828,7 +837,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	if (streq(pDE->d_name, ".") || streq(pDE->d_name, "..")) continue; /* These are not real subdirs */
 
 	strmfp(path3, path0, pDE->d_name); /* Source subdirectory path: path3 = path0/d_name */
-	_fullpath(fullpathname, path3, PATHNAME_SIZE); /* Build absolute pathname of source dir */
+	fullpath(fullpathname, path3, PATHNAME_SIZE); /* Build absolute pathname of source dir */
 	strmfp(path1, path3, pattern);	   /* Search pattern: path1 = path3/pattern */
 	strmfp(path2, ppath, pDE->d_name); /* Destination subdirectory path: path2 = ppath/dname */
 	strcat(path2, DIRSEPARATOR_STRING);/* Make sure the target path gets created if needed */
@@ -965,7 +974,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (older(p1, p2)) RETURN_CONST(0);
 
-    _fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
+    fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
     if (test == 1)
         {
 	if (iVerbose) {
@@ -1058,7 +1067,7 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 
     p = p1;		/* By default, show the source file name */
     if (show) p = p2;	/* But in showdest mode, show the destination file name */
-    _fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
+    fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
     if (test == 1)
         {
 	if (iVerbose) {
@@ -1407,14 +1416,16 @@ int mkdirp(const char *path, mode_t mode) {
     for (pc = pPath; *pc; pc++) {
       if ((*pc == DIRSEPARATOR_CHAR) && pc[1] && (pc[1] != DIRSEPARATOR_CHAR)) {
       	*pc = '\0';
-      	iErr = mkdir(pPath, mode);
-      	DEBUG_CODE(
-      	  if (!iErr) {
-	    DEBUG_PRINTF(("mkdir(\"%s\"); // Success\n", pPath));
-	  } else {
-	    XDEBUG_PRINTF(("mkdir(\"%s\"); // Failed\n", pPath));
-	  }
-        )
+      	if (access(pPath, F_OK)) { /* If the intermediate path does not exist */
+	  iErr = mkdir(pPath, mode); /* Then create it. */
+	  DEBUG_CODE(
+	    if (!iErr) {
+	      DEBUG_PRINTF(("mkdir(\"%s\"); // Success\n", pPath));
+	    } else {
+	      XDEBUG_PRINTF(("mkdir(\"%s\"); // Failed. errno=%d\n", pPath, errno));
+	    }
+	  )
+	}
       	*pc = DIRSEPARATOR_CHAR;
       }
     }
@@ -1679,4 +1690,58 @@ off_t _filelength(int hFile) {
 }
 
 #endif /* defined(__unix__) */
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|  Function	    fullpath						      |
+|									      |
+|  Description      Front-end to _fullpath, fixing the trail spaces bug	      |
+|									      |
+|  Parameters       Same as _fullpath					      |
+|									      |
+|  Returns	    Same as _fullpath					      |
+|									      |
+|  Notes	    _fullpath uses WIN32's GetFullPathName, which trims the   |
+|		    trailing dots and spaces from path names.		      |
+|		    							      |
+|  History	    							      |
+|    2017-01-30 JFL Created this routine.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifdef _WIN32
+
+char *fullpath(char *absPath, const char *relPath, size_t maxLength) {
+  int i;
+  int l = (int)strlen(relPath);
+  char *pszRet;
+  DEBUG_ENTER(("fullpath(%p, \"%s\", %lu);\n", absPath, relPath, (unsigned long)maxLength));
+  pszRet = _fullpath(absPath, relPath, maxLength);
+  if (pszRet) {
+    size_t  m = strlen(pszRet);  /* Current length of the output string */
+    maxLength -= 1;		 /* Maximum length of the output string */
+    if (!absPath) maxLength = m; /* _fullpath allocated a buffer */
+    for (i=l; i && strchr(". \t", relPath[i-1]); i--) ; /* Search the first trailing dot or space */
+    for ( ; i < l; i++) { /* Append the trailing dots or spaces to the output string */
+      if (!absPath) {		/* Extend the buffer allocated by _fullpath */
+      	char *pszRet2 = realloc(pszRet, ++maxLength + 1);
+      	if (!pszRet2) {
+      	  free(pszRet);
+      	  RETURN_STRING(NULL);
+      	}
+      	pszRet = pszRet2;
+      }
+      if (m < maxLength) {
+      	pszRet[m++] = relPath[i];
+      	pszRet[m] = '\0';
+      } else { /* The user-provided buffer is too small */
+      	errno = ENOMEM;
+      	RETURN_STRING(NULL);
+      }
+    }
+  }
+  RETURN_STRING(pszRet);
+}
+
+#endif /* _WIN32 */
 
