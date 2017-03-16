@@ -12,6 +12,21 @@
 *                   - Change the File functions to support UTF-8 names,       *
 *                     then change this program to be UTF-8 compatible.        *
 *                                                                             *
+*                   When writing to a physical disk, Windows quickly detects  *
+*		    new partition tables, mounts the corresponding volumes,   *
+*		    which locks the corresponding sectors. Then writing fails.*
+*                   To avoid that, clear partition tables in the MBR; then    *
+*                   write everything starting at sector 1; Then write the MBR.*
+*                   TO DO:                                                    *
+*                   Automate this, or write backwards from the end.           *
+*                   Alternatives: Try using volume locking IOCTLs?            *
+*                   File System Management:                                   *
+*    https://msdn.microsoft.com/en-us/library/windows/desktop/aa364407.aspx   *
+*                   Disk Management Control Codes:                            *
+*    https://msdn.microsoft.com/en-us/library/windows/desktop/aa363979.aspx   *
+*                   Volume Management Control Codes:                          *
+*    https://msdn.microsoft.com/en-us/library/windows/desktop/aa365729.aspx   *
+*                                                                             *
 *   History:								      *
 *    1994-09-09 JFL Created this program.				      *
 *    1994-12-15 JFL Dump the partition table if this is the boot sector.      *
@@ -74,13 +89,15 @@
 *		    Use the same units for disk and partition sizes.	      *
 *		    Added options -H and -I to control the disk size SI unit. *
 *		    Version 3.7.					      *
+*    2017-02-11 JFL Added a dirty workaround for Windows' auto-mount feature. *
+*		    Version 3.8.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.7"
-#define PROGRAM_DATE    "2016-12-05"
+#define PROGRAM_VERSION "3.8"
+#define PROGRAM_DATE    "2017-02-11"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -228,9 +245,14 @@ int _cdecl main(int argc, char *argv[]) {
   char *pBuf = NULL;
   char *pszHDName = NULL;	// Hard disk name
   HANDLE hDisk = NULL;		// Hard disk handle
-  HDGEOMETRY sHdGeometry;	// Hard disk geometry
-  int nHeads;			// Hard disk geometry: Number of heads
-  int nSectPerTrack;		// Hard disk geometry: Number of sectors/track
+#ifndef _MSDOS
+#define ZINIT = {0}		// Clear the structure
+#else
+#define ZINIT      		// This triggers a compilation error in MSVC 1.5.
+#endif
+  HDGEOMETRY sHdGeometry ZINIT;	// Hard disk geometry
+  int nHeads = 0;		// Hard disk geometry: Number of heads
+  int nSectPerTrack = 0;	// Hard disk geometry: Number of sectors/track
   int iListDrives = FALSE;	// If TRUE, display a list of available drives.
   int iAppendZeros = FALSE;	// If TRUE, append zeros as needed beyond the end of the source data copied.
   int iFindBS = FALSE;	        // If TRUE, scan the disk looking for boot sectors.
@@ -799,6 +821,31 @@ geometry_failure:
     printf("Press ESC to abort the copy.\n");
     iProgress = TRUE;
   }
+  /* Dirty workaround for Windows' auto-mount feature, that blocks access to the partitions while we write them */
+#ifdef _WIN32
+  int iWriteMbrLast = FALSE;
+  int nPhases = 1;
+  int iFromSectPerSect = iSSize / BlockSize(hFrom);
+  int iToSectPerSect = 0;
+  QWORD qwFromSect0 = qwFromSect;
+  if (hTo) iToSectPerSect = iSSize / BlockSize(hTo);
+  if (hTo && (qwMB >= 1) && (qwToSect == 0)) { /* If copying a whole disk image */
+    iWriteMbrLast = TRUE;
+    nPhases = 2;
+  }
+  for (int iPhase = 0; iPhase < nPhases; iPhase++) {
+    if (iWriteMbrLast) {
+      if (iPhase == 0) { /* Copy everything but the MBR */
+      	qwNBytes -= iSSize;
+      	qwFromSect += iFromSectPerSect;
+      	qwToSect += iToSectPerSect;
+      } else { /* Phase 1: Copy the MBR */
+      	qwNBytes = iSSize;
+      	qwFromSect = qwFromSect0;
+      	qwToSect = 0;
+      }
+    }
+#endif /* defined(_WIN32) */
   for ( ;
        qwNBytes != (DWORD)0;
        qwNBytes -= (DWORD)iBSize, qwFromSect += nFrom, qwToSect += nTo
@@ -1015,6 +1062,10 @@ geometry_failure:
       if (iErr) break;
     }
   }
+  /* Dirty workaround for Windows' auto-mount feature, that blocks access to the partitions while we write them */
+#ifdef _WIN32
+  } /* End of the 2-phase copy */
+#endif /* defined(_WIN32) */
 
   BlockClose(hTo);
   BlockClose(hFrom);
@@ -1237,10 +1288,10 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
     qwSize /= wKB;	// Change to the next higher scale
   }
   DWORD dwSize = (DWORD)qwSize;
-  if (dwSize >= (10*iKB)) { // We'll have two significant digits. Switch to the next scale.
+  if (dwSize >= (10U*iKB)) { // We'll have two significant digits. Switch to the next scale.
     dwSize /= wKB;
     i++;
-  } else if (dwSize >= iKB) { // We'll have 1 significant digits, + 1 after the period.
+  } else if (dwSize >= (unsigned)iKB) { // We'll have 1 significant digits, + 1 after the period.
     sprintf(szFraction+1, "%03ld", ((dwSize % wKB) * 1000) / wKB);
     dwSize /= wKB;
     i++;
@@ -1325,7 +1376,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x3C, "PQMagic NetWare" },      // PowerQuest PartitionMagic hidden NetWare
   { 0x40, "VENIX 80286" },	    // VENIX 80286
   { 0x41, "PowerPC boot" },	    // PowerPC boot partition
-  { 0x42, "MS Dyn Extd" },	    // Dynamic Extended partition
+  { 0x42, "MS Dyn Extd" },	    // Dynamic Extended partition, aka. Logical Disk Manager (LDM) partition.
   { 0x45, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x46, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x47, "EUMEL/Elan" },	    // EUMEL/Elan
@@ -1359,7 +1410,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x75, "PC/IX" },		    // PC/IX
   { 0x76, "Reserved" },		    // officially listed as reserved
   { 0x7E, "F.I.X." },	 	    // F.I.X.
-  { 0x80, "Minix < v1.4a" },	    // Minix v1.1 - 1.4a
+  { 0x80, "Minix < v1.4a" },	    // Minix v1.1 - 1.4a, or MS NT Fault Tolerant partition
   { 0x81, "Minix 1.4b+" },	    // Minix Boot partition
   { 0x82, "Minix Swap" },	    // Minix Swap partition
   { 0x82, "Solaris" },		    // Solaris (Unix)
@@ -1405,7 +1456,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0xB8, "BSDI swap" },	    // BSDI swap partition (secondarily file system)
   { 0xBE, "Solaris boot" },	    // Solaris boot partition
   { 0xBF, "Solaris" },		    // Solaris
-  { 0xC0, "DR-DOS secure" },	    // DR-DOS/Novell DOS secured partition
+  { 0xC0, "DR-DOS secure" },	    // DR-DOS/Novell DOS secured partition, or MS Valid NT Fault Tolerant partition
   { 0xC1, "DR-DOS secure 12" },	    // DR DOS 6.0 LOGIN.EXE-secured 12-bit FAT partition
   { 0xC4, "DR-DOS secure 16" },	    // DR DOS 6.0 LOGIN.EXE-secured 16-bit FAT partition
   { 0xC5, "DR-DOS secure Ex" },	    // DR DOS 6.0 LOGIN.EXE-secured 16-bit FAT partition
