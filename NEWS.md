@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [unreleased] 2017-03-16
+### Added
+- C/SRC/codepage.c: A new tool for displaying information about the current and available console code pages.
+
+### Changed
+- C/SRC/update.c: Now includes a workaround for the WIN32 incompatibility with pathnames ending with spaces or dots.
+- C/SRC/sector.cpp: Added a dirty workaround for Windows' auto-mount feature, which prevented from copying
+  a full disk image to a blank disk. (As soon as it detects a valid partition table, Windows mounts it, which locks the drive.)
+- C/SRC/chars.c: Added an optional code page argument, for displaying characters for a different Windows code page.
+
 ## [unreleased] 2017-03-12
 ### Added
 - C/include/configure.bat, make.bat: Added support for Visual Studio 2017

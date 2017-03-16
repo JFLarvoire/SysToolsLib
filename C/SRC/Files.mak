@@ -19,6 +19,7 @@ PROGRAMS = \
   2clip.exe       \
   backnum.exe     \
   chars.exe       \
+  codepage.exe    \
   conv.exe        \
   cpuid.exe       \
   deffeed.exe     \
@@ -67,12 +68,11 @@ ZIPSOURCES =		 \
   1clip.mak              \
   2clip.c                \
   2clip.mak              \
-  All.mak                \
-  arm.mak                \
   backnum.c              \
-  bios.mak               \
   chars.c                \
   clean.bat              \
+  codepage.c             \
+  codepage.mak           \
   configure              \
   configure.bat          \
   configure.msvclibx.bat \
@@ -87,7 +87,6 @@ ZIPSOURCES =		 \
   dirc.c                 \
   dirc.mak               \
   dirsize.c              \
-  dos.mak                \
   driver.c               \
   driver.mak             \
   dump.c                 \
@@ -95,7 +94,9 @@ ZIPSOURCES =		 \
   exe.bat                \
   Files.mak              \
   gpt.cpp		 \
+  gpt.mak		 \
   inicomp.c              \
+  inicomp.mak            \
   lessive.c              \
   macros.cpp             \
   make.bat               \
@@ -103,6 +104,7 @@ ZIPSOURCES =		 \
   msgbox.c               \
   msgbox.mak             \
   msgnames.h             \
+  NMakefile              \
   README.txt             \
   redo.c                 \
   redo.mak               \
@@ -112,7 +114,6 @@ ZIPSOURCES =		 \
   smbios.mak             \
   smbios_defs.c          \
   smbios_lib.c           \
-  src2objs.bat           \
   tee.c                  \
   Tools.lst              \
   tree.h                 \
@@ -125,7 +126,4 @@ ZIPSOURCES =		 \
   uuid.c		 \
   which.c                \
   whichinc.c             \
-  win32.mak              \
-  win64.mak              \
-  win95.mak              \
 
