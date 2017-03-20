@@ -14,6 +14,7 @@
 *    2017-03-03 JFL Added routine ConvertBuf(), and the fputc() series.	      *
 *    2017-03-05 JFL Rewrote fputcU() & fputsU() to write UTF16 to the console.*
 *    2017-03-12 JFL Restructured the UTF16 writing mechanism.		      *
+*    2017-03-20 JFL Bug fix: _setmodeX() now checks its input values validity.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -195,6 +196,11 @@ int iWideFileMode[FOPEN_MAX] = {0};
 /* Change the file translation mode, and record it in iWideFileMode[] */
 int _setmodeX(int iFile, int iMode) {
   int iOldMode;
+  /* Check the input values validity */
+  if ((iFile < 0) || (iFile >= FOPEN_MAX)) {
+    errno = EINVAL;
+    return -1;
+  }
   /* Workaround for an MS C library bug: it cannot switch back directly from WTEXT to BINARY */
   if ((iMode & _O_BINARY) && (iWideFileMode[iFile] & (_O_U16TEXT | _O_WTEXT))) {
     iOldMode = _setmode(iFile, _O_TEXT);
