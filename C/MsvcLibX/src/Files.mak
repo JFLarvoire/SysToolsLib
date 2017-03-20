@@ -73,12 +73,14 @@ OBJECTS = \
     +open.obj			\
     +readlink.obj		\
     +realpath.obj		\
+    +rmdir.obj			\
     +spawn.obj			\
     +strerror.obj		\
     +strndup.obj		\
     +strptime.obj		\
     +symlink.obj		\
     +uname.obj			\
+    +unlink.obj			\
     +utime.obj			\
     +utimes.obj			\
     +xfreopen.obj		\
@@ -240,6 +242,8 @@ readlink.c: $(CI)\debugm.h $(I)\unistd.h $(I)\reparsept.h
 
 realpath.c: $(CI)\debugm.h $(I)\unistd.h
 
+rmdir.c: $(CI)\debugm.h $(I)\MsvcLibX.h $(I)\sys\stat.h
+
 spawm.c: $(CI)\debugm.h $(I)\MsvcLibX.h $(I)\process.h
 
 strerror.c: $(I)\MsvcLibX.h
@@ -251,6 +255,8 @@ strerror.c: $(I)\MsvcLibX.h
 symlink.c: $(CI)\debugm.h $(I)\reparsept.h $(I)\unistd.h
 
 uname.c: $(I)\MsvcLibX.h $(I)\sys\utsname.h
+
+unlink.c: $(CI)\debugm.h $(I)\MsvcLibX.h $(I)\sys\stat.h
 
 utime.c: $(CI)\debugm.h $(I)\unistd.h $(I)\utime.h $(I)\sys\time.h
 
