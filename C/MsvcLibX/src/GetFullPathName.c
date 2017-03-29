@@ -18,9 +18,13 @@
 
 #define _UTF8_SOURCE
 
+#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+
 #include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "debugm.h"	/* MsvcLibX debugging macros */
 
 /*---------------------------------------------------------------------------*\
@@ -33,10 +37,17 @@
 |                                                                             |
 |   Return value:   The length of the full pathname, or 0 if error	      |
 |                                                                             |
-|   Notes:	    Warning: Windows' GetFullPathname trims trailing dots and |
+|   Notes:	    Warning: Windows' GetFullPathName trims trailing dots and |
 |		    spaces from the path.				      |
 |		    This derived function reproduces the bug.		      |
 |                   The caller MUST add trailing dots & spaces back if needed.|
+|                                                                             |
+|                   Warning: Windows' GetFullPathName returns unpredictable   |
+|                   results when invoked in a multithreaded application.      |
+|                   Windows' own doc recommends not using GetFullPathName in  |
+|                   this case.                                                |
+|                   Method 2 works around this limitation by doing its own    |
+|                   path management.                                          |
 |                                                                             |
 |   History:								      |
 |    2014-02-07 JFL Created this routine.				      |
@@ -51,7 +62,7 @@ DWORD WINAPI GetFullPathNameU(LPCTSTR lpName, DWORD nBufferLength, LPTSTR lpBuf,
   DWORD dwResult;
   WCHAR *wlpFilePart;
 
-  DEBUG_ENTER(("GetFullPathNameU(\"%s\", %d, %p, %p);\n", lpName, nBufferLength, lpBuf, lpFilePart));
+  DEBUG_ENTER(("GetFullPathNameU(\"%s\", %d, %p, %p);\n", lpName, (int)nBufferLength, lpBuf, lpFilePart));
 
   n = MultiByteToWideChar(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			  0,			/* dwFlags, */
@@ -92,8 +103,9 @@ DWORD WINAPI GetFullPathNameU(LPCTSTR lpName, DWORD nBufferLength, LPTSTR lpBuf,
     /* So ((n-1) - m) is the offset of the file part in the full UTF-8 pathname */
     *lpFilePart = lpBuf + (n - 1) - m;
   }
+  n -= 1; /* Do not count the final NUL */
 
-  RETURN_INT_COMMENT(n-1, ("\"%s\" \"%s\"\n", lpBuf, lpFilePart?*lpFilePart:"(NULL)"));
+  RETURN_INT_COMMENT(n, ("\"%s\" \"%s\"\n", lpBuf, lpFilePart?*lpFilePart:"(NULL)"));
 }
 
 #endif /* defined(_WIN32) */
