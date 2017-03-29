@@ -15,6 +15,7 @@
 *    2017-03-05 JFL Rewrote fputcU() & fputsU() to write UTF16 to the console.*
 *    2017-03-12 JFL Restructured the UTF16 writing mechanism.		      *
 *    2017-03-20 JFL Bug fix: _setmodeX() now checks its input values validity.*
+*    2017-03-22 JFL Bug fix: Static variables in fputcM must be thread-local. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -331,11 +332,13 @@ int fputwsW(const wchar_t *pws, FILE *f) {
 #define IS_ASCII(c) ((c&0x80) == 0)
 #define IS_LEAD_BYTE(c) ((c&0xC0) == 0xC0)
 
+#define STATIC __declspec(thread) static
+
 /* Write a UTF-8 byte, converting full UTF-8 characters to the console code page */
 int fputcM(int c, FILE *f, UINT cp) {
-  static char buf[5];
-  static int nInBuf = 0;
-  static int nExpected = 0;
+  STATIC char buf[5];
+  STATIC int nInBuf = 0;
+  STATIC int nExpected = 0;
   wchar_t wBuf[3];
   int n;
   int iRet;
