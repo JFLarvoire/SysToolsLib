@@ -76,6 +76,8 @@ int CompactPath(const char *path, char *outbuf, size_t bufsize) {
   int isAbsolute = FALSE;
   int nDotDotParts = 0;
 
+  DEBUG_ENTER(("CompactPath(\"%s\", %p, %lu);\n", path, outbuf, (unsigned long)bufsize));
+
   pcIn = path;
   inSize = (int)strlen(path) + 1;
   pcOut = outbuf;
@@ -101,7 +103,7 @@ int CompactPath(const char *path, char *outbuf, size_t bufsize) {
     if ((c != '\\') && ((lastc == '\\') || (lastc == '\0'))) { /* Beginning of a new node */
       if (nParts == MAX_SUBDIRS) {
 	errno = ENAMETOOLONG;
-	return -1;
+	RETURN_INT_COMMENT(-1, ("Name too long\n"));
       }
       pParts[nParts] = pcIn + i;
       lPart = 0;
@@ -152,7 +154,7 @@ its_a_dot_part:
   if (!outSize) {
 not_compact_enough:
     errno = ENAMETOOLONG;
-    return -1;
+    RETURN_INT_COMMENT(-1, ("Name too long\n"));
   }
   outSize -= 1;	/* Leave room for the final NUL */
   if (isAbsolute) {
@@ -184,7 +186,7 @@ not_compact_enough:
   }
   *pcOut = '\0';
 
-  return (int)(pcOut - outbuf);
+  RETURN_INT_COMMENT((int)(pcOut - outbuf), ("\"%s\"\n", outbuf));
 }
 
 
@@ -307,11 +309,11 @@ int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, 
             && ((path[2] == '\\') || (path[2] == '/')))
       )) { /* If this is a relative pathname */
     path0 = malloc(UTF8_PATH_MAX);
-    if (!path0) return -1; /* errno = ENOMEM */
+    if (!path0) RETURN_INT(-1); /* errno = ENOMEM */
     if (!GetFullPathNameU(path, UTF8_PATH_MAX, path0, NULL)) {
       free(path0);
       errno = EINVAL;
-      return -1;
+      RETURN_INT(-1);
     }
     path = path0;
   }
