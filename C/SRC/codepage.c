@@ -40,6 +40,8 @@
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
+#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <io.h>         /* For _setmode() */
