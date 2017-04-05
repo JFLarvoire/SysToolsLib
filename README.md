@@ -15,7 +15,7 @@ Major highlights:
 - Windows clipboard content filtering tools. They bring the power of the command line to all GUI apps!
 - System management tools. Manage the hardware, BIOS, hard disks, drivers, etc.
 
-More info [here](Docs/Catalog.md).
+For a list of available tools and their description, see [Catalog.md](Docs/Catalog.md).
 
 ### Development Libraries
 
@@ -31,9 +31,16 @@ Major highlights:
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
   with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM.
   More details in the [MsvcLibX documentation](C/MsvcLibX/README.md).
+- A set of debugging macros for C programs, similar in use and effect to those for scripting languages. [debugm.h](C/include/debugm.h)  
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
   It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.  
   This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.md).
+- SysLib.lib - A set of system management functions, with versions for DOS, Windows, and Linux.
+- Bios.lib - A library for writing C or C++ programs using only the legacy BIOS: Option ROMs, OS boot loaders, MS-DOS drivers, or TSRs.
+- LoDos.lib - A library for the specific needs of MS-DOS drivers and TSRs.
+- PMode.lib - A libray of switching BIOS, DOS or Windows 95 programs to the 80x86 protected mode.
+
+For more details on these C libraries, see [C/README.md](C/README.md), and the README.md files in the C/ subdirectories.
 
 Programming languages:
 
@@ -42,7 +49,7 @@ Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Li
 
 Jean-François Larvoire  
 jf.larvoire@hpe.com  
-2016-09-29
+2017-04-05
 
 
 ## Installation
@@ -124,8 +131,8 @@ Option | Description
 
 Most of the development work was done by Jean-François Larvoire during work hours at HP then HPE.
 It's thus HPE that is the copyright owner of this code.  
-HPE legal authorized in March 2016 the open-source release of this code, 
-provided that future contributors agree with the following conditions:
+HPE legal authorized in March 2016 for a first part, October 2016 for a second part, and February 2017 for the last part,
+the open-source release of this code, provided that future contributors agree with the following conditions:
 
 - Contributions from independent individuals are welcome under the rules of the Apache 2.0 license.
 - Contributions from employees of outside (non-HPE) companies will only be accepted after
@@ -134,7 +141,7 @@ provided that future contributors agree with the following conditions:
 
 ## License
 
-Copyright 2016 Hewlett Packard Enterprise
+Copyright 2017 Hewlett Packard Enterprise
 
 All files in this distribution are licensed under the Apache License version 2.0.
 You may not use any of these files except in compliance with this License.
