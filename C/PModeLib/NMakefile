@@ -1,0 +1,342 @@
+###############################################################################
+#									      #
+#   File name:	    NMakefile						      #
+#									      #
+#   Description:    An NMake makefile to build the PMODE.LIB library          #
+#									      #
+#   Notes:	    The following macros / environment variables may          #
+#		    be predefined. This allows to use the same makefile       #
+#		    on a machine with both DOS & OS/2 versions of the         #
+#		    tools.						      #
+#		    							      #
+#		     o DOS_AS		Assembler			      #
+#		     o DOS_CC		C compiler			      #
+#		     o DOS_LK		Linker				      #
+#		     o DOS_LB		Librarian			      #
+#		     o TMP		Temporary directory		      #
+#		     o BIOSLIB		BIOS.LIB and include files	      #
+#		     o LODOSLIB		LODOS.LIB and include files	      #
+#									      #
+#		    Supports the standard GNU targets:			      #
+#		    all, clean, mostlyclean, distclean, dist		      #
+#									      #
+#   History:								      #
+#    1995-02-07 JFL Adapted from NODOSLIB.MAK				      #
+#    2015-10-19 JFL Added support for the new generic configure.bat/make.bat. #
+#    2016-11-16 JFL Renamed from PMode.mak to NMakefile.		      #
+#		    Added a few targets for use in recursive builds.	      #
+#    2017-04-04 JFL Define SOURCES instead of OBJECTS, and use src2objs.mak.  #
+#		    Use touch.exe if available, else use internal DOS	      #
+#		     commands for doing the same, albeit less efficiently.    #
+#		    Rebuild pmode.inc only after a distclean. Avoids warnings.#
+#									      #
+#      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Memory model for C compilation and misc macros
+MODELE=S			# Memory model for C compilation. Good for both small & tiny programs.
+
+S=.				# Where to find source files
+R=.				# Root output path.
+!IF DEFINED(OUTDIR)
+R=$(OUTDIR)
+!ENDIF
+B=$(R)				# Where to store binary executable files
+O=$(R)\obj			# Object files relative path
+L=$(R)\list			# List files relative path
+N=$(BIOSLIB)			# Where to find the bioslib (ex nodoslib) files
+M=$(LODOSLIB)			# Where to find the lodoslib files
+
+.SUFFIXES: .inc .h
+
+!IFDEF _DEBUG
+DD=/D_DEBUG
+!ELSE
+DD=
+!ENDIF
+
+# Default values for macros TMP & LNK. Nmake always predefines AS & CC.
+!IFNDEF TMP
+!IFDEF TEMP
+TMP=$(TEMP)
+!ELSE
+TMP=.
+!ENDIF
+!ENDIF
+
+# Definitions set by the old go.bat, but not by the new make.bat
+!IFDEF DOS_PATH
+PATH=$(DOS_PATH)
+CC=$(DOS_CC)
+AS=$(DOS_AS)
+LK=$(DOS_LK)
+LB=$(DOS_LB)
+!ENDIF
+
+# Useful messaging macros
+MSG=>con echo		# Command for writing a progress message on the console
+HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
+
+# Generalized rule for C compilation
+CFLAGS=/A$(MODELE) $(DD) /Fc$(L)\ /Fo$(O)\ /G2rs /I$(N) /I$(M) /Oaes /W3 /Zpil
+{$(S)}.c{$(O)}.obj:
+    $(MSG) Compiling $(<F) ...
+    $(CC) $(CFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+# Generalized rule for Assembly language.
+AFLAGS=/c /Cx $(DD) /I$(N) /I$(M) /Fl$(L)\ /Fo$(O)\ /Sn /W3 /Zdim
+{$(S)}.asm{$(O)}.obj:
+    $(MSG) Assembling $(<F) ...
+    $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+# Inference rule for .h files conversion
+{$(S)}.h{$(S)}.inc:
+    $(MSG) Converting $(<F) ...
+    $(AS:ML=H2INC) /C $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+# Inference rule to link a test program
+LIB=$(BIOSLIB);$(LODOSLIB);$(PMODE)
+LIBS=bios.lib lodos.lib pmode.lib
+LFLAGS=/map /li /batch /nod /noe /onerror:noexe
+BB=NUL
+{$(O)\}.obj{$(B)\}.com:
+    @echo Applying inference rule {$$(O)\}.obj{$$(B)\}.com:
+    $(MSG) Linking $(@F) ...
+    set LIB=$(LIB)
+    set PATH=$(PATH)
+    copy << $(L)\$(*B).LNK
+$(BIOSLIB)\OBJ\startcom.obj $**
+$@
+$(L)\$(*F)
+$(LIBS)
+$(LFLAGS) /tiny
+<<NOKEEP
+    @echo "	type $(L)\$(*B).LNK"
+    @$(COMSPEC) /c "type $(L)\$(*B).LNK"
+    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
+    if exist $@ copy $@ $(BB)
+    cd $(L)
+    $(MAPSYM) $(*F).map
+    cd $(MAKEDIR)
+    $(MSG) ... done.
+
+#*****************************************************************************#
+#			     Specific dependancies			      #
+#*****************************************************************************#
+
+all pmodelib: headline check_reqs $(B)\pmode.lib
+
+headline:
+    $(HEADLINE) Building the PModeLib library
+
+check_reqs:
+    $(MSG) Checking requirements ...
+    @cmd /e:on /v:on /c <<"$(TMP)\check_reqs-$(PID).bat" || $(REPORT_FAILURE) # Using an outside script to allow ORing ERR results
+        @echo off & set "ERR=0" & set "CANT_FIND=Error: Configure.bat did not find"
+	if not defined MSVC	set "ERR=1" & echo !CANT_FIND! Microsoft Visual C++ 1.x (MSVC)
+	if not defined MASM	set "ERR=1" & echo !CANT_FIND! Microsoft Assembler (MASM)
+	if not defined BIOSLIB	set "ERR=1" & echo !CANT_FIND! the BIOSLIB library
+	if not defined LODOSLIB	set "ERR=1" & echo !CANT_FIND! the LODOSLIB library
+        exit !ERR!
+<<
+    $(MSG) ... Done
+
+# Create the subdirectories if they don't exist
+dirs: $(B) $(O) $(L)
+
+$(B) $(O) $(L):
+    $(MSG) Creating directory $@
+    mkdir $@
+
+# Output the default goal name for make.bat
+goal_name:
+    echo pmode
+
+# Erase all output files
+mostlyclean:
+    -rd /S /Q $(L)	>NUL 2>&1
+    -rd /S /Q $(O)	>NUL 2>&1
+    -del /Q *.pdb	>NUL 2>&1
+    -del /Q *.bak	>NUL 2>&1
+    -del /Q *~		>NUL 2>&1
+    -del /Q *.log	>NUL 2>&1
+    -del /Q *.zip	>NUL 2>&1
+
+clean: mostlyclean
+    -del /Q $(B)\*.lib	>NUL 2>&1
+    -del /Q $(B)\*.com	>NUL 2>&1
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+
+distclean: clean
+    :# Maybe we should not clean pmode.inc or windef.inc, as h2inc.exe is only available with old MASM assemblers
+    -del /Q pmode.inc	>NUL 2>&1 &:# Recreating it causes unavoidable warnings
+    -del /Q windef.inc	>NUL 2>&1 &:# Recreating it causes unavoidable warnings
+    -del /Q config.*	>NUL 2>&1
+
+# Erase all global environment variables created by this build
+VARS=PMODELIB		# Global environment variables generated here
+cleanenv:
+    call <<"$(TMP)\cleanenv-$(PID).bat" &:# Delete variables created here
+      @echo off
+      setlocal EnableExtensions EnableDelayedExpansion
+      set "KEY=HKCU\Environment"
+      if not "$(VARS)"=="" for %%v in ($(VARS)) do @(
+	>>"$(TMP)\cleanenv-$(PID).lst" (echo %%v) &:# Pass the name back to make.bat, for deleting it in the current shell environment
+	set "VALUE="
+	for /f "tokens=1,3" %%a in ('reg query "%KEY%" ^| findstr /i /b /r /c:" *%%v "') do set VALUE="%%b"
+	if defined VALUE ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
+	  set CMD=reg delete "%KEY%" /v %%v /f
+	  echo !CMD!
+	  !CMD! >NUL
+	)
+      )
+<<
+
+# Run the configure.bat script in every subdirectory
+config:
+    rem Nothing to do in $(MAKEDIR) as there is no further child level
+
+# Dummy target, to display a help screen
+help:
+    @type <<
+Targets:
+
+  pmode     Rebuild the pmode.lib library (Default)
+  clean     Delete all built files
+  test      Build the pmode library tests (pmodetst.com and vcpitst.com)
+  zip       Build a source archive in pmodelib.zip. Requires 7-zip.
+<<NOKEEP
+
+# Dummy target, to build a source archive
+dist zip:
+    $(MSG) Building pmodelib.zip ...
+    if exist pmodelib.zip del pmodelib.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    7z.exe a pmodelib.zip *.txt *.bat *.mak *.asm *.c *.h *.inc || $(REPORT_FAILURE)
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    7z.exe d pmodelib.zip config.*
+    $(MSG) ... done.
+
+# Build the library test programs
+test: pmode pmodetst # vcpitst
+
+pmodetst: dirs $(O)\pmodetst.obj $(B)\pmodetst.com
+
+vcpitst: dirs $(O)\vcpitst.obj $(B)\vcpitst.com
+
+SOURCES = \
+    A20GATE.C		\
+    A20GATEI.ASM        \
+    CPUID.ASM           \
+    DPMI.ASM            \
+    DPMIGATE.C          \
+    FLATCOPY.C          \
+    GETPMLIN.C          \
+    MAPP2L.C            \
+    PM2APPY.C           \
+    RM2PM.ASM           \
+    SEGBASE.ASM         \
+    VCPI.ASM            \
+    VM2PM.C             \
+    X86.ASM             \
+    XMS.ASM             \
+
+XSOURCES = \
+    DPMITEST.ASM        \
+    PMODETST.C          \
+    VCPITST.ASM         \
+
+!IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
+PROGRAM=PMODELIB
+!INCLUDE <SRC2OBJS.MAK>
+!ENDIF
+
+$(B)\pmode.lib: dirs $(S)\PMODE.INC $(OBJECTS)
+    $(MSG) Creating $@ ...
+    if exist $@ del $@ >nul
+    $(LB) @<<$(L)\pmode.lnk || $(REPORT_FAILURE)
+$@
+y
+$(OBJECTS)
+$(L)\$(*B).lst ;
+<<KEEP
+    $(MSG) ... done.
+
+
+# Include files dependancies
+
+$(S)\A20Gate.c:     $(S)\PMODE.H	$(N)\CLIBDEF.H
+
+$(S)\A20GateI.asm:  $(N)\ADEFINE.INC	$(N)\IO8042.INC
+
+$(S)\CPUID.ASM:
+
+$(S)\DPMI.ASM:	    $(S)\PMODE.INC
+
+$(S)\DPMIGate.c:    $(S)\PMODE.H	$(N)\CLIBDEF.H	    $(N)\UTILDEF.H
+
+$(S)\flatcopy.c:    $(S)\pmode.h	$(M)\lodos.h	    $(M)\msdos.h
+
+$(S)\GETPMLIN.C:    $(S)\PMODE.H	$(N)\CLIBDEF.H	    $(N)\UTILDEF.H
+
+$(S)\MapP2L.c:	    $(S)\pmode.h
+
+$(S)\PM2APPY.C:     $(S)\PMODE.H	$(N)\UTILDEF.H	    $(M)\LODOS.H
+
+$(S)\PMODE.H:	    $(S)\WINDEF.H
+    touch $@ || copy /b $@+NUL &:# Use touch.exe if available, else use internal DOS commands for doing the same, albeit less efficiently.
+
+$(S)\PMODE.INC:     $(S)\PMODE.H	$(S)\WINDEF.H
+
+$(S)\RM2PM.ASM:     $(N)\ADEFINE.INC
+
+$(S)\SEGBASE.ASM:   $(N)\ADEFINE.INC
+
+$(S)\VCPI.asm:
+
+$(S)\VM2PM.C:	    $(S)\PMODE.H	$(N)\UTILDEF.H
+
+$(S)\X86.asm:
+
+$(S)\XMS.asm:	    $(N)\ADEFINE.INC
+
+
+#*****************************************************************************#
+#                          Test programs dependancies                         #
+#*****************************************************************************#
+
+$(B)\pmodetst.com:  \
+	    $(S)\pmodetst.c	\
+	    $(N)\clibdef.h	$(N)\utildef.h	    bios.lib		\
+	    $(O)\startcom.obj	$(S)\pmode.h	    pmode.lib		\
+	    lodos.lib
+
+$(B)\scanmem.com:  \
+	    $(S)\scanmem.c     \
+	    $(N)\clibdef.h	$(N)\utildef.h	    bios.lib		\
+	    $(O)\startcom.obj	$(S)\pmode.h	    pmode.lib
+
+$(B)\vcpitst.com:   \
+	    $(S)\vcpitst.asm	\
+	    pmode.lib		$(S)\PMODE.INC
+
+$(B)\vcpitst.exe:   \
+	    $(S)\vcpitst.asm	\
+	    pmode.lib		$(S)\PMODE.INC
+
+$(B)\sysmap.com:    \
+	    $(S)\sysmap.c	\
+	    $(N)\clibdef.h	$(N)\utildef.h	    bios.lib		\
+	    $(O)\startcom.obj	$(S)\pmode.h	    pmode.lib
+
+$(B)\vxd.com:	 \
+	    $(S)\vxd.c		\
+	    $(N)\clibdef.h	$(N)\utildef.h	    bios.lib		\
+	    $(O)\startcom.obj	$(S)\pmode.h	    pmode.lib

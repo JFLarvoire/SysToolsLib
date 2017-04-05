@@ -1,0 +1,376 @@
+###############################################################################
+#									      #
+#   File name:	    NMakefile						      #
+#									      #
+#   Description:    An NMake makefile to build the LODOS.LIB library	      #
+#									      #
+#   Notes:	    The following macros / environment variables must be      #
+#		    predefined. This allows to use the same makefile on       #
+#		    machines with various locations for the build tools.      #
+#									      #
+#		     o DOS_AS	    Assembler				      #
+#		     o DOS_CC	    C compiler				      #
+#		     o DOS_LB	    Librarian				      #
+#		     o TMP	    Temporary directory 		      #
+#									      #
+#		    Supports the standard GNU targets:			      #
+#		    all, clean, mostlyclean, distclean, dist		      #
+#									      #
+#   History:								      #
+#    1995-08-25 JFL Created this file, adapted from NODOSLIB.MAK.	      #
+#    1995-11-10 JFL Added module GetVmID.ASM				      #
+#    2015-10-19 JFL Added support for the new generic configure.bat/make.bat. #
+#    2015-10-28 JFL Assemble startexe.asm by default, but don't put it in the #
+#		    library.						      #
+#    2016-11-16 JFL Renamed from LoDosLib.mak to NMakefile.		      #
+#		    Added a few targets for use in recursive builds.	      #
+#    2017-04-04 JFL Define SOURCES instead of OBJECTS, and use src2objs.mak.  #
+#		    Fixed dosdrv.inc generation rules to avoid a warning.     #
+#		    Rebuild dosdrv.inc only after a distclean. Avoids warngs. #
+#		    							      #
+#      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Memory model for C compilation and misc macros
+MODELE=S			# Memory model for C compilation. Good for both small & tiny programs.
+
+S=.				# Sources files relative path
+R=.				# Root output path.
+!IF DEFINED(OUTDIR)
+R=$(OUTDIR)
+!ENDIF
+B=$(R)				# Where to store binary executable files
+O=$(R)\obj			# Object files relative path
+L=$(R)\list			# List files relative path
+N=$(BIOSLIB)			# Where to get the bioslib (ex nodoslib) files
+
+# Default values for macros TMP & LNK. Nmake always predefines AS & CC.
+!IFNDEF TMP
+!IFDEF TEMP
+TMP=$(TEMP)
+!ELSE
+TMP=.
+!ENDIF
+!ENDIF
+
+# Definitions set by the old go.bat, but not by the new make.bat
+!IFDEF DOS_PATH
+PATH=$(DOS_PATH)
+CC=$(DOS_CC)
+AS=$(DOS_AS)
+LB=$(DOS_LB)
+!ENDIF
+
+# Useful messaging macros
+MSG=>con echo		# Command for writing a progress message on the console
+HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
+
+# Generalized rule for C compilation
+CFLAGS=/A$(MODELE) /Fc$(L)\ /Fo$(O)\ /G2rs /I$(N) /Oaes /W3 /Zpil
+{$(S)}.c{$(O)}.obj:
+    $(MSG) Compiling $(<F) ...
+    $(CC) $(CFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+# Generalized rule for Assembly language
+AFLAGS=/Cx /Fl$(L)\ /Fo$(O)\ /I$(N) /Sn /Zim
+{$(S)}.asm{$(O)}.obj:
+    $(MSG) Assembling $(<F) ...
+    $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+###############################################################################
+#									      #
+#			    Specific dependancies			      #
+#									      #
+###############################################################################
+
+all lodoslib: headline check_reqs dosdrv.inc $(B)\lodos.lib $(O)\startexe.obj
+
+headline:
+    $(HEADLINE) Building the LoDosLib library
+
+check_reqs:
+    $(MSG) Checking requirements ...
+    @cmd /e:on /v:on /c <<"$(TMP)\check_reqs-$(PID).bat" || $(REPORT_FAILURE) # Using an outside script to allow ORing ERR results
+        @echo off & set "ERR=0" & set "CANT_FIND=Error: Configure.bat did not find"
+	if not defined MSVC	set "ERR=1" & echo !CANT_FIND! Microsoft Visual C++ 1.x (MSVC)
+	if not defined MASM	set "ERR=1" & echo !CANT_FIND! Microsoft Assembler (MASM)
+	if not defined BIOSLIB	set "ERR=1" & echo !CANT_FIND! the BIOSLIB library
+        exit !ERR!
+<<
+    $(MSG) ... Done
+
+# Create the subdirectories if they don't exist
+dirs: $(B) $(O) $(L)
+
+$(B) $(O) $(L):
+    $(MSG) Creating directory $@
+    mkdir $@
+
+# Output the default goal name for make.bat
+goal_name:
+    echo lodoslib
+
+# Erase all output files
+mostlyclean:
+    -rd /S /Q $(L)	>NUL 2>&1
+    -rd /S /Q $(O)	>NUL 2>&1
+    -del /Q *.pdb	>NUL 2>&1
+    -del /Q *.bak	>NUL 2>&1
+    -del /Q *~		>NUL 2>&1
+    -del /Q *.log	>NUL 2>&1
+    -del /Q *.zip	>NUL 2>&1
+
+clean: mostlyclean
+    -del /Q *.lib	>NUL 2>&1
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+
+distclean: clean
+    -del /Q dosdrv.inc	>NUL 2>&1 &:# Recreating it causes unavoidable warnings
+    -del /Q config.*	>NUL 2>&1
+
+# Dummy target, to display a help screen
+help:
+    @type <<
+Targets:
+
+  lodoslib  Rebuild the lodos.lib library (Default)
+  clean     Delete all built files
+  zip       Build a source archive in lodoslib.zip. Requires 7-zip.
+<<NOKEEP
+
+# Dummy target, to build a source archive
+dist zip:
+    $(MSG) Building lodoslib.zip ...
+    if exist lodoslib.zip del lodoslib.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    7z.exe a lodoslib.zip *.txt *.bat *.mak *.asm *.c *.h *.inc || $(REPORT_FAILURE)
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    7z.exe d lodoslib.zip config.*
+    $(MSG) ... done.
+
+# Erase all global environment variables created by this build
+VARS=LODOSLIB		# Global environment variables generated here
+cleanenv:
+    call <<"$(TMP)\cleanenv-$(PID).bat" &:# Delete variables created here
+      @echo off
+      setlocal EnableExtensions EnableDelayedExpansion
+      set "KEY=HKCU\Environment"
+      if not "$(VARS)"=="" for %%v in ($(VARS)) do @(
+	>>"$(TMP)\cleanenv-$(PID).lst" (echo %%v) &:# Pass the name back to make.bat, for deleting it in the current shell environment
+	set "VALUE="
+	for /f "tokens=1,3" %%a in ('reg query "%KEY%" ^| findstr /i /b /r /c:" *%%v "') do set VALUE="%%b"
+	if defined VALUE ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
+	  set CMD=reg delete "%KEY%" /v %%v /f
+	  echo !CMD!
+	  !CMD! >NUL
+	)
+      )
+<<
+
+# Run the configure.bat script in every subdirectory
+config:
+    rem Nothing to do in $(MAKEDIR) as there is no further child level
+
+SOURCES = \
+    abs2phys.c		\
+    absdiskr.asm	\
+    absdiskw.asm	\
+    bdos.asm		\
+    cacheabs.c		\
+    cgroup.c		\
+    clus2abs.c		\
+    critsect.asm	\
+    devmain.c		\
+    dosclose.asm	\
+    doscomit.asm	\
+    dosexec.c		\
+    dosexit.asm		\
+    dosgetft.asm	\
+    dosopen.asm		\
+    dosread.asm		\
+    dossetat.asm	\
+    dossetft.asm	\
+    dosver.c		\
+    doswrite.asm	\
+    extdopen.asm	\
+    fgetc.c		\
+    fgetenv.c		\
+    fgets.c		\
+    filelen.c		\
+    find_tsr.asm	\
+    fopen.c		\
+    fputs.c		\
+    fread.c		\
+    freemem.asm		\
+    fseek.c		\
+    fwrite.c		\
+    getcwd.c		\
+    getdate.asm		\
+    getdevpa.c		\
+    getenv.c		\
+    getpsp.c		\
+    gettime.asm		\
+    getvect.asm		\
+    getvmid.asm		\
+    getvmmv.asm		\
+    getvxdep.asm	\
+    ioctldr.c		\
+    lockvol.c		\
+    lseek.asm		\
+    remove.asm		\
+    resetdrv.asm	\
+    setblock.asm	\
+    setdevpa.c		\
+    setmenv.c		\
+    setvect.asm		\
+    system.c		\
+    truename.asm	\
+    tsr.asm		\
+    yield.asm		\
+
+XSOURCES = \
+    startdev.asm	\
+    startexe.asm	\
+
+!IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
+PROGRAM=LODOSLIB
+!INCLUDE <SRC2OBJS.MAK>
+!ENDIF
+
+$(B)\lodos.lib: dirs $(OBJECTS)
+    $(MSG) Creating $@ ...
+    if exist $@ del $@ >nul
+    $(LB) @<<$(L)\lodos.lnk || $(REPORT_FAILURE)
+$@
+y
+$(OBJECTS)
+$(L)\$(*B).lst ;
+<<KEEP
+    $(MSG) ... done.
+
+dosdrv.inc: dosdrv.h dirs
+    $(MSG) Converting %s to .inc ...
+    $(AS:ML=H2INC) /C /Fa$@ /Zn$(*B)_ %s || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+
+# Include files dependancies
+
+$(S)\ABS2PHYS.C:    MSDOS.H LODOS.H $(N)\UTILDEF.H
+
+$(S)\ABSDISKR.ASM:  $(N)\ADEFINE.INC
+
+$(S)\ABSDISKW.ASM:  $(N)\ADEFINE.INC
+
+$(S)\BDOS.ASM:	    DOS.INC $(N)\ADEFINE.INC
+
+$(S)\CACHEABS.C:    MSDOS.H LODOS.H $(N)\CLIBDEF.H
+
+$(S)\CGROUP.C:	    LODOS.H
+
+$(S)\CLUS2ABS.C:    MSDOS.H LODOS.H
+
+$(S)\CRITSECT.ASM:  $(N)\ADEFINE.INC
+
+$(S)\DEVMAIN.C:     $(N)\CLIBDEF.H $(N)\UTILDEF.H
+
+$(S)\DOSCLOSE.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSCOMIT.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSEXEC.C:     LODOS.H $(N)\CLIBDEF.H $(N)\UTILDEF.H
+
+$(S)\DOSEXIT.ASM:   $(N)\ADEFINE.INC
+
+$(S)\DOSGETFT.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSOPEN.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSREAD.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSSETAT.ASM:  $(N)\ADEFINE.INC
+
+$(S)\DOSSETFT.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\DOSVER.C:	    LODOS.H
+
+$(S)\DOSWRITE.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\EXTDOPEN.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\FIND_TSR.ASM:  $(N)\ADEFINE.INC
+
+$(S)\FGETC.C:	    LODOS.H
+
+$(S)\FGETENV.C:     LODOS.H $(N)\CLIBDEF.H $(N)\UTILDEF.H
+
+$(S)\FGETS.C:	    LODOS.H $(N)\CLIBDEF.H
+
+$(S)\FILELEN.C:     LODOS.H
+
+$(S)\FOPEN.C:	    LODOS.H $(N)\CLIBDEF.H
+
+$(S)\FPUTS.C:	    LODOS.H $(N)\CLIBDEF.H
+
+$(S)\FREAD.C:	    LODOS.H
+
+$(S)\FREEMEM.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\FSEEK.C:	    LODOS.H
+
+$(S)\FWRITE.C:	    LODOS.H
+
+$(S)\GETCWD.C:	    LODOS.H $(N)\CLIBDEF.H
+
+$(S)\GETDATE.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\GETDEVPA.C:    MSDOS.H LODOS.H
+
+$(S)\GETENV.C:      LODOS.H $(N)\CLIBDEF.H
+
+$(S)\GETPSP.C:	    LODOS.H
+
+$(S)\GETTIME.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\GETVECT.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\GETVMID.ASM:
+
+$(S)\GETVMMV.ASM:
+
+$(S)\GETVXDEP.ASM:  $(N)\ADEFINE.INC
+
+$(S)\IOCTLDR.C:     MSDOS.H LODOS.H
+
+$(S)\LOCKVOL.C:     LODOS.H
+
+$(S)\LSEEK.ASM:     DOS.INC $(N)\ADEFINE.INC
+
+$(S)\REMOVE.ASM:    $(N)\ADEFINE.INC
+
+$(S)\RESETDRV.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\SETBLOCK.ASM:  $(N)\ADEFINE.INC
+
+$(S)\SETDEVPA.C:    MSDOS.H LODOS.H
+
+$(S)\SETMENV.C:     LODOS.H $(N)\CLIBDEF.H
+
+$(S)\SETVECT.ASM:   DOS.INC $(N)\ADEFINE.INC
+
+$(S)\STARTEXE.ASM:  $(N)\ADEFINE.INC
+
+$(S)\SYSTEM.C:      LODOS.H $(N)\CLIBDEF.H
+
+$(S)\TRUENAME.ASM:  DOS.INC $(N)\ADEFINE.INC
+
+$(S)\TSR.ASM:	    DOS.INC $(N)\ADEFINE.INC
+
+$(S)\YIELD.ASM:
+

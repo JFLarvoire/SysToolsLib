@@ -1,0 +1,478 @@
+###############################################################################
+#									      #
+#   File name:	    NMakefile						      #
+#									      #
+#   Description:    An NMake makefile to build the BIOS.LIB library	      #
+#									      #
+#   Notes:	    The following macros / environment variables may be       #
+#		    predefined. This allows to use the same makefile on a     #
+#		    machine with both DOS & OS/2 versions of the tools.       #
+#									      #
+#		     o DOS_AS	    Assembler				      #
+#		     o DOS_CC	    C compiler				      #
+#		     o DOS_LB	    Librarian				      #
+#		     o TMP	    Temporary directory 		      #
+#									      #
+#		    Supports the standard GNU targets:			      #
+#		    all, clean, mostlyclean, distclean, dist		      #
+#									      #
+#   History:								      #
+#    1993-07-15 JFL Created this file.					      #
+#    1994-03-09 JFL Added an automatic creation of subdirectories.	      #
+#    1994-03-10 JFL Added include files dependancies.			      #
+#		    Renamed from NODOS.MAK to NODOSLIB.MAK for		      #
+#		    compatibility with the Pike compilation server.	      #
+#    1994-05-09 JFL Added modules exit.asm, find_tsr.asm, clisti.asm.	      #
+#		    Added dependancies for .asm modules.		      #
+#    1994-05-10 JFL Added module wrefresh.asm.				      #
+#    1994-05-11 JFL Split io8042.asm into read8042.asm and writ8042.asm.      #
+#    1995-04-07 JFL Added files BREAKARG.C and CMAIN.C. 		      #
+#    1995-08-25 JFL Added file DISKREAD.C.				      #
+#    1995-08-28 JFL Added files SWAPB.ASM, SWAPW.ASM, HTOBCD.ASM,	      #
+#		     BCDTOH.ASM.					      #
+#    1995-09-14 JFL Added file FMEMCPY.ASM.				      #
+#    1995-09-14 JFL Added file DISKWRIT.C.				      #
+#    1995-10-17 JFL Added file BEEP.ASM.				      #
+#    1996-02-02 JFL Added file GETCURPO.ASM.				      #
+#    2002-07-15 JFL Added file FSTRLEN.C.				      #
+#    2015-10-19 JFL Added support for the new generic configure.bat/make.bat. #
+#    2015-10-27 JFL Added file puts.c.					      #
+#    2015-10-28 JFL Replaced startup.asm by startcom.asm from minicoms.       #
+#		    Assemble it by default, but don't put it in the library.  #
+#    2015-12-10 JFL Added file fprintf.c.				      #
+#    2016-04-11 JFL Renamed from nodoslib.mak to bioslib.mak.                 #
+#		    Renamed *putstr*() as *cputs*().                          #
+#    2016-04-24 JFL Added files getticks.asm, gettime.asm and getdate.asm.    #
+#    2016-11-16 JFL Renamed from BiosLib.mak to NMakefile.		      #
+#		    Added a few targets for use in recursive builds.	      #
+#    2017-04-04 JFL Define SOURCES instead of OBJECTS, and use src2objs.mak.  #
+#		    							      #
+#      (c) Copyright 1993-2017 Hewlett Packard Enterprise Development LP      #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Memory model for C compilation and misc macros
+MODELE=S			# Memory model for C compilation. Good for both small & tiny programs.
+
+S=.				# Sources files relative path
+R=.				# Root output path.
+!IF DEFINED(OUTDIR)
+R=$(OUTDIR)
+!ENDIF
+B=$(R)				# Where to store binary executable files
+O=$(R)\obj			# Object files relative path
+L=$(R)\list			# List files relative path
+
+# Default values for macros TMP & LNK. Nmake always predefines AS & CC.
+!IFNDEF TMP
+!IFDEF TEMP
+TMP=$(TEMP)
+!ELSE
+TMP=.
+!ENDIF
+!ENDIF
+
+# Definitions set by the old go.bat, but not by the new make.bat
+!IFDEF DOS_PATH
+PATH=$(DOS_PATH)
+CC=$(DOS_CC)
+AS=$(DOS_AS)
+LB=$(DOS_LB)
+!ENDIF
+
+# Useful messaging macros
+MSG=>con echo		# Command for writing a progress message on the console
+HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
+REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
+
+# Generalized rule for C compilation
+CFLAGS=/A$(MODELE) /Fc$(L)\ /Fo$(O)\ /G2rs /Oaes /W3 /Zpil
+{$(S)}.c{$(O)}.obj:
+    $(MSG) Compiling $(<F) ...
+    $(CC) $(CFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+# Generalized rule for Assembly language
+AFLAGS=/Cx /Fl$(L)\ /Fo$(O)\ /Sn /Zim
+{$(S)}.asm{$(O)}.obj:
+    $(MSG) Assembling $(<F) ...
+    $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
+    $(MSG) ... done.
+
+###############################################################################
+#									      #
+#			    Specific dependancies			      #
+#									      #
+###############################################################################
+
+all bioslib: headline check_reqs $(B)\bios.lib $(O)\startcom.obj
+
+headline:	# NO_LOG
+    $(HEADLINE) Building the BiosLib library
+
+check_reqs:
+    $(MSG) Checking requirements ...
+    @cmd /e:on /v:on /c <<"$(TMP)\check_reqs-$(PID).bat" || $(REPORT_FAILURE) # Using an outside script to allow ORing ERR results
+        @echo off & set "ERR=0" & set "CANT_FIND=Error: Configure.bat did not find"
+	if not defined MSVC	set "ERR=1" & echo !CANT_FIND! Microsoft Visual C++ 1.x (MSVC)
+	if not defined MASM	set "ERR=1" & echo !CANT_FIND! Microsoft Assembler (MASM)
+        exit !ERR!
+<<
+    $(MSG) ... Done
+
+# Create the subdirectories if they don't exist
+dirs: $(B) $(O) $(L)
+
+$(B) $(O) $(L):
+    $(MSG) Creating directory $@
+    mkdir $@
+
+# Output the default goal name for make.bat
+goal_name:
+    echo bioslib
+
+# Erase all output files
+mostlyclean:
+    -rd /S /Q $(L)	>NUL 2>&1
+    -rd /S /Q $(O)	>NUL 2>&1
+    -del /Q *.pdb	>NUL 2>&1
+    -del /Q *.bak	>NUL 2>&1
+    -del /Q *~		>NUL 2>&1
+    -del /Q *.log	>NUL 2>&1
+    -del /Q *.zip	>NUL 2>&1
+
+clean: mostlyclean
+    -del /Q *.lib	>NUL 2>&1
+!IF DEFINED(OUTDIR)
+    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+!ENDIF
+
+distclean: clean
+    -del /Q config.*	>NUL 2>&1
+
+# Dummy target, to display a help screen
+help:
+    @type <<
+Targets:
+
+  bioslib   Rebuild the bios.lib library (Default)
+  clean     Delete all built files
+  zip       Build a source archive in bioslib.zip. Requires 7-zip.
+<<NOKEEP
+
+# Dummy target, to build a source archive
+dist zip:
+    $(MSG) Building bioslib.zip ...
+    if exist bioslib.zip del bioslib.zip
+    set PATH=$(PATH);C:\Program Files\7-zip
+    7z.exe a bioslib.zip *.txt *.bat *.mak *.asm *.c *.h *.inc || $(REPORT_FAILURE)
+    rem # Delete files that got dragged in by wild cards, but that we don't want in the source zip.
+    7z.exe d bioslib.zip config.*
+    $(MSG) ... done.
+
+# Erase all global environment variables created by this build
+VARS=BIOSLIB		# Global environment variables generated here
+cleanenv:
+    call <<"$(TMP)\cleanenv-$(PID).bat" &:# Delete variables created here
+      @echo off
+      setlocal EnableExtensions EnableDelayedExpansion
+      set "KEY=HKCU\Environment"
+      if not "$(VARS)"=="" for %%v in ($(VARS)) do @(
+	>>"$(TMP)\cleanenv-$(PID).lst" (echo %%v) &:# Pass the name back to make.bat, for deleting it in the current shell environment
+	set "VALUE="
+	for /f "tokens=1,3" %%a in ('reg query "%KEY%" ^| findstr /i /b /r /c:" *%%v "') do set VALUE="%%b"
+	if defined VALUE ( :# The global environment variable exists. Delete it, using its actual name with the correct case.
+	  set CMD=reg delete "%KEY%" /v %%v /f
+	  echo !CMD!
+	  !CMD! >NUL
+	)
+      )
+<<
+
+# Run the configure.bat script in every subdirectory
+config:
+    rem Nothing to do in $(MAKEDIR) as there is no further child level
+
+SOURCES = \
+    activepg.asm	\
+    anldiv.asm		\
+    anlmul.asm		\
+    anlrem.asm		\
+    anlshl.asm		\
+    anlshr.asm		\
+    annaldiv.asm	\
+    annalmul.asm	\
+    annalshl.asm	\
+    annauldv.asm	\
+    annaulml.asm	\
+    annaulrm.asm	\
+    annaulsr.asm	\
+    anuldiv.asm		\
+    anulmul.asm		\
+    anulrem.asm		\
+    anulshl.asm		\
+    anulshr.asm		\
+    atoi.c		\
+    atol.c		\
+    bcdtoh.asm		\
+    beep.asm		\
+    breakarg.c		\
+    canonic.asm		\
+    clisti.asm		\
+    clrscrn.asm		\
+    cmain.c		\
+    cputs.c		\
+    cputsco.c		\
+    cursor.asm		\
+    disabkbd.asm	\
+    diskread.c		\
+    diskwrit.c		\
+    displfld.c		\
+    dumpbuf.c		\
+    exit.asm		\
+    fcputs.c		\
+    findhdr.c		\
+    fmemcmp.c		\
+    fmemcpy.asm		\
+    fmemmove.asm	\
+    fmemset.c		\
+    fprintf.c		\
+    fstrcmp.c		\
+    fstrlen.c		\
+    fstrncat.c		\
+    fstrncpy.c		\
+    getchar.asm		\
+    getcs.asm		\
+    getcurpo.asm	\
+    getdate.asm		\
+    getds.asm		\
+    getflags.asm	\
+    gets.c		\
+    getticks.asm	\
+    gettime.asm		\
+    gotoxy.asm		\
+    htobcd.asm		\
+    isswitch.c		\
+    kbhit.asm		\
+    malloc.asm		\
+    math.asm		\
+    memcmp.asm		\
+    memcpy.asm		\
+    memset.c		\
+    posterrs.asm	\
+    printf.c		\
+    putchar.asm		\
+    putchcol.asm	\
+    puts.c		\
+    rand.asm		\
+    read8042.asm	\
+    relocmgr.c		\
+    scancode.asm	\
+    scrolldn.asm	\
+    scrollup.asm	\
+    setvidmo.asm	\
+    sprintf.c		\
+    sqrt.c		\
+    sscanf.c		\
+    stc.c		\
+    stcld_u.c		\
+    stclh_u.c		\
+    strcat.c		\
+    strchr.asm		\
+    strcmp.asm		\
+    strcpy.c		\
+    strcspn.c		\
+    strlen.c		\
+    strlwr.c		\
+    strncpy.c		\
+    strpbrk.c		\
+    strspn.c		\
+    strstr.c		\
+    strtol.c		\
+    strupr.c		\
+    swapb.asm		\
+    swapw.asm		\
+    userpw.asm		\
+    wrefresh.asm	\
+    writ8042.asm	\
+
+XSOURCES = \
+    memset.asm		\
+    startcom.asm	\
+
+!IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
+PROGRAM=BIOSLIB
+!INCLUDE <SRC2OBJS.MAK>
+!ENDIF
+
+$(B)\bios.lib: dirs $(OBJECTS)
+    $(MSG) Creating $@ ...
+    if exist $@ del $@ >nul
+    $(LB) @<<$(L)\bios.lnk || $(REPORT_FAILURE)
+$@
+y
+$(OBJECTS)
+$(L)\$(*B).lst ;
+<<KEEP
+    $(MSG) ... done.
+
+
+# Include files dependencies
+
+$(S)\ACTIVEPG.ASM:   $(S)\ADEFINE.INC
+
+$(S)\ATOI.C:	     $(S)\CLIBDEF.H
+
+$(S)\ATOL.C:	     $(S)\CLIBDEF.H
+
+$(S)\BCDTOH.ASM:     $(S)\ADEFINE.INC
+
+$(S)\BEEP.ASM:	     $(S)\ADEFINE.INC	$(S)\TIMER.INC
+
+$(S)\BREAKARG.C:     $(S)\UTILDEF.H
+
+$(S)\CANONIC.ASM:    $(S)\ADEFINE.INC
+
+$(S)\CLISTI.ASM:     $(S)\ADEFINE.INC
+
+$(S)\CLRSCRN.ASM:    $(S)\ADEFINE.INC
+
+$(S)\CMAIN.C:	     $(S)\CLIBDEF.H $(S)\UTILDEF.H
+
+$(S)\CPUTS.C:	     $(S)\CLIBDEF.H
+
+$(S)\CPUTSCO.C:      $(S)\UTILDEF.H
+
+$(S)\CURSOR.ASM:     $(S)\ADEFINE.INC
+
+$(S)\DISABKBD.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+
+$(S)\DISKREAD.C:     $(S)\UTILDEF.H
+
+$(S)\DISKWRIT.C:     $(S)\UTILDEF.H
+
+$(S)\DISPLFLD.C:     $(S)\UTILDEF.H
+
+$(S)\DUMPBUF.C:      $(S)\CLIBDEF.H $(S)\UTILDEF.H
+
+$(S)\EXIT.ASM:	     $(S)\ADEFINE.INC
+
+$(S)\FCPUTS.C:       $(S)\CLIBDEF.H
+
+$(S)\FINDHDR.C:      $(S)\UTILDEF.H
+
+$(S)\FMEMCMP.C:      $(S)\CLIBDEF.H
+
+$(S)\FMEMCPY.ASM:    $(S)\ADEFINE.INC
+
+$(S)\FMEMMOVE.ASM:   $(S)\ADEFINE.INC
+
+$(S)\FMEMSET.C:      $(S)\CLIBDEF.H
+
+$(S)\FPRINTF.C:	     $(S)\CLIBDEF.H
+
+$(S)\FSTRCMP.C:      $(S)\CLIBDEF.H
+
+$(S)\FSTRLEN.C:      $(S)\CLIBDEF.H
+
+$(S)\FSTRNCAT.C:     $(S)\CLIBDEF.H
+
+$(S)\FSTRNCPY.C:     $(S)\CLIBDEF.H
+
+$(S)\GETCHAR.ASM:    $(S)\ADEFINE.INC
+
+$(S)\GETCURPO.ASM:   $(S)\ADEFINE.INC
+
+$(S)\GETS.C:         $(S)\CLIBDEF.H
+
+$(S)\GOTOXY.ASM:     $(S)\ADEFINE.INC
+
+$(S)\HTOBCD.ASM:     $(S)\ADEFINE.INC
+
+$(S)\ISSWITCH.C:     $(S)\CLIBDEF.H $(S)\UTILDEF.H
+
+$(S)\KBHIT.ASM:      $(S)\ADEFINE.INC
+
+$(S)\MALLOC.ASM:     $(S)\ADEFINE.INC
+
+$(S)\MATH.ASM:	     $(S)\ADEFINE.INC
+
+$(S)\MEMCMP.ASM:     $(S)\ADEFINE.INC
+
+$(S)\MEMCPY.ASM:     $(S)\ADEFINE.INC
+
+$(S)\MEMSET.C:	     $(S)\CLIBDEF.H
+
+$(S)\POSTERRS.ASM:   $(S)\ADEFINE.INC
+
+$(S)\PRINTF.C:	     $(S)\CLIBDEF.H
+
+$(S)\PUTCHAR.ASM:    $(S)\ADEFINE.INC
+
+$(S)\PUTCHCOL.ASM:   $(S)\ADEFINE.INC
+
+$(S)\PUTS.C:	     $(S)\CLIBDEF.H
+
+$(S)\RAND.ASM:       $(S)\ADEFINE.INC
+
+$(S)\READ8042.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+
+$(S)\RELOCMGR.C:     $(S)\UTILDEF.H
+
+$(S)\SCANCODE.ASM:   $(S)\ADEFINE.INC
+
+$(S)\SCROLLDN.ASM:   $(S)\ADEFINE.INC
+
+$(S)\SCROLLUP.ASM:   $(S)\ADEFINE.INC
+
+$(S)\SETVIDMO.ASM:   $(S)\ADEFINE.INC
+
+$(S)\SPRINTF.C:      $(S)\CLIBDEF.H
+
+$(S)\SQRT.C:	     $(S)\UTILDEF.H
+
+$(S)\SSCANF.C:	     $(S)\CLIBDEF.H
+
+$(S)\STARTCOM.ASM:   $(S)\ADEFINE.INC
+
+$(S)\STC.C:	     $(S)\CLIBDEF.H
+
+$(S)\STCLD_U.C:	     $(S)\CLIBDEF.H
+
+$(S)\STCLH_U.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRCAT.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRCHR.ASM:     $(S)\ADEFINE.INC
+
+$(S)\STRCMP.ASM:     $(S)\ADEFINE.INC
+
+$(S)\STRCPY.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRCSPN.C:      $(S)\CLIBDEF.H
+
+$(S)\STRLEN.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRLWR.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRNCPY.C:      $(S)\CLIBDEF.H
+
+$(S)\STRPBRK.C:      $(S)\CLIBDEF.H
+
+$(S)\STRSPN.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRSTR.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRTOL.C:	     $(S)\CLIBDEF.H
+
+$(S)\STRUPR.C:	     $(S)\CLIBDEF.H
+
+$(S)\SWAPB.ASM:      $(S)\ADEFINE.INC
+
+$(S)\SWAPW.ASM:      $(S)\ADEFINE.INC
+
+$(S)\USERPW.ASM:     $(S)\ADEFINE.INC $(S)\IO8042.INC
+
+$(S)\WREFRESH.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+
+$(S)\WRIT8042.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
