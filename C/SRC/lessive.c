@@ -88,14 +88,9 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #define SAMENAME strieq		/* File name comparison routine */
 
-/* Avoid warnings for names that MSVC thinks deprecated */
+/* Avoid warnings for convenient Microsoft-specific routines */
 #define strlwr _strlwr
-#define tempnam _tempnam
-#define strdup _strdup
 #define stricmp _stricmp
-#define dup	_dup
-#define fdopen	_fdopen
-#define fileno	_fileno
 
 #endif
 
