@@ -110,6 +110,7 @@ xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --
 Name		| OS	|Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
+codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
 echoargs.bat	| DW-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	| `echoargs.bat how" many args "here?`
 EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	|
 errorlev.bat	| D--	| Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)		|
