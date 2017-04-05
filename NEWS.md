@@ -4,6 +4,23 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.8] 2017-04-05
+### Added
+- C/BiosLib: A library of routines for writing C programs running in the legacy BIOS. Previously released within HP in the early 2000s as NoDosLib.
+- C/LoDosLib: A library of routines for writing MS-DOS drivers and TSRs.
+- C/PModeLib: A library of routines for managing the x86 processor protected mode.
+
+### Changed
+- C/Files.mak now checks which subdirectories exist, and build those present.
+- C/src/tee.c: Changed to a UTF-8 app, to support non-ASCII file names.
+
+### Fixed
+- C/*/configure.bat, C/*/make.bat: Avoid defining environment STINCLUDE after exit.
+- C/MsvcLibX/include/*.h: Many small compatibility fixes.
+- C/MsvcLIibX/src/*: Make sure all debug prints are done in UTF-8.
+- C/include/debugm.h: The Windows version of debug prints is now thread-safe.
+- C/MsvcLibX/src/realpath.c: Fixed resolution for relative paths.
+
 ## [unreleased] 2017-03-16
 ### Added
 - C/SRC/codepage.c: A new tool for displaying information about the current and available console code pages.
