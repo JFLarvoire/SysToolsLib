@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.8.1] 2017-04-12
+### Fixed
+- C/MsvcLibX/src/main.c: Fixed a bug that caused command-line arguments to be lost in some cases.
+- C/MsvcLibX/src/iconv.c: Added missing routine puts(). This fixes a last-minute bug in the 1.8 release, that prevented the (unreleased) debug versions of the programs from displaying debug output.
+
 ## [1.8] 2017-04-05
 ### Added
 - C/BiosLib: A library of routines for writing C programs running in the legacy BIOS. Previously released within HP in the early 2000s as NoDosLib.
@@ -17,7 +22,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### Fixed
 - C/*/configure.bat, C/*/make.bat: Avoid defining environment STINCLUDE after exit.
 - C/MsvcLibX/include/*.h: Many small compatibility fixes.
-- C/MsvcLIibX/src/*: Make sure all debug prints are done in UTF-8.
+- C/MsvcLibX/src/*: Make sure all debug prints are done in UTF-8.
 - C/include/debugm.h: The Windows version of debug prints is now thread-safe.
 - C/MsvcLibX/src/realpath.c: Fixed resolution for relative paths.
 
