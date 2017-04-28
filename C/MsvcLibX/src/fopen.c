@@ -11,6 +11,7 @@
 *    2014-07-01 JFL Added support for pathnames >= 260 characters. 	      *
 *    2017-03-12 JFL Restructured the UTF16 writing mechanism.		      *
 *    2017-03-18 JFL Bug fix: Only change Xlation when writing to a valid file.*
+*    2017-04-27 JFL Fixed 2017-03-18 bug: Failures returned a wrong errno.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -91,7 +92,7 @@ FILE *fopenM(const char *pszName, const char *pszMode, UINT cp) {
   hFile = _wfopen(wszName, wszMode);
 
   /* Find out the initial translation mode, and change it if appropriate */
-  if ((hFile != INVALID_HANDLE_VALUE) && (strchr(pszMode, 'w') || strchr(pszMode, 'a'))) {
+  if (hFile && (strchr(pszMode, 'w') || strchr(pszMode, 'a'))) {
     iFile = fileno(hFile);
     iMode = _setmodeX(iFile, _O_TEXT);	/* Get the initial mode. Any mode can switch to _O_TEXT. */
     if ((iMode & _O_TEXT) && _isatty(iFile)) { /* If writing text to the console */
