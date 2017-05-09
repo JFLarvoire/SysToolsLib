@@ -28,13 +28,15 @@
 *		    Version 1.1.6.					      *
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 1.1.7.  					      *
+*    2017-04-13 JFL Do not print a final blank line in DOS and Windows.       *
+*		    Version 1.1.8.  					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
 
-#define PROGRAM_VERSION "1.1.7"
-#define PROGRAM_DATE    "2016-01-07"
+#define PROGRAM_VERSION "1.1.8"
+#define PROGRAM_DATE    "2017-04-13"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -311,7 +313,9 @@ Offset    00           04           08           0C           0   4    8   C   \
 	printflf();
 	}
 
+#ifdef __unix__
     printflf();
+#endif
 
     return 0;
     }
