@@ -19,13 +19,15 @@
 *		    Version 1.1.					      *
 *    2016-12-09 JFL Added option -x for symmetry with option -t added on 12/5.*
 *		    Version 1.1.1.					      *
+*    2017-04-15 JFL When listing drives, tolerate missing indexes, as one     *
+*		    drive may have been recently unplugged. Version 1.1.2.    * 
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2016-12-09"
+#define PROGRAM_VERSION "1.1.2"
+#define PROGRAM_DATE    "2017-04-15"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -179,101 +181,110 @@ int _cdecl main(int argc, char *argv[]) {
   if ((!iList) && (!iCreate)) iList = TRUE;
 
   /* For every physical drives in the system, dump the MBR and GPT partition tables */
-  if (iList) for (iHDisk=0; (hDrive = HardDiskOpen(iHDisk, 0)) != 0; iHDisk++) {
-    char *pBuf;
-    EFI_PARTITION_TABLE_HEADER *pGptHdr;
-    char *pBuf2;
-    EFI_PARTITION_ENTRY *pPartEntry;
-    char szHdName[8] = "hd0:";	// Hard disk name
-    HANDLE hGptDrive;
-    HGPT hGpt;
-    WORD wSectorSize;
-    QWORD qwSize;
-    char szSize[8];
+  if (iList) {
+    int nMissing = 0; /* Number of missing disk indexes so far */
+    for (iHDisk=0; nMissing < 32; iHDisk++) {
+      char *pBuf;
+      EFI_PARTITION_TABLE_HEADER *pGptHdr;
+      char *pBuf2;
+      EFI_PARTITION_ENTRY *pPartEntry;
+      char szHdName[8] = "hd0:";	// Hard disk name
+      HANDLE hGptDrive;
+      HGPT hGpt;
+      WORD wSectorSize;
+      QWORD qwSize;
+      char szSize[8];
 
-    printf("\n");
-    if (iHDisk) {
-      printf("-------------------------------------------------------------------------------\n\n");
-    }
-
-    HardDiskGetGeometry(hDrive, &sHdGeometry);
-    qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
-    FormatSize(qwSize, szSize, sizeof(szSize), iKB);
-    oprintf("Hard disk #{%d}: {%s}  ({%l{%c}}/{%l{%c}}/{%l{%c}})\n", iHDisk,
-	    /* (long)((Qword2Double(sHdGeometry.qwSectors) * sHdGeometry.wSectorSize) / 1000000) */ szSize,
-	    cBase, sHdGeometry.dwXlatCyls, cBase, sHdGeometry.dwXlatHeads, cBase, sHdGeometry.dwXlatSects);
-
-    // Dump the legacy partition table.
-    wSectorSize = sHdGeometry.wSectorSize;
-    pBuf = (char *)malloc(wSectorSize);
-    pBuf2 = (char *)malloc(wSectorSize);
-    if ((!pBuf) || (!pBuf2)) fail(("Not enough memory (1)"));
-    pGptHdr = (EFI_PARTITION_TABLE_HEADER *)pBuf;
-    pPartEntry = (EFI_PARTITION_ENTRY *)pBuf2;
-    memset(pBuf2, 0, sHdGeometry.wSectorSize);
-
-    iErr = HardDiskRead(hDrive, _QWORD(0), 1, pBuf);
-    if (iErr) fail(("Error %d reading the MBR.\n", iErr));
-
-    if (iVerbose) DumpBuf(pBuf, 0x1BE, 0x200);
-    dump_part((MASTERBOOTSECTOR *)pBuf);
-
-    // Dump the GPT, if any
-    sprintf(szHdName, "hd%d:", iHDisk);
-    HardDiskClose(hDrive);
-    hGptDrive = BlockOpen(szHdName, "r"); // GptXxx() procs use Block handles, not HardDisk handles. 
-    if (!hGptDrive) continue; // Should not happen as HardDiskOpen succeeded above.
-    hGpt = GptOpen(hGptDrive);
-    if (hGpt) {
-      UINT32 n;
-
-      printf("\nGPT:\n");
-
-      // iErr = HardDiskRead(hDrive, _QWORD(1), 1, pBuf);
-      // if (iErr) fail(("Error %d reading the GPT header.\n", iErr));
-      pGptHdr = hGpt->pGptHdr;
-      if (iVerbose) DumpBuf(pGptHdr, 0, sizeof(EFI_PARTITION_TABLE_HEADER));
-
-      char szQwBuf[20];
-      oprintf("Main GPT LBA = {%{%c}}\n", cBase, pGptHdr->MyLBA);
-      oprintf("Alt. GPT LBA = {%{%c}}\n", cBase, pGptHdr->AlternateLBA);
-      oprintf("First LBA = {%{%c}}\n", cBase, pGptHdr->FirstUsableLBA);
-      oprintf("Last LBA = {%{%c}}\n", cBase, pGptHdr->LastUsableLBA);
-      oprintf("Disk GUID = ");
-      PrintUuid((uuid_t *)&(pGptHdr->DiskGUID));
-      printf("\n");
-      oprintf("Part. LBA = {%{%c}}\n", cBase, pGptHdr->PartitionEntryLBA);
-      oprintf("# of entries = {%{%c}}\n", cBase, pGptHdr->NumberOfPartitionEntries);
-      oprintf("Entry size = {%{%c}}\n", cBase, pGptHdr->SizeOfPartitionEntry);
-
-      printf("\n  #     Size         Start LBA           End LBA  Name\n");
-      for (n=0; n<pGptHdr->NumberOfPartitionEntries; n++) {
-	iErr = GptReadEntry(hGpt, (int)n, pPartEntry);
-	if (iErr) continue;
-	if (IsNullUuid((uuid_t*)&pPartEntry->PartitionTypeGUID)) continue; // Unused entry
-	if (iVerbose) DumpBuf(pPartEntry, 0, sizeof(EFI_PARTITION_ENTRY));
-	qwSize = pPartEntry->EndingLBA + 1 - pPartEntry->StartingLBA;
-	qwSize *= wSectorSize;
-	FormatSize(qwSize, szSize, sizeof(szSize), iKB);
-	printf("%3u ", n);
-	printf("%8s  ", szSize);
-	oprintf("{%16{%c}}  ", cBase, pPartEntry->StartingLBA);
-	oprintf("{%16{%c}}  ", cBase, pPartEntry->EndingLBA);
-	for (i=0; i<36; i++) { // Convert the Unicode string to ASCII
-	  CHAR16 uc;
-	  uc = pPartEntry->PartitionName[i];
-	  if (!uc) break; // End of string
-	  if ((WORD)uc >= 0x80) uc = '?'; // No equivalent ASCII character
-	  printf("%c", uc);
-	}
-	printf("\n");
+      hDrive = HardDiskOpen(iHDisk, READONLY);
+      if (!hDrive) {	/* If there is no disk with that index */
+      	nMissing += 1;		/* Then count the missing drive */
+      	continue;		/* And keep searching, as one drive may have been recently unplugged */
       }
-      GptClose(hGpt);
-    }
-    BlockClose(hGptDrive);
 
-    free(pBuf);
-    free(pBuf2);
+      printf("\n");
+      if (iHDisk) {
+	printf("-------------------------------------------------------------------------------\n\n");
+      }
+  
+      HardDiskGetGeometry(hDrive, &sHdGeometry);
+      qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
+      FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+      oprintf("Hard disk #{%d}: {%s}  ({%l{%c}}/{%l{%c}}/{%l{%c}})\n", iHDisk,
+	      /* (long)((Qword2Double(sHdGeometry.qwSectors) * sHdGeometry.wSectorSize) / 1000000) */ szSize,
+	      cBase, sHdGeometry.dwXlatCyls, cBase, sHdGeometry.dwXlatHeads, cBase, sHdGeometry.dwXlatSects);
+  
+      // Dump the legacy partition table.
+      wSectorSize = sHdGeometry.wSectorSize;
+      pBuf = (char *)malloc(wSectorSize);
+      pBuf2 = (char *)malloc(wSectorSize);
+      if ((!pBuf) || (!pBuf2)) fail(("Not enough memory (1)"));
+      pGptHdr = (EFI_PARTITION_TABLE_HEADER *)pBuf;
+      pPartEntry = (EFI_PARTITION_ENTRY *)pBuf2;
+      memset(pBuf2, 0, sHdGeometry.wSectorSize);
+  
+      iErr = HardDiskRead(hDrive, _QWORD(0), 1, pBuf);
+      if (iErr) fail(("Error %d reading the MBR.\n", iErr));
+  
+      if (iVerbose) DumpBuf(pBuf, 0x1BE, 0x200);
+      dump_part((MASTERBOOTSECTOR *)pBuf);
+  
+      // Dump the GPT, if any
+      sprintf(szHdName, "hd%d:", iHDisk);
+      HardDiskClose(hDrive);
+      hGptDrive = BlockOpen(szHdName, "r"); // GptXxx() procs use Block handles, not HardDisk handles. 
+      if (!hGptDrive) continue; // Should not happen as HardDiskOpen succeeded above.
+      hGpt = GptOpen(hGptDrive);
+      if (hGpt) {
+	UINT32 n;
+  
+	printf("\nGPT:\n");
+  
+	// iErr = HardDiskRead(hDrive, _QWORD(1), 1, pBuf);
+	// if (iErr) fail(("Error %d reading the GPT header.\n", iErr));
+	pGptHdr = hGpt->pGptHdr;
+	if (iVerbose) DumpBuf(pGptHdr, 0, sizeof(EFI_PARTITION_TABLE_HEADER));
+  
+	char szQwBuf[20];
+	oprintf("Main GPT LBA = {%{%c}}\n", cBase, pGptHdr->MyLBA);
+	oprintf("Alt. GPT LBA = {%{%c}}\n", cBase, pGptHdr->AlternateLBA);
+	oprintf("First LBA = {%{%c}}\n", cBase, pGptHdr->FirstUsableLBA);
+	oprintf("Last LBA = {%{%c}}\n", cBase, pGptHdr->LastUsableLBA);
+	oprintf("Disk GUID = ");
+	PrintUuid((uuid_t *)&(pGptHdr->DiskGUID));
+	printf("\n");
+	oprintf("Part. LBA = {%{%c}}\n", cBase, pGptHdr->PartitionEntryLBA);
+	oprintf("# of entries = {%{%c}}\n", cBase, pGptHdr->NumberOfPartitionEntries);
+	oprintf("Entry size = {%{%c}}\n", cBase, pGptHdr->SizeOfPartitionEntry);
+  
+	printf("\n  #     Size         Start LBA           End LBA  Name\n");
+	for (n=0; n<pGptHdr->NumberOfPartitionEntries; n++) {
+	  iErr = GptReadEntry(hGpt, (int)n, pPartEntry);
+	  if (iErr) continue;
+	  if (IsNullUuid((uuid_t*)&pPartEntry->PartitionTypeGUID)) continue; // Unused entry
+	  if (iVerbose) DumpBuf(pPartEntry, 0, sizeof(EFI_PARTITION_ENTRY));
+	  qwSize = pPartEntry->EndingLBA + 1 - pPartEntry->StartingLBA;
+	  qwSize *= wSectorSize;
+	  FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+	  printf("%3u ", n);
+	  printf("%8s  ", szSize);
+	  oprintf("{%16{%c}}  ", cBase, pPartEntry->StartingLBA);
+	  oprintf("{%16{%c}}  ", cBase, pPartEntry->EndingLBA);
+	  for (i=0; i<36; i++) { // Convert the Unicode string to ASCII
+	    CHAR16 uc;
+	    uc = pPartEntry->PartitionName[i];
+	    if (!uc) break; // End of string
+	    if ((WORD)uc >= 0x80) uc = '?'; // No equivalent ASCII character
+	    printf("%c", uc);
+	  }
+	  printf("\n");
+	}
+	GptClose(hGpt);
+      }
+      BlockClose(hGptDrive);
+  
+      free(pBuf);
+      free(pBuf2);
+    }
   }
 
 #if 0	// 2016-07-07 JFL Removed this code for now, as this is too dangerous

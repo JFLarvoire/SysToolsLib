@@ -91,13 +91,15 @@
 *		    Version 3.7.					      *
 *    2017-02-11 JFL Added a dirty workaround for Windows' auto-mount feature. *
 *		    Version 3.8.					      *
+*    2017-04-15 JFL When listing drives, tolerate missing indexes, as one     *
+*		    drive may have been recently unplugged. Version 3.8.1.    * 
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.8"
-#define PROGRAM_DATE    "2017-02-11"
+#define PROGRAM_VERSION "3.8.1"
+#define PROGRAM_DATE    "2017-04-15"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -307,7 +309,7 @@ int _cdecl main(int argc, char *argv[]) {
 	iKB = 1024;
 	continue;
       }
-      if (streq(opt, "ld")) {
+      if (streq(opt, "l") || streq(opt, "ld")) {
 	iListDrives = TRUE;
 	continue;
       }
@@ -488,8 +490,14 @@ int _cdecl main(int argc, char *argv[]) {
   }
 
   if (iListDrives) {
-    for (i=0; (hDisk = HardDiskOpen(i, READONLY)) != 0; i++) {
+    int nMissing = 0; /* Number of missing disk indexes so far */
+    for (i=0; nMissing < 32; i++) {	/* Tolerate up to 32 missing entries before giving up hope */
       char szSize[8];
+      hDisk = HardDiskOpen(i, READONLY);
+      if (!hDisk) {	/* If there is no disk with that index */
+      	nMissing += 1;		/* Then count the missing drive */
+      	continue;		/* And keep searching, as one drive may have been recently unplugged */
+      }
       // Get the drive characteristics
       iErr = HardDiskGetGeometry(hDisk, &sHdGeometry);
       QWORD qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
@@ -1137,7 +1145,7 @@ Switches:\n\
   -g    Display the source or destination drives geometry.\n\
   -H    Display disk sizes in MB, GB, etc. (default)\n\
   -I    Display disk sizes in MiB, GiB, etc.\n\
-  -ld   List available disks.\n\
+  -ld   List available disks. (alias -l)\n\
   -n N  Number of sectors to copy. Default: 1 for disks, all for files.\n\
   -p    Force dumping the partition table.\n\
   -ro   Read-only mode. Simulate commands execution without any write.\n\
