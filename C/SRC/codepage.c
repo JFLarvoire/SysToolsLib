@@ -20,6 +20,9 @@
 *		    Character Set Identifiers") there:			      *
 *   http://www-01.ibm.com/software/globalization/ccsid/ccsid_registered.html  *
 *		    							      *
+*		    IANA list of character sets, w. links to their definitions:
+*   https://www.iana.org/assignments/character-sets/character-sets.xhtml      *
+*		    							      *
 *   History								      *
 *    2014-02-27 JFL Created this program.                                     *
 *    2014-03-20 JFL Updated help.                                             *
