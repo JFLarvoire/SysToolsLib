@@ -123,12 +123,14 @@
 *    2017-01-30 JFL Improved mkdirp(), to avoid useless error messages.       *
 *                   Added a workaround for the WIN32 _fullpath() bug.         *
 *		    Version 3.5.1.    					      *
+*    2017-05-11 JFL Display MsvcLibX library version in DOS & Windows.        *
+*		    Version 3.5.2.    					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.1"
+#define PROGRAM_VERSION "3.5.2"
 #define PROGRAM_DATE    "2017-01-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -581,6 +583,10 @@ char *version(void) {
 	  " " PROGRAM_DATE
 	  " " OS_NAME
 	  DEBUG_VERSION
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
 	  );
 }
 
