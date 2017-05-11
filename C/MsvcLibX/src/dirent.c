@@ -29,6 +29,7 @@
 *    2014-03-24 JFL Renamed "statx.h" as the standard <sys/stat.h>.	      *
 *    2015-12-14 JFL Bug fix: WIN32 readdirW always read the root on "D:".     *
 *		    Bug fix: DOS opendir failed on root dirs, like "D:\".     *
+*    2017-05-11 JFL Recognize LinuX SubSystem symlinks.			      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -49,9 +50,9 @@
 #include <memory.h>
 #include <errno.h>
 /* MsvcLibX library extensions */
-#include <unistd.h> /* For readlink() */
-#include <sys/stat.h>  /* For Filetime2String() */
-#include "debugm.h" /* Use our house debugging framework */
+#include <unistd.h>	/* For readlink() */
+#include <sys/stat.h>	/* For Filetime2String() */
+#include "debugm.h"	/* Use our house debugging framework */
 
 /*****************************************************************************\
 *                                                                             *
@@ -259,6 +260,7 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
 #ifdef _WIN32
 
 #include <windows.h>
+#include "reparsept.h"	/* For the undocumented IO_REPARSE_TAG_LXSS_SYMLINK */
 
 /* Requires including windows.h and especially the kernel section */
 
@@ -408,6 +410,7 @@ check_attr_again:
 	bIsJunction = TRUE; /* Else this is a junction. Fall through to the symlink case. */
 	} 	      
       case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */
+      case IO_REPARSE_TAG_LXSS_SYMLINK:		/* LinuX SubSystem symlink */
 	pDirent->d_type = DT_LNK;		/* Symbolic link */
 	break;
       default:	/* Anything else is definitely not like a Unix symlink */
