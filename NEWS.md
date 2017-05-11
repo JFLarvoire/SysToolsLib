@@ -4,10 +4,28 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-05-11
+### Added
+- C/MsvcLibX/include/msvclibx_version.h: Defines the MSVCLIBX_VERSION string.
+
+### Changed
+- C/MsvcLibX/src/dirent.c: Recognize LinuX SubSystem symlinks.
+- C/SRC/remplace.c, C/SRC/update.c: The -V option now displays the MsvcLibX library version in DOS & Windows.
+  This allows to see if an executable built from an unchanged source contains bug fixes from a newer version of the MsvcLibX library.
+
+### Fixed
+- C/MsvcLibX/src/fopen.c: In case of error, fopen() returned a wrong errno in some cases.
+- C/MsvcLibX/src/iconv.c: Fixed fputc() for files in binary mode.
+- C/MsvcLibX/src/junction.c: Dynamically allocate debug strings in junction(). This prevents stack overflows in debug mode.
+- C/SRC/gpt.cpp, sector.cpp: When listing drives, tolerate missing indexes, as one drive may have been recently unplugged.
+- C/SRC/remplace.c: Detect the input encoding, and convert the old and new replacement string to that encoding.
+  This allows replacing non-ASCII strings, whether they come in from a pipe (using the console code page), or from an ANSI or UTF-8 text file.
+
 ## [1.8.1] 2017-04-12
 ### Fixed
 - C/MsvcLibX/src/main.c: Fixed a bug that caused command-line arguments to be lost in some cases.
-- C/MsvcLibX/src/iconv.c: Added missing routine puts(). This fixes a last-minute bug in the 1.8 release, that prevented the (unreleased) debug versions of the programs from displaying debug output.
+- C/MsvcLibX/src/iconv.c: Added missing routine puts(). This fixes a last-minute bug in the 1.8 release, that prevented
+  the (unreleased) debug versions of the programs from displaying debug output.
 
 ## [1.8] 2017-04-05
 ### Added
@@ -50,7 +68,8 @@ For more details about changes in a particular area, see the README.txt and/or N
 - UTF-8 programs now write 16-bits Unicode to the console. This allows displaying any Unicode character, even if it's not in the current code page.
   When stdout is redirected to a pipe or a file, the output is still converted to the current code page. This is the same as cmd.exe's own behaviour.
 - Redesigned UTF-8 programs initialization. Now compatible with any main() routine declaration, with 0 or 2 or 3 arguments.
-- configure.bat and make.bat do not automatically set persistent environment variables with the library paths. This did more harm than good, when dealing with multiple copies of the libraries.
+- configure.bat and make.bat do not automatically set persistent environment variables with the library paths.
+  This did more harm than good, when dealing with multiple copies of the libraries.
   It's possible to revert to the old behaviour by defining PERSISTENT_VARS first.
 - Many small changes and bug fixes.
 
