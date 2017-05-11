@@ -12,6 +12,20 @@
 *		    gcc dirsize.c -o dirsize	# Release mode version	      *
 *		    gcc -D_DEBUG dirsize.c -o dirsize.debug	# Debug ver.  *
 *		    							      *
+*		    Character encodings in Windows:			      *
+*		    - File encoding is ANSI or UTF-8 or UTF-16, based on BOM. *
+*		    - stdin and stdout pipe encoding is the console code page.*
+*			(unless redirected to a file!)			      *
+*		    - stdin and stdout console encoding can/should be UTF-16. *
+*		    - Command line arguments are encoded in the console code  *
+*		    	page, then converted to UTF-8 by MsvLibX.	      *
+*		    - Remplace is not an encoding conversion tool. It MUST    *
+*		      preserve the input encoding, and any \n or \r\n markers.*
+*		    => 							      *
+*		    - Use file binary mode for input and output.	      *
+*		    - Exception: For debug output to the console, use Unicode.*
+*		    - Convert arguments to the input stream encoding.	      *
+*		    							      *
 *   History								      *
 *    1986-11-05 JFL jf.larvoire@hp.com created this program, based on detab.c.*
 *    1992-03-11 JFL Adapted to Microsoft C.				      *
@@ -116,13 +130,18 @@
 *		    Version 2.5.4.  					      *
 *    2016-09-20 JFL Bug fix: The Win32 version did not process empty args.    *
 *		    Version 2.5.5.  					      *
+*    2017-05-11 JFL Bug fix: Do not convert the output encoding in any case.  *
+*		    Match the old & new strings to the input stream encoding. *
+*		    Display MsvcLibX library version in DOS & Windows.        *
+*		    Prefix all verbose and debug comments with a "//".        *
+*		    Version 2.6.    					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.5.5"
-#define PROGRAM_DATE    "2016-09-20"
+#define PROGRAM_VERSION "2.6"
+#define PROGRAM_DATE    "2017-05-11"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -172,6 +191,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #include <direct.h>
 #include <io.h>
+#include "iconv.h"		/* MsvcLibX character encoding conversions */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
@@ -180,13 +200,13 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #define SAMENAME strieq		/* File name comparison routine */
 
-/*  Avoid deprecation warnings */
-#define tempnam	_tempnam
-#define strdup	_strdup
-#define stricmp	_stricmp
-#define dup	_dup
-#define fdopen	_fdopen
-#define fileno	_fileno
+#define stricmp	_stricmp	/* This one is not standard */
+
+/* Do not use MsvcLibX encoding conversion for the output */
+#if 0
+#undef fputc
+#undef fwrite
+#endif
 
 #endif /* defined(_WIN32) */
 
@@ -353,6 +373,8 @@ int main(int argc, char *argv[]) {
   int iEOS = FALSE;	    /*  TRUE = End Of Switches */
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;  /*  Output file directory */
+  char *pszOld8 = old;
+  char *pszNew8 = new;
 
   /* Open a new message file stream for debug and verbose messages */
   if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
@@ -553,12 +575,49 @@ fail_no_mem:
     }
   }
 
+  /* Identify the input encoding, and change the arguments encoding to match it */
+#ifdef _WIN32
+  {
+    UINT inputCP = consoleCodePage;
+    int err;
+    DWORD dwBOM = 0;
+    struct stat buf;			/* Use MSC 6.0 compatible names */
+    int h = fileno(sf);			/* Get the file handle */
+    int nc = 0;
+    err = fstat(h, &buf);		/* Get information on that handle */
+    if (err) fail("Can't stat the input file.\n");
+    if (buf.st_mode & S_IFREG) {	/* It's a regular file */
+      for (nc=0; nc<3; nc++) {
+        int c = FGetC(sf);
+        if (c == EOF) break;
+        ((BYTE *)&dwBOM)[nc] = (BYTE)c;
+      }
+      if (dwBOM == 0xBFBBEF) {		/* If this is an UTF-8 BOM */
+      	inputCP = CP_UTF8;
+      } else {
+	if ((dwBOM & 0xFFFF) == 0xFEFF) { /* If this is an UTF-16 BOM */
+	  fail("UTF-16 files are not supported.\n");
+      	}
+      	inputCP = CP_ACP;
+      }
+    }
+    FSeek(sf, -nc, SEEK_CUR); /* Return to the beginning of the input file */
+    DEBUG_FPRINTF((mf, "// The input encoding is #%d\n", inputCP));
+    /* Now we need to convert the old and new strings to the input encoding */
+    pszOld8 = strdup(old);
+    pszNew8 = strdup(new);
+    ConvertString(old, sizeof(old), CP_UTF8, inputCP, NULL);
+    ConvertString(new, sizeof(new), CP_UTF8, inputCP, NULL);
+    iNewSize = (int)strlen(new);
+  }
+#endif
+
   if (iVerbose) {
-    if (demime && !iQuiet) fprintf(mf, "Replacing Mime %cXX codes.\n", demime);
+    if (demime && !iQuiet) fprintf(mf, "// Replacing Mime %cXX codes.\n", demime);
     if (old[0] && !iQuiet) {
-      fprintf(mf, "Replacing \"%s\" (\"", old);
+      fprintf(mf, "// Replacing \"%s\" (\"", pszOld8); /* Use the UTF-8 version in Windows */
       PrintEscapeString(mf, old);
-      fprintf(mf, "\") with \"%s\" (\"", new);
+      fprintf(mf, "\") with \"%s\" (\"", pszNew8); /* Use the UTF-8 version in Windows */
       PrintEscapeString(mf, new);
       fprintf(mf, "\").\n");
     }
@@ -598,7 +657,7 @@ fail_no_mem:
       sz[0] = (char)c0;
       sz[1] = (char)c1;
       sz[2] = '\0';
-      DEBUG_FPRINTF((mf, "Found code %s: ", sz));
+      DEBUG_FPRINTF((mf, "// Found code %s: ", sz));
       if (sscanf(sz, "%X", &ic)) {
 	DEBUG_FPRINTF((mf, "Changed to char %c.\n", ic));
 	FPutC((char)ic, df);
@@ -614,7 +673,7 @@ fail_no_mem:
 try_next_set:
     DEBUG_CODE_IF_ON(
       char cBuf[8];
-      fprintf(mf, "Trying to match '%s' in set [", EscapeChar(cBuf, (char)c));
+      fprintf(mf, "// Trying to match '%s' in set [", EscapeChar(cBuf, (char)c));
       for (i=0; i<iSetSize; i++) PrintEscapeChar(mf, cSet[i]);
       fprintf(mf, "]%s ... ", cRepeat ? EscapeChar(cBuf, cRepeat) : "");
     );
@@ -671,7 +730,7 @@ try_next_set:
     }
     ixOld += GetRxCharSet(old+ixOld, cSet, &iSetSize, &cRepeat);
   }
-  DEBUG_FPRINTF((mf, "End of file. Flushing remainders.\n"));
+  DEBUG_FPRINTF((mf, "// End of file. Flushing remainders.\n"));
   if (((cRepeat == '?') || (cRepeat == '*')) && !old[ixOld]) {
     /* The set was complete. Write the new string */
     char *new2;
@@ -689,13 +748,13 @@ try_next_set:
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
       unlink(szBakName); 		/* Remove the .bak if already there */
-      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
       rename(pszInName, szBakName);	/* Rename the source as .bak */
     } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
+      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
       unlink(pszInName); 		/* Remove the original file */
     }
-    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
     rename(pszOutName, pszInName);	/* Rename the destination as the source */
     pszOutName = pszInName;
   }
@@ -707,7 +766,7 @@ try_next_set:
     utime(pszOutName, &sOutTime);
   }
 
-  if (iVerbose) fprintf(mf, "Remplace: %ld changes done.\n", lnChanges);
+  if (iVerbose) fprintf(mf, "// Remplace: %ld changes done.\n", lnChanges);
 
   return ((lnChanges>0) ? 0 : 1);              /* and exit */
 }
@@ -797,6 +856,10 @@ char *version(void) {
 	  " " PROGRAM_DATE
 	  " " OS_NAME
 	  DEBUG_VERSION
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
 	  );
 }
 
@@ -1085,7 +1148,7 @@ int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat)
 
 #if 0
     DEBUG_CODE_IF_ON(
-	fprintf(mf, "Extracted set \"");
+	fprintf(mf, "// Extracted set \"");
 	PrintEscapeString(mf, cSet);
 	fprintf(mf, "\" %c, return %d\n", *pcRepeat, pszOld - psz0);
     );
@@ -1212,65 +1275,54 @@ int PrintEscapeString(FILE *f, char *pc)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *pszBackBuf = NULL;
-char *pszBBEnd;
-char *pszBBHead;
-char *pszBBTail;
-size_t lBB;	/* Length of back buffer */
-size_t nBB;	/* Number of characters stored in the back buffer */
-size_t ixBB;    /* Current position relative to (backwards from) the head */
 
-char *BBMove(char *p)
-{
+char *pszBackBuf = NULL;/* Address of a circular back buffer */
+char *pszBBEnd;		/* Back buffer end = First address beyond the last character */
+char *pszBBHead;	/* Where to store the next chatacter that will be read */
+char *pszBBTail;	/* Oldest character in the back buffer */
+size_t lBB = 0;		/* Length of back buffer */
+size_t nBB;		/* Number of characters stored in the back buffer */
+size_t ixBB;		/* Current position relative to (backwards from) the head */
+
+char *BBWrap(char *p) {	/* Wrap the pointer, to make sure it remains in the circular buffer */
   while (p < pszBackBuf) p += lBB;
   while (p >= pszBBEnd) p -= lBB;
   return p;
 }
 
-int InitBackBuf(char *psz0) /* Returns 0=Success, else error */
-{
+int InitBackBuf(char *psz0) { /* Returns 0=Success, else error */
   ixBB = nBB = strlen(psz0);
   lBB = max(nBB, 1024);
-  if (!pszBackBuf)
-  {
+  if (!pszBackBuf) {
     pszBackBuf = malloc(lBB);
     if (!pszBackBuf) return 1;
   }
   pszBBEnd = pszBackBuf + lBB;
   strncpy(pszBackBuf, psz0, nBB);
   pszBBTail = pszBackBuf;
-  pszBBHead = BBMove(pszBackBuf + nBB);
+  pszBBHead = BBWrap(pszBackBuf + nBB);
   return 0;
 }
 
-int FGetC(FILE *f)
-{
-/*   if (f != stdin) return fgetc(f); */
+int FGetC(FILE *f) {
   if (!pszBackBuf) InitBackBuf("");
   if (!pszBackBuf) return EOF;
-  if (!ixBB)
-  {
+  if (!ixBB) {
     int iRet = fgetc(f);
     if (iRet == EOF) return iRet;
-    if (nBB == lBB) pszBBTail = BBMove(pszBBTail + 1); /*  Drop one from the tail. */
+    if (nBB == lBB) pszBBTail = BBWrap(pszBBTail + 1); /*  Drop one from the tail. */
     *pszBBHead = (char)iRet;
-    pszBBHead = BBMove(pszBBHead + 1);
+    pszBBHead = BBWrap(pszBBHead + 1);
     if (nBB < lBB) nBB += 1;
     return iRet;
-  }
-  else 
-  {
-    return *BBMove(pszBBHead-(ixBB--));
+  } else {
+    return *BBWrap(pszBBHead-(ixBB--));
   }
 }
 
-int FSeek(FILE *f, long lOffset, int iOrigin)
-{
-/*  if (f != stdin) return fseek(f, lOffset, iOrigin); */
-  if (iOrigin == SEEK_CUR)
-  {
-    if (lOffset >= 0) 
-    {
+int FSeek(FILE *f, long lOffset, int iOrigin) {
+  if (iOrigin == SEEK_CUR) {
+    if (lOffset >= 0) {
       long l;
       for (l=0; l<lOffset; l++) FGetC(f);
       return fseek(f, 0, SEEK_CUR);
@@ -1298,7 +1350,7 @@ int FSeek(FILE *f, long lOffset, int iOrigin)
 |		    The difference is that this one flushes the output at     |
 |		    the end of every line for the console and pipes.	      |
 |		    Useful to see output in real time in long complex cmds.   |
-|		    Output to stdout is assumed to be to a consoles or pipe.  |
+|		    Output to stdout is assumed to be to a console or pipe.   |
 |									      |
 |   History:								      |
 |    2010-12-19 JFL Created this routine.				      |
@@ -1342,7 +1394,7 @@ size_t FWrite(const void *buf, size_t size, size_t count, FILE *f) {
 void MakeRoom(char **ppOut, int *piSize, int iNeeded) {
   if (iNeeded > *piSize) {
     *piSize = iNeeded+80;
-    DEBUG_FPRINTF((mf, "Reallocing buffer 0x%p to size %u\n", *ppOut, *piSize));
+    DEBUG_FPRINTF((mf, "// Reallocing buffer 0x%p to size %u\n", *ppOut, *piSize));
     *ppOut = realloc(*ppOut, *piSize);
     if (!*ppOut) {
       fprintf(stderr, "Error: not enough memory.\n");
