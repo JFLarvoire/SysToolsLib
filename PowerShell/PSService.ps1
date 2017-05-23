@@ -81,6 +81,7 @@
 #                   use it for the service registration.                      #
 #                   Added comments about Windows event logs limitations.      #
 #    2016-11-17 RBM Fixed issue #6 Mangled hyphen in final Unregister-Event.  #
+#    2017-05-10 CJG Added execution policy bypass flag.                       #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -183,7 +184,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2016-11-17"
+$scriptVersion = "2017-05-10"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -701,7 +702,7 @@ $source = @"
         p.StartInfo.UseShellExecute = false;
         p.StartInfo.RedirectStandardOutput = true;
         p.StartInfo.FileName = "PowerShell.exe";
-        p.StartInfo.Arguments = "-c & '$scriptCopyCname' -Start"; // Works if path has spaces, but not if it contains ' quotes.
+        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -Start"; // Works if path has spaces, but not if it contains ' quotes.
         p.Start();
         // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
         string output = p.StandardOutput.ReadToEnd();
