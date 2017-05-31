@@ -9,6 +9,7 @@
 #   History:                                                                  #
 #    2012-10-18 JFL jf.larvoire@hp.com created this file.                     #
 #    2016-04-17 JFL Avoid building the DOS version if missing required libs.  #
+#    2017-05-17 JFL Prevent a link warning U4004: too many rules for target.  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -28,5 +29,7 @@ complain:
 
 dirs $(O)\cpuid.obj $(B)\cpuid.exe: complain
 	@rem Do nothing as there's nothing to do
+
+EXENAME=no_such.exe	# Prevent the win32.mak $(B)\$(EXENAME) inference rule from conflicting with this one.
 !ENDIF
 
