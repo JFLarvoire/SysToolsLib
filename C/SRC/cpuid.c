@@ -28,12 +28,13 @@
 *    2013-01-31 JFL Display the number of cores.                              *
 *    2013-05-30 JFL Some CPUs pretend to support function 0xB, but do not.    *
 *    2016-04-12 JFL Removed a duplicate prototype, now defined in pmode.h.    *
+*    2017-05-31 JFL Fixed warnings. No functional code change.		      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DATE    "2016-04-12"
+#define PROGRAM_DATE    "2017-05-31"
 
 /* Definitions */
 
@@ -303,7 +304,7 @@ int _cdecl main(int argc, char *argv[])
 		while ((pc[0]==' ') && (pc[1]==' '))
 		    {
 		    char *pc2;
-		    for (pc2=pc; pc2[0]=pc2[1]; pc2++) ;
+		    for (pc2=pc; (pc2[0]=pc2[1]) != '\0'; pc2++) ;
 		    }
 		}
 	    // Display the readable brand string.
@@ -842,7 +843,7 @@ void DisplayProcInfo(void)
 	    }
 
 	/* Number of cores and threads */
-	printf("Cores and threads\n", nCores);
+	printf("Cores and threads\n");
 	nCores = 1;
 	if (dwFeatures & (1 << 28)) nCores = (int)BYTE2(dwModel2);
 	printf(" CPUID(1):  Silicon supports %d logical processors\n", nCores);
