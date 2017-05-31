@@ -29,13 +29,17 @@
 *    2016-09-15 JFL Bug fix: Now preserve the \r characters at end of lines.  *
 *                   Version 1.4.                                              *
 *    2016-10-05 JFL Removed obsolete TARGET_xxx definitions, not used anymore.*
-*                                                                             *
+*    2017-05-29 JFL Added error message for failures to backup or rename the  *
+*		    output files.					      *
+*                   Display MsvcLibX library version in DOS & Windows.        *
+*                   Version 1.4.1.                                            *
+*		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4"
-#define PROGRAM_DATE    "2016-09-15"
+#define PROGRAM_VERSION "1.4.1"
+#define PROGRAM_DATE    "2017-05-29"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
 
@@ -145,7 +149,7 @@ char *strlwr(char *psz)    /* Convenient Microsoft library routine not available
 
 void fail(char *pszFormat, ...) {
   va_list vl;
-  int n = 0;
+  int n = fprintf(stderr, "Error: ");
 
   va_start(vl, pszFormat);
   n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
@@ -164,6 +168,7 @@ FILE *mf;			    /* Message output file */
 
 /* Function prototypes */
 
+char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);                   /* Display a brief help and exit */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
@@ -203,6 +208,7 @@ int main(int argc, char *argv[]) {
   struct stat sInTime = {0};
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;	/* Output file directory */
+  int iErr;
 
   /* Open a new message file stream for debug and verbose messages */
   if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
@@ -250,6 +256,10 @@ int main(int argc, char *argv[]) {
       if (streq(pszOpt, "v") || strieq(pszOpt, "verbose")) {
 	iVerbose = 1;
 	continue;
+      }
+      if (streq(pszOpt, "V")) {
+	printf("%s\n", version(1));
+	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", argv[i]);
       continue;
@@ -361,15 +371,27 @@ int main(int argc, char *argv[]) {
 
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
-      unlink(szBakName); 		/* Remove the .bak if already there */
-      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      rename(pszInName, szBakName);	/* Rename the source as .bak */
+      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", szBakName, _strerror(NULL));
+      }
+      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      if (iErr == -1) {
+	fail("Can't backup %s. %s\n", pszInName, _strerror(NULL));
+      }
     } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
-      unlink(pszInName); 		/* Remove the original file */
+      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
+      iErr = unlink(pszInName); 	/* Remove the original file */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", pszInName, _strerror(NULL));
+      }
     }
-    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    if (iErr == -1) {
+      fail("Can't create %s. %s\n", pszInName, _strerror(NULL));
+    }
     pszOutName = pszInName;
   }
 
@@ -407,9 +429,26 @@ fail_no_mem:
 *									      *
 \*---------------------------------------------------------------------------*/
 
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
+}
+
 void usage(void) {
     printf("\n\
-Lessive Version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME " - Wipe out trailing blanks\n\
+lessive version %s - Wipe out trailing blanks\n\
 \n\
 Usage: lessive [SWITCHES] [INFILE [OUTFILE|-same]]\n\
 \n\
@@ -430,7 +469,7 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
 "\n"
 #endif
-);
+, version(0));
   exit(0);
 }
 

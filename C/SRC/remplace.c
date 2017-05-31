@@ -135,13 +135,16 @@
 *		    Display MsvcLibX library version in DOS & Windows.        *
 *		    Prefix all verbose and debug comments with a "//".        *
 *		    Version 2.6.    					      *
+*    2017-05-12 JFL Added error message for failures to backup or rename the  *
+*		    output files. Version 2.6.1.			      *
+*    2017-05-29 JFL Help only displays the main program version.              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.6"
-#define PROGRAM_DATE    "2017-05-11"
+#define PROGRAM_VERSION "2.6.1"
+#define PROGRAM_DATE    "2017-05-29"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -286,7 +289,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 void fail(char *pszFormat, ...) {
   va_list vl;
-  int n = 0;
+  int n = fprintf(stderr, "Error: ");
 
   va_start(vl, pszFormat);
   n += vfprintf(stderr, pszFormat, vl);    /*  Not thread-safe on WIN32 ?!? */
@@ -304,8 +307,8 @@ FILE *mf;			    /* Message output file */
 
 /* Forward references */
 
-char *version(void);		    /* Build the version string */
-void usage(int);
+char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
+void usage(int err);		    /* Display a brief help and exit */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
 int GetEscChar(char *pszIn, char *pc); /* Get one escaped character */
@@ -375,6 +378,7 @@ int main(int argc, char *argv[]) {
   char *pszDirName = NULL;  /*  Output file directory */
   char *pszOld8 = old;
   char *pszNew8 = new;
+  int iErr;
 
   /* Open a new message file stream for debug and verbose messages */
   if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
@@ -477,7 +481,7 @@ fail_no_mem:
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version());
+	printf("%s\n", version(1));
 	exit(0);
       }
       /* Default: Assume it's not a switch, but a string to replace */
@@ -747,15 +751,27 @@ try_next_set:
 
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
-      unlink(szBakName); 		/* Remove the .bak if already there */
+      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", szBakName, _strerror(NULL));
+      }
       DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      rename(pszInName, szBakName);	/* Rename the source as .bak */
+      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      if (iErr == -1) {
+	fail("Can't backup %s. %s\n", pszInName, _strerror(NULL));
+      }
     } else {		/* Don't keep a backup of the input file */
       DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
-      unlink(pszInName); 		/* Remove the original file */
+      iErr = unlink(pszInName); 	/* Remove the original file */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", pszInName, _strerror(NULL));
+      }
     }
     DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    if (iErr == -1) {
+      fail("Can't create %s. %s\n", pszInName, _strerror(NULL));
+    }
     pszOutName = pszInName;
   }
 
@@ -851,29 +867,33 @@ int is_redirected(FILE *f)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
 #if defined(_MSDOS) || defined(_WIN32)
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
-	  );
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
-void usage(int err)
-    {
-    FILE *f;
+void usage(int err) {
+  FILE *f;
 
-    f = stdout; 		/* Assume output on stdout will be visible */
-    if (err && is_redirected(f))	/* If error and stdout redirected... */
-	f = stderr;			/* ... then use stderr */
+  f = stdout; 		/* Assume output on stdout will be visible */
+  if (err && is_redirected(f))	/* If error and stdout redirected... */
+      f = stderr;			/* ... then use stderr */
 
-    /* Note: The help is too long, and needs to be split into several sub strings */
-    /*       Also be careful of the % character that appears in some options */
-    fprintf(f, "\
+  /* Note: The help is too long, and needs to be split into several sub strings */
+  /*       Also be careful of the % character that appears in some options */
+  fprintf(f, "\
 \n\
 remplace version %s - Replace substrings in a stream\n\
 \n\
@@ -881,7 +901,7 @@ Usage: remplace [SWITCHES] OPERATIONS [FILES_SPEC]\n\
 \n\
 files_spec: [INFILE [OUTFILE|-same]]\n\
   INFILE  Input file pathname. Default or \"-\": stdin\n\
-  OUTFILE Output file pathname. Default or \"-\": stdout\n", version());
+  OUTFILE Output file pathname. Default or \"-\": stdout\n", version(0));
     fprintf(f, "%s", "\
 \n\
 operation: {old_string new_string}|-=|-%|-.\n\
@@ -961,8 +981,8 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #endif
 );
 
-    exit(err);
-    }
+  exit(err);
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

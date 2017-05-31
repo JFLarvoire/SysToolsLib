@@ -44,13 +44,16 @@
 *    2017-03-15 JFL Changed the default console output encoding to Unicode.   *
 *		    Changed the arguments syntax, to simply type encoded files.
 *		    Autodetect the input encoding by default. V 2.0.	      *
+*    2017-05-31 JFL Added error message for failures to backup or rename the  *
+*		    output files.					      *
+*                   Display MsvcLibX library version in DOS & Windows. V2.0.1.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2017-03-15"
+#define PROGRAM_VERSION "2.0.1"
+#define PROGRAM_DATE    "2017-05-31"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -194,7 +197,7 @@ FILE *df = NULL;		/* Destination file handle */
 
 void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving no traces behind */
   va_list vl;
-  int n = 0;
+  int n = fprintf(stderr, "Error: ");
 
   va_start(vl, pszFormat);
   n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
@@ -212,7 +215,7 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
 
 /* Function prototypes */
 
-char *version(void);
+char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
@@ -244,7 +247,7 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
 
 char szUsage[] = "\
 \n\
-conv version " PROGRAM_VERSION " " PROGRAM_DATE "\n\
+conv version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION "\n\
 \n\
 Convert characters from one character set to another.\n\
 \n\
@@ -328,6 +331,7 @@ int __cdecl main(int argc, char *argv[]) {
   struct stat sInTime = {0};
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;	/* Output file directory */
+  int iErr;
 
   if (!pszBuffer) {
 fail_no_mem:
@@ -406,7 +410,7 @@ fail_no_mem:
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version());
+	printf("%s\n", version(1));
 	exit(0);
       }
       /* Unsupported switches are ignored */
@@ -575,15 +579,27 @@ fail_no_mem:
 
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
-      unlink(szBakName); 		/* Remove the .bak if already there */
-      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      rename(pszInName, szBakName);	/* Rename the source as .bak */
+      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", szBakName, _strerror(NULL));
+      }
+      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      if (iErr == -1) {
+	fail("Can't backup %s. %s\n", pszInName, _strerror(NULL));
+      }
     } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
-      unlink(pszInName); 		/* Remove the original file */
+      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
+      iErr = unlink(pszInName); 	/* Remove the original file */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", pszInName, _strerror(NULL));
+      }
     }
-    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    if (iErr == -1) {
+      fail("Can't create %s. %s\n", pszInName, _strerror(NULL));
+    }
     pszOutName = pszInName;
   }
 
@@ -600,12 +616,21 @@ fail_no_mem:
 
 #pragma warning(default:4706)	/* Restore the "assignment within conditional expression" warning */
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
-	  );
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 /*---------------------------------------------------------------------------*\

@@ -29,13 +29,17 @@
 *    2016-09-13 JFL Added new routine IsSameFile to detect equiv. pathnames.  *
 *    2016-09-14 JFL Make sure the debug stream is always in text mode.	      *
 *                   Version 3.0.                                              *
+*    2017-05-29 JFL Added error message for failures to backup or rename the  *
+*		    output files.					      *
+*                   Display MsvcLibX library version in DOS & Windows.        *
+*                   Version 3.0.1.                                            *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0"
-#define PROGRAM_DATE    "2016-09-14"
+#define PROGRAM_VERSION "3.0.1"
+#define PROGRAM_DATE    "2017-05-29"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent security warnings for old routines */
 
@@ -92,12 +96,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define SAMENAME strieq		/* File name comparison routine */
 
 /*  Avoid deprecation warnings */
-#define tempnam _tempnam
-#define strdup _strdup
-#define stricmp _stricmp
-#define dup	_dup
-#define fdopen	_fdopen
-#define fileno	_fileno
+#define stricmp	_stricmp	/* This one is not standard */
 
 #endif /* defined(_WIN32) */
 
@@ -131,7 +130,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 void fail(char *pszFormat, ...) {
   va_list vl;
-  int n = 0;
+  int n = fprintf(stderr, "Error: ");
 
   va_start(vl, pszFormat);
   n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
@@ -143,7 +142,8 @@ void fail(char *pszFormat, ...) {
 #define FAIL(msg) fail("%s", msg);
 
 /* Forward definitions */
-char *version(void);		    /* Build the version string */
+char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
+
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
@@ -196,6 +196,7 @@ int main(int argc, char *argv[])
   struct stat sInTime = {0};
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;	/* Output file directory */
+  int iErr;
 
   /* Open a new message file stream for debug and verbose messages */
   if (is_redirected(stdout)) {	/* If stdout is redirected to a file or a pipe */
@@ -221,7 +222,7 @@ int main(int argc, char *argv[])
       if (   strieq(pszOpt, "?")
 	  || strieq(pszOpt, "h")
 	  || strieq(pszOpt, "-help")) {
-	printf(usage, version());
+	printf(usage, version(0));
 	return 0;
       }
       if (strieq(pszOpt, "a")) {	/* Use append mode */
@@ -256,7 +257,7 @@ int main(int argc, char *argv[])
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version());
+	printf("%s\n", version(1));
 	exit(0);
       }
       fprintf(stderr, "Invalid switch %s\x07\n", pszArg);
@@ -362,15 +363,27 @@ int main(int argc, char *argv[])
 
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
-      unlink(szBakName); 		/* Remove the .bak if already there */
-      DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      rename(pszInName, szBakName);	/* Rename the source as .bak */
+      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", szBakName, _strerror(NULL));
+      }
+      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
+      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      if (iErr == -1) {
+	fail("Can't backup %s. %s\n", pszInName, _strerror(NULL));
+      }
     } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "Remove \"%s\"\n", pszInName));
-      unlink(pszInName); 		/* Remove the original file */
+      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
+      iErr = unlink(pszInName); 	/* Remove the original file */
+      if (iErr == -1) {
+	fail("Can't delete file %s. %s\n", pszInName, _strerror(NULL));
+      }
     }
-    DEBUG_FPRINTF((mf, "Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
+    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    if (iErr == -1) {
+      fail("Can't create %s. %s\n", pszInName, _strerror(NULL));
+    }
     pszOutName = pszInName;
   }
 
@@ -388,13 +401,23 @@ fail_no_mem:
   return 1;
 }
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
-	  );
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
+
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
