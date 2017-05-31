@@ -19,6 +19,7 @@
 *    2014-07-03 JFL Added support for pathnames >= 260 characters. 	      *
 *    2016-09-09 JFL Fixed a crash in debug mode, due to stack overflows.      *
 *    2017-03-22 JFL Added routines TrimTailSlashesW() and ResolveTailLinks*().*
+*    2017-05-31 JFL Get strerror() prototype from string.h.                   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -30,6 +31,7 @@
 
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 #include "debugm.h"
 
 #ifdef _WIN32
