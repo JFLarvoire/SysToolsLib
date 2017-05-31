@@ -4,6 +4,22 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-05-31
+### Added
+- C/SRC/asInvoker.manifest, asInvoker.rc: Default manifest to use for WIN95 and WIN32 builds.
+
+### Changed
+- C/SRC/conv.c, detab.c, lessive.c, remplace.c, update.c: Display MsvcLibX library version in DOS & Windows.
+  This allows tracking new builds with updated libraries, when the tools C sources have not changed.
+  The help still displays the main program version only, to limit the first line size.
+
+### Fixed
+- C/include/win32.mak: Use the new asInvoker.manifest by default for WIN95 and WIN32 builds. This allows fixing issues
+  with unprivileged accesses to C:\ or %ProgramFiles% silently redirected to %LOCALAPPDATA%\VirtualStore\...
+- C/MsvcLibX/include/string.h: Added a prototype for our modified version of strerror(), avoiding the link warning:
+  LIBCMT.lib(strerror.obj) : warning LNK4006: _strerror already defined in MsvcLibX.lib(strerror.obj); second definition ignored
+- C/SRC/conv.c, detab.c, lessive.c, remplace.c: Added error message for failures to backup or rename the output files.
+
 ## [Unreleased] 2017-05-11
 ### Added
 - C/MsvcLibX/include/msvclibx_version.h: Defines the MSVCLIBX_VERSION string.
