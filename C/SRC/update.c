@@ -125,13 +125,15 @@
 *		    Version 3.5.1.    					      *
 *    2017-05-11 JFL Display MsvcLibX library version in DOS & Windows.        *
 *		    Version 3.5.2.    					      *
+*    2017-05-31 JFL But don't display it in help, to limit the 1st line size. *
+*		    Version 3.5.3.    					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.2"
-#define PROGRAM_DATE    "2017-01-30"
+#define PROGRAM_VERSION "3.5.3"
+#define PROGRAM_DATE    "2017-05-31"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -328,7 +330,7 @@ static int iRecur = 0;			/* Recursive update */
 
 /* forward references */
 
-char *version(void);			/* Build this program version string */
+char *version(int iVerbose);		/* Build the version string. If verbose, append library versions */
 void usage(void);			/* Display usage */
 int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
@@ -513,7 +515,7 @@ int main(int argc, char *argv[])
 	if (   streq(arg, "-V")     /* -V: Display the version */
 	    || streq(arg, "--version"))
 	    {
-	    printf("%s\n", version());
+	    printf("%s\n", version(1));
 	    exit(0);
 	    }
 	if (   streq(arg, "-X")	    /* NoExec/Test mode on */
@@ -578,21 +580,26 @@ int main(int argc, char *argv[])
     return iExit;
     }
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
 #if defined(_MSDOS) || defined(_WIN32)
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
-	  );
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 void usage(void)
     {
-    printf("Update version %s\n\
+    printf("update version %s - Update files based on their time stamps\n\
 \n\
 Usage: update [SWITCHES] FILES DIRECTORY\n\
        update [SWITCHES] FILES DIRECTORY" DIRSEPARATOR_STRING "NEWDIR" DIRSEPARATOR_STRING "\n\
@@ -613,7 +620,7 @@ Switches:\n"
 "\
   -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\
   -F|--force    Force mode. Overwrite read-only files.\n\
-", version());
+", version(0));
 
     printf("\
   -E|--noempty  Noempty mode. Don't copy empty file.\n\
