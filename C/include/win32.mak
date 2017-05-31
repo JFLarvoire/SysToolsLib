@@ -112,6 +112,7 @@
 #		    Fixed issues when the current directory contains spaces.  #
 #		    Fixed src2objs.bat and use it indirectly via src2objs.mak.#
 #    2017-03-10 JFL If WINVER is defined but empty, use SDK & linker defaults.#
+#    2017-05-12 JFL Use a default asInvoker.manifest for all win32 builds.    #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -600,6 +601,14 @@ EXENAME=$(PROGRAM).exe	# Both DOS and Windows expect this extension.
 !ENDIF
 
 # Generic rule to build program
+!IF DEFINED(PROGRAM) && (!EXIST("$(PROGRAM).manifest")) && EXIST("asInvoker.rc") # If no manifest is defined for PROGRAM
+# Then use the default asInvoker.manifest, that flags the WIN32 exe as Vista-aware
+# But no need to add /MANIFEST to $(LFLAGS), as it just outputs a useless copy next to the exe
+!IF !DEFINED(OBJECTS)
+OBJECTS=$(O)\$(PROGRAM).obj # Necessary since adding the .res below will prevent using the {$(O)\}.obj{$(B)\}.exe inference rule as before.
+!ENDIF
+OBJECTS=$(OBJECTS) $(O)\asInvoker.res # asInvoker.rc includes asInvoker.manifest in the executable 
+!ENDIF
 $(B)\$(EXENAME): $(OBJECTS:+=)
     @echo Applying $(T).mak inference rule $$(B)\$$(EXENAME) build rule:
     $(MSG) Linking $(B)\$(@F) ...

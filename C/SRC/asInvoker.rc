@@ -1,0 +1,42 @@
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Filename	    asInvoker.rc					      |
+|									      |
+|   Description:    Flag an application as Vista-aware and unprivileged       |
+|                                                                             |
+|   Notes:	    Starting with Vista, unprivileged WIN32 apps that try to  |
+|		    access protected areas, like C:\ or %ProgramFiles%, are   |
+|		    silently redirected to %LOCALAPPDATA%\VirtualStore\...    |
+|		    This is intended to prevent old Win95 or XP apps to fail  |
+|		    in Vista and subsequent OSs, where these areas are        |
+|		    writable only by Administrators.			      |
+|		    No such redirection for WIN32 apps running as Admin.      |
+|		    No such redirection for WIN64 apps, which will fail if    |
+|		    they try writing to the protected areas in non-admin mode.|
+|		    							      |
+|		    This behaviour is prevented by linking a manifest with    |
+|		    the app, telling Windows that the app is Vista-aware.     |
+|		    We choose here to define a minimal manifest, that just    |
+|		    tells Windows that the app is to run at the invoker's     |
+|		    current privilege level.				      |
+|		    							      |
+|		    In Visual Studio 2008 and later, the linker's /MANIFEST   |
+|		    option has defaults that can do just that.		      |
+|		    But in Visual Studio 2005, this has to be expressly	      |
+|		    defined, hence the need for this rc and manifest.	      |
+|		    							      |
+|		    For more details, see:				      |
+|		    http://stackoverflow.com/questions/4730053/how-to-disable-virtualstore-for-c-programs
+|		    https://msdn.microsoft.com/en-us/library/f2c0w594.aspx    |
+|		    							      |
+|   History:								      |
+|    2010-03-15 JFL Created this rc and manifest for update.exe.	      |
+|    2017-05-12 JFL It should actually be used for any WIN32 system tool.     |
+|                                                                             |
+|         © Copyright 2016 Hewlett Packard Enterprise Development LP          |
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*---------------------------------------------------------------------------*/
+
+#include "windows.h"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "asInvoker.manifest"
