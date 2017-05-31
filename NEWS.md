@@ -19,6 +19,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/MsvcLibX/include/string.h: Added a prototype for our modified version of strerror(), avoiding the link warning:
   LIBCMT.lib(strerror.obj) : warning LNK4006: _strerror already defined in MsvcLibX.lib(strerror.obj); second definition ignored
 - C/SRC/conv.c, detab.c, lessive.c, remplace.c: Added error message for failures to backup or rename the output files.
+- C/SRC/cpuid.c, cpuid.mak: Fixed warnings. No functional code change.
 
 ## [Unreleased] 2017-05-11
 ### Added
