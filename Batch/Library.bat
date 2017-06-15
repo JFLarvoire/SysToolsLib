@@ -191,6 +191,14 @@
 :#   2016-12-12 JFL Fixed function call/return logging when sourcing this lib.#
 :#   2016-12-14 JFL Fixed macros RETURN0 and RETURN#.                         #
 :#   2016-12-16 JFL Changed %EXEC% to not capture commands output by default. #
+:#   2017-01-13 JFL Added option -f to routine :Exec.                         #
+:#   2017-01-16 JFL Use bright colors for [Success]/[Warning]/[Failure] in    #
+:#                  :Echo.Color, and added an optional suffix and end of line.#
+:#   2017-01-17 JFL Renamed %ARG0% as %SFULL%, and added a new %ARG0% with    #
+:#		    the actual invokation pathname, possibly relative.        #
+:#   2017-05-11 JFL Removed rscp which was trivial and useless.               #
+:#                  Changed chcp into GetCP, returning the current code page. #
+:#                  Added GetACP, GetOEMCP.				      #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -206,10 +214,11 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' %*& exit /b
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-16"
+set "VERSION=2017-05-11"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
-set  "ARG0=%~f0"				&:# Script full pathname
+set "SFULL=%~f0"				&:# Script full pathname
+set ^"ARG0=%0^"					&:# Script invokation name
 set ^"ARGS=%*^"					&:# Argument line
 
 :# Mechanism for calling subroutines in a second instance of a script, from its main instance.
@@ -219,8 +228,8 @@ if '%1'=='-call' !ARGS:~1!& exit /b
 :# Mechanism for "sourcing" this library from another script.
 if '%1'=='source' (
   endlocal &:# Define everything in the context of the caller script
-  if not "!!"=="" >&2 echo "%ARG0%" %1 Error: Must be called with DelayedExpansion ENABLED. & exit /b 1
-  set ^"LCALL=call "%ARG0%" call^"	&rem :# This is this library's ARG0
+  if not "!!"=="" >&2 echo "%SFULL%" %1 Error: Must be called with DelayedExpansion ENABLED. & exit /b 1
+  set ^"LCALL=call "%SFULL%" call^"	&rem :# This is the full path of this library's ARG0
 ) &:# Now initialize the library modules, then return to the parent script.
 
 :# Initialize the most commonly used library components.
@@ -254,6 +263,7 @@ call :Call.Init			&:# Function calls and argument extraction
 call :Macro.Init		&:# Inline macros generation
 call :Debug.Init		&:# Debug routines
 call :Exec.Init			&:# Conditional execution routines
+:# call :Echo.Color.Init
 
 :# FOREACHLINE macro. (Changes the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
@@ -353,7 +363,7 @@ set "POPARG=%LCALL% :PopArg"
 set "POPSARG=%LCALL% :PopSimpleArg"
 
 :# Mechanism for calling subroutines in a second external instance of the top script.
-set ^"XCALL=call "!ARG0!" -call^"	&:# This is the top script's (or this lib's if called directly) ARG0
+set ^"XCALL=call "!SFULL!" -call^"	&:# This is the full path to the top script's (or this lib's if called directly) ARG0
 set ^"XCALL@=!XCALL! :CallVar^"		&:# Indirect call, with the label and arguments in a variable
 
 :# Define a LF variable containing a Line Feed ('\x0A')
@@ -1051,6 +1061,7 @@ goto EchoArgs.loop
 :#                              usable tee.exe.                               #
 :#                              Known limitation: The exit code is always 0.  #
 :#                  -e          Always echo the command.		      #
+:#		    -f		Force executing the command, even in NOEXEC m.#
 :#                  -v          Trace the command in verbose mode. (Default)  #
 :#                  -V          Do not trace the command in verbose mode.     #
 :#                  %*          The command and its arguments                 #
@@ -1126,6 +1137,7 @@ goto EchoArgs.loop
 :#		    Added routine :_Do.                                       #
 :#   2016-12-13 JFL Rewrote _DO as a pure macro.                              #
 :#   2016-12-15 JFL Changed the default to NOT redirecting the output to log. #
+:#   2017-01-13 JFL Added option -f to routine :Exec.                         #
 :#		                                                              #
 :#----------------------------------------------------------------------------#
 
@@ -1212,6 +1224,8 @@ if .%NOREDIR%.==.1. set "Exec.2Redir="		&:# Several cases forbid redirection
 if not defined LOGFILE set "Exec.2Redir="
 if /i .%LOGFILE%.==.NUL. set "Exec.2Redir="
 set "Exec.IF_VERBOSE=%IF_VERBOSE%"		&:# Echo the command in verbose mode
+set "Exec.IF_EXEC=%IF_EXEC%"			&:# IF_EXEC macro
+set "Exec.IF_NOEXEC=%IF_NOEXEC%"		&:# IF_NOEXEC macro
 :# Record the command-line to execute.
 :# Never comment (set Exec.cmd) lines themselves, to avoid appending extra spaces.
 :# Use %*, but not %1 ... %9, because %N miss non-white argument separators like = , ;
@@ -1233,6 +1247,7 @@ if "%~1"=="-t" if defined Exec.2Redir ( :# Tee the output to the log file
   goto :Exec.NextArg
 )
 if "%~1"=="-e" set "Exec.IF_VERBOSE=if 1==1" & goto :Exec.NextArg :# Always echo the command
+if "%~1"=="-f" set "Exec.IF_EXEC=if 1==1" & set "Exec.IF_NOEXEC=if 0==1" & goto :Exec.NextArg :# Always execute the command
 if "%~1"=="-v" set "Exec.IF_VERBOSE=%IF_VERBOSE%" & goto :Exec.NextArg :# Echo the command in verbose mode
 if "%~1"=="-V" set "Exec.IF_VERBOSE=if 0==1" & goto :Exec.NextArg :# Do not echo the command in verbose mode
 :# Anything else is part of the command. Prepare to display it and run it.
@@ -1256,7 +1271,7 @@ set Exec.toEcho=%Exec.toEcho:"<"=^^^<%
 :# Finally create the usable command, by removing the last level of ^ escapes.
 set Exec.Cmd=%Exec.toEcho%
 set "Exec.Echo=rem"
-%IF_NOEXEC% set "Exec.Echo=echo"
+%Exec.IF_NOEXEC% set "Exec.Echo=echo"
 %IF_DEBUG% set "Exec.Echo=echo"
 %Exec.IF_VERBOSE% set "Exec.Echo=echo"
 %>DEBUGOUT% %Exec.Echo%.%INDENT%%Exec.toEcho%
@@ -1266,7 +1281,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# The local variables must disappear before return.
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
-endlocal & if not .%NOEXEC%.==.1. (
+endlocal & %Exec.IF_EXEC% (
   set "NOREDIR=%Exec.NOREDIR%"
   %IF_DEBUG% set "INDENT=%INDENT%  "
   call :Exec.SetErrorLevel %Exec.ErrorLevel% &:# Restore the errorlevel we had on :Exec entrance
@@ -1687,9 +1702,11 @@ goto :eof
 :#                  New implementation not using a temporary file.            #
 :#   2012-10-06 JFL Fixed the problem with displaying "!".                    #
 :#   2012-11-13 JFL Copy the string into the log file, if defined.            #
+:#   2017-01-16 JFL Use bright colors for [Success]/[Warning]/[Failure],      #
+:#                  and added an optional suffix and end of line.             #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
-
+ 
 call :Echo.Color.Init
 goto Echo.Color.End
 
@@ -1729,8 +1746,6 @@ set "ECHO.FILE=%~nx0"
 :# Use prompt to store a backspace into a variable. (Actually backspace+space+backspace)
 for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "ECHO.DEL=%%a"
 goto :eof
-
-:Echo.Color.End
 
 :#----------------------------------------------------------------------------#
 
@@ -1814,17 +1829,19 @@ goto :eof
 
 :#----------------------------------------------------------------------------#
 
-:Echo.Success
-%ECHO.COLOR% 02 [Success] /n
+:Echo.Success	[%1=Suffix string] [%2=/n]
+%ECHO.COLOR% 0A "[Success]%~1" %2
 goto :eof
 
-:Echo.Warning
-%ECHO.COLOR% 06 [Warning] /n
+:Echo.Warning	[%1=Suffix string] [%2=/n]
+%ECHO.COLOR% 0E "[Warning]%~1" %2
 goto :eof
 
-:Echo.Failure
-%ECHO.COLOR% 04 [Failure] /n
+:Echo.Failure	[%1=Suffix string] [%2=/n]
+%ECHO.COLOR% 0C "[Failure]%~1" %2
 goto :eof
+
+:Echo.Color.End
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -2462,8 +2479,8 @@ ping -n %N% 127.0.0.1 >NUL 2>&1
 
 :# Function GetProcess: Set PID and TITLE with the current console PID and title string.
 :GetProcess
-%FUNCTION% enableextensions
-if not defined ARG0 >&2 echo Function GetProcess error: Please set "ARG0=%%~0" in script initialization. & %RETURN% 1
+%FUNCTION% EnableExtensions
+if not defined SFULL >&2 echo Function GetProcess error: Please set "SFULL=%%~0" in script initialization. & %RETURN% 1
 :# Get the list of command prompts titles
 for /f "tokens=2,9*" %%a in ('tasklist /v /nh /fi "IMAGENAME eq cmd.exe"') do set TITLE.%%a=%%c
 :# Change the current title to a statistically unique value
@@ -2523,7 +2540,7 @@ call :trimleft TITLE
 :# Remove the suffix from the title. Else if we leave it and restore the title with
 :# that suffix, then the suffix will remain after the script exits.
 set "SUFFIX=%RDMTITLE% %TITLE%"
-call set "TITLE=%%TITLE: - %ARG0%=";rem %%
+call set "TITLE=%%TITLE: - %SFULL%=";rem %%
 %ECHOVARS.D% TITLE
 call set "SUFFIX=%%SUFFIX:%RDMTITLE% %TITLE%=%%"
 %ECHOVARS.D% SUFFIX
@@ -2636,30 +2653,36 @@ goto :eof
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
-:#  Function        chcp / rscp                                               #
+:#  Function        chcp	                                              #
 :#                                                                            #
-:#  Description     Change/restore the code page                              #
+:#  Description     Get code pages		                              #
 :#                                                                            #
 :#  Arguments                                                                 #
 :#                                                                            #
-:#  Notes 	    chcp saves the initial code page into variable OLDCP.     #
-:#                  rscp restores it from that variable.                      #
+:#  Notes 	                                                              #
 :#                                                                            #
 :#  History                                                                   #
+:#   2017-05-11 JFL Removed rscp which was trivial and useless.               #
+:#                  Changed chcp into GetCP, returning the current code page. #
+:#                  Added GetACP, GetOEMCP.				      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:# Under NT, save the initial code page, and change it to Windows 1252 code page.
-:chcp
-:# if not "%OS%"=="Windows_NT" goto :eof
-for /f "tokens=2 delims=:" %%n in ('chcp') do set OLDCP=%%n
-chcp 1252
+:# Get the current console code page.
+:GetCP %1=variable name
+for /f "tokens=2 delims=:" %%n in ('chcp') do for %%p in (%%n) do set "%1=%%p"
 goto :eof
 
-:# Restore the initial code page
-:rscp
-:# if not "%OS%"=="Windows_NT" goto :eof
-chcp %OLDCP%
+:# Get the default console code page
+:GetOEMCP %1=variable name
+set "CP_KEY=HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage"
+for /f "tokens=3" %%p in ('reg query "%CP_KEY%" /v "OEMCP" ^| findstr REG_SZ') do set "%1=%%p"
+goto :eof
+
+:# Get the default system code page
+:GetACP %1=variable name
+set "CP_KEY=HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage"
+for /f "tokens=3" %%p in ('reg query "%CP_KEY%" /v "ACP" ^| findstr REG_SZ') do set "%1=%%p"
 goto :eof
 
 :#----------------------------------------------------------------------------#
@@ -4101,5 +4124,5 @@ goto :next_arg
 :# This library does nothing. Display the help screen.
 goto :Help
 
-:# The following line must be last and not end by a CRLF.
+:# The following line, used by :Echo.Color, must be last and not end by a CRLF.
 -
