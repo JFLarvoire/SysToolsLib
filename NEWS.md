@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-06-15
+### Added
+- Batch/PySetup.bat: A tool for configuring *.py scripts to use one of the Python interpreters available.
+
 ## [Unreleased] 2017-05-31
 ### Added
 - C/SRC/asInvoker.manifest, asInvoker.rc: Default manifest to use for WIN95 and WIN32 builds.
