@@ -31,12 +31,13 @@
 #    2015-09-17 JFL Added option --from to copy the time of another file.     #
 #    2015-10-15 JFL Added option --f2d to set dir times from files times.     #
 #    2015-10-29 JFL Added options -z and --z2m to manage 7-Zip archive times. #
+#    2017-06-22 JFL Bug fix: Do not display help if wildcards produce 0 names.#
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2015-10-29"
+set version "2017-06-22"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -273,6 +274,7 @@ set add 0
 set sequence 0
 set action display ; # What to do. One of: display set copy rename add
 set typeNames {ctime Create mtime Modify atime Access}
+set nNames 0
 while {"$args" != ""} {
   set arg [PopArg]
   switch -- $arg {
@@ -365,6 +367,7 @@ while {"$args" != ""} {
         continue
       }
       # It's a file name. Resolve wildcards, if any.
+      incr nNames ;# Count names provided. Wildcards may produce 0 names, which is valid.
       regsub -all {\\} $arg "/" name
       if [regexp {[?*]} $name -] {
 	set names [concat $names [lsort -dictionary [glob -nocomplain $name]]]
@@ -377,7 +380,9 @@ while {"$args" != ""} {
 }
 
 if {"$names" == ""} {
-  puts -nonewline $usage
+  if (!$nNames) { # If no name was actually provided, then display help
+    puts -nonewline $usage
+  }
   exit 0
 }
 
