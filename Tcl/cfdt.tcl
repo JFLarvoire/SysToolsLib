@@ -32,6 +32,7 @@
 #    2015-10-15 JFL Added option --f2d to set dir times from files times.     #
 #    2015-10-29 JFL Added options -z and --z2m to manage 7-Zip archive times. #
 #    2017-06-22 JFL Bug fix: Do not display help if wildcards produce 0 names.#
+#                   Display the list of files processed, to monitor progress. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -466,6 +467,8 @@ set err [catch {
       set name2 "$time[file tail $name]"
       if {[Debug] || $noexec} {
 	puts "file rename $name $name2"
+      } else { # Display the list of files processed, to allow monitoring progress
+	puts $name2
       }
       if {!$noexec} {
 	file rename $name $name2
@@ -483,6 +486,8 @@ set err [catch {
     set err [catch {
       if {[Debug] || $noexec} {
 	puts "file $what \"$name\" $time"
+      } else { # Display the list of files processed, to allow monitoring progress
+	puts $name
       }
       if {!$noexec} {
 	file $what $name $time
