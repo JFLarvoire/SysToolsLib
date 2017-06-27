@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-06-27
+### Changed
+- C/MsvcLibX/include/reparsept.h, C/MsvcLibX/src/dirent.c, C/MsvcLibX/src/readlink.c:  
+  Renamed IO_REPARSE_TAG_LXSS_SYMLINK as IO_REPARSE_TAG_LX_SYMLINK.  
+  Added several other missing reparse tags, and decode them in debug mode.
+
+## [Unreleased] 2017-06-22
+### Changed
+- Tcl/cfdt.tcl: Display the list of files processed, to monitor progress.
+
+### Fixed
+- Tcl/cfdt.tcl: Do not display help if wildcards produce 0 names.
+
 ## [Unreleased] 2017-06-15
 ### Added
 - Batch/PySetup.bat: A tool for configuring *.py scripts to use one of the Python interpreters available.
