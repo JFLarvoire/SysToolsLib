@@ -21,13 +21,14 @@
 *		    Version 1.1.1.					      *
 *    2017-04-15 JFL When listing drives, tolerate missing indexes, as one     *
 *		    drive may have been recently unplugged. Version 1.1.2.    * 
+*    2017-06-28 JFL Fixed warnings. No functional code change. Version 1.1.3. * 
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.2"
-#define PROGRAM_DATE    "2017-04-15"
+#define PROGRAM_VERSION "1.1.3"
+#define PROGRAM_DATE    "2017-06-28"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -244,7 +245,6 @@ int _cdecl main(int argc, char *argv[]) {
 	pGptHdr = hGpt->pGptHdr;
 	if (iVerbose) DumpBuf(pGptHdr, 0, sizeof(EFI_PARTITION_TABLE_HEADER));
   
-	char szQwBuf[20];
 	oprintf("Main GPT LBA = {%{%c}}\n", cBase, pGptHdr->MyLBA);
 	oprintf("Alt. GPT LBA = {%{%c}}\n", cBase, pGptHdr->AlternateLBA);
 	oprintf("First LBA = {%{%c}}\n", cBase, pGptHdr->FirstUsableLBA);
@@ -537,10 +537,10 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
     qwSize /= wKB;	// Change to the next higher scale
   }
   DWORD dwSize = (DWORD)qwSize;
-  if (dwSize >= (10*iKB)) { // We'll have two significant digits. Switch to the next scale.
+  if (dwSize >= (DWORD)(10*iKB)) { // We'll have two significant digits. Switch to the next scale.
     dwSize /= wKB;
     i++;
-  } else if (dwSize >= iKB) { // We'll have 1 significant digits, + 1 after the period.
+  } else if (dwSize >= (DWORD)iKB) { // We'll have 1 significant digits, + 1 after the period.
     sprintf(szFraction+1, "%03ld", ((dwSize % wKB) * 1000) / wKB);
     dwSize /= wKB;
     i++;
