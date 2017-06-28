@@ -10,6 +10,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SRC/gpt.cpp: Fixed warnings. No functional code change.
 - C/SRC/1clip.c: Help displays the actual ANSI and OEM code pages. Fixed the link warning.
 - C/SRC/msgbox.c: Fixed the link warning.
+- C/SysLib/qword.h: Disable the warning C4710 "function 'QWORD::operator=' not expanded".
 
 ## [Unreleased] 2017-06-27
 ### Changed
