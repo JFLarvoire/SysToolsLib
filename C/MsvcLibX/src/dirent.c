@@ -39,7 +39,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ security warnings */
 
-#define _UTF8_SOURCE /* Generate the UTF-8 version of WIN32 printf & scandir */
+#define _UTF8_LIB_SOURCE /* Generate the UTF-8 version of WIN32 printf & scandir */
 
 #include "dirent.h" /* Include our associated .h, in the same dir as this .c. Do not use <>. */
 #ifndef _DIRENT_FOR_DOS_WINDOWS
