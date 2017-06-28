@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-06-28
+### Fixed
+- C/MsvcLibX/*: Fixed non _UTF8_SOURCE programs initialization by using new constant _UTF8_LIB_SOURCE instead within MsvcLibX sources.
+- C/SRC/gpt.cpp: Fixed warnings. No functional code change.
+- C/SRC/1clip.c: Help displays the actual ANSI and OEM code pages. Fixed the link warning.
+- C/SRC/msgbox.c: Fixed the link warning.
+
 ## [Unreleased] 2017-06-27
 ### Changed
 - C/MsvcLibX/include/reparsept.h, C/MsvcLibX/src/dirent.c, C/MsvcLibX/src/readlink.c:  
