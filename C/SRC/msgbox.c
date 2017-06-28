@@ -26,6 +26,7 @@
 *    2016-12-20 JFL Added library records to allow building in SysToolsLib.   *
 *    2016-12-31 JFL Fixed _setargv for use in WIN64 programs.		      *
 *                   Display help on stdout.                                   *
+*    2017-06-28 JFL Fixed the link warning. No functional code change.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -102,7 +103,11 @@ void _cdecl OutputDebugF(const char *pszFormat, ...)
 
 /* Global variables */
 
-int iDebug = FALSE;
+#if _DEBUG && HAS_MSVCLIBX
+extern int iDebug;
+#else
+int iDebug = 0;
+#endif
 
 /* Forward references */
 
