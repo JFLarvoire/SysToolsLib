@@ -396,7 +396,7 @@ extern char *Filetime2String(const FILETIME *pFT, char *pBuf, size_t nBufSize);
 #if defined(_MSDOS)
 #define _mkdirx(path, mode) _mkdir(path)
 #elif defined(_WIN32)
-#if defined(_UTF8_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_UTF8_SOURCE)
 #define _mkdirx(path, mode) mkdirU(path, mode)
 #else /* _ANSI_SOURCE */
 #define _mkdirx(path, mode) mkdirA(path, mode)
