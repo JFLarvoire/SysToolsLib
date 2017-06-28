@@ -29,13 +29,15 @@
 *		    Version 1.3.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-09-23 JFL Removed warnings. No functional code change.              *
+*    2017-06-28 JFL Fixed the link warning.				      *
+*                   Help displays the actual ANSI and OEM code pages.         *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2014-04-01"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2017-06-28"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -78,7 +80,11 @@ enum {
 
 /* Global variables */
 
+#if _DEBUG && HAS_MSVCLIBX
+extern int iDebug;
+#else
 int iDebug = 0;
+#endif
 
 /* Function prototypes */
 
@@ -219,7 +225,9 @@ int main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
-  printf("%s", "\n\
+  UINT cpANSI = GetACP();
+  UINT cpOEM = GetOEMCP();
+  printf("\n\
 1clip version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
 \n\
 Pipe text data from the Windows clipboard to stdout.\n\
@@ -231,13 +239,13 @@ Usage:\n\
 Options:\n\
   -?      Display this help screen.\n\
   -a      Get the ANSI text from the clipboard.\n\
-  -A      Output using the ANSI code page #1252 encoding.\n\
+  -A      Output using the ANSI code page #%u encoding.\n\
   -b      Output binary data.\n\
   -d      Output debugging information.\n\
   -h      Get the HTML data from the clipboard. (Encoded in UTF-8)\n\
   -l      List clipboard formats available.\n\
   -o      Get the OEM text from the clipboard.\n\
-  -O      Output using the OEM code page #437 encoding.\n\
+  -O      Output using the OEM code page #%u encoding.\n\
   -t N    Get format N. Default: 1 = plain text.\n\
   -u      Get the Unicode text from the clipboard. (Default)\n\
   -U      Output using the UTF-8 code page #65001 encoding.\n\
@@ -247,6 +255,7 @@ By default, the output is encoded in the current code page.\n\
 \n"
 "Author: Jean-Francois Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+, cpANSI, cpOEM
 );
 
   return;
