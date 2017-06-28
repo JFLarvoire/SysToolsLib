@@ -54,6 +54,7 @@
 *    2015-08-18 JFL Added operator<< and operator>>.                          * 
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
+*    2017-06-28 JFL Disable warning "function 'QWORD::operator=' not expanded"*
 *									      *
 \*****************************************************************************/
 
@@ -132,6 +133,7 @@ typedef DWORD FAR *	LPDWORD;
 
 #ifdef _MSC_VER
 #pragma warning(disable:4505) /* Avoid warnings "unreferenced local function has been removed" */
+#pragma warning(disable:4710) /* Avoid warnings "function 'QWORD::operator=' not expanded" */
 #endif
 
 #ifdef _MSDOS	/* 16-bits program */
