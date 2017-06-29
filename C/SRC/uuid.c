@@ -9,6 +9,7 @@
 *   History:								      *
 *    2016-04-24 JFL Created this file.                     		      *
 *    2016-07-12 JFL Added option -V.                     		      *
+*    2017-06-29 JFL Fixed a warning. No functional code change.		      *
 *		    							      *
 \*****************************************************************************/
 
@@ -114,7 +115,7 @@ int main(int argc, char *argv[]) {
       PrintUuid(&uuid);
 #ifdef _WIN32 /* Compare the output of our print routine to that of WIN32 */
       DEBUG_CODE({
-        char *pszString = NULL;
+        RPC_CSTR pszString = NULL;
         UuidToString((GUID *)&uuid, &pszString);
         printf(" (WIN32 result: %s)", pszString);
         RpcStringFree(&pszString);
