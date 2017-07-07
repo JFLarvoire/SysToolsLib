@@ -10,9 +10,10 @@
 *		    definitions and parameters for IOS commands.	      *
 *		    							      *
 *   History:								      *
-*    2001/09/07 JFL Moved IOS access routines from Ring0.c to this new file.  *
-*    2001/10/01 JFL Added include file r0ios.h.				      *
-*    2001/12/21 JFL Include qword.h.					      *
+*    2001-09-07 JFL Moved IOS access routines from Ring0.c to this new file.  *
+*    2001-10-01 JFL Added include file r0ios.h.				      *
+*    2001-12-21 JFL Include qword.h.					      *
+*    2017-06-29 JFL Fixed compilation warnings. No functional code change.    *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -196,10 +197,12 @@ DWORD R0IosSendCommandCB(DWORD dwRef)	// Must follow immediately after R0IosComm
     if (!pR0IosCommandCompletionProcedure)
         {
         DWORD dwSize;
+#pragma warning(disable:4054) /* Disable the warning "'type cast' : from function pointer to data pointer 'void *'" */
         dwSize = (char *)(void *)R0IosSendCommandCB - (char *)(void *)R0IosCommandCompletionProcedure;
         pR0IosCommandCompletionProcedure = _HeapAllocate(dwSize, 0);
         if (!pR0IosCommandCompletionProcedure) return BDS_Memory_Error;
-        memcpy(pR0IosCommandCompletionProcedure, R0IosCommandCompletionProcedure, dwSize);
+        memcpy(pR0IosCommandCompletionProcedure, (void *)R0IosCommandCompletionProcedure, dwSize);
+#pragma warning(default:4054) /* Restore the warning "'type cast' : from function pointer to data pointer 'void *'" */
         }
 
     // Update the BCB to manage the completion
@@ -225,6 +228,8 @@ DWORD R0IosSendCommandCB(DWORD dwRef)	// Must follow immediately after R0IosComm
     return pBCB->BD_CB_Cmd_Status;
     }
 
+#pragma warning(disable:4100) /* Disable the warning "unreferenced formal parameter" */
+
 DWORD R0IosSendCommand(_BlockDev_Command_Block *pCmdData, _BlockDev_Device_Descriptor *pDevData)
     {
     if (!iR0FreeIosCommandCompletionProcedure)
@@ -235,6 +240,8 @@ DWORD R0IosSendCommand(_BlockDev_Command_Block *pCmdData, _BlockDev_Device_Descr
 
     return R0CallCallBack(R0IosSendCommandCB, (DWORD)&pCmdData);
     }
+
+#pragma warning(default:4100) /* Restore the warning "unreferenced formal parameter" */
 
 /*---------------------------------------------------------------------------*\
 |									      *
