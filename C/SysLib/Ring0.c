@@ -41,6 +41,7 @@
 *		    Fixed support for x86_64 processors.		      *
 *		    Fixed support for new C compilers, with security cookie   *
 *		    at [ebp-4].						      *
+*    2017-07-07 JFL Fixed more compilation warnings. 			      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,11 +61,11 @@ static WORD wGate32Sel = 0;
 
 WORD R0GetLdtr(void)
     {
-    char cLdtr[4];	// 2 should be enough, but the C compiler aligns variables on adresses multiple of 4 anyway.
+    WORD wLdt;
 
-    _asm sldt cLdtr
+    _asm sldt wLdt
 
-    return *(WORD *)(cLdtr+0);
+    return wLdt;
     }
 
 DWORD R0GetGdtBase(void)
@@ -570,6 +571,8 @@ typedef struct
     void *pBuf;
     } V86MMGRALLOCPARMS;
 
+#pragma warning(disable:4731)	// Ignore the 'frame pointer register 'ebp' modified by inline assembly code' warning
+
 DWORD R0V86mmgrAllocateBufferCB(DWORD dwRef)
     {
     V86MMGRALLOCPARMS *pParms = (V86MMGRALLOCPARMS *)dwRef;
@@ -604,6 +607,7 @@ error_handler:
 #pragma warning(disable:4035)	// Ignore the no return value warning
     }
 #pragma warning(default:4035)	// Restore the no return value warning
+#pragma warning(default:4731)	// Restore the 'frame pointer register 'ebp' modified by inline assembly code' warning
 
 // Allocate a buffer. Optionnally fill it with provided buffer contents if pBuf != NULL.
 
@@ -621,6 +625,8 @@ DWORD R0V86mmgrAllocateBuffer(DWORD dwSize, void *pBuf)
     // cf V86MMGR_Allocate_Buffer doc.
     return dwErr ? 0 : (DWORD)(parms.pBuf);
     }
+
+#pragma warning(disable:4731)	// Ignore the 'frame pointer register 'ebp' modified by inline assembly code' warning
 
 DWORD R0V86mmgrFreeBufferCB(DWORD dwRef)
     {
@@ -650,6 +656,7 @@ DWORD R0V86mmgrFreeBufferCB(DWORD dwRef)
 #pragma warning(disable:4035)	// Ignore the no return value warning
     }
 #pragma warning(default:4035)	// Restore the no return value warning
+#pragma warning(default:4731)	// Restore the 'frame pointer register 'ebp' modified by inline assembly code' warning
 
 void R0V86mmgrFreeBuffer(DWORD dwSize, void *pBuf)
     {
@@ -747,6 +754,8 @@ void R0EndNestExec(void)
 *									      *
 \*---------------------------------------------------------------------------*/
 
+#pragma warning(disable:4731)	// Ignore the 'frame pointer register 'ebp' modified by inline assembly code' warning
+
 DWORD R0CallInt13CB(DWORD dwRef)
     {
     struct Client_Reg_Struc csRegsBackup;
@@ -790,6 +799,7 @@ DWORD R0CallInt13CB(DWORD dwRef)
 #pragma warning(disable:4035)	// Ignore the no return value warning
     }
 #pragma warning(default:4035)	// Restore the no return value warning
+#pragma warning(default:4731)	// Restore the 'frame pointer register 'ebp' modified by inline assembly code' warning
 
 #pragma warning(disable:4100)	// Disable the "unreferenced formal parameter" warning
 
