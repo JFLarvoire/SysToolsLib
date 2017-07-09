@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   File name:	    sector.cpp						      *
 *                                                                             *
@@ -92,14 +92,17 @@
 *    2017-02-11 JFL Added a dirty workaround for Windows' auto-mount feature. *
 *		    Version 3.8.					      *
 *    2017-04-15 JFL When listing drives, tolerate missing indexes, as one     *
-*		    drive may have been recently unplugged. Version 3.8.1.    * 
+*		    drive may have been recently unplugged. Version 3.8.1.    *
+*    2017-07-07 JFL Compile-out Win95 extensions until we fix ringo.c.	      *
+*    2017-07-08 JFL Do not display a period if there's no digit afterwards.   *
+*		    Version 3.8.2.					      *
 *		                                                              *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.8.1"
-#define PROGRAM_DATE    "2017-04-15"
+#define PROGRAM_VERSION "3.8.2"
+#define PROGRAM_DATE    "2017-07-07"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -134,11 +137,13 @@ typedef int BOOL;
 #include "IsMBR.h"
 
 #if defined(_WIN95) // If building for WIN95
-#if   HAS_98DDK
+#if   HAS_98DDK && FIXED_RING0_C
 #include "ring0.h"
 #include "r0ios.h"
 #else
+#if FIXED_RING0_C
 #pragma message("Note: Additional features are available in sector.exe when the Windows 98 DDK is configured.")
+#endif
 #endif // HAS_98DDK
 #endif // defined(_WIN95)
 
@@ -509,7 +514,8 @@ int _cdecl main(int argc, char *argv[]) {
 	     cBase, (long)sHdGeometry.dwXlatCyls, cBase, (long)sHdGeometry.dwXlatHeads, cBase, (long)sHdGeometry.dwXlatSects);
       HardDiskClose(hDisk);
     }
-#if defined(_WIN95) && HAS_98DDK
+
+#if defined(_WIN95) && HAS_98DDK && FIXED_RING0_C
     if (iVerbose && (GetVersion() > 0x80000000)) {	// If iVerbose on Win95/98/ME
       ISP_GET_FRST_NXT_DCB ispGfnDCB;
 
@@ -1276,11 +1282,16 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 |		    Ex: "21 MB" or "210 MB" or "2.1 GB"			      |
 |		    Units are actually MiB not MB, etc. (Base 1024, not 1000) |
 |		    							      |
+|		    Do not use floating point numbers, because we want to     |
+|		    avoid dragging in the floating point libraries in MS-DOS  |
+|		    programs if possible. This makes them much smaller.	      |
+|		    							      |
 |  History								      |
 |    2016-07-07 JFL Initial implementation.				      |
 |    2016-12-05 JFL Output 2 or 3 significant digits, possibly with a period. |
 |		    (Improves readbility in the same output space.)	      |
 |		    Added argument iKB to select the SI base. (KB or KiB)     |
+|    2017-07-08 JFL Do not display a period if there's no digit afterwards.   |
 *		    							      *
 \*---------------------------------------------------------------------------*/
 
@@ -1307,6 +1318,7 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
     szFraction[0] = '\0';	// No fractional part needed.
   }
   szFraction[2] = '\0';	// Limit the fractional part to 1 digit at most.
+  if (!szFraction[1]) szFraction[0] = '\0';
   return _snprintf(pBuf, nBufSize, "%u%s %cB", dwSize, szFraction, szUnits[i]);
 }
 
@@ -1389,7 +1401,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x46, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x47, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x48, "EUMEL/Elan" },	    // EUMEL/Elan
-  { 0x4C, "ETH Oberon" },	    // ETH Zürich Aos FS
+  { 0x4C, "ETH Oberon" },	    // ETH ZÃ¼rich Aos FS
   { 0x4D, "QNX Primary" },	    // QNX
   { 0x4E, "QNX Secondary" },	    // QNX
   { 0x4F, "QNX Tertiary" },	    // QNX
