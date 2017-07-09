@@ -177,11 +177,16 @@ Copy all files and subdirectories from \LMPTK\DISK1, DISK2, and DISK3, and merge
 Known issues
 ------------
 
-I've not tested the Windows 95/98 code for a long long time.  
-The code used to work reliably, and I've not changed it for ages, so I'd expect it to still work fine.  
-Yet one quick attempt recently to test raw hard disk I/O in a VM with Windows 98 failed.  
-I don't know if something was inadvertently changed in one of the sources,
-or if this is a side effect of running it in a VM, which might break some built-in assumptions.
+I had not tested the Windows 95/98 code for a long long time, since about year 2002, when I last used a Windows 98 PC.  
+The code used to work reliably, and I had not changed it since then, so I expected it to still work fine.  
+Yet one quick attempt in early 2017 to test raw hard disk I/O in a VM with Windows 98 failed, with a protection error.  
+After investigating the issue, it seems that the root cause is in the routine that switches from WIN32 ring 3 mode
+to ring 0 mode, for doing VxD calls. This routine starts by doing an SGDT instruction to get the GDT base.  
+Unfortunately the SGDT instruction is _not_ privileged, and when run in a VM, it's the host OS GDT base that's returned,
+and not the guest OS's.  
+In july 2017, I rewrote the Win95/98 raw hard disk I/O to use DPMI to execute Virtual 86 BIOS calls.  
+This works fine, but I expect the performance to be poor compared to the old implementation.  
+Any help at fixing the ring0.c module, so that it can work in a VM, is welcome. That is, how to get the guest OS GDT base?
 
 
 To do
