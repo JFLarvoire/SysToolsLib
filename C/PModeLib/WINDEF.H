@@ -1,26 +1,32 @@
 /*****************************************************************************\
 *									      *
-*	FILENAME:	windef.h				              *
+*   Filename:	    windef.h					              *
 *									      *
-*	CONTENTS:	Windows-like definitions			      *
+*   Description:    Windows-like definitions				      *
 *									      *
-*	Author: 	Jean-Francois Larvoire			94/05/14      *
+*   Notes:	    Contains a limited subset of WINDOWS.H, for use by	      *
+*		    applications that will run under DOS, but that want	      *
+*		    to be easily portable to Windows.			      *
 *									      *
-*	Notes:		Contains a limited subset of WINDOWS.H, for use by    *
-*			applications that will run under DOS, but that want   *
-*			to be easily portable to Windows.		      *
+*   History:								      *
+*    1994-05-14 JFL Jean-Francois Larvoire created this file.		      *
+*    1995-02-16 JFL Added support for C++.				      *
+*		    Moved functions definitions to PMODE.H.		      *
+*    2017-06-29 JFL Include the real windef.h if it's available.	      *
 *									      *
-*	History:							      *
-*	  95/02/16 JFL	Added support for C++.				      *
-*			Moved functions definitions to PMODE.H. 	      *
-*									      *
-*      (c) Copyright 1994-2017 Hewlett Packard Enterprise Development LP      *
+*      (C) Copyright 1994-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #ifndef _WINDEF_H
 
-#define EXPORT		// Must not be exported under DOS
+#ifdef _H2INC
+  #define _MSDOS	/* The h2inc.exe tool is for generating 16-bits DOS code */
+#endif
+
+#ifndef WSDKINCLUDE	/* Windows SDK include directory pathname */
+
+#define EXPORT		/* Must not be exported under DOS */
 #define _WINDEF_H
 
 #ifdef __cplusplus
@@ -30,6 +36,12 @@ extern "C" {
 /****** Common definitions and typedefs ******/
 
 #define VOID void
+
+#undef NEAR
+#undef FAR
+#undef PASCAL
+#undef CDECL
+#undef WINAPI
 
 #define NEAR _near
 #define FAR _far
@@ -86,4 +98,21 @@ typedef void (CALLBACK *FARPROC)(void);
 }
 #endif
 
-#endif
+#else /* defined(WSDKINCLUDE) */
+
+/* Then use the actual windef.h from the Windows SDK */
+
+/* Macros for working around the lack of a #include_next directive */
+#define WINDEF_CONCAT1(a,b) a##b /* Concatenate the raw arguments */
+#define WINDEF_CONCAT(a,b) WINDEF_CONCAT1(a,b) /* Substitute the arguments, then concatenate the values */
+#define WINDEF_STRINGIZE1(x) #x /* Convert the raw argument to a string */
+#define WINDEF_STRINGIZE(x) WINDEF_STRINGIZE1(x) /* Substitute the argument, then convert its value to a string */
+#define WINSDK_INCLUDE_FILE(relpath) WINDEF_STRINGIZE(WINDEF_CONCAT(WSDKINCLUDE,WINDEF_CONCAT(/,relpath))) /* Windows SDK include files */
+
+#define REAL_WINDEF WINSDK_INCLUDE_FILE(windef.h)
+#pragma message("#include \"" REAL_WINDEF "\"")
+#include REAL_WINDEF
+
+#endif /* !defined(WSDKINCLUDE) */
+
+#endif /* _WINDEF_H */
