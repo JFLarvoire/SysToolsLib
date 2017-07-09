@@ -77,7 +77,7 @@ $(S)/gpt.h: $(S)/SysLib.h $(S)/Block.h $(S)/efibind.h \
 
 $(S)/HardDisk.h: $(S)/SysLib.h $(S)/qword.h
 
-$(S)/HDisk95.cpp: $(S)/HardDisk.h $(S)/Ring0.h $(S)/R0Ios.h
+$(S)/HDisk95.cpp: $(S)/HardDisk.h $(S)/VxDCall.h    # The old version used $(S)/Ring0.h $(S)/R0Ios.h
 
 $(S)/HDiskDos.cpp: $(S)/HardDisk.h $(S)/int13.h
 
@@ -159,3 +159,8 @@ $(S)/Uuid.c: $(S)/Uuid.h $(S)/macaddr.h
 $(S)/Uuid.h: $(S)/SysLib.h $(S)/qword.h
 
 $(S)/UuidNull.c: $(S)/Uuid.h
+
+$(S)/VxDCall.c: $(S)/VxDCall.h
+
+$(S)/VxDCall.h: $(S)/SysLib.h
+

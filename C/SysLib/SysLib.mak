@@ -44,6 +44,7 @@ OBJECTS = \
 !IF ("$(T)"=="WIN32" || "$(T)"=="WIN95") && DEFINED(HAS_98DDK)
     +$(O)\R0Ios.obj		\
     +$(O)\Ring0.obj		\
+    +$(O)\VxDCall.obj		\
 !ENDIF
 
 # Now build rules, that should only be included in the final part of $(T).mak
