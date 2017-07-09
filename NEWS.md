@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-07-09
+### New
+- C/SysLib/VxDCall.c & VxDCall.h: Routines for WIN95 applications calling VxD WIN32 services, and VxD Device IO Controls.
+- C/SysLib/HDisk95.c: New implementation using DPMI to call V86 int 13H. Uses VxDCall.c & VxDCall.h.
+
+### Fixed
+- C/*: Fixed most remaining compilation warnings.
+- C/SRC/sector.cpp: Fixed the WIN95 version.
+
 ## [Unreleased] 2017-06-28
 ### Fixed
 - C/MsvcLibX/*: Fixed non _UTF8_SOURCE programs initialization by using new constant _UTF8_LIB_SOURCE instead within MsvcLibX sources.
