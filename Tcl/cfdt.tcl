@@ -33,12 +33,14 @@
 #    2015-10-29 JFL Added options -z and --z2m to manage 7-Zip archive times. #
 #    2017-06-22 JFL Bug fix: Do not display help if wildcards produce 0 names.#
 #                   Display the list of files processed, to monitor progress. #
+#    2017-07-28 JFL Display \ path separators for pathnames in Windows.       #
+#                   Only display paths for files which time actually changed. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2017-06-22"
+set version "2017-07-28"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -412,7 +414,9 @@ if {[llength $names] > 1} {
 # Process every file
 set exitCode 0
 set err [catch {
+  set slash [file separator]
   foreach name $names {
+    set local_name [regsub -all "/" $name $slash] ; # Name with local OS path separators
     if {"$action" == "files2dir"} {
       if ![file isdirectory $name] {
 	puts stderr "Error: '$name' is not a directory."
@@ -431,7 +435,7 @@ set err [catch {
     if {"$action" == "display"} { # Display the old date
       if [Verbose] { # Display everything
 	if $showNames {
-	  puts $name
+	  puts $local_name
 	}
 	foreach {var verb} $typeNames {
 	  set time [set $var]
@@ -446,7 +450,7 @@ set err [catch {
 	  set time [clock format $time -format "%Y-%m-%d %H:%M:%S"]
 	  puts -nonewline $time
 	  if $showNames {
-	    puts -nonewline "  $name"
+	    puts -nonewline "  $local_name"
 	  }
 	  puts ""
 	}
@@ -468,7 +472,7 @@ set err [catch {
       if {[Debug] || $noexec} {
 	puts "file rename $name $name2"
       } else { # Display the list of files processed, to allow monitoring progress
-	puts $name2
+	puts [regsub -all "/" $name2 $slash] ; # Name with local OS path separators
       }
       if {!$noexec} {
 	file rename $name $name2
@@ -483,14 +487,17 @@ set err [catch {
     }
 
     # Set the new date/time
+    set old_time [set $what]
     set err [catch {
-      if {[Debug] || $noexec} {
-	puts "file $what \"$name\" $time"
-      } else { # Display the list of files processed, to allow monitoring progress
-	puts $name
-      }
-      if {!$noexec} {
-	file $what $name $time
+      if {("$time" != "$old_time") || [Verbose]} {
+	if {[Debug] || $noexec} {
+	  puts "file $what \"$name\" $time"
+	} else { # Display the list of files processed, to allow monitoring progress
+	  puts $local_name
+	}
+	if {!$noexec} {
+	  file $what $name $time
+	}
       }
     } errMsg]
     if $err {
