@@ -154,7 +154,9 @@ void GlobalDosFree(DWORD dwSelector);
 void FarMemCopy(DWORD dwToOffset, DWORD dwToSelector, DWORD dwFromOffset, DWORD dwFromSelector, DWORD dwSize);
 
 // Manage VxD Calls
-extern void Init_VxDCall();	// Initialize the VxDCallN pointers
+extern void Init_VxDCall();		// Initialize the VxDCallN pointers
+extern HANDLE OpenVWin32();		// Open the VWIN32 VxD
+extern void CloseVWin32(HANDLE hDevice);// Close the VWIN32 VxD handle
 
 // Invoke a real mode interrupt 13H
 int DPMI_Int13(REAL_MODE_REGS *pRegs);			// Using DPMI (Supports floppys & hard disks)
