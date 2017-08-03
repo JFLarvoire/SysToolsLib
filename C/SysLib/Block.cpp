@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename:	    Block.cpp						      *
 *									      *
@@ -18,8 +18,9 @@
 *    2008-04-21 JFL Added WIN32 64-bits file I/O functions.		      *
 *    2008-04-22 JFL Moved all file I/O to separate subroutines.		      *
 *    2016-04-13 JFL Also allow specifying hard disk names as hdN:             *
+*    2017-07-15 JFL Added support for floppys.		   		      *
 *									      *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -35,6 +36,7 @@
 #include "HardDisk.h"
 #include "LogDisk.h"
 #include "File.h"
+#include "FloppyDisk.h"
 
 #ifndef NEW
 #ifndef __cplusplus
@@ -63,7 +65,6 @@
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
 |    2001-02-14 JFL Created this routine				      |
 |    2001-09-07 JFL Added pszMode processing for hard disks.		      |
 |    2002-02-07 JFL Added support for Logical Volumes. (A:, C:, etc...)	      |
@@ -145,11 +146,39 @@ its_a_hard_disk:
 
 	return (HANDLE)pDevice;
         }
+
+    // If not, check if it's a Linux-style fd0: or fd1: floppy disk name
+    if (   (nFields == 4) && (cColon == ':')
+        && ((c0 == 'f') || (c0 == 'F'))
+        && ((c1 == 'd') || (c1 == 'D')) ) {
+its_a_floppy_disk:
+	FDGEOMETRY sFdGeometry;
+
+        hDrive = FloppyDiskOpen(iDrive, iMode);
+        if (!hDrive) {
+            DEL(pDevice);
+            return NULL;
+        }
+
+	FloppyDiskGetGeometry(hDrive, &sFdGeometry);
+
+        pDevice->iType = BT_FLOPPYDISK;
+	pDevice->iBlockSize = (int)(sFdGeometry.wSectorSize);
+	pDevice->qwBlocks = sFdGeometry.dwSectors;
+	pDevice->h = hDrive;
+
+	return (HANDLE)pDevice;
+        }
+
     // As an alternative, check if it's a BIOS-style hard disk number, such as "80:" or "81:" 
-    nFields = sscanf(pszName, "%02x%c%c", &iDrive, &cColon, &cExtra);
-    if ( (nFields == 2) && (cColon == ':') && (iDrive >= 0x80) ) {
+    nFields = sscanf(pszName, "%x%c%c", &iDrive, &cColon, &cExtra);
+    if ((nFields == 2) && (cColon == ':')) {
+      if (iDrive < 0x80) {
+        goto its_a_floppy_disk;
+      } else {
 	iDrive -= 0x80;	// Convert the DOS-style drive number to a hard disk index.
         goto its_a_hard_disk;
+      }
     }
 
     // If not, assume it's a plain file name.
@@ -180,10 +209,9 @@ its_a_file:
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
-|    2002/02/07 JFL Added support for Logical Volumes.			      |
-|    2008/04/22 JFL Moved file support to FileXxxx subroutines.               |
+|    2001-02-14 JFL Created this routine				      |
+|    2002-02-07 JFL Added support for Logical Volumes.			      |
+|    2008-04-22 JFL Moved file support to FileXxxx subroutines.               |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -203,6 +231,9 @@ void BlockClose(HANDLE hDevice)
     	    break;
     	case BT_LOGICALVOLUME:
     	    LogDiskClose(pDevice->h);
+    	    break;
+    	case BT_FLOPPYDISK:
+    	    FloppyDiskClose(pDevice->h);
     	    break;
     	default:	// Unsupported device type
     	    break;
@@ -225,8 +256,7 @@ void BlockClose(HANDLE hDevice)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
+|    2001-02-14 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -252,8 +282,7 @@ QWORD BlockCount(HANDLE hDevice)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
+|    2001-02-14 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -279,8 +308,7 @@ int BlockSize(HANDLE hDevice)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
+|    2001-02-14 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -307,8 +335,7 @@ int BlockType(HANDLE hDevice)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
+|    2001-02-14 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -333,10 +360,9 @@ char *BlockIndexName(HANDLE hBlock)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
-|    2002/02/07 JFL Added support for Logical Volumes.			      |
-|    2008/04/22 JFL Moved file support to FileXxxx subroutines.               |
+|    2001-02-14 JFL Created this routine				      |
+|    2002-02-07 JFL Added support for Logical Volumes.			      |
+|    2008-04-22 JFL Moved file support to FileXxxx subroutines.               |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -354,6 +380,8 @@ int BlockRead(HANDLE hDevice, QWORD qwSector, WORD wNum, void FAR *pBuf)
     	    return HardDiskRead(pDevice->h, qwSector, wNum, pBuf);
     	case BT_LOGICALVOLUME:
     	    return LogDiskRead(pDevice->h, qwSector, wNum, pBuf);
+    	case BT_FLOPPYDISK:
+    	    return FloppyDiskRead(pDevice->h, (DWORD)qwSector, wNum, pBuf);
     	default:	// Unsupported device type
     	    return 1;
     	}
@@ -375,10 +403,9 @@ int BlockRead(HANDLE hDevice, QWORD qwSector, WORD wNum, void FAR *pBuf)
 |   Notes:	    This is an OS-independant API in the BlockXxxx family.    |
 |									      |
 |   History:								      |
-|									      |
-|    2001/02/14 JFL Created this routine				      |
-|    2002/02/07 JFL Added support for Logical Volumes.			      |
-|    2008/04/22 JFL Moved file support to FileXxxx subroutines.               |
+|    2001-02-14 JFL Created this routine				      |
+|    2002-02-07 JFL Added support for Logical Volumes.			      |
+|    2008-04-22 JFL Moved file support to FileXxxx subroutines.               |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -396,6 +423,8 @@ int BlockWrite(HANDLE hDevice, QWORD qwSector, WORD wNum, void FAR *pBuf)
     	    return HardDiskWrite(pDevice->h, qwSector, wNum, pBuf);
     	case BT_LOGICALVOLUME:
     	    return LogDiskWrite(pDevice->h, qwSector, wNum, pBuf);
+    	case BT_FLOPPYDISK:
+    	    return FloppyDiskWrite(pDevice->h, (DWORD)qwSector, wNum, pBuf);
     	default:	// Unsupported device type
     	    return 1;
     	}
