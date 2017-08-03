@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-08-03
+### New
+- C/SysLib/FDisk*.cpp & FloppyDisk.*: Routines for block I/O to floppy disks, supporting DOS, WIN95, WIN32/64.
+- C/SRC/sector.cpp: Added support for floppy disks.
+
+### Fixed
+- C/SRC/sector.cpp: When copying disk images into an existing file, the image was appended to the file, instead of
+  overwriting it.
+
 ## [Unreleased] 2017-07-09
 ### New
 - C/SysLib/VxDCall.c & VxDCall.h: Routines for WIN95 applications calling VxD WIN32 services, and VxD Device IO Controls.
