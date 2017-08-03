@@ -353,9 +353,12 @@ int DPMI_Int13(REAL_MODE_REGS *pRegs) {
 \*---------------------------------------------------------------------------*/
 
 int DIOC_Int13(HANDLE hDevice, DIOC_REGISTERS *pRegs) {
+  HRESULT hResult;
+
   if (hDevice == INVALID_HANDLE_VALUE) return -1;
 
   pRegs->reg_Flags = 0x0001; // Recommended, to detect unsupported calls on old BIOSs
 
-  return VWin32IoControl(hDevice, VWIN32_DIOC_DOS_INT13, pRegs);
+  hResult = VWin32IoControl(hDevice, VWIN32_DIOC_DOS_INT13, pRegs);
+  return (int)BYTE1(hResult); // The BIOS error code is returned in AH
 }
