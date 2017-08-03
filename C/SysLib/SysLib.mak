@@ -28,6 +28,7 @@ OBJECTS = \
 !IF "$(T)"!="BIOS"
     +$(O)\File.obj		\
 !ENDIF
+    +$(O)\FloppyDisk.obj	\
 !IF DEFINED(GNUEFI) # GPTs use EFI and UUIDs
     +$(O)\Gpt.obj		\
 !ENDIF
