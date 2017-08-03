@@ -22,13 +22,15 @@
 *    2017-04-15 JFL When listing drives, tolerate missing indexes, as one     *
 *		    drive may have been recently unplugged. Version 1.1.2.    * 
 *    2017-06-28 JFL Fixed warnings. No functional code change. Version 1.1.3. * 
+*    2017-08-03 JFL Display MsvcLibX & SysLib library versions in DOS & Win.  *
+*		    Fixed and improved the FormatSize() routine. Version 1.1.4.
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.3"
-#define PROGRAM_DATE    "2017-06-28"
+#define PROGRAM_VERSION "1.1.4"
+#define PROGRAM_DATE    "2017-08-03"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -85,7 +87,7 @@ int iKB = 1000;		// Base for hard disk sizes KB, MB, etc. 1000 or 1024
 
 /* Prototypes */
 
-char *version(void);
+char *version(int iVerbose);
 void usage(void);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
 int dump_part(MASTERBOOTSECTOR *pMbs);
@@ -163,7 +165,7 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version());
+	printf("%s\n", version(TRUE));
 	exit(0);
       }
       if (streq(opt, "x")) {
@@ -372,7 +374,7 @@ int _cdecl main(int argc, char *argv[]) {
 |									      |
 |  Description      Display a brief help for this program		      |
 |									      |
-|  Parameters       None							      |
+|  Parameters       None						      |
 |									      |
 |  Returns	    N/A 						      |
 |									      |
@@ -380,15 +382,27 @@ int _cdecl main(int argc, char *argv[]) {
 |									      |
 |  History								      |
 |    1998-10-14 JFL Initial implementation.				      |
+|    2017-07-28 JFL Display the MsvcLibX and SysLib libraries versions.       |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
-	  );
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 void usage(void) {
@@ -415,7 +429,7 @@ Switches:\n\
   -x    Use base 16 for input and output. (default)\n\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-", version());
+", version(FALSE));
   exit(0);
 }
 
@@ -513,15 +527,29 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 |									      |
 |  Description	    Format a disk size in a human-readable way		      |
 |									      |
-|  Notes	    Make sure there are at most 3 significant digits	      |
-|		    Ex: "21 MB" or "210 MB" or "2.1 GB"			      |
-|		    Units are actually MiB not MB, etc. (Base 1024, not 1000) |
+|  Arguments	    iKB = 1000 => Output a size in XB (Powers of 1000)	      |
+|		    iKB = 1024 => Output a size in XiB (Powers of 1024)	      |
+|		    iKB = 1440 => Output a size in floppy XB (1024 * 1000^N)  |
+|		    							      |
+|  Notes	    Makes sure the decimal number has at most 3 characters.   |
+|		    Ex: "12 MB" or "123 MB" or "1.2 GB"			      |
+|		    (Except for floppys. Ex: "1.44 MB")			      |
+|		    							      |
+|		    Do not use floating point numbers, because we want to     |
+|		    avoid dragging in the floating point libraries in MS-DOS  |
+|		    programs if possible. This makes them much smaller.	      |
 |		    							      |
 |  History								      |
 |    2016-07-07 JFL Initial implementation.				      |
 |    2016-12-05 JFL Output 2 or 3 significant digits, possibly with a period. |
 |		    (Improves readbility in the same output space.)	      |
 |		    Added argument iKB to select the SI base. (KB or KiB)     |
+|    2017-07-08 JFL Do not display a period if there's no digit afterwards.   |
+|    2017-07-28 JFL Added the floppy-specific algorithm, if iKB is 1440.      |
+|		    Avoid having two spaces for sizes in B (ie. < 1 KB).      |
+|		    Fixed the output for DOS.				      |
+|    2017-07-30 JFL Added a workaround for an MSVC 1.52c bug.		      |
+|    2017-08-03 JFL Cosmetic change: Align byte sizes with other XB sizes.    |
 *		    							      *
 \*---------------------------------------------------------------------------*/
 
@@ -529,26 +557,44 @@ char szUnits[] = " KMGTPE"; // Unit prefixes for 2^0, 2^10, 2^20, 2^30, etc
 
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   int i;
-  char szFraction[8] = ".";
+  char szFraction[10] = ".";
+  int iFloppy = FALSE;
+  char szUnit[3] = " B";
+  char *pszUnit = szUnit;
   WORD wKB = (WORD)iKB;
+  if (iKB == 1440) iFloppy = TRUE;	// Use the floppy-specific algorithm
   if (iKB != 1000) wKB = (WORD)1024;	// The only 2 valid values are 1000 and 1024
   for (i=0; i<6; i++) {
     if ((qwSize >> 14) == qwZero) break; // If (qwSize < 16K)
     qwSize /= wKB;	// Change to the next higher scale
+    if (iFloppy) wKB = 1000;		// Floppys divide once by 1024, then by 1000
   }
   DWORD dwSize = (DWORD)qwSize;
-  if (dwSize >= (DWORD)(10*iKB)) { // We'll have two significant digits. Switch to the next scale.
+  if (dwSize >= (10UL*wKB)) { // We'll have two significant digits. Switch to the next scale.
     dwSize /= wKB;
     i++;
-  } else if (dwSize >= (DWORD)iKB) { // We'll have 1 significant digits, + 1 after the period.
-    sprintf(szFraction+1, "%03ld", ((dwSize % wKB) * 1000) / wKB);
+  } else if (dwSize >= wKB) { // We'll have 1 significant digits, + 1 after the period.
+    DWORD dwFraction = (dwSize % wKB) * 1000UL;
+#if _MSDOS // Work around for an MSVC 1.52c DOS compiler bug. Do not remove, else the second sprintf prints "000".
+    // Forces MSVC 1.52c to actually compute dwFraction, instead of (mistakenly) simplifying the formula in the second sprintf.
+    sprintf(szFraction+1, "%ld", dwFraction);
+#endif // _MSDOS
+    sprintf(szFraction+1, "%03ld", dwFraction / wKB);
     dwSize /= wKB;
     i++;
   } else {
     szFraction[0] = '\0';	// No fractional part needed.
   }
-  szFraction[2] = '\0';	// Limit the fractional part to 1 digit at most.
-  return _snprintf(pBuf, nBufSize, "%u%s %cB", dwSize, szFraction, szUnits[i]);
+  if (iFloppy) {	// Floppy disk size formatting. Ex: "360 KB" or "1.2 MB" or "1.44 MB"
+    szFraction[3] = '\0';	// Limit the fractional part to 2 digits at most.
+    if (szFraction[2] == '0') szFraction[2] = '\0';	// But keep only 1 if the 2nd is 0
+  } else {		// Hard disk size formatting. Ex: "32 GB" or "320 GB" or "3.2 TB"
+    szFraction[2] = '\0';	// Limit the fractional part to 1 digit at most.
+  }
+  if (!szFraction[1]) szFraction[0] = '\0'; // If there's nothing behind the dot, then remove the dot.
+  szUnit[0] = szUnits[i];
+  if (szUnit[0] == ' ') pszUnit = "B "; // If there's no prefix, use just "B"
+  return _snprintf(pBuf, nBufSize, "%lu%s %s", dwSize, szFraction, pszUnit);
 }
 
 /*---------------------------------------------------------------------------*\
