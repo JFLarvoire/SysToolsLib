@@ -52,7 +52,7 @@ OBJECTS = $(OBJECTS1:.obj=.o)
 #			Include files dependancies			      #
 #-----------------------------------------------------------------------------#
 
-$(S)/Block.cpp: $(S)/Block.h $(S)/HardDisk.h $(S)/LogDisk.h
+$(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/LogDisk.h
 
 $(S)/Block.h: $(S)/SysLib.h $(S)/qword.h
 
@@ -62,6 +62,14 @@ $(S)/crc32.cpp: $(S)/crc32.h \
 $(S)/crc32.h: $(S)/SysLib.h
 
 $(S)/efibind.h: $(S)/qword.h
+
+$(S)/FDisk95.cpp: $(S)/FloppyDisk.h $(S)/int13.h $(S)/VxDCall.h
+
+$(S)/FDiskDOS.cpp: $(S)/FloppyDisk.h $(S)/int13.h
+
+$(S)/FDiskNT.cpp: $(S)/FloppyDisk.h
+
+$(S)/FDiskW32.cpp: $(S)/FloppyDisk.h
 
 $(S)/File.cpp: $(S)/File.h $(S)/FileLibc.cpp $(S)/FileW32.cpp
 
