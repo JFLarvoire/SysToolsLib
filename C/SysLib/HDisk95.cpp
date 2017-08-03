@@ -28,13 +28,6 @@
 
 #include "HardDisk.h"
 
-typedef struct tagDISK95
-    {
-    int iDrive;
-    int iMode;
-    HANDLE hVWin32;
-    } DISK95, *HDISK95;
-
 #if OLD_VERSION_USING_RING0_IOS_CALLBACKS
 
 /* 
@@ -465,7 +458,7 @@ static DWORD GetDS(void) {
 |   Description	    Get a Hard Disk parameter table.			      |
 |									      |
 |   Parameters	    HANDLE hDrive       Drive handle			      |
-|		    HDPARMS far *lpBuf  Output buffer			      |
+|		    DDPARMS far *lpBuf  Output buffer			      |
 |		    int iSize	        Buffer size 			      |
 |									      |
 |   Returns	    int iError	        BIOS error. 0 = Success.	      |
@@ -479,13 +472,13 @@ static DWORD GetDS(void) {
 
 #pragma warning(disable:4704)	// Ignore the inline assembler etc... warning
 
-int GetBiosDiskParameterTable(HANDLE hDrive, HDPARMS *lpBuf, int iSize) {
+int GetBiosDiskParameterTable(HANDLE hDrive, DDPARMS *lpBuf, int iSize) {
   HARDDISK95 *pHD95 = (HARDDISK95 *)hDrive;
   REAL_MODE_REGS regs = {0};
   int iErr = 0;
   DWORD dwDS = GetDS();
 
-  // Initialize the HDPARMS.wSize field
+  // Initialize the DDPARMS.wSize field
   FarMemCopy(0, pHD95->wDosBufSelector, (DWORD)&iSize, dwDS, 2);
 
   // First try function 48H, which supports very large disks.
@@ -505,7 +498,7 @@ int GetBiosDiskParameterTable(HANDLE hDrive, HDPARMS *lpBuf, int iSize) {
     goto GetBiosDiskParameterTable_exit;
   }
 
-  // Copy the HDPARMS structure from DOS memory to the output buffer
+  // Copy the DDPARMS structure from DOS memory to the output buffer
   FarMemCopy((DWORD)lpBuf, dwDS, 0, pHD95->wDosBufSelector, iSize);
 
 GetBiosDiskParameterTable_exit:
@@ -538,7 +531,7 @@ GetBiosDiskParameterTable_exit:
 HANDLE HardDisk95Open(int iDrive, int iMode) {
   HARDDISK95 *pHD95 = NULL;
   DWORD dwEAX;
-  HDPARMS hdParms;
+  DDPARMS hdParms;
   int iErr;
 
 #ifdef _DEBUG
@@ -562,7 +555,7 @@ HANDLE HardDisk95Open(int iDrive, int iMode) {
   pHD95->iBiosDrive = iDrive + 0x80; // Convert to int 13 drive number.
   pHD95->iMode = iMode;
 
-  iErr = GetBiosDiskParameterTable((HANDLE)pHD95, &hdParms, sizeof(HDPARMS));
+  iErr = GetBiosDiskParameterTable((HANDLE)pHD95, &hdParms, sizeof(DDPARMS));
   if (iErr) {
     HardDisk95Close((HANDLE)pHD95);
     pHD95 = NULL;
@@ -628,7 +621,7 @@ void HardDisk95Close(HANDLE hDrive) {
 \*---------------------------------------------------------------------------*/
 
 int HardDisk95GetGeometry(HANDLE hDrive, HDGEOMETRY *pHdGeometry) {
-  HDPARMS hdParms;
+  DDPARMS hdParms;
   int iErr;
 
 #ifdef _DEBUG
