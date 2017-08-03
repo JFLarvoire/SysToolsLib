@@ -96,13 +96,18 @@
 *    2017-07-07 JFL Compile-out Win95 extensions until we fix ringo.c.	      *
 *    2017-07-08 JFL Do not display a period if there's no digit afterwards.   *
 *		    Version 3.8.2.					      *
+*    2017-07-15 JFL Removed BLOCK_TYPE_* constants. Use BT_* enums instead.   *
+*    2017-07-28 JFL Added support for floppy disk drives.		      *
+*		    Display MsvcLibX & SysLib library versions in DOS & Win.  *
+*		    Use the 2017-02-11 workaround only when writing to a disk.*
+*		    Version 4.0.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.8.2"
-#define PROGRAM_DATE    "2017-07-07"
+#define PROGRAM_VERSION "4.0"
+#define PROGRAM_DATE    "2017-08-02"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -132,6 +137,7 @@ typedef int BOOL;
 // The following comes from the SysLib library
 #include "qword.h"
 #include "harddisk.h"
+#include "floppydisk.h"
 #include "block.h"
 #include "oprintf.h"
 #include "IsMBR.h"
@@ -197,7 +203,7 @@ PATCH *pLastPatch = NULL;		// Tail of patch linked list.
 
 /* -------------------------- FUNCTION prototypes -------------------------- */
 
-char *version(void);
+char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
@@ -263,7 +269,9 @@ int _cdecl main(int argc, char *argv[]) {
   int iListDrives = FALSE;	// If TRUE, display a list of available drives.
   int iAppendZeros = FALSE;	// If TRUE, append zeros as needed beyond the end of the source data copied.
   int iFindBS = FALSE;	        // If TRUE, scan the disk looking for boot sectors.
+  DWORD dwKB, dwKB0;		// Used for computing the progress report
   DWORD dwMB, dwMB0;		// Used for computing the progress report
+  FDGEOMETRY sFdGeometry ZINIT;	// Hard disk geometry
 
   /* Get the command line arguments */
 
@@ -451,7 +459,7 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version());
+	printf("%s\n", version(TRUE));
 	exit(0);
       }
       if (streq(opt, "x")) {
@@ -513,6 +521,7 @@ int _cdecl main(int argc, char *argv[]) {
       oprintf(" / Xlat({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
 	     cBase, (long)sHdGeometry.dwXlatCyls, cBase, (long)sHdGeometry.dwXlatHeads, cBase, (long)sHdGeometry.dwXlatSects);
       HardDiskClose(hDisk);
+      nMissing = 0; // Reset the missing drive counter
     }
 
 #if defined(_WIN95) && HAS_98DDK && FIXED_RING0_C
@@ -596,6 +605,31 @@ int _cdecl main(int argc, char *argv[]) {
       }
     }
 #endif // defined(_WIN95) && HAS_98DDK
+
+    /* Repeat scan for floppys */
+    nMissing = 0; /* Number of missing disk indexes so far */
+    for (i=0; nMissing < 4; i++) {	/* Tolerate up to 4 missing entries before giving up hope */
+      char szSize[8];
+      hDisk = FloppyDiskOpen(i, READONLY);
+      if (!hDisk) {	/* If there is no disk with that index */
+      	nMissing += 1;		/* Then count the missing drive */
+      	continue;		/* And keep searching, as one drive may have been recently unplugged */
+      }
+      // Get the drive characteristics
+      iErr = FloppyDiskGetGeometry(hDisk, &sFdGeometry);
+      if (!iErr) { // A floppy is present in the drive
+	QWORD qwSize = sFdGeometry.dwSectors * sFdGeometry.wSectorSize;
+	FormatSize(qwSize, szSize, sizeof(szSize), 1440); /* Compute the size in MiB or GiB, using the floppy-specific algorithm */
+	oprintf("Floppy Disk fd{%d}: #Sect={%l{%c}} ({%s})", i, cBase, sFdGeometry.dwSectors, szSize);
+	oprintf("  Phys({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
+	       cBase, (long)sFdGeometry.wCyls, cBase, (long)sFdGeometry.wHeads, cBase, (long)sFdGeometry.wSects);
+      } else { // No floppy in the drive
+	oprintf("Floppy Disk fd{%d}: No floppy in the drive\n", i);
+      }
+      FloppyDiskClose(hDisk);
+      nMissing = 0; // Reset the missing drive counter
+    }
+
     exit(0);
   }
 
@@ -639,10 +673,10 @@ int _cdecl main(int argc, char *argv[]) {
   )
   /* Get the hard disk geometry, if any */
 
-  if (BlockType(hFrom) == BLOCK_TYPE_HARDDISK) {
+  if (BlockType(hFrom) == BT_HARDDISK) {
     pszHDName = pszFrom;
     hDisk = BlockPtr(hFrom)->h;
-  } else if (hTo && (BlockType(hTo) == BLOCK_TYPE_HARDDISK)) {
+  } else if (hTo && (BlockType(hTo) == BT_HARDDISK)) {
     pszHDName = pszTo;
     hDisk = BlockPtr(hTo)->h;
   }
@@ -706,10 +740,10 @@ geometry_failure:
     qwNBytes *= (DWORD)BlockSize(hFrom);
   } else if (qwNSect == QWMAX) {	// Else if unspecified choose reasonable default
     switch (BlockType(hFrom)) {
-      case BLOCK_TYPE_FILE:
+      case BT_FILE:
 	qwNSect = BlockCount(hFrom);
 	break;
-      case BLOCK_TYPE_HARDDISK:
+      case BT_HARDDISK:
       default:
 	qwNSect = 1;
     }
@@ -732,7 +766,7 @@ geometry_failure:
   }
 
   if (   iDump
-      && (BlockType(hFrom) == BLOCK_TYPE_HARDDISK)
+      && (BlockType(hFrom) == BT_HARDDISK)
       && (qwFromSect == (DWORD)0)
      ) {
     iPart = TRUE;	// Dump partition table for master boot record
@@ -775,7 +809,7 @@ geometry_failure:
 
   // Make sure the request is compatible with the target device size
   if (   hTo
-      && (BlockType(hTo) != BLOCK_TYPE_FILE)	// Files can be extended to any length
+      && (BlockType(hTo) != BT_FILE)	// Files can be extended to any length
      ) {
     qw = qwNBytes;			// Total number of bytes to copy.
     qw /= BlockSize(hTo);		// Number of source sectors to copy
@@ -828,12 +862,22 @@ geometry_failure:
   qwSect0 = qwFromSect;
   nFrom = iBSize / BlockSize(hFrom);
   if (hTo) nTo = iBSize / BlockSize(hTo);
-  dwMB0 = (DWORD)(qwNBytes >> 20);
+  dwKB0 = (DWORD)(qwNBytes >> 10); // Only used for floppys. Floppy sizes < 50000KB. Won't overflow.
+  if (!dwKB0) dwKB0 = 1; // Avoid dividing by 0 in progress report
+  dwMB0 = (DWORD)(qwNBytes >> 20); // Will overflow for disk sizes > 4PB. Largest is 16TB in 2017.
   if (!dwMB0) dwMB0 = 1; // Avoid dividing by 0 in progress report
   if ((qwNBytes > (DWORD)iBSize) && !iQuiet) {
     previousHandler = signal(SIGINT, CtrlCHandler);
     printf("Press ESC to abort the copy.\n");
     iProgress = TRUE;
+  }
+  if (iProgress) {
+    if (           (BlockType(hFrom) == BT_FLOPPYDISK)
+        || (hTo && (BlockType(hTo) == BT_FLOPPYDISK))) {
+      iProgress = 1; /* Floppys are small and very slow. Use KB to show progress */
+    } else {
+      iProgress = 2; /* All other block devices are fast. Use MB to show progress */
+    }
   }
   /* Dirty workaround for Windows' auto-mount feature, that blocks access to the partitions while we write them */
 #ifdef _WIN32
@@ -843,7 +887,7 @@ geometry_failure:
   int iToSectPerSect = 0;
   QWORD qwFromSect0 = qwFromSect;
   if (hTo) iToSectPerSect = iSSize / BlockSize(hTo);
-  if (hTo && (qwMB >= 1) && (qwToSect == 0)) { /* If copying a whole disk image */
+  if (hTo && (BlockSize(hTo) > 1) && (qwMB >= 1) && (qwToSect == 0)) { /* If copying a whole disk image to a disk */
     iWriteMbrLast = TRUE;
     nPhases = 2;
   }
@@ -882,8 +926,11 @@ geometry_failure:
     if (iVerbose || iProgress) putchar('\r');
     if (iVerbose) oprintf("Copying {%s} {%I64{%c}} ", BlockIndexName(hFrom), cBase, qwFromSect);
     if (iVerbose && iProgress) putchar('(');
-    if (iProgress) {
-      dwMB = dwMB0 - (DWORD)(qwNBytes >> 20);
+    if (iProgress == 1) {
+      dwKB = dwKB0 - (DWORD)(qwNBytes >> 10); // Only used for floppys. Floppy sizes < 50000KB. Won't overflow.
+      printf("%ldKB / %d%%", dwKB, ((100 * dwKB) / dwKB0));
+    } else if (iProgress == 2) {
+      dwMB = dwMB0 - (DWORD)(qwNBytes >> 20); // Will overflow for disk sizes > 4PB. Largest is 16TB in 2017.
       printf("%ldMB / %d%%", dwMB, ((100 * dwMB) / dwMB0));
     }
     if (iVerbose && iProgress) putchar(')');
@@ -1095,7 +1142,7 @@ geometry_failure:
 |									      |
 |  Description      Display a brief help for this program		      |
 |									      |
-|  Parameters       None							      |
+|  Parameters       None						      |
 |									      |
 |  Returns	    N/A 						      |
 |                                                                             |
@@ -1103,19 +1150,31 @@ geometry_failure:
 |									      |
 |  History								      |
 |    1994-09-09 JFL Created this routine				      |
+|    2017-07-28 JFL Display the MsvcLibX and SysLib libraries versions.       |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-	  DEBUG_VERSION
-	  );
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 void usage(void) {
-  printf("\nDisk sector manager version %s\n\n", version());
+  printf("\nDisk sector manager version %s\n\n", version(FALSE));
 
   printf("\
 Usage:\n\
@@ -1278,9 +1337,13 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 |									      |
 |  Description	    Format a disk size in a human-readable way		      |
 |									      |
-|  Notes	    Make sure there are at most 3 significant digits	      |
-|		    Ex: "21 MB" or "210 MB" or "2.1 GB"			      |
-|		    Units are actually MiB not MB, etc. (Base 1024, not 1000) |
+|  Arguments	    iKB = 1000 => Output a size in XB (Powers of 1000)	      |
+|		    iKB = 1024 => Output a size in XiB (Powers of 1024)	      |
+|		    iKB = 1440 => Output a size in floppy XB (1024 * 1000^N)  |
+|		    							      |
+|  Notes	    Makes sure the decimal number has at most 3 characters.   |
+|		    Ex: "12 MB" or "123 MB" or "1.2 GB"			      |
+|		    (Except for floppys. Ex: "1.44 MB")			      |
 |		    							      |
 |		    Do not use floating point numbers, because we want to     |
 |		    avoid dragging in the floating point libraries in MS-DOS  |
@@ -1292,6 +1355,10 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 |		    (Improves readbility in the same output space.)	      |
 |		    Added argument iKB to select the SI base. (KB or KiB)     |
 |    2017-07-08 JFL Do not display a period if there's no digit afterwards.   |
+|    2017-07-28 JFL Added the floppy-specific algorithm, if iKB is 1440.      |
+|		    Avoid having two spaces for sizes in B (ie. < 1 KB).      |
+|		    Fixed the output for DOS.				      |
+|    2017-07-30 JFL Added a workaround for an MSVC 1.52c bug.		      |
 *		    							      *
 \*---------------------------------------------------------------------------*/
 
@@ -1299,27 +1366,44 @@ char szUnits[] = " KMGTPE"; // Unit prefixes for 2^0, 2^10, 2^20, 2^30, etc
 
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   int i;
-  char szFraction[8] = ".";
+  char szFraction[10] = ".";
+  int iFloppy = FALSE;
+  char szUnit[3] = " B";
+  char *pszUnit = szUnit;
   WORD wKB = (WORD)iKB;
+  if (iKB == 1440) iFloppy = TRUE;	// Use the floppy-specific algorithm
   if (iKB != 1000) wKB = (WORD)1024;	// The only 2 valid values are 1000 and 1024
   for (i=0; i<6; i++) {
     if ((qwSize >> 14) == qwZero) break; // If (qwSize < 16K)
     qwSize /= wKB;	// Change to the next higher scale
+    if (iFloppy) wKB = 1000;		// Floppys divide once by 1024, then by 1000
   }
   DWORD dwSize = (DWORD)qwSize;
-  if (dwSize >= (10U*iKB)) { // We'll have two significant digits. Switch to the next scale.
+  if (dwSize >= (10UL*wKB)) { // We'll have two significant digits. Switch to the next scale.
     dwSize /= wKB;
     i++;
-  } else if (dwSize >= (unsigned)iKB) { // We'll have 1 significant digits, + 1 after the period.
-    sprintf(szFraction+1, "%03ld", ((dwSize % wKB) * 1000) / wKB);
+  } else if (dwSize >= wKB) { // We'll have 1 significant digits, + 1 after the period.
+    DWORD dwFraction = (dwSize % wKB) * 1000UL;
+#if _MSDOS // Work around for an MSVC 1.52c DOS compiler bug. Do not remove, else the second sprintf prints "000".
+    // Forces MSVC 1.52c to actually compute dwFraction, instead of (mistakenly) simplifying the formula in the second sprintf.
+    sprintf(szFraction+1, "%ld", dwFraction);
+#endif // _MSDOS
+    sprintf(szFraction+1, "%03ld", dwFraction / wKB);
     dwSize /= wKB;
     i++;
   } else {
     szFraction[0] = '\0';	// No fractional part needed.
   }
-  szFraction[2] = '\0';	// Limit the fractional part to 1 digit at most.
-  if (!szFraction[1]) szFraction[0] = '\0';
-  return _snprintf(pBuf, nBufSize, "%u%s %cB", dwSize, szFraction, szUnits[i]);
+  if (iFloppy) {	// Floppy disk size formatting. Ex: "360 KB" or "1.2 MB" or "1.44 MB"
+    szFraction[3] = '\0';	// Limit the fractional part to 2 digits at most.
+    if (szFraction[2] == '0') szFraction[2] = '\0';	// But keep only 1 if the 2nd is 0
+  } else {		// Hard disk size formatting. Ex: "32 GB" or "320 GB" or "3.2 TB"
+    szFraction[2] = '\0';	// Limit the fractional part to 1 digit at most.
+  }
+  if (!szFraction[1]) szFraction[0] = '\0'; // If there's nothing behind the dot, then remove the dot.
+  szUnit[0] = szUnits[i];
+  if (szUnit[0] == ' ') pszUnit += 1; // If there's no prefix, use just "B"
+  return _snprintf(pBuf, nBufSize, "%lu%s %s", dwSize, szFraction, pszUnit);
 }
 
 /*---------------------------------------------------------------------------*\
