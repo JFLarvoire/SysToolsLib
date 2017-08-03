@@ -100,6 +100,7 @@
 *    2017-07-28 JFL Added support for floppy disk drives.		      *
 *		    Display MsvcLibX & SysLib library versions in DOS & Win.  *
 *		    Use the 2017-02-11 workaround only when writing to a disk.*
+*    2017-08-03 JFL Cosmetic change: Align byte sizes with other XB sizes.    *
 *		    Version 4.0.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -107,7 +108,7 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2017-08-02"
+#define PROGRAM_DATE    "2017-08-03"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -1359,6 +1360,7 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 |		    Avoid having two spaces for sizes in B (ie. < 1 KB).      |
 |		    Fixed the output for DOS.				      |
 |    2017-07-30 JFL Added a workaround for an MSVC 1.52c bug.		      |
+|    2017-08-03 JFL Cosmetic change: Align byte sizes with other XB sizes.    |
 *		    							      *
 \*---------------------------------------------------------------------------*/
 
@@ -1402,7 +1404,7 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   }
   if (!szFraction[1]) szFraction[0] = '\0'; // If there's nothing behind the dot, then remove the dot.
   szUnit[0] = szUnits[i];
-  if (szUnit[0] == ' ') pszUnit += 1; // If there's no prefix, use just "B"
+  if (szUnit[0] == ' ') pszUnit = "B "; // If there's no prefix, use just "B"
   return _snprintf(pBuf, nBufSize, "%lu%s %s", dwSize, szFraction, pszUnit);
 }
 
