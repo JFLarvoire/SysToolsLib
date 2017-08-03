@@ -11,7 +11,9 @@
 *		    Offsets are QWORDs for compatibility with capable OSs.    *
 *									      *
 *   History:								      *
-*    2008/04/21 JFL Created this file.					      *
+*    2008-04-21 JFL Created this file.					      *
+*    2017-08-02 JFL Fixed the support for far buffers in DOS small mem modes. *
+*		    Bug fix. Open for writing must use mode "r+b".	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -23,6 +25,9 @@
 
 #include <stdio.h>
 #include <io.h>
+#include <malloc.h>
+#include <memory.h>
+
 
 #include "File.h"	// Public definitions for this module.
 
@@ -46,8 +51,8 @@
 |   Notes:	    This is an OS-independant API in the FileXxxx family.     |
 |									      |
 |   History:								      |
-|									      |
-|    2008/04/21 JFL Created this routine				      |
+|    2008-04-21 JFL Created this routine				      |
+|    2017-08-02 JFL Bug fix. Open for writing must use mode "r+b".	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -56,7 +61,7 @@ FILE *FLO_fopen(char *pszName, char * pszMode)
 {
     FILE *hf;
 #ifdef _DEBUG
-    if (iDebug)	printf("fopen(\"%s\", \"%s\") ", pszName);
+    if (iDebug)	printf("fopen(\"%s\", \"%s\") ", pszName, pszMode);
 #endif // _DEBUG
     hf = fopen(pszName, pszMode);
 #ifdef _DEBUG
@@ -73,7 +78,7 @@ HANDLE FileLibcOpen(char *pszName, int iMode)
     if (iMode)
         pszMode = "rb";
     else
-	pszMode = "a+b";
+	pszMode = "r+b";
 
     hFile = FLO_fopen(pszName, pszMode);
     // If the file does not exist, and if we try to write to it, create an empty file.
@@ -95,8 +100,7 @@ HANDLE FileLibcOpen(char *pszName, int iMode)
 |   Notes:	    This is an OS-independant API in the FileXxxx family.     |
 |									      |
 |   History:								      |
-|									      |
-|    2008/04/21 JFL Created this routine				      |
+|    2008-04-21 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -122,8 +126,7 @@ void FileLibcClose(HANDLE hFile)
 |   Notes:	    This is an OS-independant API in the FileXxxx family.     |
 |									      |
 |   History:								      |
-|									      |
-|    2008/04/21 JFL Created this routine				      |
+|    2008-04-21 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -148,8 +151,7 @@ QWORD FileLibcSize(HANDLE hFile)
 |   Notes:	    This is an OS-independant API in the FileXxxx family.     |
 |									      |
 |   History:								      |
-|									      |
-|    2008/04/21 JFL Created this routine				      |
+|    2008-04-21 JFL Created this routine				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -164,39 +166,51 @@ static WORD DS(void) { /* Get the Data Segment */
 #pragma warning(default:4704) /* in-line assembler precludes global optimizations */
 #endif
 
-int FileLibcRead(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
-    {
-    size_t nRead;
+int FileLibcRead(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf) {
+  size_t nRead;
+  void FAR *pReadBuf = pBuf;
+#if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
+  void *pLocalBuf = NULL;
+#endif
 #ifdef _DEBUG
-    if (iDebug)
-	{
-	printf("fseek(hFile=%p, Offset=%lX, ...)\n", hFile, Qword2Dword(qwOffset));
-	printf("fread(Buf@=%p, 1, N=%lX, hFile=%p) ", pBuf, (DWORD)nToRead, hFile);
-	}
+  if (iDebug) {
+    printf("fseek(hFile=%p, Offset=%lX, ...)\n", hFile, Qword2Dword(qwOffset));
+    printf("fread(Buf@=%Fp, 1, N=%lX, hFile=%p) ", pBuf, (DWORD)nToRead, hFile);
+  }
 #endif // _DEBUG
 /* MS-DOS tiny, small, medium memory models with a single data segment */
 #if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
-    if (DWORD1(pBuf) != DS()) {
+  if (WORD1(pBuf) != DS()) {
+    pLocalBuf = malloc(nToRead);
+    if (!pLocalBuf) {
 #ifdef _DEBUG
-	 if (iDebug) printf("Can't read into a far buffer! Read canceled.\n");
+      if (iDebug) printf("DS=%04X. Can't read into a large far buffer! Read canceled.\n", DS());
 #endif // _DEBUG
-	 return 2;
-     }
+      return 2;
+    }
+    pReadBuf = pLocalBuf;
+  }
 #define FORCE_PVOID void *)(WORD)(DWORD
 #else    /* Normal case for all Windows and Unix systems, and large DOS systems */
 #define FORCE_PVOID void *
 #endif /* MS-DOS M_I86?M memory models */
-    fseek((FILE *)hFile, Qword2Dword(qwOffset), SEEK_SET);
-    /* NOTE: The next fread() triggered a pointer truncation warning in MSDOS tiny and small modes.
-             Leaving this here for now, as in most realistic cases,
-             a near buffer will be used, so the cast will work fine.
-	     And the sanity check above will catch the cases where it would not */
-    nRead = fread((FORCE_PVOID)pBuf, 1, nToRead, (FILE *)hFile);
+  fseek((FILE *)hFile, Qword2Dword(qwOffset), SEEK_SET);
+  /* NOTE: The next fread() triggered a pointer truncation warning in MSDOS tiny and small modes.
+	   Leaving this here for now, as in most realistic cases,
+	   a near buffer will be used, so the cast will work fine.
+	   And the sanity check above will catch the cases where it would not */
+  nRead = fread((FORCE_PVOID)pReadBuf, 1, nToRead, (FILE *)hFile);
 #ifdef _DEBUG
-    if (iDebug) printf("-> nRead=%lX\n", (DWORD)nRead);
+  if (iDebug) printf("-> nRead=%lX\n", (DWORD)nRead);
 #endif
-    return nRead != nToRead;
-    }
+#if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
+  if (pLocalBuf) {
+    _fmemcpy(pBuf, pLocalBuf, nRead);
+    free(pLocalBuf);
+  }
+#endif
+  return nRead != nToRead;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -214,44 +228,53 @@ int FileLibcRead(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
 |   Notes:	    This is an OS-independant API in the FileXxxx family.     |
 |									      |
 |   History:								      |
-|									      |
-|    2008/04/21 JFL Created this routine				      |
+|    2008-04-21 JFL Created this routine				      |
+|    2017-08-02 JFL Fixed the support for far buffers in DOS small mem modes. |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int FileLibcWrite(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf)
-    {
-    size_t nWritten;
+int FileLibcWrite(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf) {
+  size_t nWritten;
+#if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
+  void *pLocalBuf = NULL;
+#endif
 #ifdef _DEBUG
-    if (iDebug)
-	{
-	printf("fseek(hFile=%p, Offset=%lX, ...)\n", hFile, Qword2Dword(qwOffset));
-	printf("fwrite(Buf@=%p, 1, Count=%lX, hFile=%p) ", pBuf, (DWORD)nToWrite, hFile);
-	if (iReadOnly) printf("Read-only mode! Write canceled.\n");
-	}
+  if (iDebug) {
+    printf("fseek(hFile=%p, Offset=%lX, ...)\n", hFile, Qword2Dword(qwOffset));
+    printf("fwrite(Buf@=%Fp, 1, Count=%lX, hFile=%p) ", pBuf, (DWORD)nToWrite, hFile);
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n");
+  }
 #endif // _DEBUG
-    if (iReadOnly) return 0;
+  if (iReadOnly) return 0;
 /* MS-DOS tiny, small, medium memory models with a single data segment */
 #if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
-    if (DWORD1(pBuf) != DS()) {
+  if (WORD1(pBuf) != DS()) {
+    pLocalBuf = malloc(nToWrite);
+    if (!pLocalBuf) {
 #ifdef _DEBUG
-	 if (iDebug) printf("Can't write from a far buffer! Write canceled.\n");
+      if (iDebug) printf("DS=%04X. Can't write from a large far buffer! Write canceled.\n", DS());
 #endif // _DEBUG
-	 return 2;
-     }
+      return 2;
+    }
+    _fmemcpy(pLocalBuf, pBuf, nToWrite);
+    pBuf = pLocalBuf;
+  }
 #define FORCE_PVOID void *)(WORD)(DWORD
 #else    /* Normal case for all Windows and Unix systems, and large DOS systems */
 #define FORCE_PVOID void *
 #endif /* MS-DOS M_I86?M memory models */
-    fseek((FILE *)hFile, Qword2Dword(qwOffset), SEEK_SET);
-    /* NOTE: The next fwrite() triggered a pointer truncation warning in MSDOS tiny and small modes.
-             Leaving this here for now, as in most realistic cases,
-             a near buffer will be used, so the cast will work fine.
-	     And the sanity check above will catch the cases where it would not */
-    nWritten = fwrite((FORCE_PVOID)pBuf, 1, nToWrite, (FILE *)hFile);
+  fseek((FILE *)hFile, Qword2Dword(qwOffset), SEEK_SET);
+  /* NOTE: The next fwrite() triggered a pointer truncation warning in MSDOS tiny and small modes.
+	   Leaving this here for now, as in most realistic cases,
+	   a near buffer will be used, so the cast will work fine.
+	   And the sanity check above will catch the cases where it would not */
+  nWritten = fwrite((FORCE_PVOID)pBuf, 1, nToWrite, (FILE *)hFile);
 #ifdef _DEBUG
-    if (iDebug) printf("-> nWritten=%lX\n", (DWORD)nWritten);
+  if (iDebug) printf("-> nWritten=%lX\n", (DWORD)nWritten);
 #endif
-    return nWritten != nToWrite;
-    }
+#if defined(M_I86TM) || defined(M_I86SM) || defined(M_I86MM)
+  if (pLocalBuf) free(pLocalBuf);
+#endif
+  return nWritten != nToWrite;
+}
 
