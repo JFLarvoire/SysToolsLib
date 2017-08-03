@@ -9,6 +9,9 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SysLib/FDisk*.cpp & FloppyDisk.*: Routines for block I/O to floppy disks, supporting DOS, WIN95, WIN32/64.
 - C/SRC/sector.cpp: Added support for floppy disks.
 
+### Changed
+- C/SRC/sector.cpp, C/SRC/gpt.cpp: Updated the FormatSize() routine to make it more readable, and fixed the output in DOS.
+
 ### Fixed
 - C/SRC/sector.cpp: When copying disk images into an existing file, the image was appended to the file, instead of
   overwriting it.
