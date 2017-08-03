@@ -25,7 +25,11 @@
 *    2001-09-05 JFL Moved all MS-DOS routines into file HDiskDos.cpp.	      *
 *    2002-04-15 JFL Added write protection flag in iDrive bit 15.	      *
 *    2016-04-27 JFL Check the buffer size in GetBiosDiskChsParameters().      *
-*									      *
+*    2017-07-28 JFL GetBiosDiskChsParameters() gets the actual sector size    *
+*		    for floppys.					      *
+*		    Fixed all HardDiskXxxx() routines, to clear the R/O flag  *
+*		    in iDisk.						      *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -212,45 +216,72 @@ char far *lpcBuffer)		/* Buffer for the data read */
 |   Description:    Get a Hard Disk ISA-compatible CHS parameters.	      |
 |									      |
 |   Parameters:     int iDrive          Driver number (0x80-0xFF)	      |
-|		    HDPARMS far *lpBuf  Output buffer			      |
+|		    DDPARMS far *lpBuf  Output buffer			      |
 |		    int iSize	        Buffer size 			      |
 |									      |
 |   Returns:	    int iError	        BIOS error. 0 = Success.	      |
 |									      |
 |   Notes:	    Uses the INT 13H BIOS function 8.			      |
 |									      |
-|		    Stores the result in a HDPARMS structure, to be able      |
+|		    Stores the result in a DDPARMS structure, to be able      |
 |		     to compare results with that of function 48H.	      |
 |									      |
 |   History:								      |
-|									      |
-|    2000/06/09 JFL Created this routine				      |
-|    2001/01/10 JFL Changed the buffer parameter to a far pointer.     	      |
+|    2000-06-09 JFL Created this routine				      |
+|    2001-01-10 JFL Changed the buffer parameter to a far pointer.     	      |
+|    2017-07-28 JFL Get the actual sector size for floppys.		      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 #pragma warning(disable:4704)	// Ignore the inline assembler etc... warning
 
-int _cdecl GetBiosDiskChsParameters(int iDisk, HDPARMS far *lpBuf, int iSize)
+int _cdecl GetBiosDiskChsParameters(int iDisk, DDPARMS far *lpBuf, int iSize)
     {
     int iResult;
 
-    if (iSize < sizeof(HDPARMS)) return -1;
+#ifdef _DEBUG
+    if (iDebug) printf("GetBiosDiskChsParameters(iDisk=0x%X, lpBuf=%Fp, iSize=0x%X)\n",
+    			iDisk, lpBuf, iSize);
+#endif // _DEBUG
+
+    if (iSize < sizeof(DDPARMS)) return -1;
 
     _asm
 	{
-	mov	dx, iDisk
-	mov	ah, 08H
-	int	13h
-	jc	int13done	; Failed
-
 	push	es
 	push	di
+
+	mov	dx, iDisk
+	mov	ah, 08H
+	xor	di, di
+	mov	es, di		; Clear ES:DI to see if the BIOS sets it
+	int	13h
+	jc	int13done	; Failed. BIOS error in AH
+	; But the function can succeed even if the iDisk number is larger than the # of drives
+	mov	al, BYTE PTR iDisk
+	and	al, 7FH		; Clear the HD bit (bit #7)
+	cmp	al, dl		; Was this a valid disk number?
+	mov	ah, 1		; Invalid parameter error
+	jae	int13done
+
+	; Compute the sector size. The BIOS supports sizes != 512 for floppys only.
+	mov	bx, 200H	; Default sector size
+	mov	ax, es
+	or	ax, di		; Did the BIOS set a Drive Parameter table?
+	jz	no_DPT
+	mov	bx, 80H		; Minimum sector size = 128
+	mov	al, cl		; Save CL
+	mov	cl, es:[di+3]	; Bytes per sector (00h = 128, 01h = 256, 02h = 512, 03h = 1024)
+	shl	bx, cl		; Bytes per sector
+	mov	cl, al		; Restore CL
+no_DPT:
+	push	bx		; Sector size
 
 	cld
 	les	di, lpBuf
 
-	mov	ax, 1AH
+	; Output a function-48H-compatible parameter table
+	mov	ax, 1AH		; sizeof(DDPARMS)
 	stosw          		; 00 wSize
 
 	mov	ax, 2		; Cyl/Head/Sect info is valid
@@ -292,18 +323,18 @@ int _cdecl GetBiosDiskChsParameters(int iDisk, HDPARMS far *lpBuf, int iSize)
 	stosw
 	stosw
 
-	mov	ax, 200H
+	pop	ax		; Sector size
 	stosw			; 18 wBpS
-
-	pop	di
-	pop	es
 
 	xor	ax, ax
 
 int13done:
-	mov	al, ah		    ; Get the return code into AX
+	mov	al, ah		; Get the return code into AX
 	xor	ah, ah
 	mov	iResult, ax
+
+	pop	di
+	pop	es
 	}
 
     return iResult;
@@ -318,7 +349,7 @@ int13done:
 |   Description:    Get a Hard Disk parameter table.			      |
 |									      |
 |   Parameters:     int iDrive          Drive number (0x80-0xFF)	      |
-|		    HDPARMS far *lpBuf  Output buffer			      |
+|		    DDPARMS far *lpBuf  Output buffer			      |
 |		    int iSize	        Buffer size 			      |
 |									      |
 |   Returns:	    int iError	        BIOS error. 0 = Success.	      |
@@ -336,7 +367,7 @@ int13done:
 
 #pragma warning(disable:4704)	// Ignore the inline assembler etc... warning
 
-int _cdecl GetBiosDiskParameterTable(int iDisk, HDPARMS far *lpBuf, int iSize)
+int _cdecl GetBiosDiskParameterTable(int iDisk, DDPARMS far *lpBuf, int iSize)
     {
     int iErr;
 
@@ -524,7 +555,7 @@ int BiosDiskReadLba(int iDrive, QWORD qwSector, WORD wNum, void far *lpBuf)
 HANDLE HardDiskOpen(int iDrive, int iMode)
     {
     int iErr;
-    HDPARMS sParms;
+    DDPARMS hdParms;
 
 #ifdef _DEBUG
     if (iDebug)
@@ -537,7 +568,7 @@ HANDLE HardDiskOpen(int iDrive, int iMode)
     iDrive += 0x80;
 
     // Check if it exists
-    iErr = GetBiosDiskParameterTable(iDrive, &sParms, sizeof(sParms));
+    iErr = GetBiosDiskParameterTable(iDrive, &hdParms, sizeof(hdParms));
     if (iErr) return NULL;
 
     if (iMode) iDrive += 0x8000;	// Report R/O flag
@@ -592,44 +623,44 @@ void HardDiskClose(HANDLE hDrive)
 
 int HardDiskGetGeometry(HANDLE hDrive, HDGEOMETRY *pHdGeometry)
     {
-    int iDisk = (int)(DWORD)(LPVOID)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iErr;
-    HDPARMS sParms;
+    DDPARMS hdParms;
 
     // Get the physical parameters for the drive.
-    sParms.lpedd = (EDDPARMS far *)-1L;
-    iErr = GetBiosDiskParameterTable(iDisk, &sParms, sizeof(sParms));
+    hdParms.lpedd = (EDDPARMS far *)-1L;
+    iErr = GetBiosDiskParameterTable(iDisk, &hdParms, sizeof(hdParms));
     if (iErr) return iErr;
 
-    pHdGeometry->qwSectors = sParms.qwTotal;
-    pHdGeometry->wSectorSize = sParms.wBpS;
-    pHdGeometry->dwCyls = sParms.dwCyls;
-    pHdGeometry->dwHeads = sParms.dwHeads;
-    pHdGeometry->dwSects = sParms.dwSects;
+    pHdGeometry->qwSectors = hdParms.qwTotal;
+    pHdGeometry->wSectorSize = hdParms.wBpS;
+    pHdGeometry->dwCyls = hdParms.dwCyls;
+    pHdGeometry->dwHeads = hdParms.dwHeads;
+    pHdGeometry->dwSects = hdParms.dwSects;
     // Assume no translation.
-    pHdGeometry->dwXlatCyls = sParms.dwCyls;
-    pHdGeometry->dwXlatHeads = sParms.dwHeads;
-    pHdGeometry->dwXlatSects = sParms.dwSects;
+    pHdGeometry->dwXlatCyls = hdParms.dwCyls;
+    pHdGeometry->dwXlatHeads = hdParms.dwHeads;
+    pHdGeometry->dwXlatSects = hdParms.dwSects;
 
 #ifdef _DEBUG
 	// Display extended parameters for the curious.
-	if (iVerbose && (sParms.lpedd != (EDDPARMS far *)-1L))
+	if (iVerbose && (hdParms.lpedd != (EDDPARMS far *)-1L))
 	    {
 	    int i;
 	    WORD w;
 
-	    i = sParms.lpedd->bRevision;
+	    i = hdParms.lpedd->bRevision;
 	    printf("Extended parameter table revision %d.%d:\n", i>>4, i&0x0F);
-	    if (iVerbose) printf("At address %lp\n", sParms.lpedd);
-	    if (sParms.lpedd->bFlags & 0x40)
+	    if (iVerbose) printf("At address %lp\n", hdParms.lpedd);
+	    if (hdParms.lpedd->bFlags & 0x40)
 		printf("LBA enabled.\n");
 	    else
 		printf("LBA disabled.\n");
-	    printf("IRQ%d\n", sParms.lpedd->bIrq);
-	    printf("DMA type %d, ", sParms.lpedd->bDma >> 4);
-	    printf("on DMA channel %d\n", sParms.lpedd->bDma & 0x0F);
-	    printf("PIO type %d\n", sParms.lpedd->bPio & 0x0F);
-	    w = sParms.lpedd->wOptions;
+	    printf("IRQ%d\n", hdParms.lpedd->bIrq);
+	    printf("DMA type %d, ", hdParms.lpedd->bDma >> 4);
+	    printf("on DMA channel %d\n", hdParms.lpedd->bDma & 0x0F);
+	    printf("PIO type %d\n", hdParms.lpedd->bPio & 0x0F);
+	    w = hdParms.lpedd->wOptions;
 	    if (w & 0x0001) printf("Fast PIO enabled.\n");
 	    if (w & 0x0002) printf("Fast DMA enabled.\n");
 	    if (w & 0x0004) printf("Block PIO enabled.\n");
@@ -650,12 +681,12 @@ int HardDiskGetGeometry(HANDLE hDrive, HDGEOMETRY *pHdGeometry)
 #endif // _DEBUG
 
     // Get the BIOS-translated parameters
-    iErr = GetBiosDiskChsParameters(iDisk, &sParms, sizeof(sParms));
+    iErr = GetBiosDiskChsParameters(iDisk, &hdParms, sizeof(hdParms));
     if (iErr) return 0;	// Use the no-translation assumption.
 
-    pHdGeometry->dwXlatCyls = sParms.dwCyls;
-    pHdGeometry->dwXlatHeads = sParms.dwHeads;
-    pHdGeometry->dwXlatSects = sParms.dwSects;
+    pHdGeometry->dwXlatCyls = hdParms.dwCyls;
+    pHdGeometry->dwXlatHeads = hdParms.dwHeads;
+    pHdGeometry->dwXlatSects = hdParms.dwSects;
 
     return 0;
     }
@@ -684,9 +715,9 @@ int HardDiskGetGeometry(HANDLE hDrive, HDGEOMETRY *pHdGeometry)
 
 int HardDiskLBA2CHS(HANDLE hDrive, QWORD qwSector, WORD *pwCyl, WORD *pwHead, WORD *pwSect)
     {
-    int iDisk = (int)(DWORD)(LPVOID)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iErr;
-    HDPARMS sParms;
+    DDPARMS hdParms;
     DWORD dw;
 
     /* If the BIOS does not support LBA access, use CHS parameters. */
@@ -699,15 +730,15 @@ int HardDiskLBA2CHS(HANDLE hDrive, QWORD qwSector, WORD *pwCyl, WORD *pwHead, WO
 #endif
 
     // Get the BIOS-translated parameters
-    iErr = GetBiosDiskChsParameters(iDisk, &sParms, sizeof(sParms));
+    iErr = GetBiosDiskChsParameters(iDisk, &hdParms, sizeof(hdParms));
     if (iErr) return iErr;
 
-    *pwSect = (WORD)(dw % sParms.dwSects) + 1;
-    dw /= sParms.dwSects;
-    *pwHead = (WORD)(dw % sParms.dwHeads);
-    dw /= sParms.dwHeads;
-    *pwCyl = (WORD)(dw % sParms.dwCyls);
-    dw /= sParms.dwCyls;
+    *pwSect = (WORD)(dw % hdParms.dwSects) + 1;
+    dw /= hdParms.dwSects;
+    *pwHead = (WORD)(dw % hdParms.dwHeads);
+    dw /= hdParms.dwHeads;
+    *pwCyl = (WORD)(dw % hdParms.dwCyls);
+    dw /= hdParms.dwCyls;
 
     return (dw != 0) ? 256 : 0;
     }
@@ -735,7 +766,7 @@ int HardDiskLBA2CHS(HANDLE hDrive, QWORD qwSector, WORD *pwCyl, WORD *pwHead, WO
 
 int HardDiskRead(HANDLE hDrive, QWORD qwSector, WORD wNum, void far *pBuf)
     {
-    int iDisk = (int)(DWORD)(LPVOID)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iErr;
     WORD wCyl;			/* Cylinder */
     WORD wHead;			/* Head */
@@ -785,7 +816,7 @@ int HardDiskRead(HANDLE hDrive, QWORD qwSector, WORD wNum, void far *pBuf)
 
 int HardDiskWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, void far *pBuf)
     {
-    int iDisk = (int)(DWORD)(LPVOID)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iErr;
     WORD wCyl;			/* Cylinder */
     WORD wHead;			/* Head */
@@ -963,7 +994,7 @@ void UnlockDosVolume(int iDosDrive, int iUndo)
 
 int HardDiskLock(HANDLE hDrive, HANDLE *phLock)
     {
-    int iDisk = (int)(DWORD)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iErr;
     int iUndoLock = 0;		// Number of locks obtained on the drive
 
@@ -1007,9 +1038,9 @@ int HardDiskLock(HANDLE hDrive, HANDLE *phLock)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int HardDiskLock(HANDLE hDrive, HANDLE hLock)
+int HardDiskUnlock(HANDLE hDrive, HANDLE hLock)
     {
-    int iDisk = (int)(DWORD)hDrive;
+    int iDisk = (int)(DWORD)(LPVOID)hDrive & 0xFF;
     int iUndoLock = (int)(DWORD)hLock;
 
     if (iUndoLock > 0) UnlockDosVolume(iDosDrive, iUndoLock);
