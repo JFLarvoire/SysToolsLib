@@ -1,6 +1,8 @@
-﻿# System Tools Library
+﻿System Tools Library
+====================
 
-## Project Description
+Project Description
+-------------------
 
 ### System Tools
 
@@ -13,7 +15,7 @@ Major highlights:
 - Directory management tools, to search, compare, weight, update, recurse, etc.  
   They all support Unicode names in any code page, paths > 260 characters, junctions, file & directory symlinks.
 - Windows clipboard content filtering tools. They bring the power of the command line to all GUI apps!
-- System management tools. Manage the hardware, BIOS, hard disks, drivers, etc.
+- System management tools. Manage the hardware, BIOS, disks, drivers, etc.
 
 For a list of available tools and their description, see [Catalog.md](Docs/Catalog.md).
 
@@ -29,7 +31,7 @@ Major highlights:
   They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts.  
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
-  with commands familiar to Unix developers. Targets: DOS, WIN95, WIN32, IA64, WIN64, ARM.
+  with commands familiar to Unix developers. Targets: BIOS, DOS, WIN95, WIN32, IA64, WIN64, ARM.
   More details in the [MsvcLibX documentation](C/MsvcLibX/README.md).
 - A set of debugging macros for C programs, similar in use and effect to those for scripting languages. [debugm.h](C/include/debugm.h)  
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
@@ -52,7 +54,8 @@ jf.larvoire@hpe.com
 2017-04-05
 
 
-## Installation
+Installation
+------------
 
 ### Scripts and programs in Windows
 
@@ -61,7 +64,7 @@ You can use the WIN32 release files on all versions of Windows.
 * Go to the project release area.
 * Download the most recent SysTools.zip release.
 * Extract files from that zip file, and put them in a directory in your PATH. For example in C:\Windows.
-* The Tcl scripts require installing a Tcl interpreter. See [Tcl/README.txt](Tcl/README.txt) for details on how to do that.
+* The Tcl scripts require installing a Tcl interpreter. See [Tcl/README.md](Tcl/README.md) for details on how to do that.
 
 ### Scripts and programs in Linux
 
@@ -109,25 +112,27 @@ LICENSE.txt	| Project license (Apache 2.0)
 *.lst		| MakeZip.bat input files for generating partial source releases. (Deprecated)
 
 
-## Tools Usage
+Tools Usage
+-----------
 
 All tools (both scripts and C programs) support the -? option for help, and most share a few other common options:
 
-Option | Description
------- | -----------
-  -?   | Display a help screen.
-       |
-  -d   | Display debug information: Help the author understand what code is running.
-  -v   | Display verbose information: Help users understand what the program is doing.
-  -V   | Display the script version and exit.
-  -X   | No Exec mode: Display what the program would do, but don't do it.
-       |
-  -A   | Force ANSI encoding output. (Windows only)
-  -O   | Force OEM encoding output. (Windows only)
-  -U   | Force UTF8 encoding output. (Windows only)
+Option  | Description
+------- | -----------------------------------------------------------------------------
+  -?    | Display a help screen.
+        |    
+  -d    | Display debug information: Help the author understand what code is running.
+  -v    | Display verbose information: Help users understand what the program is doing.
+  -V    | Display the script version and exit.
+  -X    | No Exec mode: Display what the program would do, but don't do it.
+        |    
+  -A    | Force ANSI encoding output. (Windows only)
+  -O    | Force OEM encoding output. (Windows only)
+  -U    | Force UTF8 encoding output. (Windows only)
 
 
-## Contributing
+Contributing
+------------
 
 Most of the development work was done by Jean-François Larvoire during work hours at HP then HPE.
 It's thus HPE that is the copyright owner of this code.  
@@ -139,7 +144,8 @@ the open-source release of this code, provided that future contributors agree wi
   they've signed HPE's Corporate Contributor License Agreement in file [HPE_CCLA.docx](HPE_CCLA.docx).
 
 
-## License
+License
+-------
 
 Copyright 2017 Hewlett Packard Enterprise
 
