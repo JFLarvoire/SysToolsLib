@@ -138,13 +138,14 @@
 *    2017-05-12 JFL Added error message for failures to backup or rename the  *
 *		    output files. Version 2.6.1.			      *
 *    2017-05-29 JFL Help only displays the main program version.              *
+*    2017-08-25 JFL Use strerror() for portability to Unix. Version 2.6.2.    *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.6.1"
-#define PROGRAM_DATE    "2017-05-29"
+#define PROGRAM_VERSION "2.6.2"
+#define PROGRAM_DATE    "2017-08-25"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -165,6 +166,7 @@
 #include <utime.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <errno.h>
 
 #define SZ 80               /* Strings size */
 
@@ -753,24 +755,24 @@ try_next_set:
     if (iBackup) {	/* Create an *.bak file in the same directory */
       iErr = unlink(szBakName); 	/* Remove the .bak if already there */
       if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", szBakName, _strerror(NULL));
+	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
       }
       DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
       iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
       if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszInName, _strerror(NULL));
+	fail("Can't backup %s. %s\n", pszInName, strerror(errno));
       }
     } else {		/* Don't keep a backup of the input file */
       DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
       iErr = unlink(pszInName); 	/* Remove the original file */
       if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", pszInName, _strerror(NULL));
+	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
       }
     }
     DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
     iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
     if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszInName, _strerror(NULL));
+      fail("Can't create %s. %s\n", pszInName, strerror(errno));
     }
     pszOutName = pszInName;
   }
