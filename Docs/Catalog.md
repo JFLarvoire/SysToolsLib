@@ -64,6 +64,7 @@ deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
 dump.exe	| DWL	| Hexadecimal dump.									| `1clip | dump`
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
+regsub.tcl	|  WL	| Replace a regular expression at the file level.					| `regsub "(\d\d)/(\d\d)/(\d\d)" "19\1-\2-\3" *.c` &:# Change old dates to the ISO format
 remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip | remplace "; " \r\n | sort` &:# Sort an email distribution list alphabetically
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
 u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `12 u2w`

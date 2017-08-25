@@ -8,6 +8,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### New
 C/MsvcLibX/src/iconv.c: Added new routines vfprintfM(), fprintfM() and printfM() for printing multiple encodings.
 C/include/debugm.h: Added an EXE_OS_NAME definition. It'll eventually replace all OS_NAME definitions everywhere.
+Tcl/regsub.tcl: New tool to change text using regular expressions.
 
 ### Changed
 Tcl/README.txt: Converted to README.md, and updated.
