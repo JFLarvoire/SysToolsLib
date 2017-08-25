@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-08-25
+### New
+C/MsvcLibX/src/iconv.c: Added new routines vfprintfM(), fprintfM() and printfM() for printing multiple encodings.
+C/include/debugm.h: Added an EXE_OS_NAME definition. It'll eventually replace all OS_NAME definitions everywhere.
+
+### Changed
+Tcl/README.txt: Converted to README.md, and updated.
+
+### Fixed
+C/include/debugm.h: Fixed bugs that broke debug builds in Linux.
+
 ## [Unreleased] 2017-08-03
 ### New
 - C/SysLib/FDisk*.cpp & FloppyDisk.*: Routines for block I/O to floppy disks, supporting DOS, WIN95, WIN32/64.
