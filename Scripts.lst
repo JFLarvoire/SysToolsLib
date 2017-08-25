@@ -53,6 +53,7 @@ Tcl\cfdt.tcl
 Tcl\fixmht.tcl
 Tcl\FlipMails.tcl
 Tcl\get.tcl
+Tcl\regsub.tcl
 Tcl\rxrename.tcl
 Tcl\show.tcl
 Tcl\sml.tcl
