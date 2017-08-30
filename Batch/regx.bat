@@ -65,13 +65,14 @@
 :#   2016-11-23 JFL Factored out routine :Prep2ExpandVars, and use it before  #
 :#                  displaying any name or value. Fixes issues with ! and ^.  #
 :#   2016-12-16 JFL Updated the library framework. Features unchanged.        #
+:#   2017-08-29 JFL Fixed the type command output.			      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-16"
+set "VERSION=2017-08-29"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1561,7 +1562,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
       %IF_VERBOSE% set "BEFORE=!KEY!\!NAME! = "
       set "OUTPUT=!BEFORE!!VALUE!"
       call :Prep2ExpandVars OUTPUT &:# Make sure %ECHO% displays tricky characters correctly
-      %ECHO% OUTPUT
+      %ECHO% !OUTPUT!
     )
   )
 )
