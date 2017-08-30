@@ -18,6 +18,7 @@
 #    2016-01-07 JFL Added compilation option -Wall.                           #
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
 #    2016-10-14 JFL Fixed rules for building C++ programs.        	      #
+#    2017-08-29 JFL `make install` now checks that $bindir is in the PATH.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -29,11 +30,11 @@ prefix = /usr/local
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
 exec_prefix = $(prefix)
-# Where to put the executable for the command `gcc'.
+# Where to put the executables.
 bindir = $(exec_prefix)/bin
-# Where to put the directories used by the compiler.
-libexecdir = $(exec_prefix)/libexec
-# Where to put the Info files.
+# Where to put the libraries.
+libdir = $(exec_prefix)/lib
+# Where to put the info files.
 infodir = $(datarootdir)/info
 
 # Identify the OS and processor, and generate an output base directory name from that
@@ -199,8 +200,11 @@ testmak:
 	echo "MACHINE = $(MACHINE)"
 	echo "OSP = $(OSP)"
 	echo "PROGRAM = $(PROGRAM)"
+	echo "PROGRAMS = $(PROGRAMS)"
 	echo "MAKEFLAGS = $(MAKEFLAGS)"
 	echo "CURDIR = $(CURDIR)"
+	echo "exec_prefix = $(exec_prefix)"
+	echo "bindir = $(bindir)"
 
 # Load $(PROGRAM).mak or Files.mak if possible 
 ifdef PROGRAM
@@ -265,7 +269,13 @@ all: $(PROGRAMS)
 # How to install all programs built above
 .PHONY: install
 install:
-	for exe in $(PROGRAMS) ; do cp -p $(XP)/$$exe $(bindir) ; done
+	@for exe in $(PROGRAMS) ; do \
+	  echo cp -p $$PWD/$(XP)/$$exe $(bindir)/ ; \
+	       cp -p $$PWD/$(XP)/$$exe $(bindir)/ ; \
+	done
+	@if ! ( echo ":$(PATH):" | grep -q ":$(bindir):" ) ; then \
+	  >&2 echo WARNING: $(bindir) not in PATH. Please add it for the installed programs to work. ; \
+	fi
 
 # Cleanup all
 .PHONY: clean
