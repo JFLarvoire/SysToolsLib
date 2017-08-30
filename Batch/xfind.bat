@@ -31,13 +31,14 @@
 :#   2016-12-20 JFL Added routine :FindInPath, to allow finding targets       #
 :#                  even when running a copy of this script not in the PATH.  #
 :#                  Changed the output filtering, to correct only file names. #
+:#   2017-08-30 JFL Bug fix: Output the same # of : as find did. (0,1,2,...)  #
 :#                                                                            #
-:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
-:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2016-12-20"
+set "VERSION=2017-08-30"
 set "SCRIPT=%~nx0"
 set "SCRIPT_DRIVE=%~d0"
 set "SCRIPT_PATH=%~dp0" & set "SCRIPT_PATH=!SCRIPT_PATH:~0,-1!"
@@ -68,6 +69,17 @@ for %%c in (" " "&" "(" ")" "@" "," ";" "[" "]" "{" "}" "=" "'" "+" "`" "~") do 
 :condquote_ret
 endlocal & set "%RETVAR%=%P%"
 %RETURN%
+
+:strlen stringVar lenVar                -- returns the length of a string
+:strlen.q stringVar lenVar                -- returns the length of a string
+setlocal EnableDelayedExpansion
+set "len=0"
+if defined %~1 for /l %%b in (12,-1,0) do (
+  set /a "i=(len|(1<<%%b))-1"
+  for %%i in (!i!) do if not "!%~1:~%%i,1!"=="" set /a "len=%%i+1"
+)
+endlocal & if "%~2" neq "" set "%~2=%len%"
+exit /b
 
 :# Search for a Windows port of Unix tools.
 :# Search in the standard location, or underneath this script directory.
@@ -262,19 +274,22 @@ if %NOEXEC%==0 %FOREACHLINE% %%l in ('%CMDLINE%') do (
   set "LINE=%%l"
   setlocal EnableDelayedExpansion
   if "!LINE:~1,1!"==":" (	:# The file pathname begins with a drive name
-    set "HEAD=!LINE:~0,2!"
-    set "TAIL=!LINE:~2!"
+    set "DRIVE=!LINE:~0,2!"
+    set "LINE=!LINE:~2!"
   ) else (			:# The file pathname is a relative name
-    set "HEAD="
-    set "TAIL=!LINE!"
+    set "DRIVE="
   )
-  for /f "tokens=1* delims=:" %%n in ("!TAIL!") do (
+  for /f "tokens=1 delims=:" %%n in ("!LINE!") do (
     setlocal DisableDelayedExpansion
-    set "NAME=%%n"
-    set "TEXT=%%o"
+    set "PATHNAME=%%n"
+    :# We can't safely read a second token here, as tails starting with another : will be truncated
+    :# Instead, build the tail by removing the pathname from the whole line.
+    setlocal EnableDelayedExpansion
+    call :strlen PATHNAME LNAME
+    for /f %%l in ("!LNAME!") do set "TAIL=!LINE:~%%~l!"
   )
-  setlocal EnableDelayedExpansion
-  echo !HEAD!!NAME:/=\!:!TEXT!
+  :# Change slashes in the pathname, but not in the tail
+  echo !DRIVE!!PATHNAME:/=\!!TAIL!
   endlocal
   endlocal
   endlocal
