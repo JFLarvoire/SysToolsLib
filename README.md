@@ -51,7 +51,7 @@ Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Li
 
 Jean-François Larvoire  
 jf.larvoire@hpe.com  
-2017-04-05
+2017-08-30
 
 
 Installation
@@ -73,11 +73,8 @@ As for scripts, only the Tcl directory contains useful scripts for Linux.
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
-* Make sure the scripts in the Bash and Tcl subdirectories are executable, using the chmod +x command.
-* Copy the Tcl scripts into a directory in your PATH. For example in /usr/local/bin.
-* Remove the .tcl extension on all these tcl scripts (except Library.tcl), so that they can be invoked with just their base name.
-* Go to the C/SRC subdirectory, and apply the instructions in [C/README.md](C/README.md) to rebuild the C programs.
-* Copy the executable files from the output subdirectory, into the same /usr/local/bin.
+* Go to the C subdirectory, and run `make` to rebuild the C programs,
+  then `make install` to install them and the Tcl scripts.
 
 ### Development environment
 
@@ -109,7 +106,7 @@ Name            | Description
 README.md	| This file
 NEWS.md		| Project history
 LICENSE.txt	| Project license (Apache 2.0)
-*.lst		| MakeZip.bat input files for generating partial source releases. (Deprecated)
+*.lst		| List of files that go into source or binary releases. Used by MakeZip.bat and `make release`.
 
 
 Tools Usage
@@ -147,7 +144,7 @@ the open-source release of this code, provided that future contributors agree wi
 License
 -------
 
-Copyright 2017 Hewlett Packard Enterprise
+Copyright 2016-2017 Hewlett Packard Enterprise
 
 All files in this distribution are licensed under the Apache License version 2.0.
 You may not use any of these files except in compliance with this License.
