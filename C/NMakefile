@@ -16,11 +16,32 @@
 #		    Updated the cleanenv: script to display the reg command   #
 #		    it uses to delete the global environment variable.	      #
 #    2017-03-16 JFL Resurrected this file, necessary to make release.         #
+#    2017-08-29 JFL Added a help target overrifing the one in All.mak.        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+default: all
+
+# This help definition overrides the second one included in All.mak below.
+help:
+    type <<
+Usage: make.bat [options] [nmake_options] [macro_definitions] [targets] ...
+
+Macro definitions:     (They must be quoted, else the = sign will be lost)
+  "DEBUG=1"            Generate the debug version. <==> Target in a Debug\ dir.
+  "OS=BIOS DOS WIN95 WIN32 WIN64"   List of target OSs to build for
+  "WINVER=4.0"         Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
+
+Targets:
+  all                  Build all available sources (default)
+  clean                Erase all output files
+  distclean            Erase all output files and all configuration files
+  release              Generate a ..\SysTools.zip release
+<<
+
+# Include common definitions
 !INCLUDE <All.mak>
 
 # Create an MsvcLibX binary release
