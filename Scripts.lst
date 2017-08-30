@@ -22,6 +22,7 @@ Batch\IPcfg.bat
 Batch\MakeZip.bat
 Batch\MCD.BAT
 Batch\n.bat
+Batch\PySetup.bat
 Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat
@@ -53,6 +54,7 @@ Tcl\cfdt.tcl
 Tcl\fixmht.tcl
 Tcl\FlipMails.tcl
 Tcl\get.tcl
+Tcl\nlines.tcl
 Tcl\regsub.tcl
 Tcl\rxrename.tcl
 Tcl\show.tcl
