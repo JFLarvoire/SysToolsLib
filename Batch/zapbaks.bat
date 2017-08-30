@@ -14,13 +14,14 @@
 :#                  Fixed compatibility with the ezWinPorts of Unix find.     #
 :#   2014-04-22 JFL Also delete files like #*#.                               #
 :#                  Fixed the -q option.                                      #
+:#   2017-08-30 JFL Added the -XX argument.                                   #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#****************************************************************************#
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2014-04-22"
+set "VERSION=2017-08-30"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -41,6 +42,7 @@ echo   -R        Do not recurse to subdirectories. (Default)
 echo   -v        Display the Unix find command executed.
 echo   -V        Display the script version.
 echo   -X        Do not execute. List files, but don't delete them.
+echo   -XX       Do not execute. Display the command generated.
 goto :eof
 
 :main
@@ -49,6 +51,7 @@ set MAXDEPTH=-maxdepth 1
 set NOEXEC=
 set VFLAG=
 set QUIET=0
+set CALL=call
 goto get_args
 
 :next_arg
@@ -64,6 +67,7 @@ if .%1.==.-R. set "MAXDEPTH=-maxdepth 1" & goto next_arg
 if .%1.==.-v. set "VFLAG=-v" & goto next_arg
 if .%1.==.-V. (echo %VERSION%) & goto :eof
 if .%1.==.-X. set "NOEXEC=1" & goto next_arg
+if .%1.==.-XX. set "CALL=echo" & goto next_arg
 >&2 echo Warning: Unexpected argument ignored: %1
 goto :next_arg
 
@@ -80,5 +84,5 @@ if "%QUIET%"=="1" set "DOECHO="
 :#       works fine also with one quote, but fails with three quotes.
 set DOZAP=-exec rm -f {} ";"
 if "%NOEXEC%"=="1" set "DOZAP="
-call xfind %VFLAG% %INDIR% %MAXDEPTH% -type f "(" -iname "*.bak" -o -name "*~" -o -name "#*#" ")" %DOECHO% %DOZAP%
+%CALL% xfind %VFLAG% %INDIR% %MAXDEPTH% -type f "(" -iname "*.bak" -o -name "*~" -o -name "#*#" ")" %DOECHO% %DOZAP%
 
