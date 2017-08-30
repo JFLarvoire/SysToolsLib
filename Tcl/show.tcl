@@ -163,12 +163,12 @@
 #   Author          Jean-François Larvoire, jf.larvoire@free.fr               #
 #                                                                             #
 #   History                                                                   #
-#    2007/05/14 JFL Initial implementation, limited to unencoded text files.  #
+#    2007-05-14 JFL Initial implementation, limited to unencoded text files.  #
 #                   Encoded file data inside {}, and had an implicit \n after #
 #                   one-line data in ""s instead of {}s.                      #
-#    2007/05/16 JFL Changed the encoding to be more SML compliant, with new   #
+#    2007-05-16 JFL Changed the encoding to be more SML compliant, with new   #
 #                   CDATA encodings marked by =, ==, ={ ... }, =={ ... } .    #
-#    2007/05/21 JFL Bug fix: Do not stop at the first error, but output an    #
+#    2007-05-21 JFL Bug fix: Do not stop at the first error, but output an    #
 #                   error="message" attribute, and continue.                  #
 #                   Bugfix: Corrected the 'can't read "maxNC"' error.         #
 #                   Bugfix: File length reported was too big by 1 byte.       #
@@ -176,22 +176,22 @@
 #                   Bugfix: Link names were broken when link -> link.         #
 #                   New: For names, use dictionary sort, not ascii sort.      #
 #                   Version 0.04.                                             #
-#    2007/06/15 JFL Moved all show formatting routines into a namespace for   #
+#    2007-06-15 JFL Moved all show formatting routines into a namespace for   #
 #                   easy recycling into other projects.                       #
 #                   Added path globbing support for Windows.                  #
 #                   Version 0.05.                                             #
-#    2007/06/27 JFL Updated the debug package to support debugging namespaces.#
-#    2007/07/09 JFL Bug fix: Can't use regexp c{$n} with n>255.               #
-#    2007/07/10 JFL Changed the default format to encode the final \n, if any.#
+#    2007-06-27 JFL Updated the debug package to support debugging namespaces.#
+#    2007-07-09 JFL Bug fix: Can't use regexp c{$n} with n>255.               #
+#    2007-07-10 JFL Changed the default format to encode the final \n, if any.#
 #                   Version 0.06.                                             #
-#    2007/07/13 JFL Changed back to not encode it, and rely on the show= and  #
+#    2007-07-13 JFL Changed back to not encode it, and rely on the show= and  #
 #                   size= attributes to know it. Version 0.07.                #
-#    2008/09/16 JFL Minor change in ReadFile to fix syntax colouring issues.  #
+#    2008-09-16 JFL Minor change in ReadFile to fix syntax colouring issues.  #
 #                   Added option -C/--checksum. Version 0.08.                 #
-#    2008/10/08 JFL Added routine WalkFiles; Restructured ReadFile to use it, #
+#    2008-10-08 JFL Added routine WalkFiles; Restructured ReadFile to use it, #
 #                   and added ListFiles using it too. Fixed a few minor bugs. #
 #                   Version 0.09.                                             #
-#    2009/09/02 JFL Several {rx} changes to satisfy my editor syntax checker. #
+#    2009-09-02 JFL Several {rx} changes to satisfy my editor syntax checker. #
 #                   Merged in the latest version of my debug library.         #
 #                   Added the -i/--in and -s/--sort options.                  #
 #                   Added support for SML comments in input trees.            #
@@ -205,10 +205,11 @@
 #                   Added the time attribute in verbose mode.                 #
 #                   Support text files with any type of line endings.         #
 #    2013-09-25 JFL Added BSD-style license in the header.                    #
+#    2017-08-29 JFL Added "no such device" to the list of errors to ignore.   #
 #                                                                             #
 #*****************************************************************************#
 
-set version "2013-09-25"	      ; # The version of this script
+set version "2017-08-29"	      ; # The version of this script
 
 # Set global defaults
 set paths {}                          ; # List of pathnames to process.
@@ -1548,7 +1549,7 @@ xproc ShowFile {path {indent 0} {optionsV ""}} {
     catch {set size [file size $path]}
     set err [catch {set hFile [open $path]} output]
     if $err {
-      foreach msg [list "permission denied" "no such file or directory"] {
+      foreach msg [list "permission denied" "no such file or directory" "no such device"] {
 	if [regexp $msg $output -] {
 	  ShowElement file $path "error=[Quotify $msg]" "" $indent options
 	  return
@@ -2468,7 +2469,7 @@ TextFS::Import
 #   Notes:	                                                              #
 #                                                                             #
 #   History:								      #
-#    2007/05/14 JFL Created this routine.                                     #
+#    2007-05-14 JFL Created this routine.                                     #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
