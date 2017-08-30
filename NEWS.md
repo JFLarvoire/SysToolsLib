@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-08-30
+### Fixed
+- Batch/xfind.bat: Output the same # of : as find did. (0,1,2,...). This also avoids an extra : output by zapbaks.bat.
+
 ## [1.9] 2017-08-30
 ### Changed
 - C/Makefile, C/SRC/Makefile:  
