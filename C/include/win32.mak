@@ -113,6 +113,7 @@
 #		    Fixed src2objs.bat and use it indirectly via src2objs.mak.#
 #    2017-03-10 JFL If WINVER is defined but empty, use SDK & linker defaults.#
 #    2017-05-12 JFL Use a default asInvoker.manifest for all win32 builds.    #
+#    2017-08-29 JFL Bugfix: The help target did output a "1 file copied" msg. #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -726,16 +727,16 @@ clean:
 
 # Help message describing the targets
 help:
-    copy << con
+    type <<
 Targets:
- clean                    Erase all files in the $(R) directory
- $(R)\{prog}.exe        Build {prog}.exe release version from {prog}.c/cpp
- $(R)\Debug\{prog}.exe  Build {prog}.exe debug version from {prog}.c/cpp
- $(R)\OBJ\{prog}.obj       Compile {prog}.obj release version from {prog}.c/cpp
- $(R)\Debug\OBJ\{prog}.obj Compile {prog}.obj debug version from {prog}.c/cpp
- {prog}.exe            Build $(R)[\Debug]\{prog}.exe from {prog}.c/cpp
- {prog}.obj            Compile $(R)[\Debug]\OBJ\{prog}.obj from {prog}.c/cpp
- {prog}.res            Compile $(R)[\Debug]\OBJ\{prog}.res from {prog}.rc
+  clean                   Erase all files in the $(R) directory
+  $(R)\{prog}.exe        Build {prog}.exe release version from {prog}.c/cpp
+  $(R)\Debug\{prog}.exe  Build {prog}.exe debug version from {prog}.c/cpp
+  $(R)\OBJ\{prog}.obj       Compile {prog}.obj release version from {prog}.c/cpp
+  $(R)\Debug\OBJ\{prog}.obj Compile {prog}.obj debug version from {prog}.c/cpp
+  {prog}.exe            Build $(R)[\Debug]\{prog}.exe from {prog}.c/cpp
+  {prog}.obj            Compile $(R)[\Debug]\OBJ\{prog}.obj from {prog}.c/cpp
+  {prog}.res            Compile $(R)[\Debug]\OBJ\{prog}.res from {prog}.rc
 
 The debug mode is set based on the first definition found in...
  1) The nmake command line option "DEBUG=0|1"
