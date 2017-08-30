@@ -4,17 +4,33 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2017-08-25
-### New
-C/MsvcLibX/src/iconv.c: Added new routines vfprintfM(), fprintfM() and printfM() for printing multiple encodings.
-C/include/debugm.h: Added an EXE_OS_NAME definition. It'll eventually replace all OS_NAME definitions everywhere.
-Tcl/regsub.tcl: New tool to change text using regular expressions.
-
+## [1.9] 2017-08-30
 ### Changed
-Tcl/README.txt: Converted to README.md, and updated.
+- C/Makefile, C/SRC/Makefile:  
+  `make install` now verifies that $bindir is in the PATH.  
+  `make check` now checks if $bindir is in the PATH.  
+  Make sure the installed scripts are executable.
+- Batch/12.bat: Removed the -A options as the filters are now fixed.
+  Instead, temporarily change to the system's default ANSI codepage.
 
 ### Fixed
-C/include/debugm.h: Fixed bugs that broke debug builds in Linux.
+- C/include/*.mak: Bugfix: The help target did output a "1 file copied" msg.
+- C/NMakefile: Added a help target overrifing the one in All.mak.
+- Batch/regx.bat: Fixed the type command output.
+- Scripts.lst: Added missing scripts PySetup.bat and nlines.tcl.
+- Tcl/show.tcl: Added "no such device" to the list of errors to ignore.
+
+## [Unreleased] 2017-08-25
+### New
+- C/MsvcLibX/src/iconv.c: Added new routines vfprintfM(), fprintfM() and printfM() for printing multiple encodings.
+- C/include/debugm.h: Added an EXE_OS_NAME definition. It'll eventually replace all OS_NAME definitions everywhere.
+- Tcl/regsub.tcl: New tool to change text using regular expressions.
+
+### Changed
+- Tcl/README.txt: Converted to README.md, and updated.
+
+### Fixed
+- C/include/debugm.h: Fixed bugs that broke debug builds in Linux.
 
 ## [Unreleased] 2017-08-03
 ### New
