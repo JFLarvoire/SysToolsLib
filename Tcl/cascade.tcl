@@ -15,10 +15,16 @@
 #    2012-09-26 JFL Use GetSystemMetrics available in TWAPI 2.2.2.            #
 #                   Tested from Windows XP to Windows 8. (Win8 misaligned)    #
 #    2016-04-17 JFL Added option -x to force the X indent.                    #
+#    2017-08-31 JFL Bugfix: get_window_coordinates and minimize_window may    #
+#                   throw exceptions.					      #
+#                   Added a -V|--version option.                              #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
+
+# Set defaults
+set version "2017-08-31"
 
 set err [catch {
   set twapiVersion [package require twapi]
@@ -974,9 +980,9 @@ xproc Return {args} {
 #                                                                             #
 #   History:								      #
 #    2006       JFL Created this routine in pure Tcl.                         #
-#    2007/06/27 JFL Added support for routines within namespaces.             #
-#    2007/10/02 JFL Added the duration calculation, and display upon return.  #
-#    2009/06/26 JFL Combined the new trace package using the standard Tcl     #
+#    2007-06-27 JFL Added support for routines within namespaces.             #
+#    2007-10-02 JFL Added the duration calculation, and display upon return.  #
+#    2009-06-26 JFL Combined the new trace package using the standard Tcl     #
 #                   execution trace, and the old package using a modified     #
 #                   proc routine, into a single package, with two versions    #
 #                   of the Proc routine, depending on Tcl's version.          #
@@ -1189,7 +1195,7 @@ debug::Import
 #                     happens to be an invalid Tcl list.                      #
 #                                                                             #
 #   History:								      #
-#    2008/08/30 JFL Created this routine.                                     #
+#    2008-08-30 JFL Created this routine.                                     #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -1404,7 +1410,9 @@ set SM_YVIRTUALSCREEN 77
 #   Notes:	                                                              #
 #                                                                             #
 #   History:								      #
-#    2008/08/22 JFL Created this routine.                                     #
+#    2008-08-22 JFL Created this routine.                                     #
+#    2017-08-31 JFL Bugfix: get_window_coordinates and minimize_window may    #
+#                   throw exceptions.					      #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -1421,7 +1429,11 @@ proc Cascade {app x y dx dy} {
   set maxWidth 0
   set maxHeight 0
   foreach hWnd $hWnds {
-    foreach {left top right bottom} [get_window_coordinates $hWnd] break
+    if {[catch {
+      foreach {left top right bottom} [get_window_coordinates $hWnd] break
+    }]} {
+      foreach {left top right bottom} {0 0 0 0} break
+    }
     set width [expr $right - $left]
     set height [expr $bottom - $top]
     if {$width > $maxWidth} {
@@ -1448,10 +1460,12 @@ proc Cascade {app x y dx dy} {
   }
   # Move all windows
   foreach pid $pids {
-    set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
-    minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
-    show_window $hWnd -normal -sync -activate
-    move_window $hWnd $x $y ; # Note: Does not work when minimized.
+    catch {
+      set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
+      minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
+      show_window $hWnd -normal -sync -activate
+      move_window $hWnd $x $y ; # Note: Does not work when minimized.
+    }
     incr x $dx
     incr y $dy
   }
@@ -1472,7 +1486,7 @@ proc Cascade {app x y dx dy} {
 #   Notes:	                                                              #
 #                                                                             #
 #   History:								      #
-#    2008/08/22 JFL Created this routine.                                     #
+#    2008-08-22 JFL Created this routine.                                     #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -1494,6 +1508,7 @@ Options:
   -h, --help, -?    Display this help screen.
   -s, --step DX DY  Increment step. Default: $dx $dy
   -v, --verbose     Verbose attributes
+  -V, --version     Display this script version
   -x, --xindent     Horizontal indentation. Default: Width of the system button
 
 Program:            Program name. Default: putty.exe. Default extension: .exe
@@ -1523,14 +1538,18 @@ while {"$args" != ""} {
       set dx [PopArg]
       set dy [PopArg]
     }
-    "-X" - "--noexec" {
-      set noexec 1
+    "-v" - "--verbose" { # Verbose flag.
+      incr ::debug::verbosity
+    }
+    "-V" - "--version" {	# Display this library version
+      puts $version
+      exit 0
     }
     "-x" - "--xindent" {
       set dxForce [PopArg]
     }
-    "-v" - "--verbose" { # Verbose flag.
-      incr ::debug::verbosity
+    "-X" - "--noexec" {
+      set noexec 1
     }
     default {
       if [string match -* $arg] {
