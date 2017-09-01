@@ -4,9 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2017-08-30
+## [Unreleased] 2017-09-01
 ### Fixed
 - Batch/xfind.bat: Output the same # of : as find did. (0,1,2,...). This also avoids an extra : output by zapbaks.bat.
+- Tcl/cascade.tcl: get_window_coordinates and minimize_window may throw exceptions.  
+  Added a -V|--version option.
+- C/MsvcLibX/include/sys/stat.h: Sockets and Fifos ARE supported in WIN32. Enable macros S_ISSOCK and S_ISFIFO.
 
 ## [1.9] 2017-08-30
 ### Changed
