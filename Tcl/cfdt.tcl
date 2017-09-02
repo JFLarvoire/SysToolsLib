@@ -35,18 +35,87 @@
 #                   Display the list of files processed, to monitor progress. #
 #    2017-07-28 JFL Display \ path separators for pathnames in Windows.       #
 #                   Only display paths for files which time actually changed. #
+#    2017-09-02 JFL Fixed error {can't read "mtime": no such variable.}       #
+#                   Improved the debug and error reporting.                   #
+#                   Added option -q|--quiet.                                  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2017-07-28"
+set version "2017-09-02"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
 
 proc Verbose {} {expr $::verbosity > 1} ; # Test if we're in verbose mode.
 proc Debug {{n 0}} {expr $::verbosity > (2+$n)} ; # Test if we're in debug mode.
+
+proc VerbosePuts {args} {
+  if [Verbose] {
+    eval puts $args
+  }
+}
+
+proc DebugPuts {args} {
+  if [Debug] {
+    eval puts $args
+  }
+}
+
+# Quotify a string if needed. ie. when spaces, quotes, or a trailing \.
+# Prefer {} for multi-line strings, and "" for single line strings.
+proc CondQuote {text} {
+  if {"$text" == ""} {
+    return {""}
+  }
+  # If there are quotes or newlines, but no invisible characters (including \r)
+  if {[regexp {[""\n]} $text -] && ![regexp {[\x01-\x09\x0B-\x1F]} $text -]} {
+    # TO DO: Verify that {parenthesis} are balanced. Else escape them!
+    return "{$text}" ; # Then use parenthesis to avoid escaping quotes.
+  }
+  # If there are quotes, spaces, or invisible characters
+  if {[regexp {[""\s[:cntrl:]]} $text -]} {
+    # set text [Escape $text]
+    if [regexp {\s} $text -] { # Surround with quotes if there are spaces.
+      set text "\"$text\""
+    }
+  }
+  return $text
+}
+
+# Generate a string with commands for recreating variables names and values.
+proc VarsValue {args} {
+  set l {}
+  foreach arg $args {
+    if {![uplevel 1 info exists $arg]} {       # Undefined variable
+      lappend l "unset [list $arg]"
+    } elseif {[uplevel 1 array exists $arg]} { # Array name
+      set value [uplevel 1 [namespace current]::FormatArray $arg]
+      lappend l "array set [list $arg] {\n[IndentString $value]}"
+    } else {                                   # Scalar variable
+      # Note: If performance is critical, use [list] instead of [CondQuote] in this line:
+      lappend l "set [list $arg] [CondQuote [uplevel 1 set $arg]]"
+    }
+  }
+  join $l " ; "
+}
+
+# Output variables values.
+proc PutVars {args} {
+  puts [uplevel 1 VarsValue $args]
+}
+
+# Output variables values in debug mode only.
+proc DebugVars {args} {
+  DebugPuts [uplevel 1 VarsValue $args]
+}
+
+# Convert a file name to its OS-specific representation
+set slash [file separator]
+proc LocalName {name} {
+  return [regsub -all "/" $name $::slash]
+}
 
 # Remove an argument from the head of a routine argument list.
 proc PopArg {{name args}} {
@@ -247,6 +316,7 @@ Options:
     --i2n             Prefix the name with the image create time
     --m2n             Prefix the name with the file modify time
 -m, --mtime           Get/set the file modify time (default)
+-q, --quiet           Quiet mode. Do not report minor issues.
 -s, --shift N         Shift time by N seconds
 -S, --sequence N      Set multiple files times, separated by N seconds each.
 -v, --verbose         Display verbose information. Ex: Display all times.
@@ -278,6 +348,7 @@ set sequence 0
 set action display ; # What to do. One of: display set copy rename add
 set typeNames {ctime Create mtime Modify atime Access}
 set nNames 0
+set quiet 0
 while {"$args" != ""} {
   set arg [PopArg]
   switch -- $arg {
@@ -331,6 +402,9 @@ while {"$args" != ""} {
     }
     "-m" - "--mtime" { # Modification time
       set what mtime
+    }
+    "-q" - "--quiet" { # Quiet mode
+      set quiet 1
     }
     "-s" - "--shift" { # Change time by N seconds
       set action add
@@ -393,16 +467,20 @@ if {"$names" == ""} {
 regsub -all / $date - date
 
 if [Debug] {
-  puts "set date \"$date\""
-  puts "set time \"$time\""
+  DebugVars date
+  DebugVars time
   foreach name1 $names {
-    puts "set name \"$name1\""
+    puts "set name [CondQuote $name1]"
   }
+  DebugVars action
+  DebugVars what
+  DebugVars from
 }
 
 # Generate the new time stamp
 if {"$date $time" != " "} {
   set time [clock scan "$date $time"]
+  DebugVars time
 }
 
 if {[llength $names] > 1} {
@@ -414,12 +492,14 @@ if {[llength $names] > 1} {
 # Process every file
 set exitCode 0
 set err [catch {
-  set slash [file separator]
   foreach name $names {
-    set local_name [regsub -all "/" $name $slash] ; # Name with local OS path separators
+    set local_name [LocalName $name] ; # Name with local OS path separators
     if {"$action" == "files2dir"} {
       if ![file isdirectory $name] {
-	puts stderr "Error: '$name' is not a directory."
+      	if {!$quiet} {
+	  puts stderr "Error: [CondQuote $local_name] is not a directory."
+	  set exitCode 1
+	}
 	continue
       }
       FilesTime2Dir $name $what
@@ -429,6 +509,7 @@ set err [catch {
     if {"$action" != "set"} {
       foreach {var verb} $typeNames {
 	set $var [GetFile${verb}Time $name]
+	DebugVars $var
       }
     }
 
@@ -460,7 +541,14 @@ set err [catch {
 
     if {"$action" == "copy"} { # Copy the image time to the modification time
       set time [set $from]
-      if {"$time" == ""} continue ; # Nothing to copy
+      if {"$time" == ""} { # Nothing to copy
+      	# Report the issue now, but continue with the next files, which might have one.
+      	if {!$quiet} {
+	  puts stderr "Error: Cannot get [CondQuote $local_name] image time."
+	  set exitCode 1
+	}
+      	continue
+      }
     }
 
     if {"$action" == "rename"} { # Prefix the file name with a file or image time
@@ -470,9 +558,9 @@ set err [catch {
       set dir [file dirname $name]
       set name2 "$time[file tail $name]"
       if {[Debug] || $noexec} {
-	puts "file rename $name $name2"
+	puts "file rename [CondQuote $name] [CondQuote $name2]"
       } else { # Display the list of files processed, to allow monitoring progress
-	puts [regsub -all "/" $name2 $slash] ; # Name with local OS path separators
+	puts [LocalName $name2] ; # Name with local OS path separators
       }
       if {!$noexec} {
 	file rename $name $name2
@@ -487,22 +575,34 @@ set err [catch {
     }
 
     # Set the new date/time
-    set old_time [set $what]
-    set err [catch {
-      if {("$time" != "$old_time") || [Verbose]} {
-	if {[Debug] || $noexec} {
-	  puts "file $what \"$name\" $time"
-	} else { # Display the list of files processed, to allow monitoring progress
-	  puts $local_name
+    if [info exists $what] {
+      set old_time [set $what]
+    } else {
+      foreach {var verb} $typeNames {
+      	if {"$var" == "$what"} {
+	  set old_time [GetFile${verb}Time $name]
+	  break
 	}
+      }
+    }
+    DebugVars old_time
+    set err [catch {
+      if {"$time" != "$old_time"} {
+	DebugPuts "file $what [CondQuote $name] $time"
+	# Display the list of files processed, to allow monitoring progress
+	puts $local_name
 	if {!$noexec} {
 	  file $what $name $time
 	}
+      } else {
+      	VerbosePuts "# [CondQuote $local_name] $what is already correct"
       }
     } errMsg]
-    if $err {
-      puts stderr "Error: Cannot set file $name $what. $errMsg"
-      set exitCode 1
+    if $err { # Report it now, but continue with the next files, which might be writable.
+      if {!$quiet} {
+	puts stderr "Error: Cannot set [CondQuote $local_name] $what. $errMsg"
+	set exitCode 1
+      }
       continue
     }
 
@@ -513,7 +613,7 @@ set err [catch {
   }
 } msg]
 if $err {
-  puts "Error: $msg"
+  puts stderr "Error: $msg"
   set exitCode 1
 }
 exit $exitCode
