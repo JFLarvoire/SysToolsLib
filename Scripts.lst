@@ -27,6 +27,7 @@ Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat
 Batch\-rhs.bat
+Batch\subcmd.bat
 Batch\tclsh.bat
 Batch\TimeX.bat
 Batch\touch.bat
@@ -34,6 +35,7 @@ Batch\trouve.bat
 Batch\u2a.bat
 Batch\u2w.bat
 Batch\w2u.bat
+Batch\wm.bat
 Batch\x.bat
 Batch\xfind.bat
 Batch\zap.bat
