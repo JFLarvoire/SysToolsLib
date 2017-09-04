@@ -1,4 +1,4 @@
-# System Tools Catalog
+﻿# System Tools Catalog
 
 List of tools released on https://github.com/JFLarvoire/SysToolsLib, grouped by function category.
 
@@ -10,7 +10,7 @@ The Windows versions of these tools support Unicode pathnames, long paths > 260 
 The output is correct in any code page.
 As far as I know, no other Windows port of Unix tools can do all that, if any.
 
-Name		| OS	|Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 backnum.exe	| DWL	| Make a backup copy of a file, appending a unique number to its name.	 		| `backnum myprogram.c` &:# Back it up before making a risky change
 cfdt.tcl	| -WL	| Change files dates and times. Option for using a Jpeg picture internal time.		| `cfdt --i2m *.jpg` &:# Change the files time to image time.
@@ -32,7 +32,7 @@ zapbaks.bat	| -W-	| Delete all kinds of backup files (*.bak, *~, etc...), option
 
 Easily add, remove, or search entries in your PATH variables.
 
-Name		| OS	|Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 addpath.bat	| -W-	| Manage the local and global path easily.						| `addpath | sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
 AddPaths.bat	| -W-	| Configure the system path to include my tool boxes					| `addpaths`
@@ -42,7 +42,7 @@ which.exe	| -W-	| Check which program will execute by the given name. Supports a
 
 Brings the power of the command line to all Windows GUI applications.
 
-Name		| OS	| Description																							| Example
+Name		| OS   	| Description																							| Example
 ----------------|-------|-------------------------------------------------------------------------------------------------------|-------------
 12.bat		| -W-	| Pipe Windows clipboard contents into a program, then that program output back into the clipboard.	| `12 sort`
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip | sort`
@@ -52,7 +52,7 @@ Name		| OS	| Description																							| Example
 
 There tools are useful on their own, and even more so when combined in a command pipeline with the clipboard management tools above.
 
-Name		| OS	| Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 72w.bat		| -W-	| Convert UTF-7 text to Windows ANSI characters.					|
 82w.bat		| -W-	| Convert UTF-8 text to Windows ANSI. Useful to decode scrambled emails. Uses conv.exe. | `12 82w`	
@@ -72,7 +72,7 @@ w2u.bat		| -W-	| Convert Windows End-Of-Lines (CR LF) to Unix End-Of-Lines (LF).
 
 ## Manage the Windows system
 
-Name				| OS	|Description										| Example
+Name				| OS   	| Description										| Example
 --------------------------------|-------|---------------------------------------------------------------------------------------|-------------
 25.bat				| DW-	| Switches the console to 25 lines x 80 columns. (CGA mode)				| `25`
 43.bat				| DW-	| Switches the console to 43 lines x 80 columns. (EGA mode)				| `43`
@@ -100,7 +100,7 @@ XML is good for programs, but hard to read for humans.
 JSON is easier to read, but not as powerful as XML.
 SML is XML made readable.
 
-Name		| OS	|Description											 | Example
+Name		| OS   	| Description											 | Example
 ----------------|-------|------------------------------------------------------------------------------------------------|-------------
 sml.tcl		| -WL	| Convert XML files to a much simpler structured text format, and back.				 | `type config.xml | sml`
 show.tcl	| -WL	| Display files contents, or whole directory trees contents, in a simple structured text format. | `show /proc/fs`
@@ -108,7 +108,7 @@ xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --
 
 ## Programmer toolbox
 
-Name		| OS	|Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
 codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
@@ -121,15 +121,17 @@ msgbox.exe      | -W-   | Display various types of message boxes, and return ans
 nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
 PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
 PySetup.bat	| -W-	| Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts. | `pysetup -t` &:# Test if Python is correctly configured
+subcmd.bat      | -W-   | Start a sub cmd shell, changing the prompt to show the shell depth level and modes.	| `subcmd /V:on` &:# Enable delayed expansion in the sub shell
 tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Windows to run *.tcl files as command-line scripts.	 | `tclsh.bat -t` &:# Test if Tcl is correctly configured
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
 TimeX.bat	| -W-	| Time the execution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
 touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
 whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
+wm.bat          | -W-   | Invoke WinMerge, even if it's not in the PATH.					| `wm old_version new_version`
 
 ## Harware and BIOS management
 
-Name		| OS	| Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 cpuid.exe	| DW-	| Identify the processor, and display its various capabilities.				| `cpuid -v`
 gpt.exe         | DW-   | Manage GUID Partition Tables.                                                         | `gpt` &:# Dump the legacy and GUID partition tables
@@ -141,7 +143,7 @@ uuid.exe        | DW-   | Manage UUIDs.                                         
 
 ## Misc
 
-Name		| OS	|Description										| Example
+Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 FixMHT.tcl	| -WL	| Fix relative links in a .mht file. (Works around known bugs in many .mht files.)	|
 FlipMails.tcl	| -WL	| Convert mail threads into a single ASCII text file with mails in chronologic order.	| `12 flipmails`
