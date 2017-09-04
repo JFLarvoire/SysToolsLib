@@ -4,12 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2017-09-01
+## [1.9.1] 2017-09-04
+### New
+- Batch/subcmd.bat: A script that starts a sub cmd shell, changing the prompt to show the shell depth level.
+- Batch/wm.bat: A script that invokes WinMerge, even if it's not in the PATH.
+
 ### Fixed
 - Batch/xfind.bat: Output the same # of : as find did. (0,1,2,...). This also avoids an extra : output by zapbaks.bat.
 - Tcl/cascade.tcl: get_window_coordinates and minimize_window may throw exceptions.  
   Added a -V|--version option.
 - C/MsvcLibX/include/sys/stat.h: Sockets and Fifos ARE supported in WIN32. Enable macros S_ISSOCK and S_ISFIFO.
+- Tcl/cfdt.tcl: Fixed error {can't read "mtime": no such variable.}  
+  Improved the debug and error reporting.  
+  Added option -q|--quiet.
+  
 
 ## [1.9] 2017-08-30
 ### Changed
