@@ -64,13 +64,16 @@
 *		    Version 1.7.					      *
 *    2014-12-04 JFL Rebuilt with MsvcLibX support for WIN32 paths > 260 chars.*
 *		    Version 1.7.1.					      *
+*    2017-09-04 JFL Test variable NoDefaultCurrentDirectoryInExePath in cmd.  *
+*		    Display MsvcLibX library version in DOS & Windows.        *
+*		    Version 1.8.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.7.1"
-#define PROGRAM_DATE    "2014-12-04"
+#define PROGRAM_VERSION "1.8"
+#define PROGRAM_DATE    "2017-09-04"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -210,10 +213,11 @@ int iWoW = FALSE;		    /* TRUE = WIN32 program running in WIN64 */
 int isPowerShell = FALSE;	    /* TRUE = Running inside PowerShell */
 #endif
 int iSearchInCD = SEARCH_IN_CD;	    /* TRUE = Seach in the current directory first */
+int iVerbose = FALSE;
 
 /* Prototypes */
 
-char *version(void);
+char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);
 int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iAll);
 int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt);
@@ -279,13 +283,19 @@ int main(int argc, char *argv[]) {
       if (   streq(opt, "d")		/* Debug mode on */
 	  || streq(opt, "-debug")) {
 	DEBUG_ON();
+	iVerbose = TRUE;
 	printf("Debug mode on.\n");
 	continue;
       }
       )
+      if (   streq(opt, "v")		/* Verbose mode on */
+	  || streq(opt, "-verbose")) {
+	iVerbose = TRUE;
+	continue;
+      }
       if (   streq(opt, "V")		/* Get version */
 	  || streq(opt, "-version")) {
-	printf("%s\n", version());
+	printf("%s\n", version(1));
 	exit(0);
       }
       printf("Error: Invalid switch ignored: %s\n", arg);
@@ -304,6 +314,16 @@ int main(int argc, char *argv[]) {
     isPowerShell = TRUE;
     iSearchInCD = FALSE; /* Contrary to cmd, PowerShell does not search in the current directory first */
   }
+
+#pragma warning(disable:4996) /* Ignore the "'GetVersion': was declared deprecated" warning */
+  if (   (!isPowerShell)		/* If this is cmd.exe */
+      && (LOBYTE(GetVersion()) >= 6)	/* And the OS is Vista or later */ 
+      && getenv("NoDefaultCurrentDirectoryInExePath")) {
+    iSearchInCD = FALSE; /* Contrary to cmd, PowerShell does not search in the current directory first */
+    if (iVerbose) printf("# Environment variable NoDefaultCurrentDirectoryInExePath is set => No search in .\n");
+    if (iAll) iSearchInCD = TRUE;	/* But if searching for all alternatives, keep showing that in . */
+  }
+#pragma warning(default:4996) /* Restore the "'GetVersion': was declared deprecated" warning */
 #endif
 
   /* Get the PATH environment variable, and work around known issues in Win32 on WIN64 */
@@ -374,14 +394,21 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return PROGRAM_VERSION
-" " PROGRAM_DATE
-" " OS_NAME
-#ifdef _DEBUG
-" Debug"
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
-;
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 void usage(void) {
@@ -393,6 +420,7 @@ Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 Options:\n\
   -?    Display this help message and exit.\n\
   -a    Display all matches. Default: Display only the first one.\n\
+  -v    Verbose node. Display extra status information.\n\
   -V    Display this program version and exit.\n\
 \n"
 #if defined(_WIN32)
@@ -411,7 +439,7 @@ Notes:\n\
 #ifdef __unix__
 "\n"
 #endif
-, version());
+, version(0));
 
   exit(0);
 }
