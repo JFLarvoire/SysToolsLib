@@ -66,13 +66,16 @@
 :#                  displaying any name or value. Fixes issues with ! and ^.  #
 :#   2016-12-16 JFL Updated the library framework. Features unchanged.        #
 :#   2017-08-29 JFL Fixed the type command output.			      #
+:#   2017-09-05 JFL Fixed the set -t option.      			      #
+:#                  Remove PowerShell-like drive colons and trailing \.       #
+:#                  In verbose mode, type now "casts" the value type.        #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-08-29"
+set "VERSION=2017-09-05"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1228,6 +1231,7 @@ if "!ARG!"=="-p" %POPARG% & set "PATTERN=!"ARG"!" & goto dirs.get_args
 if not defined KEY set "KEY=!ARG!" & goto dirs.get_args
 if not defined RETVAR set "RETVAR=!ARG!" & goto dirs.get_args
 :dirs.got_args
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY RETVAR
 if defined RETVAR set "RETVAL="
 if "%FULLPATH%"=="1" set "BEFORE=!KEY!\"
@@ -1309,6 +1313,7 @@ if not defined KEY set "KEY=!ARG!" & goto GetValues.get_args
 >&2 %ECHO% %SCRIPT%: Error: Invalid argument !"ARG"! in function !FUNCTION.NAME!
 %RETURN% 1
 :GetValues.got_args
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY RETVAR
 :# Use reg.exe to get the key information
 set CMD=reg query "!KEY!" /f !PATTERN! !OPTS!
@@ -1390,6 +1395,7 @@ if not defined RETVAR set "RETVAR=!ARG!" & goto get_values_args
 >&2 %ECHO% %SCRIPT%: Error: Invalid argument !"ARG"! in function !FUNCTION.NAME!
 %RETURN% 1
 :got_values_args
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY RETVAR
 if defined RETVAR set "RETVAL="
 set BEFORE=
@@ -1459,6 +1465,7 @@ if defined RETVAR if "%ERROR%"=="0" (
 :ls
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "KEY=%~1" & shift
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY
 :# Then call subroutines to get subkeys, then values.
 call :dirs -cb :dirs.dirCB !KEY:%%=%%%%!
@@ -1559,7 +1566,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
     if defined RETVAR (
       set "%RETVAR%=!VALUE!"
     ) else (
-      %IF_VERBOSE% set "BEFORE=!KEY!\!NAME! = "
+      %IF_VERBOSE% set "BEFORE=!KEY!\!NAME! = (!TYPE!)"
       set "OUTPUT=!BEFORE!!VALUE!"
       call :Prep2ExpandVars OUTPUT &:# Make sure %ECHO% displays tricky characters correctly
       %ECHO% !OUTPUT!
@@ -1577,6 +1584,7 @@ set "^ERRORLEVEL=" &:# Make sure the first parsing phase does not expand this in
 :dumpdir
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "KEY=%~1" & shift
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY
 set "EXEC=!EXEC! -V"		&:# Do not display the commands in verbose mode
 set "ECHO.XVD=%ECHO.XD%"	&:# Do not display the commands in verbose mode
@@ -1627,6 +1635,7 @@ endlocal
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 :# Do not quote this set command, else ^carets would be doubled
 set KEY=%~1
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 %ECHOVARS.D% KEY
 set "EXEC=!EXEC! -V"		&:# Do not display the commands in verbose mode
 set "ECHO.XVD=%ECHO.XD%"	&:# Do not display the commands in verbose mode
@@ -1688,6 +1697,7 @@ if defined OPTS set "CMD=!CMD! !OPTS!"
 :rmdir
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "KEY=%~1"
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 set "OPTS="
 if "%~2"=="-f" set "OPTS=/f"	&:# Force writing without confirmation
 set CMD=reg delete "!KEY!"
@@ -1702,8 +1712,9 @@ if defined OPTS set "CMD=!CMD! !OPTS!"
 :write
 :add
 %FUNCTION% EnableExtensions EnableDelayedExpansion
-set "KEY=%~1"
-set "DATA=%2"	&:# Include the argument quotes if present.
+%POPARG%
+set "KEY=!ARG!"
+set "DATA=!ARGS!"	&:# Include the argument quotes if present.
 :# Split the registry path and name. Uses a fake drive @ to prevent prepending the current disk drive path to the registry path.
 for %%K in (@:"!KEY!") do (
   set "KEY=%%~dpK"
@@ -1729,6 +1740,7 @@ set "CMD=!CMD! /d !DATA! /f"
 :start
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "KEY=%~1"
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 :# Make sure the key pathname uses for full-length hive name
 set "HIVENAME[HKCR]=HKEY_CLASSES_ROOT"
 set "HIVENAME[HKCU]=HKEY_CURRENT_USER"
@@ -1830,7 +1842,8 @@ echo del, rd options:
 echo   -f               Force deletion without confirmation
 echo.
 echo set options:
-echo   -t TYPE          Value type. See (reg add /?) for details. Default: REG_SZ
+echo   -t TYPE          Value type. See (reg add /?) for types. Default: REG_SZ
+echo                    Ex: regx set HKCU\Console\InsertMode 1 -t REG_DWORD
 echo.
 echo (1): The unnamed "(Default)" value is displayed as name "".
 echo (2): In verbose mode, displays attributes with the value type.
@@ -1854,7 +1867,7 @@ if "!ARG!"=="-d" call :Debug.on & goto :next_arg
 if "!ARG!"=="-f" set "OPTS=!OPTS! -f" & goto :next_arg		&:# Force option
 if "!ARG!"=="-F" set "FULLPATH=1" & goto :next_arg
 if "!ARG!"=="-p" %POPARG% & set "OPTS=!OPTS! -p !"ARG"!" & goto :next_arg	&:# Pattern
-if "!ARG!"=="-t" %POPARG% & set "OPTS=!OPTS! -t !ARG!" & goto :next_arg		&:# Key type
+if "!ARG!"=="-t" %POPARG% & set "OPTS=!OPTS! /t !ARG!" & goto :next_arg		&:# Key type
 if "!ARG!"=="-v" call :Verbose.on & goto :next_arg
 if "!ARG!"=="-V" (echo.%VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.off & goto :next_arg
@@ -1866,4 +1879,8 @@ goto next_arg
 
 :# Execute the requested command
 :go
+:# Remove PowerShell-like drive colons
+for %%d in (HKLM HKCU HKCR HKCC HKU) do set "KEY=!KEY:%%d:=%%d\!"
+set "KEY=!KEY:\\=\!"
+:# Action!
 call :%ACTION% "!KEY!" !OPTS!
