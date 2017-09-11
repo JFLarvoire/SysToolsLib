@@ -18,7 +18,8 @@
 #    2016-01-07 JFL Added compilation option -Wall.                           #
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
 #    2016-10-14 JFL Fixed rules for building C++ programs.        	      #
-#    2017-08-29 JFL `make install` now checks that $bindir is in the PATH.    #
+#    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
+#                   `make check` now checks if $bindir is in the PATH.        #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -247,7 +248,12 @@ $(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
 # Place holder for build results selt test
 .PHONY: check
 check:
-	true
+	@if ! ( echo ":$(PATH):" | grep -q ":$(bindir):" ) ; then \
+	  >&2 echo ERROR: $(bindir) not in PATH. Please add it for the installed programs to work. ; \
+	  false ; \
+	fi
+	@echo Success
+	@true
 
 # Check the build environment. Ex: global include files location
 .PHONY: checkenv
