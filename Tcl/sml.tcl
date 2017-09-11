@@ -145,10 +145,16 @@
 #                   Bugfix: \xA0 is NOT an XML space. Use [ \t\r\n] in regxps.#
 #                   Added BSD-style license in the header.                    #
 #    2014-11-30 JFL Merged in my latest debugging framework version.          #
+#    2017-09-11 JFL Fixed bugs in SGML entities definitions conversion.	      #
+#                   Fixed conversion of XML comments beginning with a #.      #
+#                   Fixed conversion of single 'quoted' attribute values.     #
+#                   Avoid exceptions when encountering unsupported encodings. #
+#                   Improved the self-test to compare conversion results      #
+#                    both ways, and to optionally run recursively.            #
 #                                                                             #
 ###############################################################################
 
-set version "2014-11-30"	   ; # The version of this script
+set version "2017-09-11"	   ; # The version of this script
 
 # Global variables
 set inFile stdin                   ; # Input file handle. Default: stdin
@@ -1815,7 +1821,10 @@ proc UnEscapeTagName {string} {
 proc IANA2TclEncoding {encoding} {
   set encoding [string tolower $encoding]
   regsub {iso-} $encoding {iso} encoding
-  regsub {windows-1252} $encoding {cp1252} encoding
+  regsub {windows-} $encoding {cp} encoding
+  regsub {us-ascii} $encoding {ascii} encoding
+  # Tcl only supports a single processor-specific (BE or LE) utf-16 encoding
+  regsub {utf-16.*} $encoding {unicode} encoding ; # utf-16be | utf-16le | utf-16
   return $encoding
 }
 
@@ -1834,6 +1843,23 @@ proc GetXmlQuotedString {inFile} {
     if {"$c" == "$c0"} break ; # End of XML litteral
   }
   return $string ; # Return the string, including the enclosing quotes.
+}
+
+# Get an XML attribute or element name
+proc GetXmlName {inFile} {
+  # Check the first character
+  set c [PeekChar $inFile]
+  if {![regexp {[[:alpha:]:_]} $c]} {
+    return ""
+  }
+  set name [GetChar $inFile] ; # Flush the char
+  # Check subsequent characters
+  while 1 {
+    set c [PeekChar $inFile]
+    if {![regexp {[[:alnum:]:_.-]} $c]} break
+    append name [GetChar $inFile] ; # Flush the char
+  }
+  return $name
 }
 
 # Get a token
@@ -2037,7 +2063,7 @@ proc GetSgmlToken {inFile} {
       set token [GetXmlQuotedString $inFile]
     }
     default { # Else return a standard XML token
-      set token [GetSmlToken $inFile]
+      set token [GetXmlToken $inFile]
     }
   }
   return $token
@@ -2410,7 +2436,7 @@ proc GetSmlToken {inFile {varName ""}} {
 	set token [GetChar $inFile] ; # Flush the char
 	return $token
       }
-      "\}"  {           # End of outer element
+      "\}" {		# End of outer element
 	set token $c    ; # Do not flush the char!
 	return $token
       }
@@ -2422,7 +2448,7 @@ proc GetSmlToken {inFile {varName ""}} {
 	set c [PeekChar $inFile 1]
 	if {"$c" == "\n"} {
 	  set token [GetChar $inFile] ; # Flush the char
-	return $token
+	  return $token
 	}
 	break
       }
@@ -2433,7 +2459,68 @@ proc GetSmlToken {inFile {varName ""}} {
   }
   # Then feed all non-blank characters until the next delimiter
   while {"[set c [PeekChar $inFile]]" != ""} {
-    if [regexp {[#;= \t\r\n{}]} $c  -] break
+    if {[string first $c "#;= \t\r\n{}"] != -1} break
+    if {"$c" == "\\"} {
+      set c [PeekChar $inFile 1]
+      if {"$c" == "\n"} {
+	break
+      }
+    }
+    append token [GetChar $inFile]
+  }
+  return $token
+}
+
+# Get a token from an SGML element.
+proc GetSmlSgmlToken {inFile {varName ""}} {
+  # Initialize the result variable
+  if {"$varName" != ""} {
+    upvar 1 $varName token
+  }
+  set token ""
+  # First check for special delimiter tokens
+  while 1 {
+    set c [PeekChar $inFile]
+    switch -- $c {
+      "" {              # End of file
+	return $token
+      }
+      "\n"  {           # End of line
+	set token ";"     ; # This is an end of element. But leave the \n there.
+	return $token
+      }
+      " " - "\t" {      # Other blanks
+	GetChar $inFile   ; # Throw it away
+	continue
+      }
+      "#" - ";" - "=" - "\{" - "\[" { # One-character keyword
+	set token [GetChar $inFile] ; # Flush the char
+	return $token
+      }
+      "\}" - "\]"  {      # End of outer element
+	set token $c    ; # Do not flush the char!
+	return $token
+      }
+      "\"" - "'" {
+	set token [GetXmlQuotedString $inFile]
+	return $token
+      }
+      "\\" {		# Line continuation
+	set c [PeekChar $inFile 1]
+	if {"$c" == "\n"} {
+	  set token [GetChar $inFile] ; # Flush the char
+	  return $token
+	}
+	break
+      }
+      default {
+	break ; # Anything else falls through
+      }
+    }
+  }
+  # Then feed all non-blank characters until the next delimiter
+  while {"[set c [PeekChar $inFile]]" != ""} {
+    if {[string first $c "#;= \t\r\n{}\[\]"] != -1} break
     if {"$c" == "\\"} {
       set c [PeekChar $inFile 1]
       if {"$c" == "\n"} {
@@ -2550,7 +2637,7 @@ proc GetSmlAttribute {inFile {varName ""}} {
   append attrib [GetSmlTagBlanks $inFile]
   # Next should be the attribute value (Quoted or not).
   set c [PeekChar $inFile]
-  if {"$c" == "\""} { # OK, this is a quoted value (quoted a-la XML)
+  if {("$c" == "\"") || ("$c" == "'")} { # OK, this is a quoted value (quoted a-la XML)
     append attrib [GetXmlQuotedString $inFile]
   } elseif {![regexp {[; \t\r\n]} $c -]} { # OK, this is an unquoted value
     append attrib [GetSmlToken $inFile]
@@ -2559,11 +2646,8 @@ proc GetSmlAttribute {inFile {varName ""}} {
 }
 
 # Get an SML comment
+# Assumes the initial # has already been read.
 proc GetSmlComment {inFile} {
-  set c [PeekChar $inFile]
-  if {"$c" == "#"} {
-    GetChar $inFile ; # Flush the #.
-  }
   set cc [PeekChars $inFile 2]
   if {"$cc" == "--"} {
     GetChar $inFile ; # Discard the 1st -
@@ -2765,10 +2849,30 @@ proc GetSmlDefinitionToken {inFile} {
       return $token
     }
     default {		# Else use the standard tokenizer
-      return [GetSmlToken $inFile]
+      return [GetSmlSgmlToken $inFile]
     }
   }
   return $token
+}
+
+# Get a Parameter-Entity Reference in an SGML definition.
+# Assumes the initial % has not yet been read.
+proc GetPERef {inFile} {
+  set c [GetChar $inFile] ; # Get the initial "%"
+  if {"$c" != "%"} {
+    return $c		; # Not a PE reference
+  }
+  set name [GetXmlName $inFile]
+  if {"$name" == ""} {
+    return "%"
+  }
+  set c [PeekChar $inFile]
+  if {"$c" == ";"} {
+    set c [GetChar $inFile]
+  } else {
+    set c ""
+  }
+  return "%$name$c"
 }
 
 # Convert an SGML Definition [section].
@@ -2794,11 +2898,15 @@ proc ConvertSmlDefinitionSection {inFile outFile depth} {
 	Write $outFile [string range [GetXmlQuotedString $inFile] 1 end-1]
       }
       "#" {		  # Sgml Comment
+      	GetChar $inFile ; # Flush the # comment marker
 	set comment [GetSmlComment $inFile]
 	Write $outFile "<!--${comment}-->"
       }
       "!" {		  # Sgml Definition
         set tag [ConvertSmlElement $inFile $outFile $depth]
+      }
+      "%" {		  # Parameter-Entity Reference
+      	Write $outFile [GetPERef $inFile]
       }
       default { # Anything else is plain data
       	Write $outFile [GetChar $inFile]
@@ -2809,8 +2917,9 @@ proc ConvertSmlDefinitionSection {inFile outFile depth} {
 }
 
 # Convert an SML Processing instruction or SGML definition
-proc ConvertSmlHeaderTokens {inFile outFile depth} {
+proc ConvertSmlSgmlTokens {inFile outFile depth} {
   # Convert the header
+  set firstToken 1
   while 1 {
     # First convert blanks
     set blanks [GetSmlTagBlanks $inFile]
@@ -2822,27 +2931,29 @@ proc ConvertSmlHeaderTokens {inFile outFile depth} {
     if {"$c" == "\""} { # This is a quoted value (quoted a-la XML)
       set token [GetXmlQuotedString $inFile]
     } else { # This is an unquoted token.
-      set token [GetSmlToken $inFile]
+      set token [GetSmlSgmlToken $inFile]
     }
     switch -- $token {
       "" {                # End of file
 	break
       }
-      ";" - "\n" - "\}" { # End of element
+      ";" - "\n" - "\}" - "\]" { # End of element
 	break
       }
       "#" {               # Comment
-	set comment [GetSmlComment $inFile]
-	set token "--${comment}--"
+      	if {$firstToken} {
+	  set comment [GetSmlComment $inFile]
+	  set token "--${comment}--"
+	}
       }
       "\[" {              # Begin an SGML Definition subsection
       	Write $outFile $token
       	ConvertSmlDefinitionSection $inFile $outFile $depth
       	set token ""
-	break
       }
     }
     Write $outFile $token
+    set firstToken 0    ; # We've already written the first token
   }
   return ""
 }
@@ -2861,14 +2972,14 @@ proc ConvertSmlHeader {inFile outFile depth} {
       set type ""
     }
     "?" { # Processing Instruction
-      GetSmlToken $inFile name
+      GetSmlSgmlToken $inFile name
       Write $outFile "$type$name"
-      ConvertSmlHeaderTokens $inFile $outFile $depth
+      ConvertSmlSgmlTokens $inFile $outFile $depth
     }
     "!" { # SGML Definition
-      GetSmlToken $inFile name
+      GetSmlSgmlToken $inFile name
       Write $outFile "$type$name"
-      ConvertSmlHeaderTokens $inFile $outFile $depth
+      ConvertSmlSgmlTokens $inFile $outFile $depth
     }
     "#" {               # Comment
       set type "!"        ; # There's no end tag.
@@ -3084,10 +3195,49 @@ proc sml2xml {inFile outFile} {
 #                   Test XML -> SML -> XML Transformations                    #
 ###############################################################################
 
+# Looks for XML and SML files in the current directory,
+# and tests both the XML -> SML and SML -> XML conversions.
+# Names the converted files with an extension suffix: 2
+# Compares *.xml2 to *.xml, and *.sml2 to *.sml.
+# If the sml file does not exist, creates it.
+
+set defaultTestPatterns "*.xml *.xhtml *.xsl *.xsd *.xaml *.kml *.gml"
+
+proc GetDirectoryTree {path} {
+  set tree [list $path]
+  foreach dir [glob -nocomplain -type d -directory $path *] {
+    set tree [concat $tree [GetDirectoryTree $dir]]
+  }
+  return $tree
+}
+
 proc TestSml {args} {
-  set targets $args
-  if {"$targets" == ""} {
-    set targets "*.xml *.xhtml *.xsl *.xsd *.xaml *.kml"
+  set recurse 0
+  set dirs "."
+  set patterns $::defaultTestPatterns
+
+  while {$args != ""} {
+    set arg [PopArg]
+    switch -- $arg {
+      "-r" {
+	set recurse 1
+      }
+      default {
+      	set patterns [concat [list $arg] $args] ;# XML files patterns
+      	set args {}
+      }
+    }
+  }
+
+  set targets $patterns
+  if {$recurse} {
+    foreach dir [glob -type d -nocomplain *] {
+      foreach subdir [GetDirectoryTree $dir] {
+      	foreach pattern $patterns {
+      	  lappend targets "$subdir/$pattern"
+      	}
+      }
+    }
   }
 
   set sml $::argv0
@@ -3095,29 +3245,53 @@ proc TestSml {args} {
     set sml [list $::env(COMSPEC) /c $::argv0]
   }
 
-  puts "# Converting XML -> SML -> XML, and comparing the initial and final version."
+  set cd [pwd]
+  puts "\n# Testing XML -> SML -> XML conversion in [file nativename $cd]"
   set t0 [clock clicks -milliseconds]
-  set success 1
-  set err 0
-  foreach file [eval glob -nocomplain $targets] {
-    puts "$file"
+  set nTests 0
+  set nFailed 0
+  foreach file [eval glob -type f -nocomplain $targets] {
     set basename [file rootname $file]
     set smlFile ${basename}.sml
     set file2 ${file}2
+    set smlFile2 ${basename}.sml2
+    incr nTests
+    # Test the XML -> SML conversion
+    puts [file nativename $file]
     set err [catch {
-      Exec {*}$sml $file $smlFile
+      Exec {*}$sml $file $smlFile2
     } output]
     if {$err} {
       puts "Error. $output"
-      set success 0
+      incr nFailed
       continue
     }
+    if {![file exists $smlFile]} {
+      file rename $smlFile2 $smlFile
+    } else {
+      set err [catch {
+	Exec diff $smlFile $smlFile2 >@stdout 2>@stderr
+      } output]
+      set err [ErrorCode $err]
+      if {"$output" != ""} {
+	set err 1
+      }
+      if {!$err} {
+	file delete $smlFile2 ;# No need to keep it since they're identical
+      } else {
+	puts "Failure. [file nativename $file2] is different from [file nativename $file]"
+	puts "" ;# # Add a blank line, to help see the failure line
+	incr nFailed
+      }
+    }
+    # Test the SML -> XML conversion
+    puts [file nativename $smlFile]
     set err [catch {
       Exec {*}$sml $smlFile $file2
     } output]
     if {$err} {
       puts "Error. $output"
-      set success 0
+      incr nFailed
       continue
     }
     set err [catch {
@@ -3128,22 +3302,23 @@ proc TestSml {args} {
       set err 1
     }
     if {!$err} {
-      puts OK
       file delete $file2 ;# No need to keep it since they're identical
     } else {
-      puts "Failure. $file2 is different from $file"
+      puts "Failure. [file nativename $file2] is different from [file nativename $file]"
       puts "" ;# # Add a blank line, to help see the failure line
-      set success 0
+      incr nFailed
     }
   }
   set t1 [clock clicks -milliseconds]
 
   set t [expr $t1 - $t0]
-  puts "Tests completed in [format "%.2f" [expr $t / 1000.0]]s"
-  if $success {
+  puts "\n$nTests XML files tested in [format "%.2f" [expr $t / 1000.0]]s"
+  if {!$nFailed} {
     puts "All tests successful"
+    set err 0
   } else {
-    puts "Errors found. Please review the messages above"
+    puts "$nFailed conversions failed. Please review the messages above"
+    set err 1
   }
 
   return $err
@@ -3161,6 +3336,8 @@ Usage: $script <options> [infile [outfile]]
 
 Options:
   -h | --help              This help screen
+  -t [-r] [PATTERNS]       Test (recursively if -r) XML->SML->XML conversion.
+                           Default patterns: "$::defaultTestPatterns"
   -v | --verbose           Display more verbose information. (May be repeated).
   -V | --version           Display the script version.
 
