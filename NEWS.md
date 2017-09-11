@@ -4,6 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-09-11
+### Fixed
+- Batch/regx.bat: Fixed the set -t option.
+- Tcl/sml.tcl: Fixed several bugs exposed by the libxml2 test suite.
+
+### Changed
+- C/SRC/which.c: Now checks for environment variable NoDefaultCurrentDirectoryInExePath to select the command that will run.
+- Batch/regx.bat:  
+  Remove PowerShell-like drive colons and trailing \.  
+  In verbose mode, type now "casts" the value type.
+- Tcl/sml.tcl: Improved the self-test to compare conversion results both ways, and to optionally run recursively.
+
 ## [1.9.1] 2017-09-04
 ### New
 - Batch/subcmd.bat: A script that starts a sub cmd shell, changing the prompt to show the shell depth level.
@@ -18,7 +30,6 @@ For more details about changes in a particular area, see the README.txt and/or N
   Improved the debug and error reporting.  
   Added option -q|--quiet.
   
-
 ## [1.9] 2017-08-30
 ### Changed
 - C/Makefile, C/SRC/Makefile:  
