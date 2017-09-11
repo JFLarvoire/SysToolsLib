@@ -9,7 +9,9 @@
 #                                                                             #
 #  History                                                                    #
 #    2016-10-14 JFL jf.larvoire@hpe.com created this file.                    #
-#    2017-08-29 JFL `make install` now also installs Tcl files.               #
+#    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
+#                   `make check` now checks if $bindir is in the PATH.        #
+#    2017-08-30 JFL Make sure the installed scripts are executable.           #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -63,6 +65,7 @@ force: ;
 install:
 	# Install Tcl files, renaming them without the .tcl extension
 	@cd ../Tcl && for f in `cat ../Scripts.lst | grep Tcl.*tcl | sed -r "s/Tcl.(.*).tcl.*/\\1/"` ; do \
+	  if [ ! -x $$f.tcl ] ; then chmod +x $$f.tcl ; fi ; \
 	  echo cp -p $$PWD/$$f.tcl $(bindir)/$$f ; \
 	       cp -p $$PWD/$$f.tcl $(bindir)/$$f ; \
 	done
