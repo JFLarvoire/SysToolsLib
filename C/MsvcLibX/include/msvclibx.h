@@ -79,7 +79,9 @@ typedef unsigned short wchar_t; /* Defined in crtdefs.h */
 #define _WCHAR_T_DEFINED
 #endif
 typedef wchar_t* LPWSTR;    /* Defined in winnt.h */
+/* Routines in mb2wpath.c */
 extern int MultiByteToWidePath(UINT nCodePage, LPCSTR pszName, LPWSTR pwszName, int nWideBufSize);
+extern LPWSTR MultiByteToNewWidePath(UINT nCodePage, LPCSTR pszName);
 #endif
 /* Count the number of elements in an array */
 #define COUNTOF(array) (sizeof(array)/sizeof(array[0]))
