@@ -22,6 +22,7 @@
 *                   Bug fix: Detect and report output buffer overflows.       *
 *                   Convert short WIN32 paths to long paths.                  *
 *    2016-09-13 JFL Resize output buffers, to avoid wasting lots of memory.   *
+*    2017-10-03 JFL Added an ugly version of ResolveLinksM. To be fixed.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -284,6 +285,20 @@ typedef struct _NAMELIST {
   struct _NAMELIST *prev;
   char *path;
 } NAMELIST;
+
+/* TODO: Create a real ResolveLinksM common routine, called by ResolveLinksA
+         and ResolveLinksU, then remove this uglyness */
+int ResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
+  switch (cp) {
+    case CP_ACP:
+      return ResolveLinksA(path, buf, bufsize);
+    case CP_UTF8:
+      return ResolveLinksU(path, buf, bufsize);
+    default:
+      errno = EINVAL;
+      return -1;
+  }
+}
 
 /* Get the canonic name of a file, after resolving all links in its pathname */
 int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
