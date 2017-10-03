@@ -9,6 +9,9 @@
 *		    							      *
 *   History:								      *
 *    2014-07-01 JFL Created this module.				      *
+*    2017-10-02 JFL Added routine MultiByteToNewWidePath().		      *
+*                   Lowered the threshold for using a long name prefix, to    *
+*                   work around limits in functions like CreateDirectoryW().  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,11 +35,10 @@ int MultiByteToWidePath(
 ) {
   int n;
   int iNameLength = lstrlen(pszName);
-  DEBUG_CODE(
-    LPWSTR pwszName0 = pwszName;
-  );
+  LPWSTR pwszName0 = pwszName;
 
-  if (iNameLength >= MAX_PATH) { /* Then processing this pathname requires prepending a special prefix */
+  if (iNameLength >= 240) { /* Then processing this pathname requires prepending a special prefix */
+    /* Should be  >= 260, but some APIs (ex: CreateDirectoryW) fail below that limit */
     /* See http://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx */
     if (!strncmp(pszName, "\\\\?\\", 4)) {		/* The name is in the Win32 file namespace */
       /* Do nothing, the "\\?\" extended-length prefix is already there */
@@ -74,12 +76,35 @@ int MultiByteToWidePath(
 			  );
   DEBUG_CODE(
     if (pwszName != pwszName0) {
-      char szUtf8[UTF8_PATH_MAX];
-      DEBUG_WSTR2UTF8(pwszName0, szUtf8, sizeof(szUtf8));
-      DEBUG_PRINTF(("MultiByteToWidePath(); // Long name changed to \"%s\"\n", szUtf8));
+      char *pszUtf8;
+      DEBUG_WSTR2NEWUTF8(pwszName0, pszUtf8);
+      DEBUG_PRINTF(("// Long name changed to \"%s\"\n", pszUtf8));
+      DEBUG_FREEUTF8(pszUtf8);
     }
   );
-  return n;
+  return n + (pwszName - pwszName0);	/* Count the added prefix length, if any */
+}
+
+/* Allocate a new wide string, and set errno in case of failure */
+LPWSTR MultiByteToNewWidePath(
+  UINT nCodePage,
+  LPCSTR pszName
+) {
+  WCHAR *pwszName;
+  int lName = (2 * lstrlen(pszName)) + 10;	/* Number of WCHARS in the unicode name (Worst case) */
+  int n;
+
+  pwszName = malloc(sizeof(WCHAR) * lName);
+  if (!pwszName) return NULL;
+
+  n = MultiByteToWidePath(nCodePage, pszName, pwszName, lName);
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    free(pwszName);
+    return NULL;
+  }
+
+  return realloc(pwszName, sizeof(WCHAR) * n); /* Can't fail as it's reallocated smaller than before */
 }
 
 #endif /* defined(_WIN32) */
