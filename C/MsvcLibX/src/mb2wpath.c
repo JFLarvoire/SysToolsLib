@@ -82,7 +82,7 @@ int MultiByteToWidePath(
       DEBUG_FREEUTF8(pszUtf8);
     }
   );
-  return n + (pwszName - pwszName0);	/* Count the added prefix length, if any */
+  return n + (int)(pwszName - pwszName0);	/* Count the added prefix length, if any */
 }
 
 /* Allocate a new wide string, and set errno in case of failure */
