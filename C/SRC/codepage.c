@@ -16,9 +16,10 @@
 *		    HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage       *
 *		    To get information about a code page, use GetCPInfoEx().  *
 *		    							      *
-*		    IBM has its own list of code pages (called "Coded	      *
-*		    Character Set Identifiers") there:			      *
+*		    IBM list of code pages "Coded Character Set Identifiers": *
 *   http://www-01.ibm.com/software/globalization/ccsid/ccsid_registered.html  *
+*		    IBM "Supported territory codes and code pages":	      *
+*   https://www.ibm.com/support/knowledgecenter/en/SSEPGG_9.7.0/com.ibm.db2.luw.admin.nls.doc/doc/r0004565.html
 *		    							      *
 *		    IANA list of character sets, w. links to their definitions:
 *   https://www.iana.org/assignments/character-sets/character-sets.xhtml      *
