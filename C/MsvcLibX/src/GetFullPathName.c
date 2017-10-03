@@ -9,6 +9,7 @@
 *   History:								      *
 *    2016-09-12 JFL Created this file, from the routine in truename.c.	      *
 *    2017-03-20 JFL Include stdio.h, to get the UTF-8 version of printf.      *
+*    2017-10-02 JFL Fixed support for pathnames >= 260 characters.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -48,63 +49,102 @@
 |                   this case.                                                |
 |                   Method 2 works around this limitation by doing its own    |
 |                   path management.                                          |
-|                                                                             |
+|                   							      |
 |   History:								      |
 |    2014-02-07 JFL Created this routine.				      |
+|    2017-10-02 JFL Removed the pathname length limitation. Also use far less |
+|                   stack memory.					      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-DWORD WINAPI GetFullPathNameU(LPCTSTR lpName, DWORD nBufferLength, LPTSTR lpBuf, LPTSTR *lpFilePart) {
-  WCHAR wszName[MAX_PATH];
-  WCHAR wszBuf[MAX_PATH];
-  char szName[MAX_PATH*4]; /* Worst case for UTF-8 is 4 bytes/Unicode character */
+DWORD WINAPI GetFullPathNameU(LPCTSTR pszName, DWORD nBufferLength, LPTSTR lpBuf, LPTSTR *lpFilePart) {
+  WCHAR *pwszName = NULL;
+  WCHAR *pwBuf = NULL;
   int n;
-  DWORD dwResult;
-  WCHAR *wlpFilePart;
+  int lResult;
+  WCHAR *pwszFilePart;
+  int lName = lstrlen(pszName);
+  int lNameNul = lName + 1;
+  int lwBuf = lNameNul + MAX_PATH; /* In most cases, the current directory will be shorter than MAX_PATH. If not, the buffer will be extended below. */
 
-  DEBUG_ENTER(("GetFullPathNameU(\"%s\", %d, %p, %p);\n", lpName, (int)nBufferLength, lpBuf, lpFilePart));
+  DEBUG_ENTER(("GetFullPathNameU(\"%s\", %d, %p, %p);\n", pszName, (int)nBufferLength, lpBuf, lpFilePart));
 
+  pwszName = GlobalAlloc(GMEM_FIXED, sizeof(WCHAR) * lNameNul);
+  if (!pwszName) {
+out_of_mem:
+    RETURN_INT_COMMENT(0, ("Not enough memory\n"));
+  }
   n = MultiByteToWideChar(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			  0,			/* dwFlags, */
-			  lpName,		/* lpMultiByteStr, */
-			  lstrlen(lpName)+1,	/* cbMultiByte, */
-			  wszName,		/* lpWideCharStr, */
-			  MAX_PATH		/* cchWideChar, */
+			  pszName,		/* lpMultiByteStr, */
+			  lNameNul,		/* cbMultiByte, */
+			  pwszName,		/* lpWideCharStr, */
+			  lNameNul		/* cchWideChar, */
 			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the name to Unicode\n"));
+  if (!n) {
+    GlobalFree(pwszName);
+    RETURN_INT_COMMENT(0, ("Failed to convert the name to Unicode\n"));
+  }
 
-  dwResult = GetFullPathNameW(wszName, MAX_PATH, wszBuf, &wlpFilePart);
-  if (!dwResult) RETURN_INT_COMMENT(0, ("GetFullPathNameW() failed\n"));
+realloc_wBuf:
+  pwBuf = GlobalAlloc(GMEM_FIXED, sizeof(WCHAR) * lwBuf);
+  if (!pwBuf) {
+    GlobalFree(pwszName);
+    goto out_of_mem;
+  }
+  lResult = (int)GetFullPathNameW(pwszName, lwBuf, pwBuf, &pwszFilePart);
+  if (lResult > lwBuf) { /* In the possible but unlikely case that the result does not fit in pwBuf, */
+    GlobalFree(pwBuf);	 /* then extend the buffer and retry. */
+    lwBuf = lResult;
+    goto realloc_wBuf;
+  }
+  GlobalFree(pwszName);	 /* We won't need this buffer anymore */
+  if (!lResult) {
+    GlobalFree(pwBuf);
+    RETURN_INT_COMMENT(0, ("GetFullPathNameW() failed\n"));
+  }
 
   /* nRead = UnicodeToBytes(pwStr, len, buf, bufsize); */
   n = WideCharToMultiByte(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			  0,			/* dwFlags, */
-			  wszBuf,		/* lpWideCharStr, */
-			  (int)dwResult + 1,	/* cchWideChar, */
+			  pwBuf,		/* lpWideCharStr, */
+			  lResult + 1,		/* cchWideChar, */
 			  lpBuf,		/* lpMultiByteStr, */
 			  (int)nBufferLength,	/* cbMultiByte, */
 			  NULL,			/* lpDefaultChar, */
 			  NULL			/* lpUsedDefaultChar */
 			  );
-  if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the full name from Unicode\n"));
+  if (!n) {
+    GlobalFree(pwBuf);
+    RETURN_INT_COMMENT(0, ("Failed to convert the full name from Unicode\n"));
+  }
 
   if (lpFilePart) { /* Convert the file part, and get the length of the converted string */
     int m;	/* Length of the converted string */
+    char *pName;
+    lName = lstrlenW(pwszFilePart);
+    pName = GlobalAlloc(GMEM_FIXED, lName*4); /* Worst case for UTF-8 is 4 bytes/Unicode character */
+    if (!pName) {
+      GlobalFree(pwBuf);
+      goto out_of_mem;
+    }
     m = WideCharToMultiByte(CP_UTF8,			/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			    0,				/* dwFlags, */
-			    wlpFilePart,		/* lpWideCharStr, */
-			    lstrlenW(wlpFilePart),	/* cchWideChar, */
-			    szName,			/* lpMultiByteStr, */
-			    sizeof(szName),		/* cbMultiByte, */
+			    pwszFilePart,		/* lpWideCharStr, */
+			    lName,			/* cchWideChar, */
+			    pName,			/* lpMultiByteStr, */
+			    lName*4,			/* cbMultiByte, */
 			    NULL,			/* lpDefaultChar, */
 			    NULL			/* lpUsedDefaultChar */
 			    );
     /* (n-1) is the length of the full UTF-8 pathname */
     /* So ((n-1) - m) is the offset of the file part in the full UTF-8 pathname */
     *lpFilePart = lpBuf + (n - 1) - m;
+    GlobalFree(pName);
   }
   n -= 1; /* Do not count the final NUL */
 
+  GlobalFree(pwBuf);
   RETURN_INT_COMMENT(n, ("\"%s\" \"%s\"\n", lpBuf, lpFilePart?*lpFilePart:"(NULL)"));
 }
 
