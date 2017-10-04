@@ -82,6 +82,8 @@
 #                   Added comments about Windows event logs limitations.      #
 #    2016-11-17 RBM Fixed issue #6 Mangled hyphen in final Unregister-Event.  #
 #    2017-05-10 CJG Added execution policy bypass flag.                       #
+#    2017-10-04 RBL Updated C# code OnStop() routine fixing orphaned procces  #
+#                   left after stoping and starting the service               #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -184,7 +186,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2017-05-10"
+$scriptVersion = "2017-10-04"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -617,6 +619,16 @@ Function Receive-PipeHandlerThread () {
 #                   EVENT LOG lines are useful for debugging the service.     #
 #                                                                             #
 #   History                                                                   #
+#    2017-10-04 RBL Updated the OnStop() procedure adding the sections        #
+#                       try{                                                  #
+#                       }catch{                                               #
+#                       }finally{                                             #
+#                       }                                                     #
+#                   This resolved the issue where stopping the service would  #
+#                   leave the PowerShell process -Service still running. This #
+#                   unclosed process was an orphaned process that would       #
+#                   remain until the pid was manually killed or the computer  #
+#                   was rebooted                                              #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -734,22 +746,39 @@ $source = @"
     protected override void OnStop() {
       EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Entry");   // EVENT LOG
       // Start a child process with another copy of ourselves
-      Process p = new Process();
-      // Redirect the output stream of the child process.
-      p.StartInfo.UseShellExecute = false;
-      p.StartInfo.RedirectStandardOutput = true;
-      p.StartInfo.FileName = "PowerShell.exe";
-      p.StartInfo.Arguments = "-c & '$scriptCopyCname' -Stop"; // Works if path has spaces, but not if it contains ' quotes.
-      p.Start();
-      // Read the output stream first and then wait.
-      string output = p.StandardOutput.ReadToEnd();
-      // Wait for the PowerShell script to be fully stopped.
-      p.WaitForExit();
-      // Change the service state back to Stopped.                      // SET STATUS
-      serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;      // SET STATUS
-      SetServiceStatus(ServiceHandle, ref serviceStatus);               // SET STATUS
-      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit");    // EVENT LOG
-    }
+      try {
+        Process p = new Process();
+        // Redirect the output stream of the child process.
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.StartInfo.FileName = "PowerShell.exe";
+        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -Stop"; // Works if path has spaces, but not if it contains ' quotes.
+        p.Start();
+        // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
+        string output = p.StandardOutput.ReadToEnd();
+        // Wait for the completion of the script startup code, that launches the -Service instance
+        p.WaitForExit();
+        if (p.ExitCode != 0) throw new Win32Exception((int)(Win32Error.ERROR_APP_INIT_FAILURE));
+        // Success. Set the service state to Stopped.                   // SET STATUS
+        serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;      // SET STATUS
+      } catch (Exception e) {
+        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Failed to stop $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
+        // Change the service state back to Started.                    // SET STATUS [
+        serviceStatus.dwCurrentState = ServiceState.SERVICE_RUNNING;
+        Win32Exception w32ex = e as Win32Exception; // Try getting the WIN32 error code
+        if (w32ex == null) { // Not a Win32 exception, but maybe the inner one is...
+          w32ex = e.InnerException as Win32Exception;
+        }    
+        if (w32ex != null) {    // Report the actual WIN32 error
+          serviceStatus.dwWin32ExitCode = w32ex.NativeErrorCode;
+        } else {                // Make up a reasonable reason
+          serviceStatus.dwWin32ExitCode = (int)(Win32Error.ERROR_APP_INIT_FAILURE);
+        }                                                               // SET STATUS ]
+      } finally {
+        serviceStatus.dwWaitHint = 0;                                   // SET STATUS
+        SetServiceStatus(ServiceHandle, ref serviceStatus);             // SET STATUS
+        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit"); // EVENT LOG
+      }
 
     public static void Main() {
       System.ServiceProcess.ServiceBase.Run(new Service_$serviceName());
