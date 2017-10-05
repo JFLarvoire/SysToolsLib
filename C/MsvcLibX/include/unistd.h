@@ -113,6 +113,7 @@ pid_t getppid(void);	/* Get parent PID */
 #define realpath realpathA
 #define CompactPath CompactPathA
 #endif
+int CompactPathW(const WCHAR *path, WCHAR *outbuf, size_t bufsize); /* A proprietary subroutine, that cleans up . and .. parts. */
 #endif /* defined(_WIN32) */
 char *realpath(const char *path, char *buf); /* Posix routine, normally defined in stdlib.h. Output buf must contain PATH_MAX bytes */
 int CompactPath(const char *path, char *outbuf, size_t bufsize); /* A proprietary subroutine, that cleans up . and .. parts. */
