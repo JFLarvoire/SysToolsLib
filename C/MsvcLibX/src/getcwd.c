@@ -9,7 +9,7 @@
 *   History:								      *
 *    2014-02-28 JFL Created this module.				      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
-*    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
+*    2017-10-04 JFL Fixed support for pathnames >= 260 characters. 	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,14 +54,18 @@
 |    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      |
 |    2017-10-03 JFL Removed the dependency on PATH_MAX and fixed size buffers.|
 |                   Added routine getcwdM, called by getcwdA and getcwdU.     |
+|    2017-10-04 JFL Remove the long pathname prefix, if any.		      |
 *									      *
 \*---------------------------------------------------------------------------*/
+
+#define strncmpW(s1, s2, l) (CompareStringW(LOCALE_INVARIANT, 0, s1, l, s2, l)-2)
 
 char *getcwdM(char *buf, size_t bufSize, UINT cp) {
   int n;
   WCHAR *pwBuf;
-  DWORD dwBufSize = PATH_MAX; /* This will be sufficient in most cases, If not, the buf will be extended below */
+  DWORD dwBufSize = UNICODE_PATH_MAX; /* This should be sufficient in all cases. Even if not, the buf will be extended below */
   DWORD dwSize;
+  WCHAR *pwDir;
 
 realloc_wBuf:
   pwBuf = malloc(sizeof(WCHAR) * dwBufSize);
@@ -79,9 +83,21 @@ realloc_wBuf:
     return NULL;
   }
 
+  /* Remove the long pathname prefix, if any */
+  pwDir = pwBuf;
+  if (!strncmpW(pwBuf, L"\\\\?\\", 4)) {
+    pwDir += 4;
+    dwSize -= 4;
+  } else if (!strncmpW(pwBuf, L"\\\\?\\UNC\\", 8)) {
+    pwDir += 6;		/* Remove the '\\?\UNC\' prefix, except for the final two characters */
+    dwSize -= 6;
+    *pwDir = L'\\';	/* Change the 'C' to '\', so that the output begins by '\\server\share' */
+  }
+
+  /* Copy the pathname to the output buffer */
   n = WideCharToMultiByte(cp,			/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 			  0,			/* dwFlags, */
-			  pwBuf,		/* lpWideCharStr, */
+			  pwDir,		/* lpWideCharStr, */
 			  dwSize+1,		/* cchWideChar, */
 			  buf,			/* lpMultiByteStr, */
 			  (int)bufSize,		/* cbMultiByte, */
