@@ -11,6 +11,7 @@
 *    2014-03-24 JFL Renamed "statx.h" as the standard <sys/stat.h>.	      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
 *    2017-10-02 JFL Fixed support for pathnames >= 260 characters. 	      *
+*    2017-10-04 JFL Improved the debugging output.			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,22 +55,26 @@
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 
 int mkdirM(const char *pszName, mode_t iMode, UINT cp) {
-  WCHAR *pwszName;
+  WCHAR *pwszName = NULL;
   BOOL bDone;
+  int iErr = -1; /* Assume failure */
 
-  DEBUG_PRINTF(("mkdirM(\"%s\", 0x%X)\n", pszName, iMode));
+  DEBUG_ENTER(("mkdir(\"%s\", 0x%X)\n", pszName, iMode));
 
   /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
   pwszName = MultiByteToNewWidePath(cp, pszName);
-  if (!pwszName) return -1;
+  if (!pwszName) goto cleanup_and_return;
 
   bDone = CreateDirectoryW(pwszName, NULL);
-  free(pwszName);
   if (!bDone) {
     errno = Win32ErrorToErrno();
-    return -1;
+  } else {
+    iErr = 0; /* Success confirmed */
   }
-  return 0;
+
+cleanup_and_return:
+  free(pwszName);
+  RETURN_INT_COMMENT(iErr, (iErr ? "Failed. errno=%d - %s\n" : "Success\n", errno, strerror(errno)));
 }
 
 int mkdirU(const char *pszName, mode_t iMode) {
