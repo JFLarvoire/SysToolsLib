@@ -127,13 +127,17 @@
 *		    Version 3.5.2.    					      *
 *    2017-05-31 JFL But don't display it in help, to limit the 1st line size. *
 *		    Version 3.5.3.    					      *
+*    2017-10-06 JFL Fixed a conditional compilation bug in MSDOS.	      *
+*		    Fixed support for pathnames >= 260 characters. 	      *
+*                   Improved mkdirp() speed and error management.             *
+*		    Version 3.5.4.    					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.3"
-#define PROGRAM_DATE    "2017-05-31"
+#define PROGRAM_VERSION "3.5.4"
+#define PROGRAM_DATE    "2017-10-06"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -335,7 +339,7 @@ void usage(void);			/* Display usage */
 int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
 int update(char *, char *);		/* Copy a file if newer */
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK)/* In DOS it's defined, but always returns 0 */
 int update_link(char *, char *);	/* Copy a link if newer */
 #endif
 int copyf(char *, char *);		/* Copy a file silently */
@@ -422,7 +426,7 @@ int main(int argc, char *argv[])
 	    || streq(arg, "-debug")	/* The historical name of that switch */
 	    || streq(arg, "--debug"))
             {
-	    DEBUG_ON();
+	    DEBUG_MORE();
 	    iVerbose = TRUE;
 	    if (iVerbose) printf("Debug mode on.\n");
 	    continue;
@@ -773,7 +777,10 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     }
 
     if (iVerbose) {
-      DEBUG_PRINTF(("// ")); /* If debug is on, print the debug indent */
+      DEBUG_CODE_IF_ON(
+      	DEBUG_PRINT_INDENT(); /* If debug is on, print the debug indent */
+      	printf("// "); /* Then a comment marker without a linefeed */
+      )
       printf("Update %s from %s to %s\n", pattern, path0, p2);
     }
 
@@ -807,7 +814,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     while ((pDE = readdir(pDir))) {
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
       if (   (pDE->d_type != DT_REG)
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       	  && (pDE->d_type != DT_LNK)
 #endif
       	 ) continue;	/* We want only files or links */
@@ -815,7 +822,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       strmfp(path1, path0, pDE->d_name);  /* Compute source path */
       DEBUG_PRINTF(("// Found %s\n", path1));
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       if (pDE->d_type == DT_LNK) {
 	err = update_link(path1, path2);
       }
@@ -965,7 +972,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 	  }
 	  p2 = ""; /* Trick older() to think the target is deleted */
 	}
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       } else if (S_ISLNK(sP2stat.st_mode)) { /* Else if it's a link */
 	if (!test) {
 	  e = unlink(p2); /* Then deletes the link, not its target. */
@@ -1034,7 +1041,7 @@ int exists(char *name) {
     RETURN_BOOL(result);
 }
 
-#if defined(S_ISLNK)	/* All recent versions of Windows and Unix, but not MS-DOS or Windows 95/98 */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
 
 int is_link(char *name) {
     int result;
@@ -1416,37 +1423,80 @@ time_t getmodified(char *name) {
   return result;
 }
 
-/* Create a directory, and all parent directories as needed. Same as mkdir -p */
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    mkdirp						      |
+|									      |
+|   Description     Create a directory, and all parent directories as needed. |
+|									      |
+|   Parameters      Same as mkdir					      |
+|									      |
+|   Returns	    Same as mkdir					      |
+|									      |
+|   Notes	    Same as mkdir -p					      |
+|		    							      |
+|   History								      |
+|    1990s      JFL Created this routine in update.c			      |
+|    2017-10-04 JFL Improved the error handling, stopping at the first error. |
+|		    Avoid testing access repeatedly if we know it'll fail.    |
+|    2017-10-06 JFL Added the iVerbose arguement.			      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
 #ifdef _MSDOS
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 #endif
-int mkdirp(const char *path, mode_t mode) {
-  char *pPath = strdup(path);
-  char *pc;
-  int iErr;
-  DEBUG_ENTER(("mkdirp(\"%s\", 0x%X);\n", path, mode));
-  if (pPath) {
-    for (pc = pPath; *pc; pc++) {
-      if ((*pc == DIRSEPARATOR_CHAR) && pc[1] && (pc[1] != DIRSEPARATOR_CHAR)) {
-      	*pc = '\0';
-      	if (access(pPath, F_OK)) { /* If the intermediate path does not exist */
-	  iErr = mkdir(pPath, mode); /* Then create it. */
-	  DEBUG_CODE(
-	    if (!iErr) {
-	      DEBUG_PRINTF(("mkdir(\"%s\"); // Success\n", pPath));
-	    } else {
-	      XDEBUG_PRINTF(("mkdir(\"%s\"); // Failed. errno=%d\n", pPath, errno));
-	    }
-	  )
-	}
-      	*pc = DIRSEPARATOR_CHAR;
+
+int isdir(const char *pszPath) {
+  struct stat sstat;
+  int iErr = lstat(pszPath, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr) return 0;
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+  if (S_ISLNK(sstat.st_mode)) {
+    char *pszReal = realpath(pszPath, NULL);
+    int iRet = 0; /* If realpath failed, this is a dangling link, so not a directory */
+    if (pszReal) iRet = isdir(pszReal);
+    return iRet;
+  }
+#endif
+  return S_ISDIR(sstat.st_mode);
+}
+
+/* Create one directory */
+int mkdir1(const char *pszPath, mode_t pszMode) {
+#ifndef HAS_MSVCLIBX
+  DEBUG_PRINTF(("mkdir(\"%s\", 0x%X);\n", pszPath, pszMode));
+#endif
+  return mkdir(pszPath, pszMode);
+}
+
+/* Create all parent directories */
+int mkdirp(const char *pszPath0, mode_t pszMode) {
+  char *pszPath = strdup(pszPath0);
+  int iErr = 0; /* Assume success */
+  int iSkipTest = FALSE;
+  DEBUG_ENTER(("mkdirp(\"%s\", 0x%X);\n", pszPath, pszMode));
+  if (pszPath) {
+    char c;
+    char *pc = pszPath;
+    if (pc[0] && (pc[1] == ':') && (pc[2] == DIRSEPARATOR_CHAR)) pc += 2; /* Skip the drive if absolute path */
+    for (c = pc[0]; c; ) { /* Repeat for all components in the path */
+      while (*pc == DIRSEPARATOR_CHAR) pc++; ; /* Skip leading slashes if absolute path */
+      while (*pc && (*pc != DIRSEPARATOR_CHAR)) pc++; /* Skip the file or dir name */
+      c = *pc; /* Either NUL or / or \ */
+      *pc = '\0'; /* Trim pszPath */
+      if (iSkipTest || !isdir(pszPath)) { /* If the intermediate path does not exist */
+	iErr = mkdir1(pszPath, pszMode); /* Then create it. */
+	if (iErr) break; /* No need to go further if this failed */
+	iSkipTest = TRUE; /* We know future existence tests will fail */
       }
+      *pc = c; /* Restore pszPath */
     }
   }
-  iErr = mkdir(path, mode);
-  free(pPath);
-  RETURN_INT_COMMENT(iErr, ("%s\n", iErr?"Failed":"Success"));
+  free(pszPath);
+  RETURN_INT_COMMENT(iErr, (iErr ? "Failed. errno=%d - %s\n" : "Success\n", errno, strerror(errno)));
 }
+
 #ifdef _MSDOS
 #pragma warning(default:4100)
 #endif
@@ -1653,6 +1703,7 @@ int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
   struct stat stFrom = {0};
   struct timeval tvTo[2] = {{0}, {0}};
   int err;
+  DEBUG_PRINTF(("copydate(\"%s\", \"%s\")\n", pszToFile, pszFromFile));
   lstat(pszFromFile, &stFrom);
   /* Copy file permissions too */
   err = lchmod(pszToFile, stFrom.st_mode);
