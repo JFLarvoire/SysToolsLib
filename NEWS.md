@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.10] 2017-10-06
+### Fixed
+- C/MsvcLibX/*: Fixed several serious bugs that broke support for paths > 260 characters.
+  (It worked for file names that passed the threshold, but not for directory names that did :-()
+  Now tested extensively with deeply nested paths up to 400 characters, and with the new md.exe and rd.exe tools.
+
+### New
+- C/SRC/md.c: Create a directory, all its parents, and don't complain if any exists.
+  The verbose mode displays the list of directories actually created, possibly empty.
+- C/SRC/rd.c: Remove a directory, without complaining if already absent.
+  The force mode removes all contents. The no-exec mode allows testing what would be deleted.
+  The verbose mode displays the list of all files and directories actually removed, possibly empty.
+
 ## [Unreleased] 2017-09-11
 ### Fixed
 - Batch/regx.bat: Fixed the set -t option.
