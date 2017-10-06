@@ -31,7 +31,9 @@ PROGRAMS = \
   gpt.exe         \
   inicomp.exe     \
   lessive.exe     \
+  md.exe          \
   msgbox.exe      \
+  rd.exe          \
   redo.exe        \
   remplace.exe    \
   sector.exe      \
@@ -55,6 +57,8 @@ UNIX_PROGRAMS = \
   dump            \
   inicomp         \
   lessive         \
+  md              \
+  rd              \
   redo            \
   remplace        \
   update          \
@@ -101,10 +105,12 @@ ZIPSOURCES =		 \
   macros.cpp             \
   make.bat               \
   Makefile               \
+  md.c                   \
   msgbox.c               \
   msgbox.mak             \
   msgnames.h             \
   NMakefile              \
+  rd.c                   \
   README.txt             \
   redo.c                 \
   redo.mak               \
