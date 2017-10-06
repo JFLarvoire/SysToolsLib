@@ -17,6 +17,7 @@
 #		    it uses to delete the global environment variable.	      #
 #    2017-03-16 JFL Resurrected this file, necessary to make release.         #
 #    2017-08-29 JFL Added a help target overrifing the one in All.mak.        #
+#    2017-10-05 JFL Store WIN64 programs too in the release file.             #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -98,6 +99,17 @@ release:
 	pushd "%PROGRAMS_DIR%"
 	7z.exe -- a "%ZIP%" !PROGRAMS!
 	popd
+	
+	:# Add 64-bits programs is they're available and not yet added
+	if exist SRC\WIN64 for %%p in ("%PROGRAMS_DIR%") do if /I "%%~nxp" NEQ "WIN64" (
+	  set "PROGRAMS64="
+	  for %%x in (!PROGRAMS!) do set "PROGRAMS64=!PROGRAMS64! WIN64\%%x"
+	  pushd SRC
+	  pushd WIN64 & set "PROGRAMS64_DIR=!CD!" & popd
+	  $(MSG) Adding WIN64 programs from !PROGRAMS64_DIR!
+	  7z.exe -- a "%ZIP%" !PROGRAMS64!
+	  popd
+	)
 	
 	:# Add scripts for each language
 	for %%l in (Bash Batch PowerShell Tcl) do if defined %%l (
