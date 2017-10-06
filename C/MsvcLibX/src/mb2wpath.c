@@ -193,7 +193,7 @@ cleanup_and_return:
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    MultiByteToWidePath					      |
+|   Function	    MultiByteToNewWidePath				      |
 |									      |
 |   Description	    Convert a pathname to a new unicode string, inserting the |
 |		     proper \\?\ prefix if it's longer than 260 bytes	      |
