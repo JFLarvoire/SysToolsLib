@@ -204,13 +204,15 @@
 *		    Version 3.0.4.  					      *
 *    2016-01-07 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 3.0.5.  					      *
+*    2017-10-02 JFL Fixed a conditional compilation bug in MSDOS.	      *
+*		    Version 3.0.6.    					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.5"
-#define PROGRAM_DATE    "2016-01-07"
+#define PROGRAM_VERSION "3.0.6"
+#define PROGRAM_DATE    "2017-10-02"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -1273,19 +1275,19 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	      /* Since we've called stat anyway, copy the type from there */
 	      if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
 	      if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
 	      if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
 #endif
-#if defined(S_ISBLK)
+#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
 	      if (S_ISBLK(st.st_mode)) pDirent->d_type = DT_BLK;
 #endif
-#if defined(S_ISCHR)
+#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* In DOS it's defined, but always returns 0 */
 	      if (S_ISCHR(st.st_mode)) pDirent->d_type = DT_CHR;
 #endif
-#if defined(S_ISFIFO)
+#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* In DOS it's defined, but always returns 0 */
 	      if (S_ISFIFO(st.st_mode)) pDirent->d_type = DT_FIFO;
 #endif
-#if defined(S_ISSOCK)
+#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
 	      if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
 #endif
 	    }
@@ -1690,7 +1692,7 @@ int affiche1(fif *pfif, int col)
 	iShowSize = 0;
         }
     if (   S_ISCHR(pfif->st.st_mode)
-#if defined(S_ISBLK)
+#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
         || S_ISBLK(pfif->st.st_mode)
 #endif // defined(S_ISBLK)
        )
@@ -1698,7 +1700,7 @@ int affiche1(fif *pfif, int col)
         // strcat(pNicename, " !");
 	iShowSize = 0;
 	}
-#if defined(S_ISLNK)	/* All recent versions of Windows and Unix, but not MS-DOS or Windows 95/98 */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
     if (S_ISLNK(pfif->st.st_mode))
         {
 #if 0 && defined(_WIN32) && _MSVCLIBX_STAT_DEFINED

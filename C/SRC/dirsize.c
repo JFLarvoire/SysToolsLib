@@ -49,13 +49,15 @@
 *		    Version 3.1.2.  					      *
 *    2016-09-23 JFL Use macro CDECL to allow building a DOS .com version.     *
 *		    Version 3.1.3.  					      *
+*    2017-10-02 JFL Fixed a conditional compilation bug in MSDOS.	      *
+*		    Version 3.1.4.    					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.1.3"
-#define PROGRAM_DATE    "2016-09-23"
+#define PROGRAM_VERSION "3.1.4"
+#define PROGRAM_DATE    "2017-10-02"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -1167,7 +1169,7 @@ int scandirX(const char *pszName,
       lstat(szName, &st);
       if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
       if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
-#if defined(S_ISLNK)
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
 #endif
 #if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
