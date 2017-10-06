@@ -19,6 +19,8 @@ dircc.bat	| DW-	| Front end to dirc.exe. Compare file trees recursively, listing
 dirdir.bat	| DW-	| List subdirectories. (Non trivial for DOS in the absence of a dir /ad option.)	| `dirdir`
 dirsize.exe	| DWL	| Compute the total size used by a directory ot tree.					| `dirsize -s -t` &:# Find which subdirectory uses up all that space.
 mcd.bat 	| DW-	| Create a directory, and go there, in a single command.				| `mcd TempDir`
+md.exe	 	| DWL	| Create a directory, all its parents, and don't complain if any exists.		| `md -v a\b\c` &:# Displays a\ then a\b\ then a\b\c\ the first time; Displays nothing if repeated. 
+rd.exe	 	| DWL	| Remove a directory. Force mode to remove all contents. Don't complain if absent.	| `rd -v a` &:# Displays a\b\c\ then a\b\ then a\ the first time; Displays nothing if repeated.
 redo.exe	| DWL	| Execute a command recursively in a whole directory tree.				| `redo dirsize -t` &:# Same end result as the above dirsize example.
 rhs.bat 	| DW-	| Set all RHS flags for a file. Conversely, -rhs.bat removes them all.			| `-rhs msdos.sys` &:# Often needed in the 1980s.
 rxrename.tcl	| -WL	| Rename a series of files, based on a regular expression.		 		| 
