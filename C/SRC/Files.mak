@@ -44,6 +44,7 @@ PROGRAMS = \
   uuid.exe	  \
   which.exe       \
   whichinc.exe    \
+  zap.exe         \
 
 REQS = MsvcLibX_library
 
@@ -62,6 +63,7 @@ UNIX_PROGRAMS = \
   redo            \
   remplace        \
   update          \
+  zap             \
 
 UNIX_REQS = MsvcLibX_debug_macros
 
@@ -132,4 +134,5 @@ ZIPSOURCES =		 \
   uuid.c		 \
   which.c                \
   whichinc.c             \
+  zap.c                  \
 
