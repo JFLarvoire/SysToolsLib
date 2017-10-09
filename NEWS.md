@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-10-09
+- C/SRC/zap.c: Remove files, without complaining if already absent.
+
+### Fixed
+- C/SRC/rd.c: The help screen was displayed twice.
+
 ## [1.10] 2017-10-06
 ### Fixed
 - C/MsvcLibX/*: Fixed several serious bugs that broke support for paths > 260 characters.
