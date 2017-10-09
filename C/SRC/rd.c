@@ -14,11 +14,12 @@
 *		    							      *
 *   History:								      *
 *    2017-10-05 JFL Created this program, as a test of MsvcLibX's rmdir().    *
+*    2017-10-09 JFL Bug fix: The help screen was displayed twice.             *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.0"
-#define PROGRAM_DATE    "2017-10-05"
+#define PROGRAM_VERSION "1.0.1"
+#define PROGRAM_DATE    "2017-10-09"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -271,7 +272,7 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
   printf("\n");
 #endif
-  return;
+  exit(0);
 }
 
 /*---------------------------------------------------------------------------*\
