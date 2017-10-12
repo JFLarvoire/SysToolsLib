@@ -14,11 +14,12 @@
 *		    							      *
 *   History:								      *
 *    2017-10-04 JFL Created this program, as a test of MsvcLibX's mkdir().    *
+*    2017-10-11 JFL Updated the help screen for Windows. Version 1.0.1.       *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.0"
-#define PROGRAM_DATE    "2017-10-04"
+#define PROGRAM_VERSION "1.0.1"
+#define PROGRAM_DATE    "2017-10-11"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -226,7 +227,7 @@ md version %s\n\
 Create a directory\n\
 \n\
 Usage:\n\
-  md [SWITCHES] DIRNAME\n\
+  %s [SWITCHES] DIRNAME\n\
 \n\
 Switches:\n\
   -?          Display this help message and exit\n"
@@ -242,7 +243,14 @@ Switches:\n\
   -V          Display this program version and exit\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, version(FALSE));
+, version(FALSE), 
+#ifdef __unix__
+  "md"
+#else
+  "\"md.exe\""
+#endif
+
+);
 #ifdef __unix__
   printf("\n");
 #endif
