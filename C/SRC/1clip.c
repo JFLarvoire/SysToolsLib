@@ -31,13 +31,14 @@
 *    2016-09-23 JFL Removed warnings. No functional code change.              *
 *    2017-06-28 JFL Fixed the link warning.				      *
 *                   Help displays the actual ANSI and OEM code pages.         *
+*    2017-10-12 JFL Fixed the -t option parsing. Version 1.3.2.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3.1"
-#define PROGRAM_DATE    "2017-06-28"
+#define PROGRAM_VERSION "1.3.2"
+#define PROGRAM_DATE    "2017-10-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -164,7 +165,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "t")) {			/* -t: Type */
-	if (++i < argc) sscanf(arg, "%u", &type);
+	if (++i < argc) sscanf(argv[i], "%u", &type);
 	continue;
       }
       if (streq(arg+1, "u")) {			/* -u: Get the Unicode type */
