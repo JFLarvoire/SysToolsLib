@@ -132,7 +132,6 @@ int lstat(const char *path, struct stat *pStat) {
   char szTime[100];
   )
   WCHAR *pwszName = NULL;
-  int n;
 
   DEBUG_ENTER((STRINGIZE(lstat) "(\"%s\", 0x%p);\n", path, pStat));
 
