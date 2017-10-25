@@ -14,6 +14,8 @@
 *                   work around limits in functions like CreateDirectoryW().  *
 *    2017-10-04 JFL Added routine MultiByteToNewWideString().		      *
 *                   Added the management of relative paths.                   *
+*    2017-10-25 JFL Fixed MultiByteToWidePath support for paths with / seps.  *
+*                   Added routine TrimLongPathPrefix().			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -75,6 +77,7 @@ LPWSTR MultiByteToNewWideString(UINT cp, DWORD dwFlags, LPCSTR pszStr) {
 |    2014-07-01 JFL Created this routine                               	      |
 |    2017-10-02 JFL Changed the return value to the string size. Was size+1.  |
 |    2017-10-04 JFL Added the management of relative paths.                   |
+|    2017-10-25 JFL Fixed support for paths with / separators.                |
 *                   							      *
 \*---------------------------------------------------------------------------*/
 
@@ -90,10 +93,14 @@ int MultiByteToWidePath(
   int lName;
   LPWSTR pwszBuf0 = pwszBuf;
   LPWSTR pwszName = MultiByteToNewWideString(nCodePage, 0, pszName);
+  LPWSTR pwsz;
 
   if (!pwszName) return 0;
   lName = lstrlenW(pwszName);
 
+  /* Replace all / with \ */
+  for (pwsz = pwszName; *pwsz; pwsz++) if (*pwsz == L'/') *pwsz = L'\\';
+  
   /* Relative pathnames will cause failures if the absolute name passes the 260 character limit */
   if (   (pwszName[0] != L'\\')				/* If this is not an absolute path */
       && (   (pwszName[1] && (pwszName[1] != L':'))	/* And there's no drive letter */
@@ -235,6 +242,38 @@ LPWSTR MultiByteToNewWidePath(
   pwszName2 = realloc(pwszName, sizeof(WCHAR) * n); /* This is unlikely to fail, as the buffer is shrinking, but this _can_ happen */ 
   if (!pwszName2) pwszName2 = pwszName; /* In the unlikely case that it did fail, keep using the large buffer */
   return pwszName2;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    TrimLongPathPrefix					      |
+|									      |
+|   Description	    Remove the \\?\ and \\?\UNC\ prefixes from a pathname     |
+|									      |
+|   Parameters      LPSTR pszName	    The pathname to trim	      |
+|									      |
+|   Returns	    The length of the final string			      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2017-10-25 JFL Created this routine                               	      |
+*                   							      *
+\*---------------------------------------------------------------------------*/
+
+int TrimLongPathPrefix(LPSTR pszName) {
+  int n = lstrlen(pszName);
+  if (!strncmp(pszName, "\\\\?\\", 4)) {
+    int iLen = 4;
+    LPSTR lpTo = pszName;
+    if (!strncmp(pszName, "\\\\?\\UNC\\", 8)) { /* Change "\\?\UNC\server\share" to "\\server\share" */
+      iLen = 6;
+      lpTo = pszName+2;
+    }
+    n -= iLen; /* Actual length of the output path (with NUL, without prefix) */
+    memmove(lpTo, lpTo+iLen, n+1);
+  }
+  return n;
 }
 
 #endif /* defined(_WIN32) */
