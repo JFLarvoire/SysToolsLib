@@ -10,6 +10,7 @@
 *    2016-09-12 JFL Created this file, from the routine in truename.c.	      *
 *    2017-03-20 JFL Include stdio.h, to get the UTF-8 version of printf.      *
 *    2017-10-02 JFL Fixed support for pathnames >= 260 characters.	      *
+*    2017-10-25 JFL Fixed again support for pathnames >= 260 characters.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,27 +55,16 @@ DWORD WINAPI GetLongPathNameU(LPCTSTR lpShortName, LPTSTR lpBuf, DWORD nBufferLe
 
   DEBUG_ENTER(("GetLongPathNameU(\"%s\", %p, %d);\n", lpShortName, lpBuf, nBufferLength));
 
-  pwszShortName = GlobalAlloc(GMEM_FIXED, sizeof(WCHAR) * lNameNul);
+  pwszShortName = MultiByteToNewWidePath(CP_UTF8, lpShortName);
   if (!pwszShortName) {
 out_of_mem:
     RETURN_INT_COMMENT(0, ("Not enough memory\n"));
-  }
-  n = MultiByteToWideChar(CP_UTF8,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			  0,			/* dwFlags, */
-			  lpShortName,		/* lpMultiByteStr, */
-			  lstrlen(lpShortName)+1,  /* cbMultiByte, */
-			  pwszShortName,	/* lpWideCharStr, */
-			  lNameNul		/* cchWideChar, */
-			  );
-  if (!n) {
-    GlobalFree(pwszShortName);
-    RETURN_INT_COMMENT(0, ("Failed to convert the short name to Unicode\n"));
   }
 
 realloc_wBuf:
   pwBuf = GlobalAlloc(GMEM_FIXED, sizeof(WCHAR) * lwBuf);
   if (!pwBuf) {
-    GlobalFree(pwszShortName);
+    free(pwszShortName);
     goto out_of_mem;
   }
   lResult = (int)GetLongPathNameW(pwszShortName, pwBuf, lwBuf);
@@ -83,7 +73,7 @@ realloc_wBuf:
     lwBuf = lResult;
     goto realloc_wBuf;
   }
-  GlobalFree(pwszShortName);	 /* We won't need this buffer anymore */
+  free(pwszShortName);	 /* We won't need this buffer anymore */
   if (!lResult) {
     GlobalFree(pwBuf);
     RETURN_INT_COMMENT(0, ("GetLongPathNameW() failed\n"));
@@ -101,8 +91,14 @@ realloc_wBuf:
 			  );
   GlobalFree(pwBuf);
   if (!n) RETURN_INT_COMMENT(0, ("Failed to convert the Long name from Unicode\n"));
+  n -= 1; /* Do not count the final NUL */
 
-  RETURN_INT_COMMENT(n-1, ("\"%s\"\n", lpBuf));
+  /* Remove the long pathname \\?\ prefix, if it was not there before */
+  if ((!strncmp(lpBuf, "\\\\?\\", 4)) && strncmp(lpShortName, "\\\\?\\", 4)) {
+    n = TrimLongPathPrefix(lpBuf);
+  }
+
+  RETURN_INT_COMMENT(n, ("\"%s\"\n", lpBuf));
 }
 
 #endif /* defined(_WIN32) */
