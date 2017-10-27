@@ -15,6 +15,7 @@
 #  History                                                                    #
 #    2016-10-10 JFL jf.larvoire@hpe.com created this file.                    #
 #    2016-10-12 JFL Search global includes in $(STINCLUDE).                   #
+#    2017-10-26 JFL Changed the default OUTDIR to bin.			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -26,11 +27,11 @@ prefix = /usr/local
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
 exec_prefix = $(prefix)
-# Where to put the executable for the command `gcc'.
+# Where to put the executables.
 bindir = $(exec_prefix)/bin
-# Where to put the directories used by the compiler.
-libexecdir = $(exec_prefix)/libexec
-# Where to put the Info files.
+# Where to put the libraries.
+libdir = $(exec_prefix)/lib
+# Where to put the info files.
 infodir = $(datarootdir)/info
 
 # Identify the OS and processor, and generate an output base directory name from that
@@ -68,11 +69,22 @@ ifeq "$(OS)" ""    # If $(OS) is undefined or empty
   endif
 endif
 
+# Output in the bin subdirectory, unless overridden by OUTDIR
+ifdef OUTDIR
+  ifneq "$(OUTDIR)" "."
+    OD := $(OUTDIR)/
+  else
+    OD := 
+  endif
+else
+  OD := bin/
+endif
+
 # Distinguish the output directory bases for normal and debug output
 # Normal output base directory
-OSPN := $(OSP)
+OSPN := $(OD)$(OSP)
 # Debug output base directory
-OSPD := $(OSP)/debug
+OSPD := $(OD)$(OSP)/debug
 
 # Finally define the output directories for the current debug mode
 ifdef _DEBUG

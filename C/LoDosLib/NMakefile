@@ -27,6 +27,7 @@
 #    2017-04-04 JFL Define SOURCES instead of OBJECTS, and use src2objs.mak.  #
 #		    Fixed dosdrv.inc generation rules to avoid a warning.     #
 #		    Rebuild dosdrv.inc only after a distclean. Avoids warngs. #
+#    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
 #		    							      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -37,12 +38,18 @@ MODELE=S			# Memory model for C compilation. Good for both small & tiny programs
 
 S=.				# Sources files relative path
 R=.				# Root output path.
-!IF DEFINED(OUTDIR)
-R=$(OUTDIR)
+!IF !DEFINED(OUTDIR)
+OUTDIR=bin
+OD=bin\			# Output directory - In the default bin subdirectory
+!ELSEIF "$(OUTDIR)"=="."
+OD=			# Output directory - In the current directory
+!ELSE # It's defined and not empty
+OD=$(OUTDIR)\		# Output directory - In the specified directory
 !ENDIF
-B=$(R)				# Where to store binary executable files
-O=$(R)\obj			# Object files relative path
-L=$(R)\list			# List files relative path
+B=$(OUTDIR)			# Where to store binary executable files
+BD=$(OD)			# Where to store binary executable files
+O=$(OD)obj			# Object files relative path
+L=$(OD)list			# List files relative path
 N=$(BIOSLIB)			# Where to get the bioslib (ex nodoslib) files
 
 # Default values for macros TMP & LNK. Nmake always predefines AS & CC.
@@ -126,7 +133,7 @@ mostlyclean:
 
 clean: mostlyclean
     -del /Q *.lib	>NUL 2>&1
-!IF DEFINED(OUTDIR)
+!IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
 !ENDIF
 

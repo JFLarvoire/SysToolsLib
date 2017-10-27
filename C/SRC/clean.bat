@@ -14,13 +14,14 @@
 :#   2012-10-21 JFL Fixed bug if one of the target dirs does not exist.       #
 :#   2015-10-27 JFL Added the BIOS and WIN95 target dirs.                     #
 :#   2015-12-09 JFL Added support for a config.bat file defining an %OUTDIR%. #
+:#   2017-10-26 JFL The default OUTDIR is now bin\.			      #
 :#                                                                            #
-:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
-:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-
+set "VERSION=2017-10-26"
 set "ARG0=%~f0"
 set "SCRIPT=%~nx0"
 set "TOOLS=%~dp0"
@@ -51,10 +52,16 @@ if .%1.==.-X. set "CMD=%CMD% -X" & goto :next_arg
 
 if exist %CONFIG.BAT% call %CONFIG.BAT% &:# Possibly defines %OUTDIR%
 
-set "BP="
-if defined OUTDIR set "BP=%OUTDIR%\"
+:# Select the binary output path prefix
+if not defined OUTDIR (
+  set "BP=bin\"
+) else if "%OUTDIR%"=="." (
+  set "BP="
+) else (
+  set "BP=%OUTDIR%\"
+)
 
-for %%d in (BIOS DOS WIN95 WIN32 WIN64) do (
+for %%d in (ARM BIOS DOS WIN95 IA64 WINXP WIN32 WIN64) do (
   set "DIR=%BP%%%d"
   if exist !DIR! (
     pushd !DIR!

@@ -134,6 +134,7 @@
 #    2017-03-02 JFL Added the CLEAN_DIRS and CLEAN_FILES variables.           #
 #    2017-03-13 JFL Fix build if environment variable OS is not defined.      #
 #    2017-08-29 JFL Bugfix: The help target did output a "1 file copied" msg. #
+#    2017-10-22 JFL Changed OUTDIR default to the bin subdirectory.           #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -150,10 +151,13 @@ TMP=.
 !ENDIF
 !ENDIF
 
-!IF DEFINED(OUTDIR)
-OD=$(OUTDIR)^\
-!ELSE
-OD=
+!IF !DEFINED(OUTDIR)
+OUTDIR=bin
+OD=bin\			# Output directory - In the default bin subdirectory
+!ELSEIF "$(OUTDIR)"=="."
+OD=			# Output directory - In the current directory
+!ELSE # It's defined and not empty
+OD=$(OUTDIR)\		# Output directory - In the specified directory
 !ENDIF
 
 ###############################################################################
@@ -576,7 +580,7 @@ clean mostlyclean distclean:
     if exist "$(MAKEPATH)\IA64.mak"  $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\IA64.mak" clean
     if exist "$(MAKEPATH)\WIN64.mak" $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\WIN64.mak" clean
     if exist "$(MAKEPATH)\ARM.mak"   $(MAKE) /$(MAKEFLAGS) /c /s /f "$(MAKEPATH)\ARM.mak" clean
-!IF DEFINED(OUTDIR)
+!IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
 !ENDIF
     -del /Q *.bak	>NUL 2>&1

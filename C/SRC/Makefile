@@ -20,6 +20,7 @@
 #    2016-10-14 JFL Fixed rules for building C++ programs.        	      #
 #    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
 #                   `make check` now checks if $bindir is in the PATH.        #
+#    2017-10-26 JFL Changed the default OUTDIR to bin.			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -73,11 +74,22 @@ ifeq "$(OS)" ""    # If $(OS) is undefined or empty
   endif
 endif
 
+# Output in the bin subdirectory, unless overridden by OUTDIR
+ifdef OUTDIR
+  ifneq "$(OUTDIR)" "."
+    OD := $(OUTDIR)/
+  else
+    OD := 
+  endif
+else
+  OD := bin/
+endif
+
 # Distinguish the output directory bases for normal and debug output
 # Normal output base directory
-OSPN := $(OSP)
+OSPN := $(OD)$(OSP)
 # Debug output base directory
-OSPD := $(OSP)/debug
+OSPD := $(OD)$(OSP)/debug
 
 # Finally define the output directories for the current debug mode
 ifdef _DEBUG

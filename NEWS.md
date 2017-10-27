@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-10-27
+- C/SRC/which.c: Also search for shell internal commands. Added options -i and -I to control that internal command search.
+- C/NMakeFile: Improved make release messages and errors. Also release DOS, WIN64, etc, programs, if available.
+- C/NMakeFile & *.mak : Changed the default output directory from . to bin. Ex: WIN32 output now goes to bin\WIN32\.
+
+## [Unreleased] 2017-10-25
+- C/MsvcLibX/*: Additional fixes for support for paths > 260 characters for The Silver Searcher (ag.exe).
+  The tools in C/SRC/* are not affected.
+
 ## [Unreleased] 2017-10-09
 - C/SRC/zap.c: Remove files, without complaining if already absent.
 

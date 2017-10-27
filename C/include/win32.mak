@@ -22,7 +22,7 @@
 #		    Command-line definitions:				      #
 #		    DEBUG=0	 Build the release ver. (<=> target WIN32)    #
 #		    DEBUG=1	 Build the debug ver. (<=> target WIN32\DEBUG)#
-#		    OUTDIR=path  Output to path\WIN32\. Default: To .\WIN32\  #
+#		    OUTDIR=path  Output to path\WIN32\. Default: To bin\WIN32\#
 #		    PROGRAM=name Set the output file base name		      #
 #		    WINVER=M.m   4.0=Win95/NT4 5.1=XP 6.0=Vista 6.1=7 6.2=8   #
 #		    		 Converted to WINVER=0xM0n for windows.h      #
@@ -114,6 +114,7 @@
 #    2017-03-10 JFL If WINVER is defined but empty, use SDK & linker defaults.#
 #    2017-05-12 JFL Use a default asInvoker.manifest for all win32 builds.    #
 #    2017-08-29 JFL Bugfix: The help target did output a "1 file copied" msg. #
+#    2017-10-22 JFL Changed OUTDIR default to the bin subdirectory.           #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -166,9 +167,13 @@ DS=
 
 # Define directories
 S=.				# Where to find source files
-R=$(T)				# Root output path.
-!IF DEFINED(OUTDIR)
-R=$(OUTDIR)\$(T)
+!IF !DEFINED(OUTDIR)
+OUTDIR=bin
+R=$(OUTDIR)\$(T)		# Root output path - In the default bin subdirectory
+!ELSEIF "$(OUTDIR)"=="."
+R=$(T)				# Root output path - In the current directory
+!ELSE # It's defined and not empty
+R=$(OUTDIR)\$(T)		# Root output path - In the specified directory
 !ENDIF
 B=$(R)$(DS)			# Where to store binary executable files
 O=$(B)\OBJ			# Where to store object files
