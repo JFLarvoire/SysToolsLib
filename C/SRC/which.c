@@ -67,13 +67,18 @@
 *    2017-09-04 JFL Test variable NoDefaultCurrentDirectoryInExePath in cmd.  *
 *		    Display MsvcLibX library version in DOS & Windows.        *
 *		    Version 1.8.					      *
+*    2017-10-11 JFL In Windows, also check PS and cmd.exe internal commands.  *
+*    2017-10-26 JFL Added options -i and -I to control that int. cmd. search. *
+*		    Bugfix: WIN64 will run .com files, which may be exe inside.
+*    2017-10-27 JFL Put MSC-specific pragmas within a #ifdef _MSC_VER/#endif. *
+*		    Version 1.9.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.8"
-#define PROGRAM_DATE    "2017-09-04"
+#define PROGRAM_VERSION "1.9"
+#define PROGRAM_DATE    "2017-10-27"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -84,7 +89,7 @@
 #include <string.h>
 #include <errno.h>
 /* The following include files are not available in the Microsoft C libraries */
-/* Use MinGW, or JFL's MsvcLibX library extensions if needed */
+/* Use MinGW, or JFL's MsvcLibX library extensions for MS Visual C++ */
 #include <unistd.h>		/* For the access function */
 #include <dirent.h>		/* We use the DIR type and the dirent structure */
 
@@ -93,16 +98,23 @@
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
+typedef enum {
+  SHELL_UNKNOWN = 0,
+  SHELL_COMMAND,			/* Windows command.com */
+  SHELL_CMD,				/* Windows cmd.exe */
+  SHELL_POWERSHELL,			/* Windows PowerShell.exe */
+  SHELL_BASH,				/* Unix bash */
+} shell_t;
+
 /************************ MS-DOS-specific definitions ************************/
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-#define OS_NAME "DOS"
-
 char *pszExtDos[] = {"COM", "EXE", "BAT", NULL};
-char **pszExt = pszExtDos;
+char **ppszExt = pszExtDos;
 
 #define SEARCH_IN_CD TRUE  /* Command.com searches in the current directory */
+#define DEFAULT_SHELL SHELL_COMMAND
 
 #endif
 
@@ -115,13 +127,12 @@ char **pszExt = pszExtDos;
 #define INCL_VIO
 #include "os2.h"
 
-#define OS_NAME "OS/2"
-
 char *pszExtReal[] = {"COM", "EXE", "BAT", NULL};
 char *pszExtProt[] = {"EXE", "CMD", NULL};
-char **pszExt = pszExtProt;
+char **ppszExt = pszExtProt;
 
 #define SEARCH_IN_CD TRUE  /* The OS/2 shell searches in the current directory */
+#define DEFAULT_SHELL SHELL_COMMAND
 
 #endif
 
@@ -129,25 +140,17 @@ char **pszExt = pszExtProt;
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
-#ifdef _WIN64
-char *pszExtWin64[] = {"exe", "cmd", "bat", NULL};
-char **pszExt = pszExtWin64;
-#else
+/* Note: In Windows NT, some files may have the .com extension, but actually be
+   structured as .exe internally. Look for the 'MZ' header to tell if it's an exe.
+   If they are an old-style DOS .com, and your version of Windows does not have
+   the 16-bits subsystem installed, then this will trigger an error popup.
+   Do not attempt to detect this in which.exe: If a DOS .com is in the PATH,
+   it is it that Windows will attempt (and fail) to run. */
 char *pszExtWin32[] = {"com", "exe", "cmd", "bat", NULL};
-char **pszExt = pszExtWin32;
-#endif
+char **ppszExt = pszExtWin32;
 
 #define SEARCH_IN_CD TRUE  /* Cmd.exe searches in the current directory */
+#define DEFAULT_SHELL SHELL_CMD
 
 #endif
 
@@ -155,20 +158,11 @@ char **pszExt = pszExtWin32;
 
 #ifdef __unix__	/* Automatically defined when targeting a Unix application */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 char *pszExtUnix[] = {NULL};
-char **pszExt = pszExtUnix;
+char **ppszExt = pszExtUnix;
 
 #define SEARCH_IN_CD FALSE  /* Unix shells do not search in the current directory */
+#define DEFAULT_SHELL SHELL_BASH
 
 #include <strings.h> /* For strcasecmp() */
 #define _stricmp strcasecmp
@@ -180,12 +174,12 @@ char **pszExt = pszExtUnix;
 
 /*********************************** Other ***********************************/
 
-#ifndef OS_NAME
+#ifndef EXE_OS_NAME
 
-#define OS_NAME "Unidentified_OS"
+#define EXE_OS_NAME "Unidentified_OS"
 
 char *pszExtOther[] = {NULL};
-char **pszExt = pszExtOther;
+char **ppszExt = pszExtOther;
 
 #define SEARCH_IN_CD TRUE
 
@@ -209,11 +203,8 @@ char szSystem32dir[FILENAME_MAX];
 char szSystem64dir[FILENAME_MAX];
 int iWoW = FALSE;		    /* TRUE = WIN32 program running in WIN64 */
 #endif
-#if defined(_WIN32)
-int isPowerShell = FALSE;	    /* TRUE = Running inside PowerShell */
-#endif
 int iSearchInCD = SEARCH_IN_CD;	    /* TRUE = Seach in the current directory first */
-int iVerbose = FALSE;
+shell_t shell = DEFAULT_SHELL;
 
 /* Prototypes */
 
@@ -228,6 +219,17 @@ size_t strnirepl(char *pszResultBuffer, size_t lResultBuffer, const char *pszStr
 #if defined(_WIN32)
 int GetProcessName(pid_t pid, char *name, size_t lname);
 int FixNameCase(char *pszPathname);
+#endif
+#if defined(_MSDOS) || defined(_WIN32)
+int SearchCommandInternal(char *pszCommand);
+#endif
+#if defined(_WIN32)
+char **GetInternalCommands(void);    /* Get a NULL-terminated list of internal shell commands */
+int SearchCmdInternal(char *pszCommand);
+#endif
+#if defined(_WIN32) || defined(__unix__)
+int SearchPowerShellInternal(char *pszCommand);
+int SearchBashInternal(char *pszCommand);
 #endif
 
 /*---------------------------------------------------------------------------*\
@@ -260,6 +262,8 @@ int main(int argc, char *argv[]) {
   char **pathList = malloc(0);
   int nPaths = 0;
   int iPath;
+  int iVerbose = FALSE;
+  int iInternal = -1;
 
   for (iArg=1; iArg<argc; iArg++) { /* Process all command line arguments */
     arg = argv[iArg];
@@ -288,6 +292,16 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       )
+      if (   streq(opt, "i")		/* Search the shell's internals */
+	  || streq(opt, "-internal")) {
+	iInternal = 1;
+	continue;
+      }
+      if (   streq(opt, "I")		/* Do not search the shell's internals */
+	  || streq(opt, "-no-internal")) {
+	iInternal = 0;
+	continue;
+      }
       if (   streq(opt, "v")		/* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
@@ -310,20 +324,35 @@ int main(int argc, char *argv[]) {
   GetProcessName(getppid(), szShellName, sizeof(szShellName));
   DEBUG_PRINTF(("Executed inside %s.\n", szShellName));
   /* wsmprovhost.exe is PowerShell's remote session host process */
-  if (strieq(szShellName, "powershell.exe") || strieq(szShellName, "wsmprovhost.exe")) { 
-    isPowerShell = TRUE;
+  if (strieq(szShellName, "powershell.exe") || strieq(szShellName, "wsmprovhost.exe")) {
+    shell = SHELL_POWERSHELL;
+    if (iInternal == -1) iInternal = 0; /* The search is very slow the first time. Don't do it by default. */
     iSearchInCD = FALSE; /* Contrary to cmd, PowerShell does not search in the current directory first */
+  } else if (strieq(szShellName, "cmd.exe")) { 
+    shell = SHELL_CMD;
+    if (iInternal == -1) iInternal = 1; /* The search is fast. Do it by default. */
+  } else if (strieq(szShellName, "command.com")) { 
+    shell = SHELL_COMMAND;
+    if (iInternal == -1) iInternal = 0;	/* The search method is not yet implemented. No need to call the stub. */
+  } else if (strieq(szShellName, "bash.exe")) { 
+    shell = SHELL_BASH;
+    if (iInternal == -1) iInternal = 1; /* The search is fast. Do it by default. */
   }
+  if (iInternal == -1) iInternal = 0; /* Unidentified shell. Do not search internals, we don't know how anyway */
 
+#if defined(_MSC_VER)
 #pragma warning(disable:4996) /* Ignore the "'GetVersion': was declared deprecated" warning */
-  if (   (!isPowerShell)		/* If this is cmd.exe */
+#endif
+  if (   (shell == SHELL_CMD)		/* If this is cmd.exe */
       && (LOBYTE(GetVersion()) >= 6)	/* And the OS is Vista or later */ 
       && getenv("NoDefaultCurrentDirectoryInExePath")) {
-    iSearchInCD = FALSE; /* Contrary to cmd, PowerShell does not search in the current directory first */
+    iSearchInCD = FALSE; /* This disables search in the Current Directory first */
     if (iVerbose) printf("# Environment variable NoDefaultCurrentDirectoryInExePath is set => No search in .\n");
     if (iAll) iSearchInCD = TRUE;	/* But if searching for all alternatives, keep showing that in . */
   }
+#if defined(_MSC_VER)
 #pragma warning(default:4996) /* Restore the "'GetVersion': was declared deprecated" warning */
+#endif
 #endif
 
   /* Get the PATH environment variable, and work around known issues in Win32 on WIN64 */
@@ -351,6 +380,10 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
+#if defined(__unix__)
+  if (iVerbose) iVerbose = 1; /* Stupid trick to avoid a warning */
+#endif
+
   /* Build the list of directories to search in */
   if (iSearchInCD) {
     pathList = realloc(pathList, (sizeof(char *))*(++nPaths));
@@ -372,6 +405,35 @@ int main(int argc, char *argv[]) {
   for ( ; iArg<argc; iArg++) { /* Process all remaining command line arguments */
     pszCommand = argv[iArg];
 
+    /* First search in internal commands */
+    if (iInternal) {
+      switch (shell) {
+#if defined(_MSDOS) || defined(_WIN32)
+	case SHELL_COMMAND:
+	  iFound = SearchCommandInternal(pszCommand);
+	  break;
+#endif
+#if defined(_WIN32)
+	case SHELL_CMD:
+	  iFound = SearchCmdInternal(pszCommand);
+	  break;
+#endif
+#if defined(_WIN32) || defined(__unix__)
+	case SHELL_POWERSHELL:
+	  iFound = SearchPowerShellInternal(pszCommand);
+	  break;
+	case SHELL_BASH:
+	  iFound = SearchBashInternal(pszCommand);
+	  break;
+#endif
+	default:
+	  iFound = FALSE;
+	  break;
+      }
+      if (iFound && !iAll) continue;
+    }
+
+    /* Then search the PATH */
     for (iPath=0; iPath < nPaths; iPath++) {
       iFound = SearchProgramWithAnyExt(pathList[iPath], pszCommand, iAll);
       if (iFound && !iAll) break;
@@ -395,7 +457,7 @@ int main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 char *version(int iVerbose) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
   char *pszLibVer = ""
 #if defined(_MSDOS) || defined(_WIN32)
 #include "msvclibx_version.h"
@@ -420,6 +482,8 @@ Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 Options:\n\
   -?    Display this help message and exit.\n\
   -a    Display all matches. Default: Display only the first one.\n\
+  -i    Search for the shell internal commands first. (Default for cmd.exe)\n\
+  -I    Do not search for the shell internal commands. (Faster)\n\
   -v    Verbose node. Display extra status information.\n\
   -V    Display this program version and exit.\n\
 \n"
@@ -428,6 +492,8 @@ Options:\n\
 Notes:\n\
   Uses the PATHEXT variable to infer other possible names.\n\
   Supports specific rules for cmd and PowerShell.\n\
+  Searches for internal commands. Ex in cmd: 'which md' outputs: cmd /c MD\n\
+        Ex in PowerShell: 'which -i md' outputs: PowerShell -c md -> mkdir\n\
 \n"
 #endif
 #ifdef _MSDOS
@@ -458,7 +524,7 @@ Notes:\n\
 \*---------------------------------------------------------------------------*/
 
 int initExtListDone = FALSE;
-void initExtList(void) {
+void initExtList() {
 #if defined(_WIN32)
   /* Build the extension list, based on variable PATHEXT if present. */
   char *pszPathExt = getenv("PATHEXT");
@@ -469,9 +535,9 @@ void initExtList(void) {
 
   DosGetMachineMode(&b);
   if (b == MODE_REAL)
-    pszExt = pszExtReal;
+    ppszExt = pszExtReal;
   else /* MODE_PROTECTED */
-    pszExt = pszExtProt;
+    ppszExt = pszExtProt;
 #endif
 
 #if defined(_WIN32)
@@ -484,7 +550,7 @@ void initExtList(void) {
 
     pBuf = (char **)malloc(sizeof(char *)); /* Room for the final NUL */
     /* Special case: If the parent is PowerShell, prepend the .ps1 extension */
-    if (isPowerShell) {
+    if (shell == SHELL_POWERSHELL) {
       pBuf = realloc(pBuf, (nExt + 2) * sizeof(char *));
       pBuf[nExt] = "ps1";
       nExt += 1;
@@ -504,12 +570,271 @@ void initExtList(void) {
       nExt += 1;
     }
     pBuf[nExt] = NULL;
-    pszExt = pBuf;
+    ppszExt = pBuf;
   }
 #endif
 
   initExtListDone = TRUE;
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetInternalCommands					      |
+|									      |
+|   Description     Build a list of internal shell commands          	      |
+|									      |
+|   Returns:	    A pointer to a NULL-terminated list of internal commands  |
+|									      |
+|   Notes	    Caches the list in a temporary file, to improve perf.     |
+|		    The temporary file name includes the OS version, so that  |
+|		    it's rebuilt if a new OS update includes more commands.   |
+|		    							      |
+|   History								      |
+|    2017-10-11 JFL Initial implementattion.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#if defined(_WIN32)
+
+#define BYTE0(var) (((BYTE *)&(var))[0])
+#define BYTE1(var) (((BYTE *)&(var))[1])
+#define WORD0(var) (((WORD *)&(var))[0])
+#define WORD1(var) (((WORD *)&(var))[1])
+
+#if defined(_MSC_VER)
+#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
+#endif
+
+char **GetInternalCommands() {
+  char **ppszInternalCommands = NULL;
+  int nCmd = 0;
+#if defined(_WIN32)
+  char *pszListFile = NULL;
+  size_t l;
+  DWORD dwVersion;
+  int iMajorVersion;
+  int iMinorVersion; 
+  int iBuild = 0;
+  char *pszTemp = getenv("TEMP");
+  if (!pszTemp) pszTemp = getenv("TMP");
+  if (!pszTemp) return NULL;
+  DEBUG_PRINTF(("pszTemp = \"%s\"\n", pszTemp));
+  pszListFile = malloc(strlen(pszTemp) + 40);
+  if (!pszListFile) return NULL;
+#if defined(_MSC_VER)
+#pragma warning(disable:4996) /* Ignore the "'GetVersion': was declared deprecated" warning */
+#endif
+  dwVersion = GetVersion();
+#if defined(_MSC_VER)
+#pragma warning(default:4996) /* Restore the "'GetVersion': was declared deprecated" warning */
+#endif
+  iMajorVersion = (int)BYTE0(dwVersion);
+  iMinorVersion = (int)BYTE1(dwVersion);
+  if (dwVersion < 0x80000000) iBuild = (int)WORD1(dwVersion);
+  strcpy(pszListFile, pszTemp);
+  l = strlen(pszTemp);
+  if (l && (pszListFile[l-1] != '\\')) strcpy(pszListFile+(l++), "\\");
+
+  if (shell == SHELL_CMD) { /* The shell is cmd.exe */
+    FILE *hf;
+    char buf[40];
+    sprintf(pszListFile+l, "cmd-internal-%d.%d.%d.lst", iMajorVersion, iMinorVersion, iBuild);
+    DEBUG_PRINTF(("pszListFile = \"%s\"\n", pszListFile));
+    if (access(pszListFile, 0) == -1) { /* If the file does not exist */
+      char *pszCmd = malloc(strlen(pszListFile) + 200);
+      if (!pszCmd) goto cleanup_and_return;
+      /* Generate a batch command that gets help about all standard commands, selects the internal ones, and stores them in pszListFile */
+      sprintf(pszCmd, "(for /f \"tokens=1\" %%c in ('help ^| findstr /r /c:\"^[A-Z][A-Z]*  \"') do @if not exist \"%%WINDIR%%\\System32\\%%c.exe\" if not exist \"%%WINDIR%%\\System32\\%%c.com\" echo %%c) >\"%s\" 2>NUL", pszListFile);
+      DEBUG_PRINTF(("pszCmd = (%s)\n", pszCmd));
+      system(pszCmd);
+      free(pszCmd);
+    }
+#define MAX_INTERNAL_COMMANDS 100
+    ppszInternalCommands = malloc((MAX_INTERNAL_COMMANDS+1)*sizeof(char *));
+    if (!ppszInternalCommands) goto cleanup_and_return;
+    hf = fopen(pszListFile, "rt");
+    while (fgets(buf, sizeof(buf), hf)) {
+      for (l = strlen(buf); l && ((buf[l-1]=='\r') || (buf[l-1]=='\n')); ) buf[--l] = '\0'; /* Trim trailing CR/LF */
+      ppszInternalCommands[nCmd++] = strdup(buf);
+      if (nCmd == MAX_INTERNAL_COMMANDS) {
+      	fprintf(stderr, "which: Warning: Too many internal commands in \"%s\"\n", pszListFile);
+      	break; /* Avoid buffer overflow */
+      }
+    }
+    ppszInternalCommands[nCmd] = NULL;
+    fclose(hf);
+  }
+cleanup_and_return:
+  free(pszListFile);
+#endif /* defined(_WIN32) */
+  DEBUG_CODE_IF_ON(
+    int i;
+    DEBUG_PRINT_INDENT();
+    if (ppszInternalCommands) {
+      printf("GetInternalCommands(); // return {");
+      for (i=0; i<nCmd; i++) printf("%s%s", i?" ":"", ppszInternalCommands[i]);
+      printf("}\n");
+    } else {
+      printf("GetInternalCommands(); // return NULL\n");
+    }
+  )
+  return ppszInternalCommands;
+}
+
+#if defined(_MSC_VER)
+#pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
+#endif
+
+static char **ppszCmdInternals = NULL;
+
+int SearchCmdInternal(char *pszCommand);
+int SearchPowerShellInternal(char *pszCommand);
+
+int SearchCmdInternal(char *pszCommand) {
+  char **ppszIntCmd;
+  if (!ppszCmdInternals) ppszCmdInternals = GetInternalCommands();
+  if (ppszCmdInternals) for (ppszIntCmd = ppszCmdInternals; *ppszIntCmd; ppszIntCmd++) {
+    if (!_stricmp(pszCommand, *ppszIntCmd)) {
+      printf("cmd /c %s\n", *ppszIntCmd);
+      return TRUE;
+      break;
+    }
+  }
+  return FALSE;
+}
+
+#endif /* defined(_WIN32) */
+
+#if defined(_WIN32) || defined(__unix__)
+
+int SearchPowerShellInternal(char *pszCommand) {
+  char szCmd[1024];
+  int iRet;
+  /* Generate a PowerShell command that gets internal commands by the given name, and displays which.exe output directly */
+  sprintf(szCmd, "powershell -ExecutionPolicy Bypass -c \"Get-Command %s -CommandType Alias, Cmdlet, Function, Workflow -ErrorAction SilentlyContinue | %% {\\\"PowerShell -c \\\"+$(if ($_.DisplayName) {$_.DisplayName} else {$_.Name})}\"", pszCommand);
+  DEBUG_PRINTF(("%s\n", szCmd));
+  iRet = system(szCmd); /* Returns 0 if a command was found, else a non-0 error code */
+  DEBUG_PRINTF(("  exit %d\n", iRet));
+  return (iRet == 0);
+}
+
+#endif /* defined(_WIN32) || defined(__unix__) */
+
+#if defined(_WIN32) || defined(__unix__)
+
+#if defined(__unix__)
+#define BASH "/bin/bash"
+#else /* WIN32 */
+#define BASH "%%windir%%\\system32\\bash.exe"
+#endif
+
+int SearchBashInternal(char *pszCommand) {
+  char szCmd[1024];
+  int iRet;
+  /* Generate a bash command that gets help about internal commands, and displays which.exe output directly */
+  sprintf(szCmd, BASH " -c \"help %s >/dev/null 2>/dev/null && echo 'bash -c %s'\"", pszCommand, pszCommand);
+  DEBUG_PRINTF(("%s\n", szCmd));
+  iRet = system(szCmd); /* Returns 0 if a command was found, else a non-0 error code */
+  DEBUG_PRINTF(("  exit %d\n", iRet));
+  return (iRet == 0);
+}
+
+#endif /* defined(_WIN32) || defined(__unix__) */
+
+#if defined(_MSDOS) || defined(_WIN32)
+
+#if defined(_MSDOS)
+/* TODO: DOS does not have _popen. Actually it might not be possible due to the lack of multitasking.
+         Using an intermediate file is precisely what the GetInternalCommands() function above does */ 
+FILE * __cdecl _popen(const char *pszCommand, const char *pszMode);
+void _pclose(FILE *hf);
+/* Dummy implementations, so that the code builds and links, but does nothing */
+#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+FILE * __cdecl _popen(const char *pszCommand, const char *pszMode) {
+  return fopen("NUL", pszMode);
+}
+#pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
+void _pclose(FILE *hf) {
+  fclose(hf);
+}
+#endif /* defined(_MSDOS) */
+
+char **GetComspecCommands() {
+  char **ppszInternalCommands = NULL;
+  int nCmd = 0;
+  char *pszListFile = NULL;
+  char szCmd[128];
+  char szLine[128];
+  FILE *hCmd;
+  int i;
+  char *pszShell;
+
+  pszShell = getenv("COMSPEC");
+  if (!pszShell) goto cleanup_and_return;
+  DEBUG_PRINTF(("pszShell = \"%s\"\n", pszShell));
+
+#define MAX_INTERNAL_COMMANDS 100
+  ppszInternalCommands = malloc((MAX_INTERNAL_COMMANDS+1)*sizeof(char *));
+  if (!ppszInternalCommands) goto cleanup_and_return;
+
+  sprintf(szCmd, "%s /C HELP", pszShell); /* Do not use quotes around the shell name. This won't work in DOS. */
+  hCmd = _popen(szCmd, "rt");
+  if (!hCmd) {
+    fprintf(stderr, "which: Error: Can't run \"%s\" /C HELP\n", pszShell);
+    return NULL;
+  }
+  while(fgets(szLine, sizeof(szLine), hCmd)) {
+    for (i=0; ; i++) if ((szLine[i] < 'A') || (szLine[i] > 'Z')) break;
+    if (i < 2) continue; /* If there are less than 2 consecutive capital letters, this is not a command name */
+    szLine[i] = '\0';
+    /* TODO: Check if it's internal or external */
+    ppszInternalCommands[nCmd++] = strdup(szLine);
+    if (nCmd == MAX_INTERNAL_COMMANDS) {
+      fprintf(stderr, "which: Warning: Too many internal commands in \"%s\"\n", pszListFile);
+      break; /* Avoid buffer overflow */
+    }
+  }
+  _pclose(hCmd);
+
+cleanup_and_return:
+  DEBUG_CODE_IF_ON(
+    DEBUG_PRINT_INDENT();
+    if (ppszInternalCommands) {
+      printf("GetComspecCommands(); // return {");
+      for (i=0; i<nCmd; i++) printf("%s%s", i?" ":"", ppszInternalCommands[i]);
+      printf("}\n");
+    } else {
+      printf("GetComspecCommands(); // return NULL\n");
+    }
+  )
+  return ppszInternalCommands;
+}
+
+#if defined(_MSC_VER)
+#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+#endif
+
+int SearchCommandInternal(char *pszCommand) {
+  GetComspecCommands();
+  /* TODO: Implement this */
+  /* Gotcha: Some versions of DOS have a help.exe or help.com command,
+     others don't. This is the case of DOS 7 in Windows 98. */
+  /* http://thestarman.pcministry.com/DOS/DOS7INT.htm */
+  /* Idea: Run system("ihelp.bat %COMMAND%") with ihelp.bat:
+       set PATH=
+       %1 /?
+     Clearing the PATH ensures that only internal commands can do anything.
+     I tried testing the errorlevel, but this does not work.
+     Instead, check if anything is written to stderr.
+  */
+  return FALSE;
+}
+
+#if defined(_MSC_VER)
+#pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
+#endif
+
+#endif /* defined(_MSDOS) || defined(_WIN32) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -540,8 +865,8 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iAll) {
   }
 #endif
   if (!initExtListDone) initExtList();
-  for (i=0; pszExt[i]; i++) {
-    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, pszExt[i]);
+  for (i=0; ppszExt[i]; i++) {
+    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i]);
     if (iFound && !iAll) return iFound;
   }
 
@@ -692,7 +1017,9 @@ int GetProcessName(pid_t pid, char *name, size_t lname) {
 
 #if defined(_WIN32)
 
+#if defined(_MSC_VER)
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
+#endif
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
@@ -764,7 +1091,9 @@ int FixNameCase(char *pszPathname) {
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
 
+#if defined(_MSC_VER)
 #pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
+#endif
 
 #endif
 
