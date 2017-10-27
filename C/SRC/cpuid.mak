@@ -15,7 +15,7 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-!IF "$(T)"=="DOS" && ("$(HAS_BIOSLIB)"!="1" || "$(HAS_LODOSLIB)"!="1" || "$(HAS_PMODE)"!="1")
+!IF "$(T)"=="DOS" && ("$(HAS_BIOSLIB)"!="1" || "$(HAS_LODOSLIB)"!="1" || "$(HAS_PMODELIB)"!="1")
 complain:
 	@echo>con The DOS version of this program requires the BIOSLIB, LODOSLIB, and PMODE libraries.
 
@@ -25,7 +25,7 @@ dirs $(O)\cpuid.obj $(B)\cpuid.exe: complain
 
 !IF "$(T)"=="WIN64"
 complain:
-	@echo>con There's no 64-bits version of this program yet.
+	@echo>con There's no WIN64 version of this program yet.
 
 dirs $(O)\cpuid.obj $(B)\cpuid.exe: complain
 	@rem Do nothing as there's nothing to do
