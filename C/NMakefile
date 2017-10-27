@@ -18,6 +18,9 @@
 #    2017-03-16 JFL Resurrected this file, necessary to make release.         #
 #    2017-08-29 JFL Added a help target overrifing the one in All.mak.        #
 #    2017-10-05 JFL Store WIN64 programs too in the release file.             #
+#    2017-10-22 JFL Use %OUTDIR% to locate the *.exe programs.                #
+#    2017-10-27 JFL Improved make release: Better messages and error reports. #
+#		    Warn about missing exes. Store DOS, WIN64, etc, programs. #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -50,15 +53,44 @@ release:
     call <<"$(TMP)\MsvcLibX-release-$(PID).bat"
 	@echo off
 	setlocal EnableExtensions EnableDelayedExpansion
+	goto :main
+	
+	:msg
+	echo %*
+	$(MSG) %*
+	exit /b
+	
+	:main
+	set "MSG=call :msg"
+	
+	:# Select the output directory
+	set "CONFIG.H=config.%COMPUTERNAME%.h"
+	if not exist %CONFIG.H% set "CONFIG.H=config.h"
+	if exist %CONFIG.H% call %CONFIG.H%
+	if not defined OUTDIR (
+	  set "\OUTDIR=\bin"
+	) else if "%OUTDIR%"=="." (
+	  set "\OUTDIR="
+	) else (
+	  set "\OUTDIR=\%OUTDIR%"
+	)
 	
 	:# Set the output file name
-	pushd .. & set "ZIP=!CD!\SysTools.zip" & popd
+	pushd .. & set "ZIP=!CD!%\OUTDIR%\SysTools.zip" & popd
 	
+	:# Select the 32-bits programs directory to use.
+	for %%d in (WIN95 WINXP WIN32) do ( :# May be overriden by setting PROGRAMS_DIR before running make release.
+	  if not defined PROGRAMS_DIR if exist SRC%\OUTDIR%\%%d (
+	    pushd SRC%\OUTDIR%\%%d & set "PROGRAMS_DIR=!CD!" & popd
+	  )
+	)
+	if not exist "%PROGRAMS_DIR%" (%MSG% Error: Can't find the programs directory. & exit 1) &:# Also fails if it's not defined
+
 	:# Build the program list
 	set "QUIET_MAKE=1" &:# Tell All.mak, etc, to skip low priority information messages
 	%FOREACHLINE% %%f in ('$(BMAKE) -C SRC list_programs') do set "PROGRAMS=%%f"
-	$(MSG) PROGRAMS = (!PROGRAMS!)
-	if not defined PROGRAMS ($(MSG) Error: Can't get the programs list. & exit 1)
+	%MSG% PROGRAMS = (!PROGRAMS!)
+	if not defined PROGRAMS (%MSG% Error: Can't get the programs list. & exit 1)
 	
 	:# List scripts from Scripts.lst
 	pushd ..
@@ -77,53 +109,70 @@ release:
 	  set "%%l=!%%l:~1!" &:# Remove the initial colon we put in at first
 	  if defined %%l set "%%l=!%%l:~1!" & rem :# Remove the separator space added with each append
 	  set "LIST=(!%%l!)"
-	  $(MSG) %%l = !LIST!
+	  %MSG% %%l = !LIST!
 	)
 	popd
 	
 	:# Rebuild a new zip file
 	set PATH=%PATH%;C:\Program Files\7-zip
 	if exist "%ZIP%" del "%ZIP%"
-	$(MSG) Creating "%ZIP%"
+	%MSG% Creating "%ZIP%"
 
-	:# Select the programs to use.
-	for %%d in (WIN95 WINXP WIN32) do ( :# May be overriden by setting PROGRAMS_DIR before running make release.
-	  if not defined PROGRAMS_DIR if exist SRC\%%d (
-	    pushd SRC\%%d & set "PROGRAMS_DIR=!CD!" & popd
-	  )
-	)
-	if not exist "%PROGRAMS_DIR%" ($(MSG) Error: Can't find the programs directory. & exit 1) &:# Also fails if it's not defined
-
-	:# Add programs
-	$(MSG) Adding programs from %PROGRAMS_DIR%
+	:# Add 32-bits programs (from the selected dir in WIN95 WINXP WIN32)
+	%MSG% Adding WIN32 programs from %PROGRAMS_DIR%
 	pushd "%PROGRAMS_DIR%"
+	:# But some programs may not have been built, if the necessary libraries are missing.
+	set "ALL_PROGRAMS=%PROGRAMS%"
+	set "PROGRAMS="
+	for %%p in (%ALL_PROGRAMS%) do if exist %%p (
+	  set "PROGRAMS=!PROGRAMS! %%p"
+	) else (
+	  %MSG% Warning: %%p not found
+	)
+	if defined PROGRAMS set "PROGRAMS=!PROGRAMS:~1!
 	7z.exe -- a "%ZIP%" !PROGRAMS!
+	if errorlevel 1 exit /b
 	popd
 	
-	:# Add 64-bits programs is they're available and not yet added
-	if exist SRC\WIN64 for %%p in ("%PROGRAMS_DIR%") do if /I "%%~nxp" NEQ "WIN64" (
-	  set "PROGRAMS64="
-	  for %%x in (!PROGRAMS!) do set "PROGRAMS64=!PROGRAMS64! WIN64\%%x"
-	  pushd SRC
-	  pushd WIN64 & set "PROGRAMS64_DIR=!CD!" & popd
-	  $(MSG) Adding WIN64 programs from !PROGRAMS64_DIR!
-	  7z.exe -- a "%ZIP%" !PROGRAMS64!
-	  popd
+	:# Add DOS and WIN64 programs is they're available and not yet added
+	for %%o in (ARM DOS IA64 WIN64) do (
+	  if exist SRC%\OUTDIR%\%%o for %%d in ("%PROGRAMS_DIR%") do if /I "%%~nxd" NEQ "%%o" (
+	    pushd SRC%\OUTDIR%
+	    pushd %%o & set "PROGRAMS%%o_DIR=!CD!" & popd
+	    %MSG% Adding %%o programs from !PROGRAMS%%o_DIR!
+	    :# Some programs may not have been built, if the necessary libraries are missing.
+	    set "PROGRAMS%%o="
+	    for %%p in (%ALL_PROGRAMS%) do if exist %%o\%%p (
+	      set "PROGRAMS%%o=!PROGRAMS%%o! %%o\%%p"
+	    ) else (
+	      findstr /C:"no %%o version" "%CD%\SRC\%%~np.mak" >NUL 2>NUL || %MSG% Warning: %%p not found
+	    )
+	    if defined PROGRAMS%%o set "PROGRAMS%%o=!PROGRAMS%%o:~1!
+	    7z.exe -- a "%ZIP%" !PROGRAMS%%o!
+	    if errorlevel 1 exit /b
+	    popd
+	  )
 	)
 	
 	:# Add scripts for each language
 	for %%l in (Bash Batch PowerShell Tcl) do if defined %%l (
 	  pushd ..\%%l
-	  $(MSG) Adding %%l scripts from !CD!
+	  %MSG% Adding %%l scripts from !CD!
 	  7z.exe -- a "%ZIP%" !%%l!
+	  if errorlevel 1 exit /b
 	  popd
 	)
 	
 	:# Add the doc files
-	$(MSG) Adding README
+	%MSG% Adding README
 	pushd ..\Docs
 	7z.exe a "%ZIP%" Catalog.md
+	if errorlevel 1 exit /b
 	7z.exe rn "%ZIP%" Catalog.md README.md
+	if errorlevel 1 exit /b
 	popd
+	
+	:# Conclusion
+	%MSG% %ZIP% done
 <<
 
