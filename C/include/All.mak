@@ -135,6 +135,7 @@
 #    2017-03-13 JFL Fix build if environment variable OS is not defined.      #
 #    2017-08-29 JFL Bugfix: The help target did output a "1 file copied" msg. #
 #    2017-10-22 JFL Changed OUTDIR default to the bin subdirectory.           #
+#    2017-10-30 JFL Corrected a typo in the help message.                     #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -621,7 +622,7 @@ Targets:
   clean                  Erase all output files in BIOS, DOS, WIN32, WIN64
   distclean              Erase all output files and all configuration files
   {prog}.com             Build BIOS and DOS versions of {prog}.com
-  {prog}.exe             Build DOS and all Windows versions of {prog}.com
+  {prog}.exe             Build DOS and all Windows versions of {prog}.exe
   Debug\{prog}.exe       Build BIOS and DOS versions of the same
   {prog}.exe             Build DOS, WIN32, and WIN64 versions of {prog}.exe
   Debug\{prog}.exe       Build DOS, WIN32, and WIN64 debug versions of the same
