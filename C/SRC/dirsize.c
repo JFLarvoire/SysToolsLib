@@ -51,13 +51,17 @@
 *		    Version 3.1.3.  					      *
 *    2017-10-02 JFL Fixed a conditional compilation bug in MSDOS.	      *
 *		    Version 3.1.4.    					      *
+*    2017-10-30 JFL Minor changes to the debugging output.		      *
+*    2017-10-31 JFL Added options -i and -I. Changed the default back to      *
+*		    iContinue = FALSE, negating the 2012-01-09 decision above.*
+*		    Version 3.2.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.1.4"
-#define PROGRAM_DATE    "2017-10-02"
+#define PROGRAM_VERSION "3.2"
+#define PROGRAM_DATE    "2017-10-31"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -94,8 +98,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-#define OS_NAME "DOS"
-
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
 #define PATHNAME_SIZE FILENAME_MAX
@@ -110,16 +112,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
@@ -136,8 +128,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _OS2	/* Automatically defined when targeting an OS/2 application? */
 
-#define OS_NAME "OS/2"
-
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
 #define PATHNAME_SIZE CCHMAXPATH	/* FILENAME_MAX incorrect in stdio.h */
@@ -152,16 +142,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /************************* Unix-specific definitions *************************/
 
 #ifdef __unix__	/* Automatically defined when targeting a Unix application */
-
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
 
 #define DIRSEPARATOR_CHAR '/'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "/"
@@ -219,7 +199,7 @@ char init_dir[PATHNAME_SIZE];       /* Initial directory */
 char init_drive;                    /* Initial drive */
 long csz=0;			    /* Cluster size. 0=Unknown. */
 int band = FALSE;		    /* If TRUE, skip a line every 5 lines */
-int iContinue = TRUE;               /* If TRUE, continue after having an error */
+int iContinue = FALSE;              /* If TRUE, continue after having an error */
 int iQuiet = FALSE;		    /* If TRUE, only display major errors */
 int iVerbose = FALSE;		    /* If TRUE, display additional information */
 int iHuman = TRUE;		    /* If TRUE, display human-friendly values with a comma every 3 digits */
@@ -322,6 +302,14 @@ int main(int argc, char *argv[]) {
       }
       if (streq(arg+1, "H")) {
 	iHuman = FALSE;
+	continue;
+      }
+      if (streq(arg+1, "i")) {
+	iContinue = TRUE;
+	continue;
+      }
+      if (streq(arg+1, "I")) {
+	iContinue = FALSE;
 	continue;
       }
       if (streq(arg+1, "k")) {
@@ -482,7 +470,7 @@ int main(int argc, char *argv[]) {
 char *version(void) {
   return (PROGRAM_VERSION
 	  " " PROGRAM_DATE
-	  " " OS_NAME
+	  " " EXE_OS_NAME
 	  DEBUG_VERSION
 	  );
 }
@@ -509,6 +497,8 @@ Switches:\n\
   -from Y-M-D List only files starting from that date.\n\
   -g	      Display sizes in Giga bytes.\n\
   -H	      Display sizes without the human-friendly commas.\n\
+  -i	      Ignore directory access errors.\n\
+  -I	      Stop in case of directory access error. (Default)\n\
   -k	      Display sizes in Kilo bytes.\n\
   -m	      Display sizes in Mega bytes.\n\
   -q          Quiet mode: Do not display minor errors.\n\
@@ -715,10 +705,16 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
     iErr = lstat(pDE->d_name, &sStat);
 #endif
 
+#if !HAS_MSVCLIBX
     DEBUG_PRINTF(("chdir(\"%s\");\n", pDE->d_name));
+#endif
     iErr = chdir(pDE->d_name);
     if (iErr) {
-      if (iVerbose) fprintf(stderr, "Warning: Cannot access directory %s.\n", pDE->d_name);
+      char *pszSeverity = iContinue ? "Warning" : "Error";
+      if (iVerbose || !iContinue) {
+	getcwd(szCurDir, sizeof(szCurDir));   /* Canonic name of the target directory */
+      	fprintf(stderr, "%s: Cannot access directory %s" DIRSEPARATOR_STRING "%s. %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
+      }
       if (!iContinue) finis(RETCODE_INACCESSIBLE);
     } else {
       dSize = ScanFiles(pOpts, pConstraints);
@@ -726,7 +722,9 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
 	getcwd(szCurDir, sizeof(szCurDir));   /* Canonic name of the target directory */
 	affiche(szCurDir, dSize);
       }
+#if !HAS_MSVCLIBX
       DEBUG_PRINTF(("chdir(\"..\");\n"));
+#endif
       iErr = chdir("..");
   
       size += dSize;  /* Totalize sizes */
