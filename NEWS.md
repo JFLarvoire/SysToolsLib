@@ -4,16 +4,34 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-11-14
+### Fixed
+- C/MsvcLibX/*: Additional fixes for support for paths > 260 characters for dirsize.exe.
+- C/SRC/dirsize.c: Added support for paths > 260 bytes in Windows 10 with the registry opt-in enabled.
+  But it's still broken in Windows <= 8, and in Windows 10 if the registry opt-in has not been enabled.
+- */configure.bat, */make.bat: Work around a cmd bug that broke the cmd windows title.
+- C/include/src2objs.mak: Changed the output file name to $(PROGRAM).objects.
+  This fixes the bug which caused libraries to be rebuilt even if no source had changed.
+
+### Changed
+- C/Include/*: Changed the default output dir to bin instead of .
+- C/Include/*.mak: Added rules to build DLLs.
+- */configure.bat, */make.bat: Added a search in the PATH, to be forward-compatible.
+  Added the :CheckDir subroutine to search consistently.
+
 ## [Unreleased] 2017-10-27
+### Fixed
 - C/SRC/which.c: Also search for shell internal commands. Added options -i and -I to control that internal command search.
 - C/NMakeFile: Improved make release messages and errors. Also release DOS, WIN64, etc, programs, if available.
 - C/NMakeFile & *.mak : Changed the default output directory from . to bin. Ex: WIN32 output now goes to bin\WIN32\.
 
 ## [Unreleased] 2017-10-25
+### Fixed
 - C/MsvcLibX/*: Additional fixes for support for paths > 260 characters for The Silver Searcher (ag.exe).
   The tools in C/SRC/* are not affected.
 
 ## [Unreleased] 2017-10-09
+### New
 - C/SRC/zap.c: Remove files, without complaining if already absent.
 
 ### Fixed
