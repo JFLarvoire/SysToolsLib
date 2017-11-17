@@ -7,7 +7,6 @@ Batch\82w.bat
 Batch\a2u.bat
 Batch\ADDPATH.BAT
 Batch\AddPaths.bat
-Batch\b64dec.bat
 Batch\DIRCC.BAT
 Batch\DIRDIR.BAT
 Batch\Disconnect.bat
@@ -51,6 +50,8 @@ PowerShell\Reconnect.ps1
 PowerShell\ShadowCopy.ps1
 PowerShell\Test-IPv6Components.ps1
 PowerShell\Window.ps1
+Tcl\b64dec.tcl
+Tcl\b64enc.tcl
 Tcl\cascade.tcl
 Tcl\cfdt.tcl
 Tcl\fixmht.tcl

@@ -61,6 +61,7 @@ Name		| OS   	| Description										| Example
 82w.bat		| -W-	| Convert UTF-8 text to Windows ANSI. Useful to decode scrambled emails. Uses conv.exe. | `12 82w`	
 a2u.bat		| -W-	| Convert ANSI text to 16-bits Unicode text.						|
 b64dec.tcl	| -WL	| Decode base64-encoded data.								| `12 b64dec`
+b64enc.tcl	| -WL	| Encode data in base64.								| `12 b64enc`
 codepage.exe	| -W-	| Get information about the current and usable console code pages.			| `codepage 850` &:# Display a table of code page 850 characters.
 conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.txt | conv w .`
 deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|

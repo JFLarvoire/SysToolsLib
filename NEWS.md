@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-11-17
+### Fixed
+- The library included a useless b64dec.bat, instead of b64dec.tcl.
+- C/SRC/chars.c: Fixed the output of the NUL character, which broke the columns alignment
+### Changed
+- C/SRC/chars.c: Added a -a option to output all characters, even those known to break alignment.
+  Useful for testing filtering programs with _all_ 8-bit characters.
+### New
+- Tcl/b64dec.tcl: A base64 decoder, that was listed in the catalog, but missing in the library.
+- Tcl/b64enc.tcl: A base64 encoder, symmetric to b64dec.tcl.
+
 ## [Unreleased] 2017-11-14
 ### Fixed
 - C/MsvcLibX/*: Additional fixes for support for paths > 260 characters for dirsize.exe.
