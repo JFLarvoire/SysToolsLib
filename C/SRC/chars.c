@@ -13,13 +13,16 @@
 *		    Version 1.1.					      *
 *    2017-03-06 JFL Added an optional code page argument for Windows.         *
 *		    Version 1.2.					      *
+*    2017-11-17 JFL Fixed the output of the NUL character.		      *
+*		    Added option -a.					      *
+*		    Version 1.3.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2017-03-06"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2017-11-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -43,6 +46,11 @@
 
 #include <windows.h>
 
+#include <io.h>		/* For _setmode() */
+#include <fcntl.h>  
+
+#define EOL "\r\n"
+
 #endif /* _WIN32 */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -51,6 +59,11 @@
 
 #define OS_NAME "DOS"
 
+#include <io.h>		/* For _setmode() */
+#include <fcntl.h>  
+
+#define EOL "\r\n"
+
 #endif /* _MSDOS */
 
 /************************* OS/2-specific definitions *************************/
@@ -58,6 +71,8 @@
 #ifdef _OS2	/* To be defined on the command line for the OS/2 version */
 
 #define OS_NAME "OS/2"
+
+#define EOL "\r\n"
 
 #endif /* _OS2 */
 
@@ -74,6 +89,8 @@
 #else
 #define OS_NAME "Unix"
 #endif
+
+#define EOL "\n"
 
 #endif /* __unix__ */
 
@@ -93,6 +110,7 @@ int main(int argc, char *argv[])
     int iCP = 0;
     DWORD dwCP0 = GetConsoleOutputCP();
 #endif
+    int iAll = FALSE;
 #ifdef __unix__
     int isUTF8 = FALSE;
     char *pszLang = getenv("LANG");
@@ -108,6 +126,12 @@ int main(int argc, char *argv[])
 #endif
         ) {
         arg[0] = '-';
+	if (   streq(arg, "-a")     /* -a: Display all characters */
+	    || streq(arg, "--all"))
+	    {
+	    iAll = TRUE;
+	    continue;
+	    }
 	if (   streq(arg, "-h")	    /* Display usage */
 	    || streq(arg, "-help")	/* The historical name of that switch */
 	    || streq(arg, "--help")
@@ -137,6 +161,11 @@ int main(int argc, char *argv[])
     if (iCP) SetConsoleOutputCP(iCP);
 #endif
 
+#if defined(_MSDOS) || defined(_WIN32)
+  fflush(stdout); /* Make sure any previous output is done in text mode */
+  _setmode( _fileno( stdout ), _O_BINARY );
+#endif
+
     for (j=0; j<16; j++)
 	{
 	for (i=0; i<8; i++)
@@ -145,7 +174,7 @@ int main(int argc, char *argv[])
 
 	    if (!(i&3)) printf("  ");
 
-	    k = (16*i)+j;
+	    l = k = (16*i)+j;
 	    switch (k)
 		{
 #ifndef __unix__
@@ -155,26 +184,26 @@ int main(int argc, char *argv[])
 		case 0x0A:
 		case 0x0D:
 		case 0x1A:
-		    l = ' ';
+		    if (!iAll) l = ' ';
 		    break;
 #endif
 		default:
 #ifdef __unix__
 		    if (k < 0x20) {
-		      l = ' ';
+		      if (!iAll) l = ' ';
 		      break;
 		    }
 #endif
-		    l = k;
 		    break;
 		}
 
-	    printf("  %02X %c", k, l);
+	    printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
+	    fwrite(&l, 1, 1, stdout);
 	    }
-	printf("\n");
+	printf(EOL);
 	}
 
-    printf("\n");
+    printf(EOL);
 
     for (j=0; j<16; j++)
 	{
@@ -196,7 +225,7 @@ int main(int argc, char *argv[])
 #endif
 	    printf("  %02X %c", k, k);
 	    }
-	printf("\n");
+	printf(EOL);
 	}
 
 #ifdef _WIN32
@@ -217,6 +246,7 @@ void usage(void)
 #endif
 "\n\
 Switches:\n\
+  -a|--all      Output all characters, even the control chars like CR LF etc...\n\
   -h|--help|-?  Display this help screen.\n\
   -V|--version  Display this program version and exit.\n\
 \n\
