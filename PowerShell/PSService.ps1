@@ -82,8 +82,8 @@
 #                   Added comments about Windows event logs limitations.      #
 #    2016-11-17 RBM Fixed issue #6 Mangled hyphen in final Unregister-Event.  #
 #    2017-05-10 CJG Added execution policy bypass flag.                       #
-#    2017-10-04 RBL Updated C# code OnStop() routine fixing orphaned procces  #
-#                   left after stoping and starting the service               #
+#    2017-10-04 RBL rblindberg Updated C# code OnStop() routine fixing        #
+#                   orphaned process left after stoping the service.          #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -779,6 +779,7 @@ $source = @"
         SetServiceStatus(ServiceHandle, ref serviceStatus);             // SET STATUS
         EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit"); // EVENT LOG
       }
+    }
 
     public static void Main() {
       System.ServiceProcess.ServiceBase.Run(new Service_$serviceName());
