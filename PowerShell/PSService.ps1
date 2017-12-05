@@ -113,13 +113,7 @@
 
   .PARAMETER Setup
     Install the service.
-	
-  .PARAMETER ServiceUser
-    User account to run the service as, if other than SYSTEM.
-	
-  .PARAMETER ServicePassword
-    Password for ServiceUser.
-	
+
   .PARAMETER Remove
     Uninstall the service.
 
@@ -180,13 +174,10 @@ Param(
 
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
   [Switch]$Setup,               # Install the service
-  
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
   [string]$ServiceUser,        # Set the service to run as this user
-  
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
   [string]$ServicePassword,      # Use this password for the user
-  
   [Parameter(ParameterSetName='Remove', Mandatory=$true)]
   [Switch]$Remove,              # Uninstall the service
 
