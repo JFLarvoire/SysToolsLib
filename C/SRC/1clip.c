@@ -32,13 +32,14 @@
 *    2017-06-28 JFL Fixed the link warning.				      *
 *                   Help displays the actual ANSI and OEM code pages.         *
 *    2017-10-12 JFL Fixed the -t option parsing. Version 1.3.2.		      *
+*    2017-12-05 JFL Display the HTML Format header in dbg mode. Version 1.3.3.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3.2"
-#define PROGRAM_DATE    "2017-10-12"
+#define PROGRAM_VERSION "1.3.3"
+#define PROGRAM_DATE    "2017-12-05"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -400,15 +401,24 @@ int CopyClip(UINT type, UINT codepage) {
 	    char *pc;
 	    int iFirst = 0;
 	    int iLast = nChars - 1; // Remove the trailing NUL
-	    // Skip the clipboard information header
-	    if ((pc = strstr(lpString, "\nStartHTML:")) != NULL) sscanf(pc+11, "%d", &iFirst);
-	    if ((pc = strstr(lpString, "\nEndHTML:")) != NULL) sscanf(pc+9, "%d", &iLast);
-	    // Update the HTML header to declare it's encoded in UTF-8
-	    if (iFirst > (LNEWHEADER - LOLDHEADER)) {
-	      if (!strncmp(lpString + iFirst, szOldHeader, LOLDHEADER)) {
-	      	iFirst -= LNEWHEADER - LOLDHEADER;
-	      	strncpy(lpString + iFirst, szNewHeader, LNEWHEADER);
+	    if (!iDebug) { // Show the unmodified header in debug mode
+	      // Skip the clipboard information header
+	      if ((pc = strstr(lpString, "\nStartHTML:")) != NULL) sscanf(pc+11, "%d", &iFirst);
+	      if ((pc = strstr(lpString, "\nEndHTML:")) != NULL) sscanf(pc+9, "%d", &iLast);
+	      // Update the HTML header to declare it's encoded in UTF-8
+	      if (iFirst > (LNEWHEADER - LOLDHEADER)) {
+		if (!strncmp(lpString + iFirst, szOldHeader, LOLDHEADER)) {
+		  iFirst -= LNEWHEADER - LOLDHEADER;
+		  strncpy(lpString + iFirst, szNewHeader, LNEWHEADER);
+		}
 	      }
+	    }
+	    if (iDebug) {
+	      fflush(stdout); // Necessary in case we've added debugging output before this
+	      _setmode(_fileno(stdout), _O_BINARY);
+	      fwrite(lpString, 1, iFirst, stdout); /* Display the HTML Format header */
+	      fflush(stdout);
+	      _setmode(_fileno(stdout), _O_TEXT); // In case we have more debugging output
 	    }
 	    lpString += iFirst;
 	    nChars = iLast - iFirst;
@@ -581,7 +591,7 @@ int CompareUint(const UINT *pu1, const UINT *pu2) {
   if (*pu1 > *pu2) return 1;
   return 0;
 }
-  
+
 int EnumClip(void) {
   int nChars = 0;
   UINT cfList[CFLISTSIZE];
