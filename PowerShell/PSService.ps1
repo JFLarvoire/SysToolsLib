@@ -82,6 +82,8 @@
 #                   Added comments about Windows event logs limitations.      #
 #    2016-11-17 RBM Fixed issue #6 Mangled hyphen in final Unregister-Event.  #
 #    2017-05-10 CJG Added execution policy bypass flag.                       #
+#    2017-12-05 NWK omrsafetyo Added ServiceUser and ServicePassword to the   #
+#                   script parameters.                                        #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -110,6 +112,11 @@
   .PARAMETER Setup
     Install the service.
 
+  .PARAMETER ServiceUser
+    User account to run the service as, if other than SYSTEM.
+	
+  .PARAMETER ServicePassword
+    Password for ServiceUser.
   .PARAMETER Remove
     Uninstall the service.
 
@@ -170,10 +177,13 @@ Param(
 
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
   [Switch]$Setup,               # Install the service
+
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
-  [string]$User,				# Set the service to run as this user
+  [string]$ServiceUser,        # Set the service to run as this user
+  
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
-  [string]$Password,			# Use this password for the user												   
+  [string]$ServicePassword,      # Use this password for the user
+  
   [Parameter(ParameterSetName='Remove', Mandatory=$true)]
   [Switch]$Remove,              # Uninstall the service
 
@@ -215,15 +225,6 @@ $logName = "Application"                # Event Log name (Unrelated to the logFi
 #         HKLM\System\CurrentControlSet\services\eventlog\Application\NEWLOGNAME
 #	  Else, New-EventLog will fail, saying the log NEWLOGNAME is already registered as a source,
 #	  even though "Get-WinEvent -ListLog NEWLOGNAME" says this log does not exist!
-
-# Load sub function files - omrsafetyo
-if ($Service) {
-	$functionsDir = Join-Path $ScriptDirectoryName functions 
-	$functionsFiles = Get-Childitem $functionsDir -filter *.ps1 | select -expand FullName
-	ForEach ( $functionFile in $functionsFiles ) {
-		. $functionFile
-	}
-}  
 
 # If the -Version switch is specified, display the script version and exit.
 if ($Version) {
@@ -787,8 +788,8 @@ $source = @"
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $userName = $identity.Name      # Ex: "NT AUTHORITY\SYSTEM" or "Domain\Administrator"
 $authority,$name = $username -split "\\"
-# $RunasAccount = (Get-WmiObject win32_Service -Filter "Name='$serviceName'").StartName # not sure if this is needed, keeping commented for now
-$isSystem = $identity.IsSystem	# Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
+$RunasAccount = (Get-WmiObject win32_Service -Filter "Name='$serviceName'").StartName # not sure if this is needed, keeping commented for now
+$isSystem = ($identity.IsSystem -or $userName -eq $RunasAccount)    # Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
 # Log "# `$userName = `"$userName`" ; `$isSystem = $isSystem"
 
 if ($Setup) {Log ""}    # Insert one blank line to separate test sessions logs
@@ -877,31 +878,13 @@ if ($Setup) {                   # Install the service
     Write-Debug "Installation is necessary" # Also avoids a ScriptAnalyzer warning
     # And continue with the installation.
   }
-  if (!(Test-Path $installDir)) {
-	Write-Verbose "Creating installDir: $installDir"											 
+  if (!(Test-Path $installDir)) {											 
     New-Item -ItemType directory -Path $installDir | Out-Null
-  }
-  else {
-	Write-Verbose "installDir exists: $installDir "
   }
   # Copy the service script into the installation directory
   if ($ScriptFullName -ne $scriptCopy) {
     Write-Verbose "Installing $scriptCopy"
-    # Copy-Item $ScriptFullName $scriptCopy
-	# Adding functionality for sub-scripts - omrsafetyo
-	$pattern = [regex]::Escape($scriptDirectoryName)
-	ForEach ( $file in Get-ChildItem -recurse $scriptDirectoryName ) {
-		$FileFullName = $file.FullName
-		$RelativeName = ($FileFullName -replace "$Pattern", "")
-		$NewPath = Join-Path $installDir $RelativeName
-		if ( $file.PSIsContainer -and -not(test-path -path $NewPath) ) {
-			Write-Verbose "Creating $NewPath"
-			New-Item -ItemType directory -Path $NewPath | Out-Null
-		} else {
-			Write-Verbose "Installing $NewPath"
-			Copy-Item $FileFullName $NewPath
-		}
-	}
+    Copy-Item $ScriptFullName $scriptCopy
   }
   # Generate the service .EXE from the C# source embedded in this script
   try {
@@ -914,13 +897,13 @@ if ($Setup) {                   # Install the service
   }
   # Register the service
   Write-Verbose "Registering service $serviceName"
-  if ( $username -and $password ) {
-	$securePassword = ConvertTo-SecureString $Password -AsPlainText -Force
-	$Credentials = New-Object -Type System.Management.Automation.PSCredential ($User,$securePassword)
-	$pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic -Credential $Credentials
+  if ( $ServiceUser -and $ServicePassword ) {
+    $securePassword = ConvertTo-SecureString $ServicePassword -AsPlainText -Force
+    $Credentials = New-Object -Type System.Management.Automation.PSCredential ($ServiceUser,$securePassword)
+    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic -Credential $Credentials
   }
   else {
-	$pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
+    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
   }
 
   return
@@ -946,11 +929,6 @@ if ($Remove) {                  # Uninstall the service
   }
   # Remove the installed files
   if (Test-Path $installDir) {
-	$objInstallDir = Get-Item $installDir
-	if ( $objInstallDir.Name -eq $serviceName ) {
-		Write-Verbose "Removing directory $installDir"
-		Remove-Item $installDir -recurse -force
-		return
     foreach ($ext in ("exe", "pdb", "ps1")) {
       $file = "$installDir\$serviceName.$ext"
       if (Test-Path $file) {
@@ -1041,4 +1019,3 @@ if ($Service) {                 # Run the service
   }
   return
 }
-
