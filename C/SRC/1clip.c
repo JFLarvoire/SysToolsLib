@@ -33,6 +33,7 @@
 *                   Help displays the actual ANSI and OEM code pages.         *
 *    2017-10-12 JFL Fixed the -t option parsing. Version 1.3.2.		      *
 *    2017-12-05 JFL Display the HTML Format header in dbg mode. Version 1.3.3.*
+*		    Added option -r to get RTF data.			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -165,6 +166,10 @@ int main(int argc, char *argv[]) {
 	codepage = CP_OEMCP;
 	continue;
       }
+      if (streq(arg+1, "r")) {			/* -r: Get the RTF */
+	type = RegisterClipboardFormat("Rich Text Format");
+	continue;
+      }
       if (streq(arg+1, "t")) {			/* -t: Type */
 	if (++i < argc) sscanf(argv[i], "%u", &type);
 	continue;
@@ -248,6 +253,7 @@ Options:\n\
   -l      List clipboard formats available.\n\
   -o      Get the OEM text from the clipboard.\n\
   -O      Output using the OEM code page #%u encoding.\n\
+  -r      Get the RTF data from the clipboard.\n\
   -t N    Get format N. Default: 1 = plain text.\n\
   -u      Get the Unicode text from the clipboard. (Default)\n\
   -U      Output using the UTF-8 code page #65001 encoding.\n\
@@ -398,6 +404,7 @@ int CopyClip(UINT type, UINT codepage) {
 	  if (   (type > CF_PRIVATEFIRST)
 	    && ((n = GetClipboardFormatName(type, buf, sizeof(buf))) != 0)
 	    && streq(buf, "HTML Format")) { // Special case for HTML:
+	    // https://msdn.microsoft.com/en-us/library/aa767917.aspx
 	    char *pc;
 	    int iFirst = 0;
 	    int iLast = nChars - 1; // Remove the trailing NUL
