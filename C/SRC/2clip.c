@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
     WCHAR *pwUnicodeBuf = (WCHAR *)pBuffer;
     if (type) {	/* This is a specific data type */
       char header[256];
-      if (isHTML) { // https://msdn.microsoft.com/en-us/library/aa767917(VS.85).aspx
+      if (isHTML) { // https://msdn.microsoft.com/en-us/library/aa767917.aspx
       	char *pszFormat = "Version:0.9\r\nStartHTML:%d\r\nEndHTML:%d\r\nStartFragment:%d\r\nEndFragment:%d\r\n";
       	int nHead = 50; /* Initial estimate for the number of characters in the header. (After formatting!) */
       	char *pc;
