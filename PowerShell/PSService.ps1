@@ -9,10 +9,10 @@
 #                   in the PowerShell subdirectory.                           #
 #                   Please report any problem in the Issues tab in that       #
 #                   GitHub repository in                                      #
-#                   https://github.com/JFLarvoire/SysToolsLib/issues	      #
+#                   https://github.com/JFLarvoire/SysToolsLib/issues          #
 #                   If you do submit a pull request, please add a comment at  #
 #                   the end of this header with the date, your initials, and  #
-#		    a description of the changes. Also update $scriptVersion. #
+#                   a description of the changes. Also update $scriptVersion. #
 #                                                                             #
 #                   The initial version of this script was described in an    #
 #                   article published in the May 2016 issue of MSDN Magazine. #
@@ -73,9 +73,9 @@
 #    2016-06-09 JFL Finalized the PSThread management routines error handling.#
 #                   This finally fixes issue #1.                              #
 #    2016-08-22 JFL Fixed issue #3 creating the log and install directories.  #
-#		    Thanks Nischl.					      #
+#                   Thanks Nischl.                                            #
 #    2016-09-06 JFL Fixed issue #4 detecting the System account. Now done in  #
-#		    a language-independent way. Thanks A Gonzalez.	      #
+#                   a language-independent way. Thanks A Gonzalez.            #
 #    2016-09-19 JFL Fixed issue #5 starting services that begin with a number.#
 #                   Added a $ServiceDescription string global setting, and    #
 #                   use it for the service registration.                      #
@@ -84,6 +84,8 @@
 #    2017-05-10 CJG Added execution policy bypass flag.                       #
 #    2017-10-04 RBL rblindberg Updated C# code OnStop() routine fixing        #
 #                   orphaned process left after stoping the service.          #
+#    2017-12-05 NWK omrsafetyo Added ServiceUser and ServicePassword to the   #
+#                   script parameters.                                        #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -112,6 +114,11 @@
   .PARAMETER Setup
     Install the service.
 
+  .PARAMETER ServiceUser
+    User account to run the service as, if other than SYSTEM.
+	
+  .PARAMETER ServicePassword
+    Password for ServiceUser.
   .PARAMETER Remove
     Uninstall the service.
 
@@ -173,6 +180,12 @@ Param(
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
   [Switch]$Setup,               # Install the service
 
+  [Parameter(ParameterSetName='Setup', Mandatory=$false)]
+  [string]$ServiceUser,         # Set the service to run as this user
+  
+  [Parameter(ParameterSetName='Setup', Mandatory=$false)]
+  [string]$ServicePassword,     # Use this password for the user
+  
   [Parameter(ParameterSetName='Remove', Mandatory=$true)]
   [Switch]$Remove,              # Uninstall the service
 
@@ -186,7 +199,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2017-10-04"
+$scriptVersion = "2017-11-29"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -805,7 +818,8 @@ $source = @"
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $userName = $identity.Name      # Ex: "NT AUTHORITY\SYSTEM" or "Domain\Administrator"
 $authority,$name = $username -split "\\"
-$isSystem = $identity.IsSystem	# Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
+$RunasAccount = (Get-WmiObject win32_Service -Filter "Name='$serviceName'").StartName # not sure if this is needed, keeping commented for now
+$isSystem = ($identity.IsSystem -or $userName -eq $RunasAccount)    # Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
 # Log "# `$userName = `"$userName`" ; `$isSystem = $isSystem"
 
 if ($Setup) {Log ""}    # Insert one blank line to separate test sessions logs
@@ -894,7 +908,7 @@ if ($Setup) {                   # Install the service
     Write-Debug "Installation is necessary" # Also avoids a ScriptAnalyzer warning
     # And continue with the installation.
   }
-  if (!(Test-Path $installDir)) {
+  if (!(Test-Path $installDir)) {											 
     New-Item -ItemType directory -Path $installDir | Out-Null
   }
   # Copy the service script into the installation directory
@@ -913,7 +927,14 @@ if ($Setup) {                   # Install the service
   }
   # Register the service
   Write-Verbose "Registering service $serviceName"
-  $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
+  if ( $ServiceUser -and $ServicePassword ) {
+    $securePassword = ConvertTo-SecureString $ServicePassword -AsPlainText -Force
+    $Credentials = New-Object -Type System.Management.Automation.PSCredential ($ServiceUser,$securePassword)
+    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic -Credential $Credentials
+  }
+  else {
+    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
+  }
 
   return
 }
@@ -1028,4 +1049,3 @@ if ($Service) {                 # Run the service
   }
   return
 }
-
