@@ -14,13 +14,14 @@
 #    2017-11-17 JFL Added a workaround to correct the output to the console.  #
 #                   Use the base64::decode library routine by default.        #
 #                   Added option -V.                                          #
+#    2017-11-19 JFL Use tell instead of chan tell. This works in Tcl <= 8.4.  #
 #                                                                             #
 #         © Copyright 2017 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-set version "2017-11-17"
+set version "2017-11-19"
 set script [file tail $::argv0]    ; # This script name.
 set verbosity 1                    ; # 0=quiet; 1=normal; 2=verbose; 3=debug
 proc Debug {} { expr $::verbosity > 2 }
@@ -102,22 +103,18 @@ while {"$args" != ""} {
   }
 }
 
-# Make sure Tcl does not change data in our back.
+# Make sure Tcl does not change data.
 fconfigure stdin -translation binary
 # But using binary translation (and thus encoding) for the output breaks the Windows console output.
 # Using lf translation still uses the system encoding. This fixes the console output, but breaks output to files.
 # We'd need to use lf translation for the console, and binary translation for files and pipes.
 # Unfortunately I could find no reliable way to detect when stdout is the console. (There are documented ways in Unix, but the problem is in Windows.)
-# Workaround: Distinguish files from pipes and consoles, as files support [chan tell], whereas the other two don't and return -1.
-# This should fix console and files, but still break pipes. Yet it works in all three. I don't know why. Maybe Tcl detects pipes, and encodes things differently for them.
+# Workaround: Distinguish files from pipes and consoles, as files support tell, whereas the other two don't and return -1.
+# This should fix console and files, but still break pipes. Yet it works in all three. I suppose that Tcl detects pipes, and encodes things differently for them.
 set translation binary
-catch { # The [chan tell] and [encoding] functions aren't supported in Tcl 8.4
-  DebugString stderr "chan tell stdout = [chan tell stdout]"
-  DebugString stderr "encoding system = [encoding system]"
-  if {[chan tell stdout] == -1} { # This is the console or a pipe
-    set translation lf
-  }
-} output
+if {[tell stdout] == -1} { # This is the console or a pipe
+  set translation lf
+}
 fconfigure stdout -translation $translation
 
 set string [read stdin]

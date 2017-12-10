@@ -29,13 +29,14 @@
 *		    Removed the sz prefix in buffer variables names.	      *
 *		    Version 1.3.2.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
+*    2017-12-05 JFL Added options -h and -r, for HTML and RTF. Version 1.4.   *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3.2"
-#define PROGRAM_DATE    "2014-11-14"
+#define PROGRAM_VERSION "1.4"
+#define PROGRAM_DATE    "2017-12-05"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -69,9 +70,7 @@
 
 void usage(void);
 int IsSwitch(char *pszArg);
-#if 0
-int ToClip(const char* pBuffer, size_t lBuf);
-#endif
+int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
 int ToClipW(const WCHAR* pwBuffer, size_t nWChars);
 
 /*---------------------------------------------------------------------------*\
@@ -101,6 +100,9 @@ int main(int argc, char *argv[]) {
   char   *pBuffer;
   int i;
   UINT codepage;
+  UINT type = 0;
+  int iDone;
+  int isHTML = FALSE;
 
   /* Record the console code page, to allow converting the output accordingly */
   codepage = GetConsoleOutputCP();
@@ -117,8 +119,17 @@ int main(int argc, char *argv[]) {
 	codepage = CP_ACP;
 	continue;
       }
+      if (streq(arg+1, "h")) {		/* Register the input as HTML */
+	type = RegisterClipboardFormat("HTML Format");
+	isHTML = TRUE;
+	continue;
+      }
       if (streq(arg+1, "O")) {		/* Assume the input is OEM text */
 	codepage = CP_OEMCP;
+	continue;
+      }
+      if (streq(arg+1, "r")) {		/* Register the input as RTF */
+	type = RegisterClipboardFormat("Rich Text Format");
 	continue;
       }
       if (streq(arg+1, "u")) {		/* Assume the input is Unicode */
@@ -156,27 +167,49 @@ int main(int argc, char *argv[]) {
   }
   if (nTotal > 0) {
     WCHAR *pwUnicodeBuf = (WCHAR *)pBuffer;
-    if (codepage != CP_NULL) {
-      pwUnicodeBuf = (WCHAR *)malloc(2*(nTotal));
-      if (!pwUnicodeBuf) {
-	COMPLAIN("Insufficient memory!");
-	exit(1);
+    if (type) {	/* This is a specific data type */
+      char header[256];
+      if (isHTML) { // https://msdn.microsoft.com/en-us/library/aa767917.aspx
+      	char *pszFormat = "Version:0.9\r\nStartHTML:%d\r\nEndHTML:%d\r\nStartFragment:%d\r\nEndFragment:%d\r\n";
+      	int nHead = 50; /* Initial estimate for the number of characters in the header. (After formatting!) */
+      	char *pc;
+      	int iFragment = 0;
+      	int iEndFragment = (int)nTotal;
+	if (((pc = strstr(pBuffer, "<body")) != NULL) && ((pc = strstr(pc, ">")) != NULL)) iFragment = (int)(pc+1-pBuffer);
+	if ((pc = strstr(pBuffer, "</body")) != NULL) iEndFragment = (int)(pc-pBuffer);
+      	for (i = 0; i != nHead; nHead = i) { // Repeat until the string length stabilizes
+	  i = sprintf(header, pszFormat, nHead, nHead+nTotal, nHead+iFragment, nHead+iEndFragment);
+	}
+	pBuffer = realloc(pBuffer, nTotal + nHead);
+	memmove(pBuffer+nHead, pBuffer, nTotal);
+	memmove(pBuffer, header, nHead);
+	nTotal += nHead;
       }
-      nTotal = MultiByteToWideChar(codepage,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-			           0,			/* dwFlags, */
-			           pBuffer,		/* lpMultiByteStr, */
-			           (int)nTotal,		/* cbMultiByte, */
-			           pwUnicodeBuf,	/* lpWideCharStr, */
-			           (int)nTotal		/* cchWideChar, */
-			           );
-      if (!nTotal) {
-	COMPLAIN("Can't convert the intput to Unicode!");
-	exit(1);
+      iDone = ToClip(pBuffer, nTotal, type);
+    } else {	/* This is text. Convert it to Unicode to avoid codepage issues */
+      if (codepage != CP_NULL) {
+	pwUnicodeBuf = (WCHAR *)malloc(2*(nTotal));
+	if (!pwUnicodeBuf) {
+	  COMPLAIN("Insufficient memory!");
+	  exit(1);
+	}
+	nTotal = MultiByteToWideChar(codepage,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
+				     0,			/* dwFlags, */
+				     pBuffer,		/* lpMultiByteStr, */
+				     (int)nTotal,		/* cbMultiByte, */
+				     pwUnicodeBuf,	/* lpWideCharStr, */
+				     (int)nTotal		/* cchWideChar, */
+				     );
+	if (!nTotal) {
+	  COMPLAIN("Can't convert the intput to Unicode!");
+	  exit(1);
+	}
+      } else {
+	nTotal /= 2;	/* # of wide unicode characters */
       }
-    } else {
-      nTotal /= 2;	/* # of wide unicode characters */
+      iDone = ToClipW(pwUnicodeBuf, nTotal);
     }
-    if (!ToClipW(pwUnicodeBuf, nTotal)) {
+    if (!iDone) {
       COMPLAIN("Failed to write to the clipboard!");
       exit(1);
     }
@@ -221,7 +254,9 @@ Usage:\n\
 Switches:\n\
   -?        Display this help screen\n\
   -A        Assume input is ANSI text (Code page 1252)\n\
+  -h        Register input as HTML\n\
   -O        Assume input is OEM text (Code page 437)\n\
+  -r        Register input as RTF\n\
   -u        Assume input is Unicode text\n\
   -U        Assume input is UTF-8 text (Code page 65001)\n\
   -V        Display the program version\n\
@@ -265,7 +300,6 @@ int IsSwitch(char *pszArg)
 	}
     }
 
-#if 0
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function:	    ToClip						      |
@@ -274,21 +308,23 @@ int IsSwitch(char *pszArg)
 |									      |
 |   Parameters:     const char *pBuffer     The data buffer to copy	      |
 |		    size_t lBuf		    The number of bytes to copy       |
+|		    UINT cf		    Clipboard Format. Dflt: CF_TEXT   |
 |									      |
 |   Returns:	    TRUE if success, or FALSE if FAILURE.		      |
 |									      |
 |   History:								      |
-|									      |
 |    1997-05-09 JFL Adapted from Windows Developer's Journal sample           |
 |    2004-08-11 JFL Fixed a bug that caused the last character to be lost.    |
 |    2014-11-14 JFL Change NUL characters to spaces, to avoid truncating the  |
 |		    clipboard data at the first NUL in the input stream.      |
+|    2017-12-05 JFL Added the cf argument.                                    |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int ToClip(const char* pBuffer, size_t lBuf)
+int ToClip(const char* pBuffer, size_t lBuf, UINT cf)
     {
-    int iResult = FALSE;     /* assume failure */
+    int iResult = FALSE;	/* assume failure */
+    if (!cf) cf = CF_TEXT;	/* If not set, use the default Clipboard Format */
 
     if (OpenClipboard(NULL))
         {
@@ -300,12 +336,12 @@ int ToClip(const char* pBuffer, size_t lBuf)
                 size_t n;
 		char* pGlobalBuf = (char *)GlobalLock(hClipData);
 		CopyMemory(pGlobalBuf, pBuffer, lBuf);
-		for (n=0; n<nWChars; n++) { /* Change NUL characters to spaces */
+		for (n=0; n<lBuf; n++) { /* Change NUL characters to spaces */
 		  if (!pGlobalBuf[n]) pGlobalBuf[n] = pGlobalBuf[n] = ' ';
 		}
 		pGlobalBuf[lBuf++] = '\0'; // ~~JFL 2004-08-11 Append a NUL.
                 GlobalUnlock(hClipData);
-                if (SetClipboardData(CF_TEXT, hClipData))
+                if (SetClipboardData(cf, hClipData))
 		    iResult = TRUE; /* finally, success! */
                 CloseClipboard();
                 }
@@ -320,7 +356,6 @@ int ToClip(const char* pBuffer, size_t lBuf)
 
     return iResult;
     }
-#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
