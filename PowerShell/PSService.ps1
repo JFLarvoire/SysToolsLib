@@ -52,6 +52,13 @@
 #                   Service installation and usage: See the dynamic help      #
 #                   section below, or run: help .\PSService.ps1 -Detailed     #
 #                                                                             #
+#                   Debugging: The Log function writes messages into a file   #
+#                   called C:\Windows\Logs\PSService.log (or actually         #
+#                   ${env:windir}\Logs\$serviceName.log).                     #
+#                   It is very convenient to monitor what's written into that #
+#                   file with a WIN32 port of the Unix tail program. Usage:   #
+#                   tail -f C:\Windows\Logs\PSService.log                     #
+#                                                                             #
 #   History                                                                   #
 #    2015-07-10 JFL jf.larvoire@hpe.com created this script.                  #
 #    2015-10-13 JFL Made this script completely generic, and added comments   #
@@ -86,6 +93,13 @@
 #                   orphaned process left after stoping the service.          #
 #    2017-12-05 NWK omrsafetyo Added ServiceUser and ServicePassword to the   #
 #                   script parameters.                                        #
+#    2017-12-10 JFL Removed the unreliable service account detection tests,   #
+#                   and instead use dedicated -SCMStart and -SCMStop          #
+#                   arguments in the PSService.exe helper app.                #
+#                   Renamed variable userName as currentUserName.             #
+#                   Renamed arguments ServiceUser and ServicePassword to the  #
+#                   more standard UserName and Password.                      #
+#                   Also added the standard argument -Credential.             #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -113,17 +127,51 @@
 
   .PARAMETER Setup
     Install the service.
+    Optionally use the -Credential or -UserName arguments to specify the user
+    account for running the service. By default, uses the LocalSystem account.
+    Known limitation with the old PowerShell v2: It is necessary to use -Credential
+    or -UserName. For example, use -UserName LocalSystem to emulate the v3+ default.
 
-  .PARAMETER ServiceUser
-    User account to run the service as, if other than SYSTEM.
-	
-  .PARAMETER ServicePassword
-    Password for ServiceUser.
+  .PARAMETER Credential
+    User and password credential to use for running the service.
+    For use with the -Setup command.
+    Generate a PSCredential variable with the Get-Credential command.
+
+  .PARAMETER UserName
+    User account to use for running the service.
+    For use with the -Setup command, in the absence of a Credential variable.
+    The user must have the "Log on as a service" right. To give him that right,
+    open the Local Security Policy management console, go to the
+    "\Security Settings\Local Policies\User Rights Assignments" folder, and edit
+    the "Log on as a service" policy there.
+    Services should always run using a user account which has the least amount
+    of privileges necessary to do its job.
+    Three accounts are special, and do not require a password:
+    * LocalSystem - The default if no user is specified. Highly privileged.
+    * LocalService - Very few privileges, lowest security risk.
+      Apparently not enough privileges for running PowerShell. Do not use.
+    * NetworkService - Idem, plus network access. Same problems as LocalService.
+
+  .PARAMETER Password
+    Password for UserName. If not specified, you will be prompted for it.
+    It is strongly recommended NOT to use that argument, as that password is
+    visible on the console, and in the task manager list.
+    Instead, use the -UserName argument alone, and wait for the prompt;
+    or, even better, use the -Credential argument.
+
   .PARAMETER Remove
     Uninstall the service.
 
   .PARAMETER Service
     Run the service in the background. Used internally by the script.
+    Do not use, except for test purposes.
+
+  .PARAMETER SCMStart
+    Process Service Control Manager start requests. Used internally by the script.
+    Do not use, except for test purposes.
+
+  .PARAMETER SCMStop
+    Process Service Control Manager stop requests. Used internally by the script.
     Do not use, except for test purposes.
 
   .PARAMETER Control
@@ -157,6 +205,11 @@
     Not installed
 
   .EXAMPLE
+    # Configure the service to run as a different user
+    C:\PS>$cred = Get-Credential -UserName LAB\Assistant
+    C:\PS>.\PSService -Setup -Credential $cred
+
+  .EXAMPLE
     # Send a control message to the service, and verify that it received it.
     C:\PS>PSService -Control Hello
     C:\PS>Notepad C:\Windows\Logs\PSService.log
@@ -178,19 +231,29 @@ Param(
   [Switch]$Status = $($PSCmdlet.ParameterSetName -eq 'Status'), # Get the current service status
 
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
+  [Parameter(ParameterSetName='Setup2', Mandatory=$true)]
   [Switch]$Setup,               # Install the service
 
-  [Parameter(ParameterSetName='Setup', Mandatory=$false)]
-  [string]$ServiceUser,         # Set the service to run as this user
+  [Parameter(ParameterSetName='Setup', Mandatory=$true)]
+  [String]$UserName,              # Set the service to run as this user
   
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
-  [string]$ServicePassword,     # Use this password for the user
+  [String]$Password,              # Use this password for the user
   
+  [Parameter(ParameterSetName='Setup2', Mandatory=$false)]
+  [System.Management.Automation.PSCredential]$Credential, # Service account credential
+
   [Parameter(ParameterSetName='Remove', Mandatory=$true)]
   [Switch]$Remove,              # Uninstall the service
 
   [Parameter(ParameterSetName='Service', Mandatory=$true)]
-  [Switch]$Service,             # Run the service
+  [Switch]$Service,               # Run the service (Internal use only)
+
+  [Parameter(ParameterSetName='SCMStart', Mandatory=$true)]
+  [Switch]$SCMStart,              # Process SCM Start requests (Internal use only)
+
+  [Parameter(ParameterSetName='SCMStop', Mandatory=$true)]
+  [Switch]$SCMStop,               # Process SCM Stop requests (Internal use only)
 
   [Parameter(ParameterSetName='Control', Mandatory=$true)]
   [String]$Control = $null,     # Control message to send to the service
@@ -199,7 +262,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2017-11-29"
+$scriptVersion = "2017-12-10"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -300,7 +363,7 @@ Function Log () {
     New-Item -ItemType directory -Path $logDir | Out-Null
   }
   if ($String.length) {
-    $string = "$(Now) $pid $userName $string"
+    $string = "$(Now) $pid $currentUserName $string"
   }
   $string | Out-File -Encoding ASCII -Append "$logFile"
 }
@@ -581,7 +644,7 @@ Function Start-PipeHandlerThread () {
   Start-PSThread -Variables @{  # Copy variables required by function Log() into the thread context
     logDir = $logDir
     logFile = $logFile
-    userName = $userName
+    currentUserName = $currentUserName
   } -Functions Now, Log, Receive-PipeMessage -ScriptBlock {
     Param($pipeName, $pipeThreadName)
     try {
@@ -712,7 +775,7 @@ $source = @"
     private static extern bool SetServiceStatus(IntPtr handle, ref ServiceStatus serviceStatus);
 
     protected override void OnStart(string [] args) {
-      EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Entry. Starting script '$scriptCopyCname' -Start"); // EVENT LOG
+      EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Entry. Starting script '$scriptCopyCname' -SCMStart"); // EVENT LOG
       // Set the service state to Start Pending.                        // SET STATUS [
       // Only useful if the startup time is long. Not really necessary here for a 2s startup time.
       serviceStatus.dwServiceType = ServiceType.SERVICE_WIN32_OWN_PROCESS;
@@ -727,7 +790,7 @@ $source = @"
         p.StartInfo.UseShellExecute = false;
         p.StartInfo.RedirectStandardOutput = true;
         p.StartInfo.FileName = "PowerShell.exe";
-        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -Start"; // Works if path has spaces, but not if it contains ' quotes.
+        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -SCMStart"; // Works if path has spaces, but not if it contains ' quotes.
         p.Start();
         // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
         string output = p.StandardOutput.ReadToEnd();
@@ -765,11 +828,11 @@ $source = @"
         p.StartInfo.UseShellExecute = false;
         p.StartInfo.RedirectStandardOutput = true;
         p.StartInfo.FileName = "PowerShell.exe";
-        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -Stop"; // Works if path has spaces, but not if it contains ' quotes.
+        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -SCMStop"; // Works if path has spaces, but not if it contains ' quotes.
         p.Start();
         // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
         string output = p.StandardOutput.ReadToEnd();
-        // Wait for the completion of the script startup code, that launches the -Service instance
+        // Wait for the PowerShell script to be fully stopped.
         p.WaitForExit();
         if (p.ExitCode != 0) throw new Win32Exception((int)(Win32Error.ERROR_APP_INIT_FAILURE));
         // Success. Set the service state to Stopped.                   // SET STATUS
@@ -814,13 +877,9 @@ $source = @"
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
-# Check if we're running as a real user, or as the SYSTEM = As a service
+# Identify the user name. We use that for logging.
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$userName = $identity.Name      # Ex: "NT AUTHORITY\SYSTEM" or "Domain\Administrator"
-$authority,$name = $username -split "\\"
-$RunasAccount = (Get-WmiObject win32_Service -Filter "Name='$serviceName'").StartName # not sure if this is needed, keeping commented for now
-$isSystem = ($identity.IsSystem -or $userName -eq $RunasAccount)    # Do not test ($userName -eq "NT AUTHORITY\SYSTEM"), as this fails in non-English systems.
-# Log "# `$userName = `"$userName`" ; `$isSystem = $isSystem"
+$currentUserName = $identity.Name # Ex: "NT AUTHORITY\SYSTEM" or "Domain\Administrator"
 
 if ($Setup) {Log ""}    # Insert one blank line to separate test sessions logs
 Log $MyInvocation.Line # The exact command line that was used to start us
@@ -831,32 +890,34 @@ New-EventLog -LogName $logName -Source $serviceName -ea SilentlyContinue
 # Workaround for PowerShell v2 bug: $PSCmdlet Not yet defined in Param() block
 $Status = ($PSCmdlet.ParameterSetName -eq 'Status')
 
-if ($Start) {                   # Start the service
-  if ($isSystem) { # If running as SYSTEM, ie. invoked as a service
-    # Do whatever is necessary to start the service script instance
-    Log "$scriptName -Start: Starting script '$scriptFullName' -Service"
-    Write-EventLog -LogName $logName -Source $serviceName -EventId 1001 -EntryType Information -Message "$scriptName -Start: Starting script '$scriptFullName' -Service"
-    Start-Process PowerShell.exe -ArgumentList ("-c & '$scriptFullName' -Service")
-  } else {
-    Write-Verbose "Starting service $serviceName"
-    Write-EventLog -LogName $logName -Source $serviceName -EventId 1002 -EntryType Information -Message "$scriptName -Start: Starting service $serviceName"
-    Start-Service $serviceName # Ask Service Control Manager to start it
-  }
+if ($SCMStart) {                # The SCM tells us to start the service
+  # Do whatever is necessary to start the service script instance
+  Log "$scriptName -SCMStart: Starting script '$scriptFullName' -Service"
+  Write-EventLog -LogName $logName -Source $serviceName -EventId 1001 -EntryType Information -Message "$scriptName -SCMStart: Starting script '$scriptFullName' -Service"
+  Start-Process PowerShell.exe -ArgumentList ("-c & '$scriptFullName' -Service")
   return
 }
 
-if ($Stop) {                    # Stop the service
-  if ($isSystem) { # If running as SYSTEM, ie. invoked as a service
-    # Do whatever is necessary to stop the service script instance
-    Write-EventLog -LogName $logName -Source $serviceName -EventId 1003 -EntryType Information -Message "$scriptName -Stop: Stopping script $scriptName -Service"
-    Log "$scriptName -Stop: Stopping script $scriptName -Service"
-    # Send an exit message to the service instance
-    Send-PipeMessage $pipeName "exit" 
-  } else {
-    Write-Verbose "Stopping service $serviceName"
-    Write-EventLog -LogName $logName -Source $serviceName -EventId 1004 -EntryType Information -Message "$scriptName -Stop: Stopping service $serviceName"
-    Stop-Service $serviceName # Ask Service Control Manager to stop it
-  }
+if ($Start) {                   # The user tells us to start the service
+  Write-Verbose "Starting service $serviceName"
+  Write-EventLog -LogName $logName -Source $serviceName -EventId 1002 -EntryType Information -Message "$scriptName -Start: Starting service $serviceName"
+  Start-Service $serviceName # Ask Service Control Manager to start it
+  return
+}
+
+if ($SCMStop) {         #  The SCM tells us to stop the service
+  # Do whatever is necessary to stop the service script instance
+  Write-EventLog -LogName $logName -Source $serviceName -EventId 1003 -EntryType Information -Message "$scriptName -SCMStop: Stopping script $scriptName -Service"
+  Log "$scriptName -SCMStop: Stopping script $scriptName -Service"
+  # Send an exit message to the service instance
+  Send-PipeMessage $pipeName "exit"
+  return
+}
+
+if ($Stop) {                    # The user tells us to stop the service
+  Write-Verbose "Stopping service $serviceName"
+  Write-EventLog -LogName $logName -Source $serviceName -EventId 1004 -EntryType Information -Message "$scriptName -Stop: Stopping service $serviceName"
+  Stop-Service $serviceName # Ask Service Control Manager to stop it
   return
 }
 
@@ -927,12 +988,30 @@ if ($Setup) {                   # Install the service
   }
   # Register the service
   Write-Verbose "Registering service $serviceName"
-  if ( $ServiceUser -and $ServicePassword ) {
-    $securePassword = ConvertTo-SecureString $ServicePassword -AsPlainText -Force
-    $Credentials = New-Object -Type System.Management.Automation.PSCredential ($ServiceUser,$securePassword)
-    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic -Credential $Credentials
+  if ($UserName -and !$Credential.UserName) {
+    $emptyPassword = New-Object -Type System.Security.SecureString
+    switch ($UserName) {
+      {"LocalService", "NetworkService" -contains $_} {
+        $Credential = New-Object -Type System.Management.Automation.PSCredential ("NT AUTHORITY\$UserName", $emptyPassword)
+      }
+      {"LocalSystem", ".\LocalSystem", "${env:COMPUTERNAME}\LocalSystem", "NT AUTHORITY\LocalService", "NT AUTHORITY\NetworkService" -contains $_} {
+        $Credential = New-Object -Type System.Management.Automation.PSCredential ($UserName, $emptyPassword)
+      }
+      default {
+        if (!$Password) {
+          $Credential = Get-Credential -UserName $UserName -Message "Please enter the password for the service user"
+        } else {
+          $securePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+          $Credential = New-Object -Type System.Management.Automation.PSCredential ($UserName, $securePassword)
+        }
+      }
+    }
   }
-  else {
+  if ($Credential.UserName) {
+    Log "$scriptName -Setup # Configuring the service to run as $($Credential.UserName)"
+    $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic -Credential $Credential
+  } else {
+    Log "$scriptName -Setup # Configuring the service to run by default as LocalSystem"
     $pss = New-Service $serviceName $exeFullName -DisplayName $serviceDisplayName -Description $ServiceDescription -StartupType Automatic
   }
 
@@ -971,6 +1050,7 @@ if ($Remove) {                  # Uninstall the service
       Remove-Item $installDir
     }
   }
+  Log ""                # Insert one blank line to separate test sessions logs
   return
 }
 
