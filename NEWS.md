@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-12-10
+### Fixed
+- PowerShell/PSService.ps1: Fixed an issue where stopping the service would leave the PowerShell process -Service still running.
+### Changed
+- PowerShell/PSService.ps1: Added the ability to run the service as a different user.
+- Tcl/b64dec.tcl: Now compatible with Tcl versions <= 8.4.
+- C/SRC/1clip.c:
+  * Display the HTML Format header in debug mode.
+  * Added option -r to get RTF data.
+- C/SRC/2clip.c: Added options -h and -r, for copying HTML and RTF.
+
 ## [Unreleased] 2017-11-17
 ### Fixed
 - The library included a useless b64dec.bat, instead of b64dec.tcl.
