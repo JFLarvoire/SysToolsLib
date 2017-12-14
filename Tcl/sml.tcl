@@ -151,10 +151,11 @@
 #                   Avoid exceptions when encountering unsupported encodings. #
 #                   Improved the self-test to compare conversion results      #
 #                    both ways, and to optionally run recursively.            #
+#    2017-12-14 JFL Avoid a crash if the input contains less than 2 chars.    #
 #                                                                             #
 ###############################################################################
 
-set version "2017-09-11"	   ; # The version of this script
+set version "2017-12-14"	   ; # The version of this script
 
 # Global variables
 set inFile stdin                   ; # Input file handle. Default: stdin
@@ -3416,6 +3417,9 @@ fconfigure $inFile -encoding binary
 # (Avoid peeking into characters that will change meaning when we change the encoding)
 set byteOrderMark [GetChars $inFile 2]
 foreach {char1 char2} [split $byteOrderMark ""] {}
+# Avoid a crash if the input contains less than 2 characters
+if ![info exists char2] {set char2 ""}
+if ![info exists char1] {set char1 ""}
 set encoding ""
 # Look for UTF-16 byte-order marks
 if {("$byteOrderMark" == "\xFF\xFE") || ("$char2" == "\x00")} {
