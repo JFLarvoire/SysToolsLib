@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2017-12-14
+### Fixed
+- tcl/sml.tcl: Avoid a crash if the input contains less than 2 characters.
+
 ## [Unreleased] 2017-12-10
 ### Fixed
 - PowerShell/PSService.ps1: Fixed an issue where stopping the service would leave the PowerShell process -Service still running.
