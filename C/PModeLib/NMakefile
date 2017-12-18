@@ -30,6 +30,7 @@
 #		     commands for doing the same, albeit less efficiently.    #
 #		    Rebuild pmode.inc only after a distclean. Avoids warnings.#
 #    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
+#    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
 #									      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -239,33 +240,33 @@ pmodetst: dirs $(O)\pmodetst.obj $(B)\pmodetst.com
 vcpitst: dirs $(O)\vcpitst.obj $(B)\vcpitst.com
 
 SOURCES = \
-    A20GATE.C		\
-    A20GATEI.ASM        \
-    CPUID.ASM           \
-    DPMI.ASM            \
-    DPMIGATE.C          \
-    FLATCOPY.C          \
-    GETPMLIN.C          \
-    MAPP2L.C            \
-    PM2APPY.C           \
-    RM2PM.ASM           \
-    SEGBASE.ASM         \
-    VCPI.ASM            \
-    VM2PM.C             \
-    X86.ASM             \
-    XMS.ASM             \
+    a20gate.c		\
+    a20gatei.asm        \
+    cpuid.asm           \
+    dpmi.asm            \
+    dpmigate.c          \
+    flatcopy.c          \
+    getpmlin.c          \
+    mapp2l.c            \
+    pm2appy.c           \
+    rm2pm.asm           \
+    segbase.asm         \
+    vcpi.asm            \
+    vm2pm.c             \
+    x86.asm             \
+    xms.asm             \
 
 XSOURCES = \
-    DPMITEST.ASM        \
-    PMODETST.C          \
-    VCPITST.ASM         \
+    dpmitest.asm        \
+    pmodetst.c          \
+    vcpitst.asm         \
 
 !IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
 PROGRAM=PMODELIB
 !INCLUDE <SRC2OBJS.MAK>
 !ENDIF
 
-$(B)\pmode.lib: dirs $(S)\PMODE.INC $(OBJECTS)
+$(B)\pmode.lib: dirs $(S)\pmode.inc $(OBJECTS)
     $(MSG) Creating $@ ...
     if exist $@ del $@ >nul
     $(LB) @<<$(L)\pmode.lnk || $(REPORT_FAILURE)
@@ -279,40 +280,40 @@ $(L)\$(*B).lst ;
 
 # Include files dependancies
 
-$(S)\A20Gate.c:     $(S)\PMODE.H	$(N)\CLIBDEF.H
+$(S)\a20gate.c:     $(S)\pmode.h	$(N)\clibdef.h
 
-$(S)\A20GateI.asm:  $(N)\ADEFINE.INC	$(N)\IO8042.INC
+$(S)\a20gatei.asm:  $(N)\adefine.inc	$(N)\io8042.inc
 
-$(S)\CPUID.ASM:
+$(S)\cpuid.asm:
 
-$(S)\DPMI.ASM:	    $(S)\PMODE.INC
+$(S)\dpmi.asm:	    $(S)\pmode.inc
 
-$(S)\DPMIGate.c:    $(S)\PMODE.H	$(N)\CLIBDEF.H	    $(N)\UTILDEF.H
+$(S)\dpmigate.c:    $(S)\pmode.h	$(N)\clibdef.h	    $(N)\utildef.h
 
 $(S)\flatcopy.c:    $(S)\pmode.h	$(M)\lodos.h	    $(M)\msdos.h
 
-$(S)\GETPMLIN.C:    $(S)\PMODE.H	$(N)\CLIBDEF.H	    $(N)\UTILDEF.H
+$(S)\getpmlin.c:    $(S)\pmode.h	$(N)\clibdef.h	    $(N)\utildef.h
 
-$(S)\MapP2L.c:	    $(S)\pmode.h
+$(S)\mapp2l.c:	    $(S)\pmode.h
 
-$(S)\PM2APPY.C:     $(S)\PMODE.H	$(N)\UTILDEF.H	    $(M)\LODOS.H
+$(S)\pm2appy.c:     $(S)\pmode.h	$(N)\utildef.h	    $(M)\lodos.h
 
-$(S)\PMODE.H:	    $(S)\WINDEF.H
+$(S)\pmode.h:	    $(S)\windef.h
     touch $@ || copy /b $@+NUL &:# Use touch.exe if available, else use internal DOS commands for doing the same, albeit less efficiently.
 
-$(S)\PMODE.INC:     $(S)\PMODE.H	$(S)\WINDEF.H
+$(S)\pmode.inc:     $(S)\pmode.h	$(S)\windef.h
 
-$(S)\RM2PM.ASM:     $(N)\ADEFINE.INC
+$(S)\rm2pm.asm:     $(N)\adefine.inc
 
-$(S)\SEGBASE.ASM:   $(N)\ADEFINE.INC
+$(S)\segbase.asm:   $(N)\adefine.inc
 
-$(S)\VCPI.asm:
+$(S)\vcpi.asm:
 
-$(S)\VM2PM.C:	    $(S)\PMODE.H	$(N)\UTILDEF.H
+$(S)\vm2pm.c:	    $(S)\pmode.h	$(N)\utildef.h
 
-$(S)\X86.asm:
+$(S)\x86.asm:
 
-$(S)\XMS.asm:	    $(N)\ADEFINE.INC
+$(S)\xms.asm:	    $(N)\adefine.inc
 
 
 #*****************************************************************************#
@@ -332,11 +333,11 @@ $(B)\scanmem.com:  \
 
 $(B)\vcpitst.com:   \
 	    $(S)\vcpitst.asm	\
-	    pmode.lib		$(S)\PMODE.INC
+	    pmode.lib		$(S)\pmode.inc
 
 $(B)\vcpitst.exe:   \
 	    $(S)\vcpitst.asm	\
-	    pmode.lib		$(S)\PMODE.INC
+	    pmode.lib		$(S)\pmode.inc
 
 $(B)\sysmap.com:    \
 	    $(S)\sysmap.c	\

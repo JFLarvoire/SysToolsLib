@@ -28,6 +28,7 @@
 #		    Fixed dosdrv.inc generation rules to avoid a warning.     #
 #		    Rebuild dosdrv.inc only after a distclean. Avoids warngs. #
 #    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
+#    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
 #		    							      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -247,7 +248,7 @@ XSOURCES = \
 
 !IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
 PROGRAM=LODOSLIB
-!INCLUDE <SRC2OBJS.MAK>
+!INCLUDE <src2objs.mak>
 !ENDIF
 
 $(B)\lodos.lib: dirs $(OBJECTS)
@@ -269,115 +270,115 @@ dosdrv.inc: dosdrv.h dirs
 
 # Include files dependancies
 
-$(S)\ABS2PHYS.C:    MSDOS.H LODOS.H $(N)\UTILDEF.H
+$(S)\abs2phys.c:    msdos.h lodos.h $(N)\utildef.h
 
-$(S)\ABSDISKR.ASM:  $(N)\ADEFINE.INC
+$(S)\absdiskr.asm:  $(N)\adefine.inc
 
-$(S)\ABSDISKW.ASM:  $(N)\ADEFINE.INC
+$(S)\absdiskw.asm:  $(N)\adefine.inc
 
-$(S)\BDOS.ASM:	    DOS.INC $(N)\ADEFINE.INC
+$(S)\bdos.asm:	    dos.inc $(N)\adefine.inc
 
-$(S)\CACHEABS.C:    MSDOS.H LODOS.H $(N)\CLIBDEF.H
+$(S)\cacheabs.c:    msdos.h lodos.h $(N)\clibdef.h
 
-$(S)\CGROUP.C:	    LODOS.H
+$(S)\cgroup.c:	    lodos.h
 
-$(S)\CLUS2ABS.C:    MSDOS.H LODOS.H
+$(S)\clus2abs.c:    msdos.h lodos.h
 
-$(S)\CRITSECT.ASM:  $(N)\ADEFINE.INC
+$(S)\critsect.asm:  $(N)\adefine.inc
 
-$(S)\DEVMAIN.C:     $(N)\CLIBDEF.H $(N)\UTILDEF.H
+$(S)\devmain.c:     $(N)\clibdef.h $(N)\utildef.h
 
-$(S)\DOSCLOSE.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\dosclose.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\DOSCOMIT.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\doscomit.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\DOSEXEC.C:     LODOS.H $(N)\CLIBDEF.H $(N)\UTILDEF.H
+$(S)\dosexec.c:     lodos.h $(N)\clibdef.h $(N)\utildef.h
 
-$(S)\DOSEXIT.ASM:   $(N)\ADEFINE.INC
+$(S)\dosexit.asm:   $(N)\adefine.inc
 
-$(S)\DOSGETFT.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\dosgetft.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\DOSOPEN.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\dosopen.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\DOSREAD.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\dosread.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\DOSSETAT.ASM:  $(N)\ADEFINE.INC
+$(S)\dossetat.asm:  $(N)\adefine.inc
 
-$(S)\DOSSETFT.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\dossetft.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\DOSVER.C:	    LODOS.H
+$(S)\dosver.c:	    lodos.h
 
-$(S)\DOSWRITE.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\doswrite.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\EXTDOPEN.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\extdopen.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\FIND_TSR.ASM:  $(N)\ADEFINE.INC
+$(S)\find_tsr.asm:  $(N)\adefine.inc
 
-$(S)\FGETC.C:	    LODOS.H
+$(S)\fgetc.c:	    lodos.h
 
-$(S)\FGETENV.C:     LODOS.H $(N)\CLIBDEF.H $(N)\UTILDEF.H
+$(S)\fgetenv.c:     lodos.h $(N)\clibdef.h $(N)\utildef.h
 
-$(S)\FGETS.C:	    LODOS.H $(N)\CLIBDEF.H
+$(S)\fgets.c:	    lodos.h $(N)\clibdef.h
 
-$(S)\FILELEN.C:     LODOS.H
+$(S)\filelen.c:     lodos.h
 
-$(S)\FOPEN.C:	    LODOS.H $(N)\CLIBDEF.H
+$(S)\fopen.c:	    lodos.h $(N)\clibdef.h
 
-$(S)\FPUTS.C:	    LODOS.H $(N)\CLIBDEF.H
+$(S)\fputs.c:	    lodos.h $(N)\clibdef.h
 
-$(S)\FREAD.C:	    LODOS.H
+$(S)\fread.c:	    lodos.h
 
-$(S)\FREEMEM.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\freemem.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\FSEEK.C:	    LODOS.H
+$(S)\fseek.c:	    lodos.h
 
-$(S)\FWRITE.C:	    LODOS.H
+$(S)\fwrite.c:	    lodos.h
 
-$(S)\GETCWD.C:	    LODOS.H $(N)\CLIBDEF.H
+$(S)\getcwd.c:	    lodos.h $(N)\clibdef.h
 
-$(S)\GETDATE.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\getdate.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\GETDEVPA.C:    MSDOS.H LODOS.H
+$(S)\getdevpa.c:    msdos.h lodos.h
 
-$(S)\GETENV.C:      LODOS.H $(N)\CLIBDEF.H
+$(S)\getenv.c:      lodos.h $(N)\clibdef.h
 
-$(S)\GETPSP.C:	    LODOS.H
+$(S)\getpsp.c:	    lodos.h
 
-$(S)\GETTIME.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\gettime.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\GETVECT.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\getvect.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\GETVMID.ASM:
+$(S)\getvmid.asm:
 
-$(S)\GETVMMV.ASM:
+$(S)\getvmmv.asm:
 
-$(S)\GETVXDEP.ASM:  $(N)\ADEFINE.INC
+$(S)\getvxdep.asm:  $(N)\adefine.inc
 
-$(S)\IOCTLDR.C:     MSDOS.H LODOS.H
+$(S)\ioctldr.c:     msdos.h lodos.h
 
-$(S)\LOCKVOL.C:     LODOS.H
+$(S)\lockvol.c:     lodos.h
 
-$(S)\LSEEK.ASM:     DOS.INC $(N)\ADEFINE.INC
+$(S)\lseek.asm:     dos.inc $(N)\adefine.inc
 
-$(S)\REMOVE.ASM:    $(N)\ADEFINE.INC
+$(S)\remove.asm:    $(N)\adefine.inc
 
-$(S)\RESETDRV.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\resetdrv.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\SETBLOCK.ASM:  $(N)\ADEFINE.INC
+$(S)\setblock.asm:  $(N)\adefine.inc
 
-$(S)\SETDEVPA.C:    MSDOS.H LODOS.H
+$(S)\setdevpa.c:    msdos.h lodos.h
 
-$(S)\SETMENV.C:     LODOS.H $(N)\CLIBDEF.H
+$(S)\setmenv.c:     lodos.h $(N)\clibdef.h
 
-$(S)\SETVECT.ASM:   DOS.INC $(N)\ADEFINE.INC
+$(S)\setvect.asm:   dos.inc $(N)\adefine.inc
 
-$(S)\STARTEXE.ASM:  $(N)\ADEFINE.INC
+$(S)\startexe.asm:  $(N)\adefine.inc
 
-$(S)\SYSTEM.C:      LODOS.H $(N)\CLIBDEF.H
+$(S)\system.c:      lodos.h $(N)\clibdef.h
 
-$(S)\TRUENAME.ASM:  DOS.INC $(N)\ADEFINE.INC
+$(S)\truename.asm:  dos.inc $(N)\adefine.inc
 
-$(S)\TSR.ASM:	    DOS.INC $(N)\ADEFINE.INC
+$(S)\tsr.asm:	    dos.inc $(N)\adefine.inc
 
-$(S)\YIELD.ASM:
+$(S)\yield.asm:
 

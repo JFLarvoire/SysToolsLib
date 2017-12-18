@@ -47,6 +47,7 @@
 #		    Added a few targets for use in recursive builds.	      #
 #    2017-04-04 JFL Define SOURCES instead of OBJECTS, and use src2objs.mak.  #
 #    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
+#    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
 #		    							      #
 #      (c) Copyright 1993-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -309,7 +310,7 @@ XSOURCES = \
 
 !IFDEF LOGFILE # Avoid doing that conversion for special unlogged targets like clean
 PROGRAM=BIOSLIB
-!INCLUDE <SRC2OBJS.MAK>
+!INCLUDE <src2objs.mak>
 !ENDIF
 
 $(B)\bios.lib: dirs $(OBJECTS)
@@ -326,160 +327,160 @@ $(L)\$(*B).lst ;
 
 # Include files dependencies
 
-$(S)\ACTIVEPG.ASM:   $(S)\ADEFINE.INC
+$(S)\activepg.asm:   $(S)\adefine.inc
 
-$(S)\ATOI.C:	     $(S)\CLIBDEF.H
+$(S)\atoi.c:	     $(S)\clibdef.h
 
-$(S)\ATOL.C:	     $(S)\CLIBDEF.H
+$(S)\atol.c:	     $(S)\clibdef.h
 
-$(S)\BCDTOH.ASM:     $(S)\ADEFINE.INC
+$(S)\bcdtoh.asm:     $(S)\adefine.inc
 
-$(S)\BEEP.ASM:	     $(S)\ADEFINE.INC	$(S)\TIMER.INC
+$(S)\beep.asm:	     $(S)\adefine.inc $(S)\timer.inc
 
-$(S)\BREAKARG.C:     $(S)\UTILDEF.H
+$(S)\breakarg.c:     $(S)\utildef.h
 
-$(S)\CANONIC.ASM:    $(S)\ADEFINE.INC
+$(S)\canonic.asm:    $(S)\adefine.inc
 
-$(S)\CLISTI.ASM:     $(S)\ADEFINE.INC
+$(S)\clisti.asm:     $(S)\adefine.inc
 
-$(S)\CLRSCRN.ASM:    $(S)\ADEFINE.INC
+$(S)\clrscrn.asm:    $(S)\adefine.inc
 
-$(S)\CMAIN.C:	     $(S)\CLIBDEF.H $(S)\UTILDEF.H
+$(S)\cmain.c:	     $(S)\clibdef.h   $(S)\utildef.h
 
-$(S)\CPUTS.C:	     $(S)\CLIBDEF.H
+$(S)\cputs.c:	     $(S)\clibdef.h
 
-$(S)\CPUTSCO.C:      $(S)\UTILDEF.H
+$(S)\cputsco.c:      $(S)\utildef.h
 
-$(S)\CURSOR.ASM:     $(S)\ADEFINE.INC
+$(S)\cursor.asm:     $(S)\adefine.inc
 
-$(S)\DISABKBD.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+$(S)\disabkbd.asm:   $(S)\adefine.inc $(S)\io8042.inc
 
-$(S)\DISKREAD.C:     $(S)\UTILDEF.H
+$(S)\diskread.c:     $(S)\utildef.h
 
-$(S)\DISKWRIT.C:     $(S)\UTILDEF.H
+$(S)\diskwrit.c:     $(S)\utildef.h
 
-$(S)\DISPLFLD.C:     $(S)\UTILDEF.H
+$(S)\displfld.c:     $(S)\utildef.h
 
-$(S)\DUMPBUF.C:      $(S)\CLIBDEF.H $(S)\UTILDEF.H
+$(S)\dumpbuf.c:      $(S)\clibdef.h   $(S)\utildef.h
 
-$(S)\EXIT.ASM:	     $(S)\ADEFINE.INC
+$(S)\exit.asm:	     $(S)\adefine.inc
 
-$(S)\FCPUTS.C:       $(S)\CLIBDEF.H
+$(S)\fcputs.c:       $(S)\clibdef.h
 
-$(S)\FINDHDR.C:      $(S)\UTILDEF.H
+$(S)\findhdr.c:      $(S)\utildef.h
 
-$(S)\FMEMCMP.C:      $(S)\CLIBDEF.H
+$(S)\fmemcmp.c:      $(S)\clibdef.h
 
-$(S)\FMEMCPY.ASM:    $(S)\ADEFINE.INC
+$(S)\fmemcpy.asm:    $(S)\adefine.inc
 
-$(S)\FMEMMOVE.ASM:   $(S)\ADEFINE.INC
+$(S)\fmemmove.asm:   $(S)\adefine.inc
 
-$(S)\FMEMSET.C:      $(S)\CLIBDEF.H
+$(S)\fmemset.c:      $(S)\clibdef.h
 
-$(S)\FPRINTF.C:	     $(S)\CLIBDEF.H
+$(S)\fprintf.c:	     $(S)\clibdef.h
 
-$(S)\FSTRCMP.C:      $(S)\CLIBDEF.H
+$(S)\fstrcmp.c:      $(S)\clibdef.h
 
-$(S)\FSTRLEN.C:      $(S)\CLIBDEF.H
+$(S)\fstrlen.c:      $(S)\clibdef.h
 
-$(S)\FSTRNCAT.C:     $(S)\CLIBDEF.H
+$(S)\fstrncat.c:     $(S)\clibdef.h
 
-$(S)\FSTRNCPY.C:     $(S)\CLIBDEF.H
+$(S)\fstrncpy.c:     $(S)\clibdef.h
 
-$(S)\GETCHAR.ASM:    $(S)\ADEFINE.INC
+$(S)\getchar.asm:    $(S)\adefine.inc
 
-$(S)\GETCURPO.ASM:   $(S)\ADEFINE.INC
+$(S)\getcurpo.asm:   $(S)\adefine.inc
 
-$(S)\GETS.C:         $(S)\CLIBDEF.H
+$(S)\gets.c:         $(S)\clibdef.h
 
-$(S)\GOTOXY.ASM:     $(S)\ADEFINE.INC
+$(S)\gotoxy.asm:     $(S)\adefine.inc
 
-$(S)\HTOBCD.ASM:     $(S)\ADEFINE.INC
+$(S)\htobcd.asm:     $(S)\adefine.inc
 
-$(S)\ISSWITCH.C:     $(S)\CLIBDEF.H $(S)\UTILDEF.H
+$(S)\isswitch.c:     $(S)\clibdef.h   $(S)\utildef.h
 
-$(S)\KBHIT.ASM:      $(S)\ADEFINE.INC
+$(S)\kbhit.asm:      $(S)\adefine.inc
 
-$(S)\MALLOC.ASM:     $(S)\ADEFINE.INC
+$(S)\malloc.asm:     $(S)\adefine.inc
 
-$(S)\MATH.ASM:	     $(S)\ADEFINE.INC
+$(S)\math.asm:	     $(S)\adefine.inc
 
-$(S)\MEMCMP.ASM:     $(S)\ADEFINE.INC
+$(S)\memcmp.asm:     $(S)\adefine.inc
 
-$(S)\MEMCPY.ASM:     $(S)\ADEFINE.INC
+$(S)\memcpy.asm:     $(S)\adefine.inc
 
-$(S)\MEMSET.C:	     $(S)\CLIBDEF.H
+$(S)\memset.c:	     $(S)\clibdef.h
 
-$(S)\POSTERRS.ASM:   $(S)\ADEFINE.INC
+$(S)\posterrs.asm:   $(S)\adefine.inc
 
-$(S)\PRINTF.C:	     $(S)\CLIBDEF.H
+$(S)\printf.c:	     $(S)\clibdef.h
 
-$(S)\PUTCHAR.ASM:    $(S)\ADEFINE.INC
+$(S)\putchar.asm:    $(S)\adefine.inc
 
-$(S)\PUTCHCOL.ASM:   $(S)\ADEFINE.INC
+$(S)\putchcol.asm:   $(S)\adefine.inc
 
-$(S)\PUTS.C:	     $(S)\CLIBDEF.H
+$(S)\puts.c:	     $(S)\clibdef.h
 
-$(S)\RAND.ASM:       $(S)\ADEFINE.INC
+$(S)\rand.asm:       $(S)\adefine.inc
 
-$(S)\READ8042.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+$(S)\read8042.asm:   $(S)\adefine.inc $(S)\io8042.inc
 
-$(S)\RELOCMGR.C:     $(S)\UTILDEF.H
+$(S)\relocmgr.c:     $(S)\utildef.h
 
-$(S)\SCANCODE.ASM:   $(S)\ADEFINE.INC
+$(S)\scancode.asm:   $(S)\adefine.inc
 
-$(S)\SCROLLDN.ASM:   $(S)\ADEFINE.INC
+$(S)\scrolldn.asm:   $(S)\adefine.inc
 
-$(S)\SCROLLUP.ASM:   $(S)\ADEFINE.INC
+$(S)\scrollup.asm:   $(S)\adefine.inc
 
-$(S)\SETVIDMO.ASM:   $(S)\ADEFINE.INC
+$(S)\setvidmo.asm:   $(S)\adefine.inc
 
-$(S)\SPRINTF.C:      $(S)\CLIBDEF.H
+$(S)\sprintf.c:      $(S)\clibdef.h
 
-$(S)\SQRT.C:	     $(S)\UTILDEF.H
+$(S)\sqrt.c:	     $(S)\utildef.h
 
-$(S)\SSCANF.C:	     $(S)\CLIBDEF.H
+$(S)\sscanf.c:	     $(S)\clibdef.h
 
-$(S)\STARTCOM.ASM:   $(S)\ADEFINE.INC
+$(S)\startcom.asm:   $(S)\adefine.inc
 
-$(S)\STC.C:	     $(S)\CLIBDEF.H
+$(S)\stc.c:	     $(S)\clibdef.h
 
-$(S)\STCLD_U.C:	     $(S)\CLIBDEF.H
+$(S)\stcld_u.c:	     $(S)\clibdef.h
 
-$(S)\STCLH_U.C:	     $(S)\CLIBDEF.H
+$(S)\stclh_u.c:	     $(S)\clibdef.h
 
-$(S)\STRCAT.C:	     $(S)\CLIBDEF.H
+$(S)\strcat.c:	     $(S)\clibdef.h
 
-$(S)\STRCHR.ASM:     $(S)\ADEFINE.INC
+$(S)\strchr.asm:     $(S)\adefine.inc
 
-$(S)\STRCMP.ASM:     $(S)\ADEFINE.INC
+$(S)\strcmp.asm:     $(S)\adefine.inc
 
-$(S)\STRCPY.C:	     $(S)\CLIBDEF.H
+$(S)\strcpy.c:	     $(S)\clibdef.h
 
-$(S)\STRCSPN.C:      $(S)\CLIBDEF.H
+$(S)\strcspn.c:      $(S)\clibdef.h
 
-$(S)\STRLEN.C:	     $(S)\CLIBDEF.H
+$(S)\strlen.c:	     $(S)\clibdef.h
 
-$(S)\STRLWR.C:	     $(S)\CLIBDEF.H
+$(S)\strlwr.c:	     $(S)\clibdef.h
 
-$(S)\STRNCPY.C:      $(S)\CLIBDEF.H
+$(S)\strncpy.c:      $(S)\clibdef.h
 
-$(S)\STRPBRK.C:      $(S)\CLIBDEF.H
+$(S)\strpbrk.c:      $(S)\clibdef.h
 
-$(S)\STRSPN.C:	     $(S)\CLIBDEF.H
+$(S)\strspn.c:	     $(S)\clibdef.h
 
-$(S)\STRSTR.C:	     $(S)\CLIBDEF.H
+$(S)\strstr.c:	     $(S)\clibdef.h
 
-$(S)\STRTOL.C:	     $(S)\CLIBDEF.H
+$(S)\strtol.c:	     $(S)\clibdef.h
 
-$(S)\STRUPR.C:	     $(S)\CLIBDEF.H
+$(S)\strupr.c:	     $(S)\clibdef.h
 
-$(S)\SWAPB.ASM:      $(S)\ADEFINE.INC
+$(S)\swapb.asm:      $(S)\adefine.inc
 
-$(S)\SWAPW.ASM:      $(S)\ADEFINE.INC
+$(S)\swapw.asm:      $(S)\adefine.inc
 
-$(S)\USERPW.ASM:     $(S)\ADEFINE.INC $(S)\IO8042.INC
+$(S)\userpw.asm:     $(S)\adefine.inc $(S)\io8042.inc
 
-$(S)\WREFRESH.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+$(S)\wrefresh.asm:   $(S)\adefine.inc $(S)\io8042.inc
 
-$(S)\WRIT8042.ASM:   $(S)\ADEFINE.INC $(S)\IO8042.INC
+$(S)\writ8042.asm:   $(S)\adefine.inc $(S)\io8042.inc
