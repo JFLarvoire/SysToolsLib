@@ -28,15 +28,18 @@
 *    2013-01-31 JFL Display the number of cores.                              *
 *    2013-05-30 JFL Some CPUs pretend to support function 0xB, but do not.    *
 *    2016-04-12 JFL Removed a duplicate prototype, now defined in pmode.h.    *
-*    2017-05-31 JFL Fixed warnings. No functional code change.		      *
+*    2017-05-31 JFL Fixed WIN32 warnings. No functional code change.	      *
+*    2017-12-18 JFL Fixed DOS warnings. No functional code change.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DATE    "2017-05-31"
+#define PROGRAM_DATE    "2017-12-18"
 
 /* Definitions */
+
+#pragma warning(disable:4001)       /* Ignore the // C++ comment warning */
 
 /************************ Win32-specific definitions *************************/
 
@@ -124,6 +127,8 @@ int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
 #define OS_NAME "DOS"
 
+#pragma warning(disable:4209)	// Ignore the benign typedef redefinition warning
+				// as several of the following redefine CHAR, WORD, DWORD
 #include "clibdef.h"
 #include "utildef.h"
 #include "lodos.h"
@@ -229,7 +234,7 @@ int _cdecl main(int argc, char *argv[])
 #ifdef _MSDOS
     int iErr;
 
-    _dos_setblock(0x1000, _psp, &iErr);
+    _dos_setblock(0x1000, (WORD)_psp, (WORD *)&iErr); /* 3rd arg = max § size */
 #endif // defined(_MSDOS)
 
     /* Process arguments */
@@ -845,7 +850,7 @@ void DisplayProcInfo(void)
 	/* Number of cores and threads */
 	printf("Cores and threads\n");
 	nCores = 1;
-	if (dwFeatures & (1 << 28)) nCores = (int)BYTE2(dwModel2);
+	if (dwFeatures & (1L << 28)) nCores = (int)BYTE2(dwModel2);
 	printf(" CPUID(1):  Silicon supports %d logical processors\n", nCores);
 	if (dwMaxValue >= 4)
 	    {
@@ -854,8 +859,8 @@ void DisplayProcInfo(void)
 
 	    dwECX = 0;
 	    _cpuid(4, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	    nMaxCores = ((dwEAX >> 26) & 0x3F) + 1;
-	    nMaxThreads = ((dwEAX >> 14) & 0xFFF) + 1;
+	    nMaxCores = (int)((dwEAX >> 26) & 0x3F) + 1;
+	    nMaxThreads = (int)((dwEAX >> 14) & 0xFFF) + 1;
 	    printf(" CPUID(4):  Silicon supports %d cores and %d threads/core\n", nMaxCores, nMaxThreads);
 	    }
 	if (dwMaxValue >= 11)
