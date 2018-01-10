@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.11] 2018-01-10
+### New
+- Batch/CheckEOL.bat: Check the line ending type (Windows/Unix/Mac) for a set of files.
+- Batch/vcvars.bat: Run vcvarsall.bat for the latest Visual C++ installed.
+- PowerShell/Get-Console.ps1: A tool for capturing the console screen as HTML or RTF or text,
+  and copying it to the clipboard or a file.
+### Fixed
+- C/LoDosLib/dosdrv.h: Added workaround to avoid warnings when running h2inc.exe.
+- C/SRC/cpuid.c: Fixed DOS warnings.
+### Changed
+- C/SRC/2clip.c: Remove the UTF8 BOM when writing RTF.
+- C/Include/debugm.h: Added debug macros RETURN_PTR(p), RETURN_LONG(l), RETURN_CSTRING(s), RETURN_CPTR(p).
+- C/NMakefile: 'make release' adds ag.exe if it's linked in C\Ag\.
+
 ## [Unreleased] 2017-12-14
 ### Fixed
 - tcl/sml.tcl: Avoid a crash if the input contains less than 2 characters.
