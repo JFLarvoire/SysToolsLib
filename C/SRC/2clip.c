@@ -30,13 +30,14 @@
 *		    Version 1.3.2.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2017-12-05 JFL Added options -h and -r, for HTML and RTF. Version 1.4.   *
+*    2018-01-08 JFL Remove the UTF8 BOM when writing RTF. Version 1.4.1.      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4"
-#define PROGRAM_DATE    "2017-12-05"
+#define PROGRAM_VERSION "1.4.1"
+#define PROGRAM_DATE    "2018-01-08"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -103,6 +104,7 @@ int main(int argc, char *argv[]) {
   UINT type = 0;
   int iDone;
   int isHTML = FALSE;
+  int isRTF = FALSE;
 
   /* Record the console code page, to allow converting the output accordingly */
   codepage = GetConsoleOutputCP();
@@ -130,6 +132,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(arg+1, "r")) {		/* Register the input as RTF */
 	type = RegisterClipboardFormat("Rich Text Format");
+	isRTF = TRUE;
 	continue;
       }
       if (streq(arg+1, "u")) {		/* Assume the input is Unicode */
@@ -184,6 +187,11 @@ int main(int argc, char *argv[]) {
 	memmove(pBuffer+nHead, pBuffer, nTotal);
 	memmove(pBuffer, header, nHead);
 	nTotal += nHead;
+      } else if (isRTF) { // We must remove the BOM, which confuses MS Word
+      	if ((nTotal >= 3) && !strncmp(pBuffer, "\xEF\xBB\xBF", 3)) {
+      	  pBuffer += 3;		// Skip the UTF8 BOM
+      	  nTotal -= 3;
+      	}
       }
       iDone = ToClip(pBuffer, nTotal, type);
     } else {	/* This is text. Convert it to Unicode to avoid codepage issues */
