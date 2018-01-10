@@ -50,6 +50,7 @@ Name		| OS   	| Description																							| Example
 12.bat		| -W-	| Pipe Windows clipboard contents into a program, then that program output back into the clipboard.	| `12 sort`
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip | sort`
 2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir | 2clip`
+Get-Console.ps1	| -W-	| Capture the console window as HTML or RTF or plain Text, and send it to the clipboard.                | `Get-Console`
 
 ## Convert data
 
@@ -115,6 +116,7 @@ xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
+CheckEOL.bat    | -W-   | Check the line ending type for a set of files.					| `CheckEOL *.c`
 codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
 echoargs.bat	| DW-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	| `echoargs.bat how" many args "here?`
 EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	|
@@ -130,6 +132,7 @@ tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Win
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
 TimeX.bat	| -W-	| Time the execution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
 touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
+vcvars.bat      | -W-   | Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
 whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
 wm.bat          | -W-   | Invoke WinMerge, even if it's not in the PATH.					| `wm old_version new_version`
 
