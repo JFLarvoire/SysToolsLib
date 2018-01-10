@@ -7,6 +7,7 @@ Batch\82w.bat
 Batch\a2u.bat
 Batch\ADDPATH.BAT
 Batch\AddPaths.bat
+Batch\CheckEOL.bat
 Batch\DIRCC.BAT
 Batch\DIRDIR.BAT
 Batch\Disconnect.bat
@@ -33,6 +34,7 @@ Batch\touch.bat
 Batch\trouve.bat
 Batch\u2a.bat
 Batch\u2w.bat
+Batch\vcvars.bat
 Batch\w2u.bat
 Batch\wm.bat
 Batch\x.bat
@@ -42,6 +44,7 @@ Batch\zapbaks.bat
 PowerShell\Disable-IPv6Components.ps1
 PowerShell\EchoArgs.ps1
 PowerShell\Enable-IPv6Components.ps1
+PowerShell\Get-Console.ps1
 PowerShell\Get-ProductKey.ps1
 PowerShell\IESec.ps1
 PowerShell\Is-WindowsActivated.ps1
