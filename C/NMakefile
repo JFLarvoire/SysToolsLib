@@ -22,6 +22,7 @@
 #    2017-10-27 JFL Improved make release: Better messages and error reports. #
 #		    Warn about missing exes. Store DOS, WIN64, etc, programs. #
 #    2017-10-30 JFL Adapt the help message depending on OUTDIR.               #
+#    2018-01-10 JFL 'make release' adds ag.exe if it's linked in Ag\.         #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -143,6 +144,14 @@ release:
 	7z.exe -- a "%ZIP%" !PROGRAMS!
 	if errorlevel 1 exit /b
 	popd
+	:# Add The Silver Searcher WIN32 version if present
+	dir ag
+	if exist Ag\bin\WIN32\ag.exe (
+	  pushd Ag\bin\WIN32
+	  %MSG% Adding WIN32 Silver Searcher from !CD!
+	  7z.exe -- a "%ZIP%" ag.exe
+	  popd
+	)
 	
 	:# Add DOS and WIN64 programs is they're available and not yet added
 	for %%o in (ARM DOS IA64 WIN64) do (
@@ -162,6 +171,13 @@ release:
 	    if errorlevel 1 exit /b
 	    popd
 	  )
+	)
+	:# Add The Silver Searcher WIN64 version if present
+	if exist Ag\bin\WIN64\ag.exe (
+	  pushd Ag\bin
+	  %MSG% Adding WIN64 Silver Searcher from !CD!
+	  7z.exe -- a "%ZIP%" WIN64\ag.exe
+	  popd
 	)
 	
 	:# Add scripts for each language
