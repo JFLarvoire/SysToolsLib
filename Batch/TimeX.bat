@@ -13,13 +13,14 @@
 :#                                                                            #
 :#  History                                                                   #
 :#   2014-12-02 JFL Created this script, reusing my Library.bat routines.     #
+:#   2018-01-23 JFL Added option -2 to output the result to stderr.           #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2014-12-02"
+set "VERSION=2018-01-23"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -605,6 +606,7 @@ echo.
 echo Options:
 echo   -?       Display this help
 echo   --       End of options
+echo   -2       Output the result to stderr
 echo   -n N     Run the commands N times and display the start and end times
 echo   -t       Get the current time, with seconds resolution
 echo   -v       Verbose mode. Display commands executed
@@ -625,6 +627,7 @@ if .!ARG!.==.. goto :SetTime
 if .!ARG!.==.--. goto :Start
 if .!ARG!.==.-?. goto :Help
 if .!ARG!.==./?. goto :Help
+if .!ARG!.==.-2. set ">DEBUGOUT=>&2" & goto next_arg
 if .!ARG!.==.-d. call :Debug.On & goto next_arg
 if .!ARG!.==.-n. %POPARG% & set "NLOOPS=!ARG!" & goto next_arg
 if .!ARG!.==.-t. goto :GetTime
@@ -657,7 +660,7 @@ goto :eof
 :Start
 call :Now
 set STARTED=%HOUR%:%MINUTE%:%SECOND%.%MS%
-%ECHO.V% Starting at %STARTED%
+%>DEBUGOUT% %ECHO.V% Starting at %STARTED%
 
 for /l %%n in (1,1,%NLOOPS%) do (
   %EXEC% %ARGS%
@@ -665,8 +668,8 @@ for /l %%n in (1,1,%NLOOPS%) do (
 
 call :Now
 set ENDED=%HOUR%:%MINUTE%:%SECOND%.%MS%
-%ECHO.V% Ended at %ENDED%
+%>DEBUGOUT% %ECHO.V% Ended at %ENDED%
 
 call :Time.Delta %STARTED% %ENDED% -f
-%ECHO% Duration: %DH%:%DM%:%DS%.%DMS%
+%>DEBUGOUT% %ECHO% Duration: %DH%:%DM%:%DS%.%DMS%
 
