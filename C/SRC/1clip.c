@@ -1,13 +1,12 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename	    1clip.c						      *
 *									      *
 *   Contents	    Pipe the clipboard text contents to standard output	      *
 *									      *
-*   Notes:	    Build with command: "exew 2clip"			      *
+*   Notes:	    							      *
 *									      *
 *   History								      *
-*									      *
 *    1997-05-09 JFL Adapted 2clip.c from Windows Developer's Journal sample.  *
 *    2005-06-10 JFL Created this reverse program. Version 1.0.		      *
 *    2006-04-03 JFL Improved error reporting. Version 1.01.		      *
@@ -34,13 +33,19 @@
 *    2017-10-12 JFL Fixed the -t option parsing. Version 1.3.2.		      *
 *    2017-12-05 JFL Display the HTML Format header in dbg mode. Version 1.3.3.*
 *		    Added option -r to get RTF data.			      *
+*    2018-01-23 JFL Bugfix: Option -t alone did not default to CF_TEXT.       *
+*                   Bugfix: Debug printf("Printing ...") could cause a hang.  *
+*                   Use MsvcLibX for output to the console. Version 2.0.      *
+*                   This fixes the v1.3 issues with large output in CP 65001. *
 *                                                                             *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3.3"
-#define PROGRAM_DATE    "2017-12-05"
+#define PROGRAM_VERSION "2.0"
+#define PROGRAM_DATE    "2018-01-23"
+
+#define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -49,6 +54,8 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+#include "iconv.h"	/* MsvcLibX output encoding definitions */
+#include "debugm.h"	/* SysToolsLib debug macros */
 
 // Define WIN32 replacements for common Standard C library functions.
 #define strlwr CharLower
@@ -83,14 +90,11 @@ enum {
 
 /* Global variables */
 
-#if _DEBUG && HAS_MSVCLIBX
-extern int iDebug;
-#else
-int iDebug = 0;
-#endif
+DEBUG_GLOBALS
 
 /* Function prototypes */
 
+char *version(int iVerbose);	    /* Build a string with the program versions */
 void usage(void);
 int IsSwitch(char *pszArg);
 int CopyClip(UINT type, UINT codepage);
@@ -121,10 +125,7 @@ int main(int argc, char *argv[]) {
   int i;
   int iAction = COPYCLIP;
   UINT type = CF_UNICODETEXT;
-  UINT codepage;
-
-  /* Record the console code page, to allow converting the output accordingly */
-  codepage = GetConsoleOutputCP();
+  UINT codepage = consoleCodePage; /* The code page to use for the output */
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -146,10 +147,12 @@ int main(int argc, char *argv[]) {
 	codepage = CP_NULL;
 	continue;
       }
+      DEBUG_CODE(
       if (streq(arg+1, "d")) {			/* -d: Debug */
 	iDebug = 1;
 	continue;
       }
+      )
       if (streq(arg+1, "h")) {			/* -h: Get the HTML */
 	type = RegisterClipboardFormat("HTML Format");
 	continue;
@@ -171,7 +174,8 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "t")) {			/* -t: Type */
-	if (++i < argc) sscanf(argv[i], "%u", &type);
+      	type = CF_TEXT;
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) sscanf(argv[++i], "%u", &type);
 	continue;
       }
       if (streq(arg+1, "u")) {			/* -u: Get the Unicode type */
@@ -183,7 +187,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "V")) {	/* Display version */
-	printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+	printf("%s\n", version(TRUE));
 	exit(0);
       }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
@@ -191,9 +195,8 @@ int main(int argc, char *argv[]) {
     }
     fprintf(stderr, "Unexpected argument %s ignored.\n", arg);
   }
-  if (iDebug) {
-    printf("The current code page is %d\n", codepage);
-  }
+  DEBUG_PRINTF(("The current code page is %d\n", consoleCodePage));
+  DEBUG_PRINTF(("The output code page is %d\n", codepage));
 
   /* Go for it */
   switch (iAction) {
@@ -208,7 +211,7 @@ int main(int argc, char *argv[]) {
       break;
   }
 
-  if (iDebug) printf("Exiting\n");
+  DEBUG_PRINTF(("Exiting\n"));
   return 0;
 }
 
@@ -231,6 +234,23 @@ int main(int argc, char *argv[]) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
+}
+
 void usage(void) {
   UINT cpANSI = GetACP();
   UINT cpOEM = GetOEMCP();
@@ -247,8 +267,12 @@ Options:\n\
   -?      Display this help screen.\n\
   -a      Get the ANSI text from the clipboard.\n\
   -A      Output using the ANSI code page #%u encoding.\n\
-  -b      Output binary data.\n\
-  -d      Output debugging information.\n\
+  -b      Output binary data.\n"
+#ifdef _DEBUG
+"\
+  -d      Output debug information.\n"
+#endif
+"\
   -h      Get the HTML data from the clipboard. (Encoded in UTF-8)\n\
   -l      List clipboard formats available.\n\
   -o      Get the OEM text from the clipboard.\n\
@@ -261,7 +285,7 @@ Options:\n\
 \n\
 By default, the output is encoded in the current code page.\n\
 \n"
-"Author: Jean-Francois Larvoire"
+"Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 , cpANSI, cpOEM
 );
@@ -377,11 +401,15 @@ char szNewHeader[] = "<html>\r\n\
 <body>";
 #define LNEWHEADER (sizeof(szNewHeader) - 1)
 
+#pragma warning(disable:4996)	/* Ignore the deprecated name warning */
+
 int CopyClip(UINT type, UINT codepage) {
   int nChars = 0;
   int iDone;
+  int isUtf8 = FALSE;
+  int utf16 = FALSE;	// If true, output UTF-16
 
-  if (iDebug) printf("CopyClip(%d, %d);\n", type, codepage);
+  DEBUG_PRINTF(("CopyClip(%d, %d);\n", type, codepage));
 
   if (OpenClipboard(NULL)) {
     HANDLE hCBData;
@@ -393,10 +421,10 @@ int CopyClip(UINT type, UINT codepage) {
       // nChars = lstrlen(lpString); // This works only for text types
       nChars = (int)GlobalSize(hCBData);
       switch (type) {
-	case 1:
-	case 7:
+	case CF_TEXT:
+	case CF_OEMTEXT:
 	  nChars -= 1; break; // Remove the trailing NUL
-	case 13:
+	case CF_UNICODETEXT:
 	  nChars -= 2; break; // Remove the trailing unicode NUL
 	default: {
 	  char buf[128];
@@ -408,7 +436,10 @@ int CopyClip(UINT type, UINT codepage) {
 	    char *pc;
 	    int iFirst = 0;
 	    int iLast = nChars - 1; // Remove the trailing NUL
+	    isUtf8 = TRUE; // HTML is already encoded in UTF8 in the clipboard
+	    DEBUG_CODE(
 	    if (!iDebug) { // Show the unmodified header in debug mode
+	    )
 	      // Skip the clipboard information header
 	      if ((pc = strstr(lpString, "\nStartHTML:")) != NULL) sscanf(pc+11, "%d", &iFirst);
 	      if ((pc = strstr(lpString, "\nEndHTML:")) != NULL) sscanf(pc+9, "%d", &iLast);
@@ -419,6 +450,7 @@ int CopyClip(UINT type, UINT codepage) {
 		  strncpy(lpString + iFirst, szNewHeader, LNEWHEADER);
 		}
 	      }
+	    DEBUG_CODE(
 	    }
 	    if (iDebug) {
 	      fflush(stdout); // Necessary in case we've added debugging output before this
@@ -427,14 +459,21 @@ int CopyClip(UINT type, UINT codepage) {
 	      fflush(stdout);
 	      _setmode(_fileno(stdout), _O_TEXT); // In case we have more debugging output
 	    }
+	    )
 	    lpString += iFirst;
 	    nChars = iLast - iFirst;
 	    break;
 	  }
 	}
       }
+      /* Check if MsvcLibX can output UTF-16 */
+      if (isConsole(_fileno(stdout)) && (codepage == consoleCodePage)) {
+	DEBUG_PRINTF(("Writing Unicode\n"));
+      	utf16 = TRUE;
+      	codepage = CP_UTF8;
+      }
       /* Convert the output to the requested code page */
-      if (codepage != CP_NULL) {
+      if ((codepage != CP_NULL) && (!(isUtf8 && (codepage == CP_UTF8)))) {
 	int nWChars;
       	WCHAR *pwszBuf = (WCHAR *)malloc(2 * nChars); /* Worst case for Unicode encoding */
       	char *pszBuf = malloc(4 * nChars); /* Worst case for UTF-8 encoding */
@@ -466,12 +505,12 @@ int CopyClip(UINT type, UINT codepage) {
 	    PUTERR("Cannot convert the data to Unicode.");
 	    goto cleanup;
 	  }
-	  if (iDebug) printf("Converted %d chars to %d WCHARs\n", nChars, nWChars);
+	  DEBUG_PRINTF(("Converted %d chars to %d WCHARs\n", nChars, nWChars));
         } else {
           pwszBuf = (WCHAR *)lpString;
           nWChars = nChars / 2;
         }
-        /* Then convert back to the final output code page */
+        /* Then convert Unicode back to the final output code page */
 	nChars = WideCharToMultiByte(codepage,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 				     0,			/* dwFlags, */
 				     pwszBuf,		/* lpWideCharStr, */
@@ -485,46 +524,25 @@ int CopyClip(UINT type, UINT codepage) {
 	  PUTERR("Cannot convert the data to the output code page.");
 	  goto cleanup;
 	}
-	if (iDebug) printf("Converted %d WCHARs to %d chars\n", nWChars, nChars);
+	DEBUG_PRINTF(("Converted %d WCHARs to %d chars\n", nWChars, nChars));
 	lpString = pszBuf;
+	// lpString[nChars] = '\0'; 
       }
-      // message(lpString);
-      fflush(stdout); // Necessary in case we've added debugging output before this
-      _setmode(_fileno(stdout), _O_BINARY);
-      if ((codepage == CP_UTF7) || (codepage == CP_UTF8)) {
-      	/* For some unknown reason, fwrite() does not work in this case */
-      	/* The characters appear as boxes, with one box per character in the string. */
-      	/* Can't use _setmode(..., _O_U8TEXT) either, as this translates \n to \r\n */
-      	/* The only workaround I found is to use printf("%s", lpString)...
-      	   but this requires scanning the string for \0, as our data may contain some */
-      	int nCharsLeft = nChars;
-      	int nWritten = 0;
-      	if (iDebug) printf("Printing using the printf(\"%s\") method\r\n");
-	lpString[nChars] = '\0'; /* Make sure lstrlen works */
-	while (nCharsLeft) {
-	  int n = lstrlen(lpString);
-	  if (n) nWritten += printf("%s", lpString);
-	  lpString += n;
-	  nCharsLeft -= n;
-	  if (nCharsLeft) { /* There's an \0 in our clipboard data */
-	    fputc('\0', stdout);
-	    nWritten += 1;
-	    lpString += 1;
-	    nCharsLeft -= 1;
-	  }
-	}
-	iDone = !!nWritten;
-      } else { /* No code page specified. Output the raw clipboard data */
-	iDone = (int)fwrite(lpString, nChars, 1, stdout);
+      /* Unless writing UTF16 to the console, switch to binary mode, to write
+         exactly what we got from the clipboard, even Unix line endings */
+      if (!utf16) {
+	fflush(stdout); // Necessary in case we've added debugging output before this
+      	_setmode(_fileno(stdout), _O_BINARY);
       }
-      fflush(stdout); // Necessary, else the following _setmode() reverses it _before_ the conversion is done. 
-      _setmode(_fileno(stdout), _O_TEXT);
+      iDone = (int)fwrite(lpString, nChars, 1, stdout);
+      if (!utf16) {
+	fflush(stdout); // Necessary, else the following _setmode() reverses it _before_ the conversion is done. 
+	_setmode(_fileno(stdout), _O_TEXT);
+      }
       if (!iDone) {
 	PUTERR("Cannot write to the output file.");
       } else {
-	if (iDebug) {
-	  printf("Wrote %d bytes.\n", nChars);
-	}
+	DEBUG_PRINTF(("Wrote %d bytes.\n", nChars));
       }
 cleanup:
       GlobalUnlock(hCBData);
@@ -537,6 +555,8 @@ cleanup:
 
   return nChars;
 }
+
+#pragma warning(default:4996)	/* Restore the deprecated name warning */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
