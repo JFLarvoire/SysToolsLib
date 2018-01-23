@@ -23,6 +23,7 @@
 #		    Warn about missing exes. Store DOS, WIN64, etc, programs. #
 #    2017-10-30 JFL Adapt the help message depending on OUTDIR.               #
 #    2018-01-10 JFL 'make release' adds ag.exe if it's linked in Ag\.         #
+#    2018-01-23 JFL Added a 'make source-release' rule.			      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -54,6 +55,7 @@ Targets:
   clean                Erase all output files
   distclean            Erase all output files and all configuration files
   release              Generate a ..\$(OD)SysTools.zip release
+  source-release       Generate a ..\$(OD)SysTools-src.zip release
 <<
 
 # Include common definitions
@@ -202,3 +204,67 @@ release:
 	%MSG% %ZIP% done
 <<
 
+source-release:
+    call <<"$(TMP)\MsvcLibX-source-release-$(PID).bat"
+	@echo off
+	setlocal EnableExtensions EnableDelayedExpansion
+	goto :main
+	
+	:msg
+	echo %*
+	$(MSG) %*
+	exit /b
+	
+	:main
+	set "MSG=call :msg"
+	
+	:# Select the output directory
+	set "CONFIG.H=config.%COMPUTERNAME%.h"
+	if not exist %CONFIG.H% set "CONFIG.H=config.h"
+	if exist %CONFIG.H% call %CONFIG.H%
+	if not defined OUTDIR (
+	  set "\OUTDIR=\bin"
+	) else if "%OUTDIR%"=="." (
+	  set "\OUTDIR="
+	) else (
+	  set "\OUTDIR=\%OUTDIR%"
+	)
+	
+	:# Set the output file name
+	pushd .. & set "ZIP=!CD!%\OUTDIR%\SysTools-src.zip" & popd
+	
+	:# Rebuild a new zip file
+	set "PATH=%PATH%;C:\Program Files\7-zip;C:\Program Files\Git\cmd"
+	if exist "%ZIP%" del "%ZIP%"
+	%MSG% Creating "%ZIP%"
+
+	pushd ..
+	:# Problem: The list size is > 8KB, which confuses the batch parser
+	:# So split it into several sub-lists of smaller sizes
+	set "LOWCLIBS="
+	set "HICLIBS="
+	set "OTHERS="
+	for /f "delims=" %%f in ('git ls-files') do (
+	  set "FILE=./%%f"
+	  if        not "!FILE:/C/BiosLib/=!"=="!FILE!" (
+	    set LOWCLIBS=!LOWCLIBS! "%%f"
+	  ) else if not "!FILE:/C/LoDosLib/=!"=="!FILE!" (
+	    set LOWCLIBS=!LOWCLIBS! "%%f"
+	  ) else if not "!FILE:/C/=!"=="!FILE!" (
+	    set HICLIBS=!HICLIBS! "%%f"
+	  ) else (
+	    set OTHERS=!OTHERS! "%%f"
+	  )
+	)
+	set OTHERS=!OTHERS: ".gitattributes"=!
+	for %%v in (OTHERS LOWCLIBS HICLIBS) do (
+	  set %%v=!%%v:/=\!
+	  echo 7z.exe -- a "%ZIP%" !%%v!
+	  7z.exe a -- "%ZIP%" !%%v!
+	)
+	:# for /f %%f in ('git ls-files') do 7z.exe -- a "%ZIP%" "%%f"
+	popd
+	
+	:# Conclusion
+	%MSG% %ZIP% done
+<<
