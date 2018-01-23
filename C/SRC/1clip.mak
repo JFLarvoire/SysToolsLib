@@ -23,7 +23,7 @@ dirs $(O)\1clip.obj $(B)\1clip.exe: complain
 
 !IF 0
 
-!IF "$(T)"=="WIN32"
+!IF "$(T)"=="WIN32" || "$(T)"=="WIN95"
 SOURCES=1clip.c
 LFLAGS=$(LFLAGS) /SUBSYSTEM:WINDOWS
 !ENDIF

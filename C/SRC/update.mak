@@ -26,7 +26,7 @@
 SOURCES=update.c
 !ENDIF
 
-!IF "$(T)"=="WIN32"
+!IF "$(T)"=="WIN32" || "$(T)"=="WIN95"
 SOURCES=update.c update.rc
 # LFLAGS=$(LFLAGS) /MANIFEST
 !ENDIF
