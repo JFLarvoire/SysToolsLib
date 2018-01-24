@@ -524,7 +524,7 @@ int CopyClip(UINT type, UINT codepage) {
 	  PUTERR("Cannot convert the data to the output code page.");
 	  goto cleanup;
 	}
-	DEBUG_PRINTF(("Converted %d WCHARs to %d chars\n", nWChars, nChars));
+	DEBUG_PRINTF(("Converted %d WCHARs to %d chars in CP %d\n", nWChars, nChars, codepage));
 	lpString = pszBuf;
 	// lpString[nChars] = '\0'; 
       }
