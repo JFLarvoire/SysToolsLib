@@ -123,6 +123,7 @@ EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line
 errorlev.bat	| D--	| Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)		|
 inicomp.exe	| DWL	| Compare .ini or .reg files. Useful to detect changes in the Windows registry.		| `inicomp server1.reg server2.reg`
 MakeZip.bat	| -W-	| Create a zip file, based on a list of files in an input file. Uses 7-zip.		| `makezip tools.lst` &:# Builds tools.zip.
+mountw.bat      | -W-   | Mount a .wim Windows disk Image using a Unix-like command.                            | `mountw boot.wim` &:# Mounts the image at the default C:\mnt\wim
 msgbox.exe      | -W-   | Display various types of message boxes, and return answers to the batch.		| `msgbox -x -c "About to erase your disk"`
 nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
 PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
@@ -132,6 +133,7 @@ tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Win
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
 TimeX.bat	| -W-	| Time the execution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
 touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
+umountw.bat     | -W-   | Unmount a .wim Windows disk Image using a Unix-like command.                          | `umountw` &:# Unmounts the image at the default C:\mnt\wim
 vcvars.bat      | -W-   | Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
 whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
 wm.bat          | -W-   | Invoke WinMerge, even if it's not in the PATH.					| `wm old_version new_version`
