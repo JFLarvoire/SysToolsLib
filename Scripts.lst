@@ -21,6 +21,7 @@ Batch\iecache.bat
 Batch\IPcfg.bat
 Batch\MakeZip.bat
 Batch\MCD.BAT
+Batch\mountw.bat
 Batch\n.bat
 Batch\PySetup.bat
 Batch\Reconnect.bat
@@ -34,6 +35,7 @@ Batch\touch.bat
 Batch\trouve.bat
 Batch\u2a.bat
 Batch\u2w.bat
+Batch\umountw.bat
 Batch\vcvars.bat
 Batch\w2u.bat
 Batch\wm.bat
