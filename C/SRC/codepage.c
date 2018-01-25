@@ -34,14 +34,14 @@
 *    2017-03-09 JFL Display the code page name & infos before its char. table.*
 *		    Version 1.1.					      *
 *    2017-03-16 JFL Display the default console code page (OEMCP). V 1.1.1.   *
-*    2018-01-24 JFL Display console font information. V 1.2.		      *
+*    2018-01-25 JFL Display console font information. V 1.2.		      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2018-01-24"
+#define PROGRAM_DATE    "2018-01-25"
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
@@ -293,9 +293,7 @@ char *GetCPName(int iCP, LPCPINFOEX lpCpi) {
 char *version(void);
 void usage(void);
 int IsSwitch(char *pszArg);
-#if WINVER >= 0x500	 // Console font APIs aren't defined in Windows 9X SDKs
 int CheckConsoleFont(void);
-#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -525,9 +523,7 @@ int main(int argc, char *argv[]) {
     printf("System code page: %d = %s\n", iACP, GetCPName(iACP, NULL));
     // Now check the console font, to allow detecting incompatibility cases.
     // (As raster fonts usually only support the default console code page)
-#if WINVER >= 0x500	 // Console font APIs aren't defined in Windows 9X SDKs
     CheckConsoleFont();
-#endif
   }
 
   return 0;
@@ -635,7 +631,16 @@ int IsSwitch(char *pszArg) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-#if WINVER >= 0x500	 // Console font APIs aren't defined in Windows 9X SDKs
+#if _MSC_VER <= 1400
+typedef struct _CONSOLE_FONT_INFOEX {
+  ULONG cbSize;
+  DWORD nFont;
+  COORD dwFontSize;
+  UINT  FontFamily;
+  UINT  FontWeight;
+  WCHAR FaceName[LF_FACESIZE];
+} CONSOLE_FONT_INFOEX, *PCONSOLE_FONT_INFOEX;
+#endif
 
 // GetCurrentConsoleFontEx does not exist in Windows XP => Get its address dynamically.
 typedef BOOL (WINAPI *PGETCURRENTCONSOLEFONTEX)(HANDLE h, BOOL b, PCONSOLE_FONT_INFOEX p);
@@ -661,9 +666,21 @@ int CheckConsoleFont() {
     char szFaceName[4*LF_FACESIZE]; // Worst case converting cfix.FaceName to UTF8
     int isRaster = FALSE;
 
-    if (cfix.FontFamily & TMPF_TRUETYPE) pszType = "TrueType";
-    else if (cfix.FontFamily & TMPF_VECTOR) pszType = "Vector";
-    else {pszType = "Raster"; isRaster = TRUE;}
+// See https://msdn.microsoft.com/en-us/library/windows/desktop/dd145132(v=vs.85).aspx
+#define TMPF_POSTSCRIPT (TMPF_DEVICE | TMPF_VECTOR | TMPF_FIXED_PITCH)
+
+    if (cfix.FontFamily & TMPF_TRUETYPE) {
+      pszType = "TrueType";
+    } else if (cfix.FontFamily & TMPF_VECTOR) {
+      if ((cfix.FontFamily & TMPF_POSTSCRIPT) == TMPF_POSTSCRIPT) {
+	pszType = "PostScript";
+      } else {
+	pszType = "Vector";
+      }
+    } else {
+      pszType = "Raster";
+      isRaster = TRUE;
+    }
 
     if ((!cfix.FaceName[2]) && ((int)(cfix.FaceName[0]) > 0xFF)) {
       cfix.FaceName[0] = 0; // Garbage there on some PCs: Three non-0 bytes, then all 0s
@@ -677,5 +694,3 @@ int CheckConsoleFont() {
   CloseHandle(hConsole);
   return 0;
 }
-
-#endif // WINVER >= 0x500 // Console font APIs aren't defined in Windows 9X SDKs

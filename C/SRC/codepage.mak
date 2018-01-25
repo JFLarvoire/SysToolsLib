@@ -20,11 +20,3 @@ complain:
 dirs $(O)\codepage.obj $(B)\codepage.exe: complain
 	@rem Do nothing as there's nothing to do
 !ENDIF
-
-!IF "$(T)"=="WIN95"
-complain:
-	@echo>con There's no Windows 95 version of this program.
-
-dirs $(O)\codepage.obj $(B)\codepage.exe: complain
-	@rem Do nothing as there's nothing to do
-!ENDIF
