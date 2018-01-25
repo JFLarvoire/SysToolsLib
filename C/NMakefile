@@ -24,6 +24,7 @@
 #    2017-10-30 JFL Adapt the help message depending on OUTDIR.               #
 #    2018-01-10 JFL 'make release' adds ag.exe if it's linked in Ag\.         #
 #    2018-01-23 JFL Added a 'make source-release' rule.			      #
+#    2018-01-25 JFL Add 32-bits *.exe from WIN32, if not available in WIN95.  #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -137,14 +138,26 @@ release:
 	:# But some programs may not have been built, if the necessary libraries are missing.
 	set "ALL_PROGRAMS=%PROGRAMS%"
 	set "PROGRAMS="
-	for %%p in (%ALL_PROGRAMS%) do if exist %%p (
-	  set "PROGRAMS=!PROGRAMS! %%p"
-	) else (
-	  %MSG% Warning: %%p not found
+	set "PROGRAMS2="
+	for %%p in (%ALL_PROGRAMS%) do (
+	  if exist %%p (
+	    set "PROGRAMS=!PROGRAMS! %%p"
+	  ) else if exist "..\WIN32\%%~p" (
+	    %MSG% Warning: %%p not found. Using that in WIN32 instead.
+	    set "PROGRAMS2=!PROGRAMS2! %%p"
+	  ) else (
+	    %MSG% Warning: %%p not found
+	  )
 	)
 	if defined PROGRAMS set "PROGRAMS=!PROGRAMS:~1!
 	7z.exe -- a "%ZIP%" !PROGRAMS!
 	if errorlevel 1 exit /b
+	if defined PROGRAMS2 ( :# Add the missing ones from WIN32 if avail. there
+	  set "PROGRAMS2=!PROGRAMS2:~1!
+	  cd ..\WIN32
+	  7z.exe -- a "%ZIP%" !PROGRAMS2!
+	  if errorlevel 1 exit /b
+	  )
 	popd
 	:# Add The Silver Searcher WIN32 version if present
 	dir ag
@@ -155,7 +168,7 @@ release:
 	  popd
 	)
 	
-	:# Add DOS and WIN64 programs is they're available and not yet added
+	:# Add DOS and WIN64 programs if they're available and not yet added
 	for %%o in (ARM DOS IA64 WIN64) do (
 	  if exist SRC%\OUTDIR%\%%o for %%d in ("%PROGRAMS_DIR%") do if /I "%%~nxd" NEQ "%%o" (
 	    pushd SRC%\OUTDIR%
