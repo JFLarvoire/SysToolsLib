@@ -195,8 +195,8 @@ int main(int argc, char *argv[]) {
     }
     fprintf(stderr, "Unexpected argument %s ignored.\n", arg);
   }
-  DEBUG_PRINTF(("The current code page is %d\n", consoleCodePage));
-  DEBUG_PRINTF(("The output code page is %d\n", codepage));
+  DEBUG_PRINTF(("The current console code page is %d\n", consoleCodePage));
+  DEBUG_PRINTF(("The selected output code page is %d\n", codepage));
 
   /* Go for it */
   switch (iAction) {
