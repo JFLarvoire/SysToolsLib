@@ -4,7 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2018-01-23
+## [Unreleased] 2018-02-01
+### Fixed
+- The UTF-8 arguments and standard I/O initialization did not work with Visual Studio 14 and later.
+
+## [Unreleased] 2018-01-25
 ### New
 - Batch/mountw.bat: Mount a .wim Windows disk Image using a Unix-like command.
 - Batch/umountw.bat: Unmount a .wim Windows disk Image using a Unix-like command.
