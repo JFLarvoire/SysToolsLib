@@ -17,6 +17,7 @@
 PROGRAMS = \
   1clip.exe       \
   2clip.exe       \
+  2note.exe       \
   backnum.exe     \
   chars.exe       \
   codepage.exe    \
@@ -74,6 +75,8 @@ ZIPSOURCES =		 \
   1clip.mak              \
   2clip.c                \
   2clip.mak              \
+  2note.c                \
+  2note.mak              \
   backnum.c              \
   chars.c                \
   clean.bat              \
