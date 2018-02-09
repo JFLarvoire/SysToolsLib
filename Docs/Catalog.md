@@ -115,6 +115,7 @@ xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
+2note.exe	| -W-	| Pipe a program output into Windows Notepad.						| `dir | 2note`
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
 CheckEOL.bat    | -W-   | Check the line ending type for a set of files.					| `CheckEOL *.c`
 codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
