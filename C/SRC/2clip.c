@@ -249,6 +249,10 @@ int main(int argc, char *argv[]) {
 
 void usage(void)
     {
+    UINT cpANSI = GetACP();
+    UINT cpOEM = GetOEMCP();
+    UINT cpCurrent = GetConsoleOutputCP();
+
     printf("\
 \n\
 2clip version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
@@ -261,18 +265,19 @@ Usage:\n\
 \n\
 Switches:\n\
   -?        Display this help screen\n\
-  -A        Assume input is ANSI text (Code page 1252)\n\
+  -A        Assume input is ANSI text (Code page %u)\n\
   -h        Register input as HTML\n\
-  -O        Assume input is OEM text (Code page 437)\n\
+  -O        Assume input is OEM text (Code page %u)\n\
   -r        Register input as RTF\n\
   -u        Assume input is Unicode text\n\
   -U        Assume input is UTF-8 text (Code page 65001)\n\
   -V        Display the program version\n\
 \n\
-By default, the input is assumed to be encoded in the current code page.\n\
+Default input encoding: The current console code page (Code page %u).\n\
 \n"
 "Author: Jean-Francois Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+, cpANSI, cpOEM, cpCurrent
 );
 
     return;

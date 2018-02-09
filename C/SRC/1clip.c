@@ -254,6 +254,8 @@ char *version(int iVerbose) {
 void usage(void) {
   UINT cpANSI = GetACP();
   UINT cpOEM = GetOEMCP();
+  UINT cpCurrent = GetConsoleOutputCP();
+
   printf("\n\
 1clip version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
 \n\
@@ -266,7 +268,7 @@ Usage:\n\
 Options:\n\
   -?      Display this help screen.\n\
   -a      Get the ANSI text from the clipboard.\n\
-  -A      Output using the ANSI code page #%u encoding.\n\
+  -A      Output using the ANSI encoding (Code page %u).\n\
   -b      Output binary data.\n"
 #ifdef _DEBUG
 "\
@@ -276,18 +278,18 @@ Options:\n\
   -h      Get the HTML data from the clipboard. (Encoded in UTF-8)\n\
   -l      List clipboard formats available.\n\
   -o      Get the OEM text from the clipboard.\n\
-  -O      Output using the OEM code page #%u encoding.\n\
+  -O      Output using the OEM encoding (Code page %u).\n\
   -r      Get the RTF data from the clipboard.\n\
   -t N    Get format N. Default: 1 = plain text.\n\
   -u      Get the Unicode text from the clipboard. (Default)\n\
-  -U      Output using the UTF-8 code page #65001 encoding.\n\
+  -U      Output using the UTF-8 encoding (Code page 65001).\n\
   -V      Display the program version\n\
 \n\
-By default, the output is encoded in the current code page.\n\
+Default output encoding: The current console code page (Code page %u).\n\
 \n"
 "Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, cpANSI, cpOEM
+, cpANSI, cpOEM, cpCurrent
 );
 
   return;
