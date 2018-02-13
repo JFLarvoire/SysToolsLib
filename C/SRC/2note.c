@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename	    2note.c						      *
 *									      *
@@ -7,14 +7,19 @@
 *   Notes:	    							      *
 *									      *
 *   History								      *
-*    2018-02-08 JFL Adapted from 2clip.c. Version 1.0.			      *
-*									      *
-*         � Copyright 2018 Hewlett Packard Enterprise Development LP          *
+*    2018-02-08 JFL Adapted from 2clip.c.				      *
+*    2018-02-13 JFL Use MsvcLibX for UTF-8 I/O, and debugm.h for OS macros.   *
+*		    Convert Unix \n line endings to Windows \r\n. Version 1.0.*
+*		    							      *
+*         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_NAME    "2note"
 #define PROGRAM_VERSION "1.0"
-#define PROGRAM_DATE    "2018-02-08"
+#define PROGRAM_DATE    "2018-02-13"
+
+#define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -22,6 +27,7 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+#include "debugm.h"	/* SysToolsLib debug macros */
 
 #define COMPLAIN(s) fprintf(stderr, "Error %d: %s", GetLastError(), s)
 
@@ -30,22 +36,13 @@
 
 #define BLOCKSIZE (4096)	// Number of characters that will be allocated in each loop.
 
-#define NARGS 10		// Max number of command line arguments supported.
-
-#if defined(_WIN64)
-#define OS_NAME "Win64"
-#elif defined(_WIN32)
-#define OS_NAME "Win32"
-#else
-#define OS_NAME "Unknown_OS"
-#endif
-
 /* Local definitions */
 
 #define CP_NULL ((UINT)-1) /* No code page. Can't use 0 as CP_ACP is 0 */
 
 /* Function prototypes */
 
+char *version(int iVerbose);	    /* Build a string with the program versions */
 void usage(void);
 int IsSwitch(char *pszArg);
 int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
@@ -105,7 +102,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "V")) {	/* Display version */
-	printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+	printf("%s\n", version(TRUE));
 	exit(0);
       }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
@@ -183,31 +180,47 @@ int main(int argc, char *argv[]) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
+char *version(int iVerbose) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
+  char *pszLibVer = ""
+#if defined(_MSDOS) || defined(_WIN32)
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+    ;
+  char *pszVer = NULL;
+  if (iVerbose) {
+    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
+}
+
 void usage(void) {
   UINT cpANSI = GetACP();
   UINT cpOEM = GetOEMCP();
   UINT cpCurrent = GetConsoleOutputCP();
+  printf("\n" PROGRAM_NAME " version %s\n", version(FALSE));
   printf("\
-\n\
-2notepad version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
 \n\
 Pipe text from stdin to the Windows Notepad\n\
 \n\
 Usage:\n\
 \n\
-    <command> | 2clip [switches]\n\
+    <command> | " PROGRAM_NAME " [switches]\n\
 \n\
 Switches:\n\
   -?        Display this help screen\n\
-  -A        Assume input is ANSI text (Code page %u)\n\
-  -O        Assume input is OEM text (Code page %u)\n\
-  -u        Assume input is Unicode text\n\
-  -U        Assume input is UTF-8 text (Code page 65001)\n\
+  -A        The input is ANSI text (Code page %u)\n\
+  -O        The input is OEM text (Code page %u)\n\
+  -u        The input is UTF-16 text (Unicode)\n\
+  -U        The input is UTF-8 text (Code page 65001)\n\
   -V        Display the program version\n\
 \n\
 Default input encoding: The current console code page (Code page %u).\n\
 \n"
-"Author: Jean-Francois Larvoire"
+"Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 , cpANSI, cpOEM, cpCurrent);
 
@@ -358,20 +371,32 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
   HWND hMainWnd = 0;
   HWND hWnd;
   WCHAR* pGlobalBuf = (WCHAR *)GlobalAlloc(GMEM_FIXED, (nWChars+1)*sizeof(WCHAR));
-  size_t n;
+  size_t n, m, nLF;
+  int iResult = FALSE; /* Assume failure */
 
-  /* Copy the buffer, removing NULs, and appending one NUL. */
+  /* Copy the buffer, making sure it'll appear correctly in Notepad. */
   if (!pGlobalBuf) {
     ReportWin32Error("");
     return FALSE;
   }
-  for (n=0; n<nWChars; n++) { /* Copy text, changing NUL characters to spaces */
-    WCHAR wc;
-    wc = pwBuffer[n];
-    if (!wc) wc = L' ';
-    pGlobalBuf[n] = wc;
+  /* Check if the input contains Unix LF line endings */
+  for (n=nLF=0; n<nWChars; n++) {
+    if ((pwBuffer[n] != L'\r') && (pwBuffer[n+1] == L'\n')) nLF += 1;
   }
-  pGlobalBuf[nWChars] = L'\0'; /* Append a fina NUL */
+  if (nLF) { /* Then realloc the buffer to allow converting all \n to \r\n */
+    pGlobalBuf = (WCHAR *)GlobalReAlloc(pGlobalBuf, (nWChars+nLF+1)*sizeof(WCHAR), 0);
+    if (!pGlobalBuf) {
+      ReportWin32Error("");
+      return FALSE;
+    }
+  }
+  for (n=m=0; n<nWChars; n++, m++) { /* Copy text, changing NUL to ' ', and \n to \r\n */
+    WCHAR wc = pwBuffer[n];
+    if (!wc) wc = L' ';
+    pGlobalBuf[m] = wc;
+    if ((wc != L'\r') && (pwBuffer[n+1] == L'\n')) pGlobalBuf[++m] = L'\r';
+  }
+  pGlobalBuf[m] = L'\0'; /* Append a final NUL */
 
   /* Start the child process. */ 
   if (!CreateProcess(NULL,		// Module name
@@ -386,8 +411,7 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
 		     &pi )    		// Pointer to PROCESS_INFORMATION structure
      ) {
     ReportWin32Error("CreateProcess failed. ");
-    GlobalFree(pGlobalBuf);
-    return FALSE;
+    goto cleanup;
   }
 
   /* Wait until the Notepad main window appears */
@@ -398,19 +422,21 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
   }
   if (!hMainWnd) {
     fprintf(stderr, "Failed to get Notepad main window handle.\n");
-    GlobalFree(pGlobalBuf);
-    return FALSE;
+    goto cleanup;
   }
   /* Find Notepad content area window */
   hWnd = FindWindowEx(hMainWnd, 0, "Edit", NULL);
   if (!hWnd) {
-    printf("Failed to get Notepad edit window handle.\n");
+    fprintf(stderr, "Failed to get Notepad edit window handle.\n");
+    goto cleanup;
   }
 
   /* Set the Notepad content text */
   SendMessageW(hWnd, WM_SETTEXT, 0, (LPARAM)pGlobalBuf);
+  iResult = TRUE; /* Done */
 
   /* Cleanup and exit */
+cleanup:
   GlobalFree(pGlobalBuf);
-  return TRUE;
+  return iResult;
 }
