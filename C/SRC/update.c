@@ -131,13 +131,14 @@
 *		    Fixed support for pathnames >= 260 characters. 	      *
 *                   Improved mkdirp() speed and error management.             *
 *		    Version 3.5.4.    					      *
+*    2018-02-27 JFL All updateall() returns done via :cleanup_and_return.     *
 *                                                                             *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.4"
-#define PROGRAM_DATE    "2017-10-06"
+#define PROGRAM_VERSION "3.5.5"
+#define PROGRAM_DATE    "2018-02-27"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -739,10 +740,10 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     path = malloc(PATHNAME_SIZE);
     name = malloc(PATHNAME_SIZE);
     fullpathname = malloc(PATHNAME_SIZE);
-    if ((!path0) || (!path1) || (!path2) || (!path) || (!name)) {
+    if ((!path0) || (!path1) || (!path2) || (!path3) || (!path) || (!name) || (!fullpathname)) {
       fprintf(stderr, "Error: Not enough memory\n");
       nErrors += 1;
-      RETURN_INT(nErrors);
+      goto cleanup_and_return;
     }
 #endif
 
@@ -806,10 +807,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     if (!pDir) {
       fprintf(stderr, "Error: can't open directory \"%s\": %s\n", path0, strerror(errno));
       nErrors += 1;
-#ifndef _MSDOS
-      free(path0); free(path1); free(path2); free(path3); free(path); free(name); free(fullpathname);
-#endif
-      RETURN_INT(nErrors);
+      goto cleanup_and_return;
     }
     while ((pDE = readdir(pDir))) {
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
@@ -844,10 +842,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       if (!pDir) {
 	fprintf(stderr, "Error: Can't open directory \"%s\": %s\n", path0, strerror(errno));
       	nErrors += 1;
-#ifndef _MSDOS
-	free(path0); free(path1); free(path2); free(path3); free(path); free(name); free(fullpathname);
-#endif
-	RETURN_INT(nErrors);
+        goto cleanup_and_return;
       }
       while ((pDE = readdir(pDir))) {
       	int p2_exists, p2_is_dir;
@@ -911,6 +906,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       copydate(ppath, path0); /* Make sure the directory date matches too */
     }
 
+cleanup_and_return:
 #ifndef _MSDOS
     free(path0); free(path1); free(path2); free(path3); free(path); free(name); free(fullpathname);
 #endif
@@ -1784,6 +1780,7 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength) {
   if (pszRet) {
     size_t  m = strlen(pszRet);  /* Current length of the output string */
     maxLength -= 1;		 /* Maximum length of the output string */
+    /* If absPath is NULL, then _fullpath() allocated a new buffer with malloc() */
     if (!absPath) maxLength = m; /* _fullpath allocated a buffer */
     for (i=l; i && strchr(". \t", relPath[i-1]); i--) ; /* Search the first trailing dot or space */
     for ( ; i < l; i++) { /* Append the trailing dots or spaces to the output string */
