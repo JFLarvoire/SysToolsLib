@@ -34,6 +34,7 @@
 *		    Added IO_REPARSE_TAG_NFS to known symbolic link types.    *
 *    2017-10-02 JFL Removed dependencies on MAX_PATH or PATH_MAX.	      *
 *		    Fixed support for pathnames >= 260 characters.	      *
+*    2018-02-28 JFL Fixed alphasort() when files differ only by case.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -737,8 +738,8 @@ int __cdecl alphasort(const _dirent **ppDE1, const _dirent **ppDE2) {
   /* Sort names a-la Windows, that is case insensitive */
   ret = _strnicmp((*ppDE1)->d_name, (*ppDE2)->d_name, NAME_MAX);
   if (ret) return ret;
-  /* For the remote chance that we're accessing a Unix share */
-  ret = _strnicmp((*ppDE1)->d_name, (*ppDE2)->d_name, NAME_MAX);
+  /* For the remote chance that we're accessing a Unix share, with files that differ only by case */
+  ret = strncmp((*ppDE1)->d_name, (*ppDE2)->d_name, NAME_MAX);
   if (ret) return ret;
   return 0;
 }
