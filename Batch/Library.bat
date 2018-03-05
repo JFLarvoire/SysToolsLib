@@ -199,6 +199,9 @@
 :#   2017-05-11 JFL Removed rscp which was trivial and useless.               #
 :#                  Changed chcp into GetCP, returning the current code page. #
 :#                  Added GetACP, GetOEMCP.				      #
+:#   2018-03-01 JFL New faster version of the FALSE.EXE macro.		      #
+:#		    Simpler and faster versions of function is_dir.	      #
+:#		    Added functions dirname, filename, has_wildcards.	      #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -214,7 +217,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' %*& exit /b
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-05-11"
+set "VERSION=2018-03-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1167,7 +1170,8 @@ set "XEXEC@=%XCALL% :Exec.ExecVar"
 for %%t in (tee.exe) do set "Exec.tee=%%~$PATH:t"
 :# Initialize ERRORLEVEL with known values
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE0.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE.EXE=((for /f %%i in () do .)||rem.)" &:# Faster macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -2764,10 +2768,24 @@ goto :eof
 :#  History                                                                   #
 :#   2013-08-27 JFL Created this routine.                                     #
 :#   2015-11-19 JFL Adapted to new %UPVAR% mechanism.                         #
+:#   2017-10-23 JFL Simpler and faster versions of is_dir.                    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
+:get_attrs PATHNAME RETVAR -- Returns string drahscotl-- (Directory/Read Only/Archived/Hidden/System/Compressed/Offline/Temporary/Link)
+set "%~2="
+for /f "delims=" %%a in ("%~a1") do set "%~2=%%~a"
+exit /b
+
 :is_dir pathname       -- Check if a pathname refers to an existing directory
+for /f "tokens=1,2 delims=d" %%a in ("-%~a1") do if not "%%~b"=="" exit /b 0
+exit /b 1
+
+:is_dir2 pathname       -- Check if a pathname refers to an existing directory
+pushd "%~1" 2>NUL && popd
+exit /b
+
+:is_dir1 pathname       -- Check if a pathname refers to an existing directory
 %FUNCTION%
 pushd "%~1" 2>NUL
 if errorlevel 1 (
@@ -2798,6 +2816,7 @@ if errorlevel 1 (
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
+:# TODO: This :basename routine will give wrong results on "D:relative.txt"
 :basename pathnameVar filenameVar :# Returns the file name part of the pathname
 %FUNCTION% enabledelayedexpansion
 set "RETVAR=%~2"
@@ -2809,6 +2828,51 @@ if not "%NAME%"=="%NAME:\=%" goto :basename.trim_path
 %UPVAR% %RETVAR%
 set "%RETVAR%=%NAME%"
 %RETURN%
+
+:#----------------------------------------------------------------------------#
+
+:dirname PATHNAME DIRVAR	:# Returns the directory part of the pathname
+setlocal EnableExtensions EnableDelayedExpansion
+set "DIR=%~1"
+:dirname.next
+if "!DIR:~-1!"=="\" goto :dirname.done
+if "!DIR:~-1!"==":" goto :dirname.done
+set "DIR=!DIR:~0,-1!"
+if defined DIR goto :dirname.next
+:dirname.done
+endlocal & set "%~2=%DIR%" & exit /b
+
+:#----------------------------------------------------------------------------#
+
+:filename PATHNAME FILEVAR	:# Returns the file name part of the pathname
+setlocal EnableExtensions EnableDelayedExpansion
+set "PATHNAME=%~1"
+set "NAME="
+:filename.next
+set "C=!PATHNAME:~-1!"
+if "!C!"=="\" goto :filename.done
+if "!C!"==":" goto :filename.done
+set "NAME=!C!!NAME!"
+set "PATHNAME=!PATHNAME:~0,-1!"
+if defined PATHNAME goto :filename.next
+:filename.done
+endlocal & set "%~2=%NAME%" & exit /b
+
+:#----------------------------------------------------------------------------#
+
+:has_wildcards NAME	:# Return ERRORLEVEL 0 if a name contains wildcards
+setlocal EnableExtensions EnableDelayedExpansion
+set "NAME=%~1"
+set "RESULT=0"
+:has_wildcards.next
+set "C=!NAME:~-1!"
+if "!C!"=="*" goto :has_wildcards.done
+if "!C!"=="?" goto :has_wildcards.done
+set "NAME=!NAME:~0,-1!"
+if defined NAME goto :has_wildcards.next
+set "RESULT=1"
+:has_wildcards.done
+endlocal & exit /b %RESULT%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -4028,6 +4092,26 @@ set "VAR=AFTER"
 %ECHOVARS% CD
 
 goto :eof
+
+:#----------------------------------------------------------------------------#
+
+:exit
+exit /b
+
+:exit/b
+exit /b %1
+
+:test_true
+%TRUE.EXE%
+exit /b
+
+:test_false
+%FALSE.EXE%
+exit /b
+
+:test_false0
+%FALSE0.EXE%
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
