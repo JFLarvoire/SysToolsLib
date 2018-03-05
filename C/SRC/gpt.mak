@@ -8,15 +8,16 @@
 #                                                                             #
 #   History:                                                                  #
 #    2016-09-28 JFL jf.larvoire@hpe.com created this file.                    #
+#    2018-03-02 JFL Use new variable SKIP_THIS to prevent builds.             #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-!IF ("$(HAS_GNUEFI)"!="1")
-complain:
-	@echo>con This program requires the GNUEFI library.
+SOURCES=gpt.c
+OBJECTS=$(O)\gpt.obj
+EXENAME=gpt.exe
 
-dirs $(O)\gpt.obj $(B)\gpt.exe: complain
-	@rem Do nothing as we don't have the necessary libraries
+!IF ("$(HAS_GNUEFI)"!="1")
+SKIP_THIS=This program requires the GNUEFI library.
 !ENDIF

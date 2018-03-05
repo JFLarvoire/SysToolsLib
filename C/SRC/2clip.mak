@@ -8,16 +8,17 @@
 #                                                                             #
 #   History:                                                                  #
 #    2012-03-01 JFL jf.larvoire@hp.com created this file.                     #
+#    2018-03-02 JFL Use new variable SKIP_THIS to prevent builds.             #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-!IF "$(T)"=="DOS"
-complain:
-	@echo>con There's no DOS version of this program.
+SOURCES=2clip.c
+OBJECTS=$(O)\2clip.obj
+EXENAME=2clip.exe
 
-dirs $(O)\2clip.obj $(B)\2clip.exe: complain
-	@rem Do nothing as there's nothing to do
+!IF "$(T)"=="DOS"
+SKIP_THIS=There's no DOS version of this program.
 !ENDIF
 

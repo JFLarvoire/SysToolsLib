@@ -8,16 +8,17 @@
 #									      #
 #   History:								      #
 #    2015-12-09 JFL Created this file.					      #
+#    2018-03-02 JFL Use new variable SKIP_THIS to prevent builds.             #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-!IF "$(T)"=="DOS"
-complain:
-	@echo>con There's no DOS version of this program.
+SOURCES=driver.c
+OBJECTS=$(O)\driver.obj
+EXENAME=driver.exe
 
-dirs $(O)\driver.obj $(B)\driver.exe: complain
-	@rem Do nothing as there's nothing to do
+!IF "$(T)"=="DOS"
+SKIP_THIS=There's no DOS version of this program.
 !ENDIF
 

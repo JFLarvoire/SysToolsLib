@@ -47,7 +47,10 @@ PROGRAMS = \
   whichinc.exe    \
   zap.exe         \
 
-REQS = MsvcLibX_library
+# All programs above depend on MsvcLibX.
+# If they depend on another SysToolLib library, define it in a program-specific include file.
+REQS = MsvcLibX_library						# Check requirement using this dummy target
+# LIBRARIES = $(MSVCLIBX)\$(OUTDIR)\lib\MsvcLibX$(LSX).lib	# Add a dependency on this library
 
 UNIX_PROGRAMS = \
   backnum         \
