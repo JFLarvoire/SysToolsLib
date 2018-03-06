@@ -687,15 +687,15 @@ int _cdecl main(int argc, char *argv[]) {
 	  }
 
 	  case 3: {
-	    int iType;
+	    int iType3;
 	    int iLock;
 	    printf(" Enclosure or chassis information:\n");
 	    PrintStringIfDefined(&dmi21Hdr, pStruct, 4, "Manufacturer");
-	    iType = BYTE_AT(pStruct,5);
-	    iLock = iType & 0x80;
-	    iType &= 0x7F;
-	    if (iType >= NCHASSISTYPES) i=0;
-	    printf("  Chassis Type = %s\n", szChassisType[iType]);
+	    iType3 = BYTE_AT(pStruct,5);
+	    iLock = iType3 & 0x80;
+	    iType3 &= 0x7F;
+	    if (iType3 >= NCHASSISTYPES) iType3=0;
+	    printf("  Chassis Type = %s\n", szChassisType[iType3]);
 	    if (iLock) {
 	      printf("  Has a lock\n");
 	    } else {
