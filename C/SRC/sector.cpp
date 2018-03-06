@@ -1155,18 +1155,21 @@ geometry_failure:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
   char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
 #include "syslib_version.h"
 	  " ; SysLib " SYSLIB_VERSION
+#endif
     ;
-  char *pszVer = NULL;
-  if (iVerbose) {
     pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
     if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
   }
@@ -1366,6 +1369,8 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 
 char szUnits[] = " KMGTPE"; // Unit prefixes for 2^0, 2^10, 2^20, 2^30, etc
 
+#pragma warning(disable:4459) /* Ignore the "declaration of 'iKB' hides global declaration" warning */
+
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   int i;
   char szFraction[10] = ".";
@@ -1407,6 +1412,8 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   if (szUnit[0] == ' ') pszUnit = "B "; // If there's no prefix, use just "B"
   return _snprintf(pBuf, nBufSize, "%lu%s %s", dwSize, szFraction, pszUnit);
 }
+
+#pragma warning(default:4459) /* Restore the "declaration of 'iKB' hides global declaration" warning */
 
 /*---------------------------------------------------------------------------*\
 |									      *
