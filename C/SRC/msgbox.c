@@ -402,19 +402,19 @@ int main(int argc, char *argv[])
     if (pszFormat[0] == '@')
 	{
 	long lSize;
+	HFILE hFile;
 
-	HFILE hf;
-	hf = _lopen(pszFormat+1, OF_READ);
-	if (hf == HFILE_ERROR)
+	hFile = _lopen(pszFormat+1, OF_READ);
+	if (hFile == HFILE_ERROR)
 	    {
 	    MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Cannot open file %s.\n", pszFormat+1);
 	    return 254;
 	    }
 	// Get the file size.
 	{
-	long lPos = _llseek(hf, 0, FILE_CURRENT);   // Current position
-	lSize = _llseek(hf, 0, FILE_END);	    // Find the position of the end
-	_llseek(hf, lPos, FILE_BEGIN);		    // Return to the initial position
+	long lPos = _llseek(hFile, 0, FILE_CURRENT);	// Current position
+	lSize = _llseek(hFile, 0, FILE_END);		// Find the position of the end
+	_llseek(hFile, lPos, FILE_BEGIN);		// Return to the initial position
 	}
 
 	pszFormat = malloc(lSize);
@@ -423,7 +423,8 @@ int main(int argc, char *argv[])
 	    MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Not enough memory.\n");
 	    return 253;
 	    }
-	_lread(hf, pszFormat, lSize);
+	_lread(hFile, pszFormat, lSize);
+	_lclose(hFile);
 	}
 
     i = iFormat;
