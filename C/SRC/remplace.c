@@ -449,7 +449,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (strieq(pszOpt, "i")) {
-	int iErr = InitBackBuf(argv[++i]);
+	iErr = InitBackBuf(argv[++i]);
 	if (iErr) {
 fail_no_mem:
 	  FAIL("Not enough memory");
@@ -594,9 +594,9 @@ fail_no_mem:
     if (err) fail("Can't stat the input file.\n");
     if (buf.st_mode & S_IFREG) {	/* It's a regular file */
       for (nc=0; nc<3; nc++) {
-        int c = FGetC(sf);
-        if (c == EOF) break;
-        ((BYTE *)&dwBOM)[nc] = (BYTE)c;
+        int c1 = FGetC(sf);
+        if (c1 == EOF) break;
+        ((BYTE *)&dwBOM)[nc] = (BYTE)c1;
       }
       if (dwBOM == 0xBFBBEF) {		/* If this is an UTF-8 BOM */
       	inputCP = CP_UTF8;
@@ -869,17 +869,22 @@ int is_redirected(FILE *f)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
   char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
     ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
     if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
   }
   if (!pszVer) pszVer = pszMainVer;
