@@ -41,7 +41,7 @@ addpath.bat	| -W-	| Manage the local and global path easily.						| `addpath | s
 AddPaths.bat	| -W-	| Configure the system path to include my tool boxes					| `addpaths`
 which.exe	| -W-	| Check which program will execute by the given name. Supports any executable type, including tcl and ps1. (Contrary to most WIN32 ports of which, which ignore Windows' %PATHEXT% variable, and don't know the different precedence rules of cmd and powershell shells.) | `which which`
 
-## Access the Windows Clipboard
+## Pipes and the Windows Clipboard
 
 Brings the power of the command line to all Windows GUI applications.
 
@@ -50,6 +50,7 @@ Name		| OS   	| Description																							| Example
 12.bat		| -W-	| Pipe Windows clipboard contents into a program, then that program output back into the clipboard.	| `12 sort`
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip | sort`
 2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir | 2clip`
+2note.exe	| -W-	| Pipe a program output into Windows Notepad.								| `dir | 2note`
 Get-Console.ps1	| -W-	| Capture the console window as HTML or RTF or plain Text, and send it to the clipboard.                | `Get-Console`
 
 ## Convert data
@@ -115,7 +116,6 @@ xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
-2note.exe	| -W-	| Pipe a program output into Windows Notepad.						| `dir | 2note`
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
 CheckEOL.bat    | -W-   | Check the line ending type for a set of files.					| `CheckEOL *.c`
 codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
