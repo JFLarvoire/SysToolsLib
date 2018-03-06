@@ -4,6 +4,22 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-03-06
+### New
+- C/SRC/2note.c: A program for sending a pipe output to a new Notepad instance.
+### Changed
+- C/SRC/1clip.c, 2clip.c: Updated the help message to show actual system-specific code page numbers in all cases.
+- C/SRC/zap.c: Added options -i and -I. Ignore case in Windows by default. Added options -f and -rf, to delete complete directories.
+- All makefiles: Dynamically build the list of dependant libraries, and automatically relink only the programs that use them. 
+- Batch/Library.bat:
+  New faster version of the FALSE.EXE macro.
+  Simpler and faster versions of function is_dir.
+  Added functions dirname, filename, has_wildcards
+### Fixed
+- Fixed _all_ warnings that appeared in Visual Studio 2015.
+- MsvcLibX/src/dirent.c: Fixed alphasort() when files differ only by case.
+- C/SysLib/FileW32.cpp: Added the ability to read 64-bit sizes in WIN64.
+
 ## [Unreleased] 2018-02-01
 ### Fixed
 - The UTF-8 arguments and standard I/O initialization did not work with Visual Studio 14 and later.
