@@ -318,6 +318,11 @@ int LogDisk95GetBPB(HANDLE hDrive, BPB *pBpb)
 *									      *
 \*---------------------------------------------------------------------------*/
 
+/* These warnings are issues in Visual Studio 2015 and later, to signal WIN64
+   portability isses. But this WIN95 code will never be ported to WIN64. */
+#pragma warning(disable:4311) /* Ignore the "'type cast': pointer truncation" warning */
+#pragma warning(disable:4302) /* Ignore the "'type cast': truncation" warning */
+
 int LogDisk95Read(HANDLE hDrive, QWORD qwSector, WORD wNum, void FAR *pBuf)
     {
     PLOGDISK pLogDisk = (PLOGDISK)hDrive;
