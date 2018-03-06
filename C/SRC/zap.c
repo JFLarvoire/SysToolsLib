@@ -15,6 +15,7 @@
 *   History:								      *
 *    2017-10-09 JFL Created this program, based on md.c, rd.c, and zap.bat.   *
 *    2018-03-06 JFL Added options -i and -I. Ignore case in Windows by dflt.  *
+*		    Added options -f and -rf, to delete complete directories. *
 *		    							      *
 \*****************************************************************************/
 
@@ -91,14 +92,12 @@ int IsSwitch(char *pszArg);
 int isdir(const char *pszPath);
 char *NewPathName(const char *path, const char *name);
 typedef struct zapOpts {
-  int iVerbose;
-  int iNoExec;
-  int iRecurse;
-  int iNoCase;
+  int iFlags;
   char *pszPrefix;
 } zapOpts;
 int zap(const char *pathname, zapOpts *pzo); /* Remove files in a directory */
 int zapbaks(const char *path, zapOpts *pzo); /* Remove backup files in a dir */
+int rmdirRF(const char *path, int iFlags);   /* Remove a whole directory */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -116,15 +115,18 @@ int zapbaks(const char *path, zapOpts *pzo); /* Remove backup files in a dir */
 *									      *
 \*---------------------------------------------------------------------------*/
 
+/* Same flags as in rd.c, as we share routine rmdirRF() */
 #define FLAG_VERBOSE	0x0001
 #define FLAG_NOEXEC	0x0002
-#define FLAG_RECUR	0x0004
+#define FLAG_RECURSE	0x0004
+#define FLAG_NOCASE	0x0008
+#define FLAG_FORCE	0x0010
 
 int main(int argc, char *argv[]) {
   int i;
   int nErr = 0;
   int iRet = 0;
-  zapOpts zo = {TRUE, FALSE, FALSE, IGNORECASE, ""};
+  zapOpts zo = {FLAG_VERBOSE | IGNORECASE, ""};
   int iZapBackup = FALSE;
   int nZaps = 0;
 
@@ -142,6 +144,10 @@ int main(int argc, char *argv[]) {
 	  continue;
 	}
       )
+      if (streq(opt, "f")) {	/* Force deleting directories */
+	zo.iFlags |= FLAG_FORCE;
+	continue;
+      }
       if (   streq(opt, "help")
 	  || streq(opt, "-help")
 	  || streq(opt, "h")
@@ -149,11 +155,11 @@ int main(int argc, char *argv[]) {
 	usage();
       }
       if (streq(opt, "i")) {	/* Ignore case */
-	zo.iNoCase = TRUE;
+	zo.iFlags |= FLAG_NOCASE;
 	continue;
       }
       if (streq(opt, "I")) {	/* Do not ignore case */
-	zo.iNoCase = FALSE;
+	zo.iFlags &= ~FLAG_NOCASE;
 	continue;
       }
       if (streq(opt, "p")) {	/* Prefix string */
@@ -161,23 +167,27 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "q")) {	/* Quiet mode */
-	zo.iVerbose = FALSE;
+	zo.iFlags &= ~FLAG_VERBOSE;
 	continue;
       }
       if (streq(opt, "r")) {	/* Deleting files recursively in all subdirectories */
-	zo.iRecurse = TRUE;
+	zo.iFlags |= FLAG_RECURSE;
+	continue;
+      }
+      if (streq(opt, "rf")) {	/* Deleting files recursively in all subdirectories */
+	zo.iFlags |= FLAG_RECURSE | FLAG_FORCE;
 	continue;
       }
       if (streq(opt, "X")) {	/* NoExec mode: Display what files will be deleted */
-	zo.iNoExec = TRUE;
+	zo.iFlags |= FLAG_NOEXEC;
 	continue;
       }
       if (streq(opt, "v")) {	/* Verbose mode */
-	zo.iVerbose = TRUE;
+	zo.iFlags |= FLAG_VERBOSE;
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(zo.iVerbose));
+	printf("%s\n", version(zo.iFlags & FLAG_VERBOSE));
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -190,7 +200,11 @@ int main(int argc, char *argv[]) {
       continue;
     }
     if (isdir(arg)) {
-      fprintf(stderr, "zap: Error: \"%s\" is a directory!\n", arg);
+      if ((!(zo.iFlags & FLAG_RECURSE)) || (!(zo.iFlags & FLAG_FORCE))) {
+      	fprintf(stderr, "zap: Error: \"%s\" is a directory! Use -r -f if your really want to delete it.\n", arg);
+	continue;
+      }
+      rmdirRF(arg, zo.iFlags);   /* Remove a whole directory */
       continue;
     }
     nErr += zap(arg, &zo);
@@ -404,6 +418,7 @@ int zap(const char *path, zapOpts *pzo) {
   DIR *pDir;
   struct dirent *pDE;
   int nErr = 0;
+  int iFNM = (pzo->iFlags & FLAG_NOCASE) ? FNM_CASEFOLD : 0;
 
   DEBUG_ENTER(("zap(\"%s\");\n", path));
 
@@ -431,7 +446,7 @@ out_of_memory:
       case DT_DIR:
       	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
       	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
-      	if (pzo->iRecurse) {
+      	if (pzo->iFlags & FLAG_RECURSE) {
 	  char *pPathname2 = NewPathName(pPathname, pName);
 	  if (!pPathname2) goto out_of_memory;
       	  nErr += zap(pPathname2, pzo);
@@ -439,9 +454,9 @@ out_of_memory:
       	}
       	break;
       default:
-      	if (fnmatch(pName, pDE->d_name, pzo->iNoCase ? FNM_CASEFOLD : 0) == FNM_NOMATCH) break;
-      	if (pzo->iVerbose) printf("%s%s\n", pzo->pszPrefix, pPathname);
-      	if (!pzo->iNoExec) iErr = unlink(pPathname);
+      	if (fnmatch(pName, pDE->d_name, iFNM) == FNM_NOMATCH) break;
+      	if (pzo->iFlags & FLAG_VERBOSE) printf("%s%s\n", pzo->pszPrefix, pPathname);
+      	if (!(pzo->iFlags & FLAG_NOEXEC)) iErr = unlink(pPathname);
       	break;
     }
     if (iErr) {
@@ -479,4 +494,105 @@ int zapbaks(const char *path, zapOpts *pzo) {
   }
   return nErr;
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    rmdirRF						      |
+|									      |
+|   Description     Remove a directory, and all its files and subdirectories. |
+|									      |
+|   Parameters      const char *path		The directory pathname	      |
+|		    int iFlags			Verbose & NoExec flags	      |
+|		    							      |
+|   Returns	    0 = Success, else failed.				      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2017-10-05 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifdef _MSC_VER
+#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
+#endif
+
+int rmdirRF(const char *path, int iFlags) {
+  char *pPath;
+  int iErr;
+  struct stat sstat;
+  DIR *pDir;
+  struct dirent *pDE;
+  int nErr = 0;
+  int iVerbose = iFlags & FLAG_VERBOSE;
+  int iNoExec = iFlags & FLAG_NOEXEC;
+  char *pszSuffix;
+
+  DEBUG_ENTER(("rmdirRF(\"%s\");\n", path));
+
+  iErr = lstat(path, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr && (errno == ENOENT) && !iVerbose) return 0; /* Already deleted. Not an error. */
+  if (iErr) return 1;
+  if (!S_ISDIR(sstat.st_mode)) {
+    errno = ENOTDIR;
+    return 1;
+  }
+
+  pDir = opendir(path);
+  if (!pDir) return 1;
+  while ((pDE = readdir(pDir))) {
+    DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+    iErr = 0;
+    pPath = NewPathName(path, pDE->d_name);
+    pszSuffix = "";
+    switch (pDE->d_type) {
+      case DT_DIR:
+      	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
+      	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
+      	iErr = rmdirRF(pPath, iFlags);
+      	pszSuffix = DIRSEPARATOR_STRING;
+      	break;
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+      case DT_LNK:
+      	pszSuffix = ">";
+      	/* Fall through into the DT_REG case */
+#endif
+      case DT_REG:
+      	if (iVerbose) printf("%s%s\n", pPath, pszSuffix);
+      	if (!iNoExec) iErr = unlink(pPath);
+      	break;
+      default:
+      	iErr = 1;		/* We don't support deleting there */
+#if defined(ENOSYS)
+      	errno = ENOSYS;		/* Function not supported */
+#else
+      	errno = EPERM;		/* Operation not permitted */
+#endif
+      	pszSuffix = "?";
+      	break;
+    }
+    if (iErr) {
+      fprintf(stderr, "rd: Error deleting \"%s%s\": %s\n", pDE->d_name, pszSuffix, strerror(errno));
+      nErr += 1;
+      /* Continue the directory scan, looking for other files to delete */
+    }
+    free(pPath);
+  }
+  closedir(pDir);
+
+  iErr = 0;
+  if (iVerbose) {
+    pszSuffix = DIRSEPARATOR_STRING;
+    if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
+    printf("%s%s\n", path, pszSuffix);
+  }
+  if (!iNoExec) iErr = rmdir(path);
+  if (iErr) nErr += 1;
+
+  RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
+}
+
+#ifdef _MSC_VER
+#pragma warning(default:4706)
+#endif
 
