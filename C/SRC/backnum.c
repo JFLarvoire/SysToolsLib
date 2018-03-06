@@ -369,10 +369,10 @@ int main(int argc, char *argv[]) {
 
       /* Check files that match the wildcard pattern */
       if (fnmatch(szPattern, pDE->d_name, FNM_CASEFOLD) == FNM_MATCH) {
-	int i = 0;
+	int iNum = 0;
 	DEBUG_PRINTF(("// Found backup name: \"%s\"\n", pDE->d_name));
-	sscanf(pDE->d_name + iOffset, "%03d", &i);
-	if (i > iMax) iMax = i;
+	sscanf(pDE->d_name + iOffset, "%03d", &iNum);
+	if (iNum > iMax) iMax = iNum;
 	DEBUG_PRINTF(("iMax = %d;\n", iMax));
       }
     }
