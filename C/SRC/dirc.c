@@ -1735,9 +1735,9 @@ int affiche1(fif *pfif, int col)
     /* Output the size */
     if (iShowSize) /* This is a normal file, and we need to display the size */
 	{
-	/* Under MS-DOS, even with QWORDs, the size will always be < 4GB.
-	   So the high DWORD will be 0. No need to use any conversion trick. */ 
-	nSize = sprintf(szSize, "%"PRIuPTR, pfif->st.st_size);
+	int nBytes = sizeof(pfif->st.st_size); /* Could this be made a compile-time constant? */
+	char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
+	nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
 	}
     else           /* This is a special file, do not display a size */
         {
