@@ -14,11 +14,12 @@
 *		    							      *
 *   History:								      *
 *    2017-10-09 JFL Created this program, based on md.c, rd.c, and zap.bat.   *
+*    2018-03-06 JFL Added options -i and -I. Ignore case in Windows by dflt.  *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.0"
-#define PROGRAM_DATE    "2017-10-09"
+#define PROGRAM_VERSION "1.1.0"
+#define PROGRAM_DATE    "2018-03-06"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -49,6 +50,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
+#define IGNORECASE FALSE
 
 #endif
 
@@ -58,6 +60,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
+#define IGNORECASE TRUE
 
 #endif /* defined(_WIN32) */
 
@@ -67,6 +70,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
+#define IGNORECASE TRUE
 
 #endif /* defined(_MSDOS) */
 
@@ -90,6 +94,7 @@ typedef struct zapOpts {
   int iVerbose;
   int iNoExec;
   int iRecurse;
+  int iNoCase;
   char *pszPrefix;
 } zapOpts;
 int zap(const char *pathname, zapOpts *pzo); /* Remove files in a directory */
@@ -119,7 +124,7 @@ int main(int argc, char *argv[]) {
   int i;
   int nErr = 0;
   int iRet = 0;
-  zapOpts zo = {TRUE, FALSE, FALSE, ""};
+  zapOpts zo = {TRUE, FALSE, FALSE, IGNORECASE, ""};
   int iZapBackup = FALSE;
   int nZaps = 0;
 
@@ -142,6 +147,14 @@ int main(int argc, char *argv[]) {
 	  || streq(opt, "h")
 	  || streq(opt, "?")) {
 	usage();
+      }
+      if (streq(opt, "i")) {	/* Ignore case */
+	zo.iNoCase = TRUE;
+	continue;
+      }
+      if (streq(opt, "I")) {	/* Do not ignore case */
+	zo.iNoCase = FALSE;
+	continue;
       }
       if (streq(opt, "p")) {	/* Prefix string */
 	if (((i+1) < argc) && !IsSwitch(argv[i+1])) zo.pszPrefix = argv[++i];
@@ -250,6 +263,8 @@ Switches:\n\
 #endif
 "\
   -b          Delete backup files: *.bak, *~, #*#\n\
+  -i          Ignore case. Default in Windows\n\
+  -I          Do not ignore case. Default in Unix\n\
   -p PREFIX   Prefix string to insert ahead of output file names\n\
   -q          Quiet mode. Do not output the deleted files names\n\
   -r          Delete files recursively in all subdirectories\n\
@@ -424,7 +439,7 @@ out_of_memory:
       	}
       	break;
       default:
-      	if (fnmatch(pName, pDE->d_name, 0) == FNM_NOMATCH) break;
+      	if (fnmatch(pName, pDE->d_name, pzo->iNoCase ? FNM_CASEFOLD : 0) == FNM_NOMATCH) break;
       	if (pzo->iVerbose) printf("%s%s\n", pzo->pszPrefix, pPathname);
       	if (!pzo->iNoExec) iErr = unlink(pPathname);
       	break;
