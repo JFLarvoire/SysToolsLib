@@ -440,13 +440,13 @@ int main(int argc, char *argv[]) {
       }
       /* Check if the first half is ASCII-compatible */
       if (iCP != 1252) for (i=0x20; i<0x7F; i++) {
-	int j;
+	int i2;
 	long w;
 	int n;
-	w = j = 0;
+	w = i2 = 0;
 	n = MultiByteToWideChar(iCP, 0, (LPCSTR)&i, 1, (LPWSTR)&w, 2);
-	n = WideCharToMultiByte(1252, 0, (LPCWSTR)&w, n, (LPSTR)&j, 2, NULL, NULL);
-	if (i != j) {
+	n = WideCharToMultiByte(1252, 0, (LPCWSTR)&w, n, (LPSTR)&i2, 2, NULL, NULL);
+	if (i != i2) {
 	  nInfos += sprintf(szInfos+nInfos, " Incompatible with ASCII");
 	  kMin=0; kMax=8; nBlocks = 2; /* So display both the ASCII block and the extended block */
 	  break;
