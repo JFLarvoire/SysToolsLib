@@ -618,17 +618,22 @@ fail_no_mem:
 
 #pragma warning(default:4706)	/* Restore the "assignment within conditional expression" warning */
 
-char *version(int iVerbose) {
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
   char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
     ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
     if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
   }
   if (!pszVer) pszVer = pszMainVer;
