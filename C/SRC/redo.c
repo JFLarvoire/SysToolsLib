@@ -684,7 +684,6 @@ void DoPerPath(void)
 
     for (i=0; i<MAXARGS; i++)
 	{
-	char *pc;
 	char *pc2;
 	char c;
 
