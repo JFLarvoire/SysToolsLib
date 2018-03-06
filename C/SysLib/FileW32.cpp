@@ -17,6 +17,7 @@
 *   History:								      *
 *    2008-04-21 JFL Created this file.					      *
 *    2016-04-13 JFL Don't use GetFileSizeEx() & SetFilePointerEx() for WIN95. *
+*    2018-03-05 JFL Added support for 64-bits read/write sizes in WIN64.      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -168,13 +169,22 @@ QWORD FileW32Size(HANDLE hFile)
 |   History:								      |
 |    2008-04-21 JFL Created this routine				      |
 |    2016-04-13 JFL Don't use SetFilePointerEx() for WIN95.		      |
+|    2018-03-05 JFL Added support for 64-bits read sizes in WIN64.            |
 *									      *
 \*---------------------------------------------------------------------------*/
+
+#if defined(_WIN64)	/* Actually #if (sizeof(size_t) > sizeof(DWORD)) */
+#define NEED_LOOP 1		/* Then we must loop reading smaller chunks */
+#define CHUNK_SIZE 0x40000000	/* Read 1 GB chuncks */
+#endif
 
 int FileW32Read(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
     {
     BOOL bDone;
+    size_t nRead = 0;
+    DWORD dwToRead;
     DWORD dwRead = 0;
+    size_t nLeft;
 
 #if defined(_WIN95)
     if (GetVersion() >= 0x80000000)		// Windows 95/98/ME
@@ -185,7 +195,7 @@ int FileW32Read(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
     if (iDebug)
 	{
 	printf("SetFilePointerEx(hFile=%p, Offset=%I64X, ...)\n", hFile, qwOffset);
-	printf("ReadFile(hFile=%p, Buf@=%p, N=%lX, ...) ", hFile, pBuf, (DWORD)nToRead);
+	printf("ReadFile(hFile=%p, Buf@=%p, N=%IX, ...) ", hFile, pBuf, nToRead);
 	}
 #endif
     {
@@ -203,11 +213,25 @@ int FileW32Read(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
     bDone = SetFilePointerEx(hFile, liOffset, NULL, FILE_BEGIN);
 #endif /* defined(_WIN95) */
     }
-    if (bDone) bDone = ReadFile(hFile, (LPVOID)pBuf, nToRead, &dwRead, NULL);
-#ifdef _DEBUG
-    if (iDebug) printf("-> bDone=%d dwRead=%lX\n", (int)bDone, dwRead);
+
+#if NEED_LOOP
+    for (nLeft = nToRead; bDone && nLeft; nLeft -= dwRead) {
+      dwToRead = (nLeft > CHUNK_SIZE) ? CHUNK_SIZE : (DWORD)nLeft;
+#else
+      dwToRead = nLeft = nToRead;
 #endif
-    return (nToRead != dwRead);
+      if (bDone) {
+	dwRead = 0;
+	bDone = ReadFile(hFile, (LPBYTE)pBuf+nRead, dwToRead, &dwRead, NULL);
+	nRead += dwRead;
+      }
+#if NEED_LOOP
+    }
+#endif
+#ifdef _DEBUG
+    if (iDebug) printf("-> bDone=%d nRead=%IX\n", (int)bDone, nRead);
+#endif
+    return (nToRead != nRead);
     }
 
 /*---------------------------------------------------------------------------*\
@@ -228,13 +252,17 @@ int FileW32Read(HANDLE hFile, QWORD qwOffset, size_t nToRead, void FAR *pBuf)
 |   History:								      |
 |    2008-04-21 JFL Created this routine				      |
 |    2016-04-13 JFL Don't use SetFilePointerEx() for WIN95.		      |
+|    2018-03-05 JFL Added support for 64-bits write sizes in WIN64.           |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 int FileW32Write(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf)
     {
     BOOL bDone;
+    size_t nWritten= 0;
+    DWORD dwToWrite;
     DWORD dwWritten = 0;
+    size_t nLeft;
 
 #if defined(_WIN95)
     if (GetVersion() >= 0x80000000)     	// Windows 95/98/ME
@@ -245,7 +273,7 @@ int FileW32Write(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf)
     if (iDebug)
 	{
 	printf("SetFilePointerEx(hFile=%p, Offset=%I64X, ...)\n", hFile, qwOffset);
-	printf("WriteFile(hFile=%p, Buf@=%p, N=%lX, ...) ", hFile, pBuf, (DWORD)nToWrite);
+	printf("WriteFile(hFile=%p, Buf@=%p, N=%IX, ...) ", hFile, pBuf, nToWrite);
 	}
     if (iReadOnly) printf("Read-only! Write canceled.\n");
 #endif // _DEBUG
@@ -265,10 +293,24 @@ int FileW32Write(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf)
     bDone = SetFilePointerEx(hFile, liOffset, NULL, FILE_BEGIN);
 #endif /* defined(_WIN95) */
     }
-    if (bDone) bDone = WriteFile(hFile, (LPVOID)pBuf, nToWrite, &dwWritten, NULL);
-#ifdef _DEBUG
-    if (iDebug) printf("-> bDone=%d dwWritten=%lX\n", (int)bDone, dwWritten);
+
+#if NEED_LOOP
+    for (nLeft = nToWrite; bDone && nLeft; nLeft -= dwWritten) {
+      dwToWrite = (nLeft > CHUNK_SIZE) ? CHUNK_SIZE : (DWORD)nLeft;
+#else
+      dwToWrite = nLeft = nToWrite;
 #endif
-    return (nToWrite != dwWritten);
+      if (bDone) {
+	dwWritten = 0;
+      	bDone = WriteFile(hFile, (LPBYTE)pBuf+nWritten, dwToWrite, &dwWritten, NULL);
+	nWritten += dwWritten;
+      }
+#if NEED_LOOP
+    }
+#endif
+#ifdef _DEBUG
+    if (iDebug) printf("-> bDone=%d nWritten=%IX\n", (int)bDone, nWritten);
+#endif
+    return (nToWrite != nWritten);
     }
 
