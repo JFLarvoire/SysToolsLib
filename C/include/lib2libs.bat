@@ -12,13 +12,14 @@
 :#   2018-01-12 JFL Created this script                                       *
 :#   2018-03-01 JFL Removed the dependency on remplace.exe.                   *
 :#                  Added the DEFAULTLIBS from the OBJECTS files.             *
-:#                                                                            *
+:#   2018-03-11 JFL Use variable _OBJECTS if defined, else use OBJECTS.	      *
+:#		    							      *
 :#        © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-03-01"
+set "VERSION=2018-03-11"
 set ARG0=%0
 goto :main
 
@@ -77,8 +78,13 @@ echo # Computed variables:
 :# Find additional libraries in the objects we'll link
 set "OLIBS="
 call :DeleteArray OLIBS &:# Clear the OLIBS[] array
-if defined OBJECTS (
-  for %%o in (!OBJECTS!) do (
+if defined _OBJECTS (
+  set "OBJVAR=_OBJECTS"
+) else (
+  set "OBJVAR=OBJECTS"
+)
+if defined %OBJVAR% (
+  for %%o in (!%OBJVAR%!) do (
     if exist "%%~o" (
       set "OBJ=%%~o"
     ) else if exist "%O%\%%~o" (
