@@ -6,14 +6,17 @@
 *									      *
 *   Notes	    gcc can display all its predefined macros this way:       *
 *		    echo . | gcc -dM -E - | sort -d -f			      *
-*									      *
+*		    							      *
+*		    References:						      *
+*		    https://msdn.microsoft.com/en-us/library/b0084kay.aspx    *
+*		    							      *
 *   History								      *
 *    2005-05-10 JFL Created this file.					      *
 *    2012-02-02 JFL Added tons of definitions from GCC.			      *
 *    2014-04-22 JFL Removed an annoying Visual C++ warning.		      *
 *                   Fixed the command-line argument parsing.		      *
 *    2014-04-22 JFL Added processor types _M_X64, _M_ARM, _M_ARM64.	      *
-*                                                                             *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
@@ -117,11 +120,15 @@ int main(int argc, char *argv[])
   PRINTVAL(=__LINE__);
   PRINTVAL(=__TIME__);
   PRINTVAL(=__TIMESTAMP__);
+  PRINTVAL(=__STDC_HOSTED__);
+  PRINTVAL(=__STDCPP_THREADS__);
 
   /* ANSI C99 */
   PRINTVAL(=__func__);
   PRINTVAL(=__FUNC__);
   PRINTVAL(=__FUNCTION__);
+  PRINTVAL(=__FUNCDNAME__);		/* MS extension for decorated C++ names */
+  PRINTVAL(=__FUNCSIG__);		/* MS extension for call type. Ex: cdecl */
 
   /* Debug mode */
   PRINTVAL(=DEBUG);
@@ -331,7 +338,13 @@ int main(int argc, char *argv[])
   PRINTVAL(=_MSC_BUILD);
   PRINTVAL(=_MSC_FULL_VER);
   PRINTVAL(=_MT);
+  PRINTVAL(=_MD);
+  PRINTVAL(=__CLR_VER);
+  PRINTVAL(=_MSVC_LANG);
 
+  PRINTVAL(=_WINDLL);
+  PRINTVAL(=_DLL);
+  PRINTVAL(=_MANAGED);
 
   PRINTVAL(=_OPENMP);
 
@@ -361,10 +374,6 @@ int main(int argc, char *argv[])
   PRINTVAL(=_WINDOWS);
   PRINTVAL(=__WINDOWS);
   PRINTVAL(=__WINDOWS__);
-
-  PRINTVAL(=_WINDLL);
-  PRINTVAL(=_DLL);
-  PRINTVAL(=_MANAGED);
 
   PRINTVAL(=WIN32);
   PRINTVAL(=_WIN32);
@@ -424,6 +433,8 @@ int main(int argc, char *argv[])
   PRINTVAL(=_M_PPC);
   PRINTVAL(=_M_X64);
   PRINTVAL(=_M_ARM);
+  PRINTVAL(=_M_ARM_ARMV7VE);
+  PRINTVAL(=_M_ARM_FP);
   PRINTVAL(=_M_ARM64);
 
   PRINTVAL(=i386);
