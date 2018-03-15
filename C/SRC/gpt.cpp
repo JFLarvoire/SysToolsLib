@@ -24,13 +24,14 @@
 *    2017-06-28 JFL Fixed warnings. No functional code change. Version 1.1.3. * 
 *    2017-08-03 JFL Display MsvcLibX & SysLib library versions in DOS & Win.  *
 *		    Fixed and improved the FormatSize() routine. Version 1.1.4.
+*    2017-08-15 JFL Fixed warnings in Visual Studio 2015. Version 1.1.5.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.4"
-#define PROGRAM_DATE    "2017-08-03"
+#define PROGRAM_VERSION "1.1.5"
+#define PROGRAM_DATE    "2017-08-15"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -386,18 +387,21 @@ int _cdecl main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
   char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
 #include "syslib_version.h"
 	  " ; SysLib " SYSLIB_VERSION
+#endif
     ;
-  char *pszVer = NULL;
-  if (iVerbose) {
     pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
     if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
   }
@@ -555,6 +559,8 @@ void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop) {
 
 char szUnits[] = " KMGTPE"; // Unit prefixes for 2^0, 2^10, 2^20, 2^30, etc
 
+#pragma warning(disable:4459) /* Ignore the "declaration of 'iKB' hides global declaration" warning */
+
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   int i;
   char szFraction[10] = ".";
@@ -596,6 +602,8 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
   if (szUnit[0] == ' ') pszUnit = "B "; // If there's no prefix, use just "B"
   return _snprintf(pBuf, nBufSize, "%lu%s %s", dwSize, szFraction, pszUnit);
 }
+
+#pragma warning(default:4459) /* Restore the "declaration of 'iKB' hides global declaration" warning */
 
 /*---------------------------------------------------------------------------*\
 |									      *
@@ -671,7 +679,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x3C, "PQMagic NetWare" },      // PowerQuest PartitionMagic hidden NetWare
   { 0x40, "VENIX 80286" },	    // VENIX 80286
   { 0x41, "PowerPC boot" },	    // PowerPC boot partition
-  { 0x42, "MS Dyn Extd" },	    // Dynamic Extended partition
+  { 0x42, "MS Dyn Extd" },	    // Dynamic Extended partition, aka. Logical Disk Manager (LDM) partition.
   { 0x45, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x46, "EUMEL/Elan" },	    // EUMEL/Elan
   { 0x47, "EUMEL/Elan" },	    // EUMEL/Elan
@@ -705,7 +713,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x75, "PC/IX" },		    // PC/IX
   { 0x76, "Reserved" },		    // officially listed as reserved
   { 0x7E, "F.I.X." },	 	    // F.I.X.
-  { 0x80, "Minix < v1.4a" },	    // Minix v1.1 - 1.4a
+  { 0x80, "Minix < v1.4a" },	    // Minix v1.1 - 1.4a, or MS NT Fault Tolerant partition
   { 0x81, "Minix 1.4b+" },	    // Minix Boot partition
   { 0x82, "Minix Swap" },	    // Minix Swap partition
   { 0x82, "Solaris" },		    // Solaris (Unix)
@@ -751,7 +759,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0xB8, "BSDI swap" },	    // BSDI swap partition (secondarily file system)
   { 0xBE, "Solaris boot" },	    // Solaris boot partition
   { 0xBF, "Solaris" },		    // Solaris
-  { 0xC0, "DR-DOS secure" },	    // DR-DOS/Novell DOS secured partition
+  { 0xC0, "DR-DOS secure" },	    // DR-DOS/Novell DOS secured partition, or MS Valid NT Fault Tolerant partition
   { 0xC1, "DR-DOS secure 12" },	    // DR DOS 6.0 LOGIN.EXE-secured 12-bit FAT partition
   { 0xC4, "DR-DOS secure 16" },	    // DR DOS 6.0 LOGIN.EXE-secured 16-bit FAT partition
   { 0xC5, "DR-DOS secure Ex" },	    // DR DOS 6.0 LOGIN.EXE-secured 16-bit FAT partition
