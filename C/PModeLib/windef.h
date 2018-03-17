@@ -43,9 +43,11 @@ extern "C" {
 #undef CDECL
 #undef WINAPI
 
+#ifndef _H2INC	/* h2inc.exe generates warning HI4010: identifier is a MASM keyword  */
 #define NEAR _near
 #define FAR _far
 #define PASCAL _pascal
+#endif
 #define CDECL _cdecl
 
 #define WINAPI _pascal
@@ -57,9 +59,26 @@ typedef int BOOL;
 #define FALSE 0
 #define TRUE 1
 
-typedef unsigned char BYTE;
-typedef unsigned short WORD;
-typedef unsigned long DWORD;
+/* Define assembler register types BYTE, WORD, DWORD for C */
+/* Note: H2INC.EXE outputs three HI4010 warnings: "identifier is a MASM keyword"
+	 when defining these with a typedef.
+         I tried preventing that warning, using #ifndef _H2INC, or with info
+         from https://msdn.microsoft.com/en-us/library/aa712931.aspx
+         or with pragmas, but found no solution that worked.
+         So instead, use macros _BYTE, _WORD, _DWORD, and define them
+         differently for C (using a typedef) and for H2INC (without that) */
+#ifndef _H2INC	/* Compiling in C or C++ programs */
+typedef unsigned char	BYTE;	/* 8 bits unsigned character */
+typedef unsigned short  WORD;   /* 16-bit unsigned value */
+typedef unsigned long   DWORD;  /* 32-bit unsigned integer */
+#define _BYTE  BYTE
+#define _WORD  WORD
+#define _DWORD DWORD
+#else		/* Converting to .inc with h2inc.exe */
+#define _BYTE unsigned char
+#define _WORD unsigned short
+#define _DWORD unsigned long
+#endif
 
 typedef unsigned int UINT;
 
@@ -80,7 +99,9 @@ typedef signed long LONG;
 #define NULL 0
 #endif
 
+#ifndef _H2INC	/* Compiling in C or C++ programs */
 typedef VOID FAR *LPVOID;
+#endif
 
 #define MAKELP(sel, off) ((LPVOID)MAKELONG((off), (sel)))
 #define SELECTOROF(lp) HIWORD(lp)

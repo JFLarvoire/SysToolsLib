@@ -13,6 +13,7 @@
 *    1995-02-07 JFL Created by Jean-François LARVOIRE			      *
 *    1995-09-18 JFL Updated the definition for RM2PMAndCallBack		      *
 *    2015-10-27 JFL Added the generation of a library search record.	      *
+*    2018-03-15 JFL Added workaround for warnings when running h2inc.exe.     *
 *		    							      *
 *      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,21 +43,21 @@ extern "C" {
 
 typedef struct
     {
-    WORD Limit_0_15;	    // Limit bits (0..15)
-    WORD Base_0_15;	    // Base bits (0..15)
-    BYTE Base_16_23;	    // Base bits (16..23)
-    BYTE Access_Rights;     // 286 access rights
-    BYTE Extra_Rights;	    // 386 extra access rights
-    BYTE Base_24_31;	    // Base bits (24..31)
+    _WORD Limit_0_15;	    // Limit bits (0..15)
+    _WORD Base_0_15;	    // Base bits (0..15)
+    _BYTE Base_16_23;	    // Base bits (16..23)
+    _BYTE Access_Rights;    // 286 access rights
+    _BYTE Extra_Rights;	    // 386 extra access rights
+    _BYTE Base_24_31;	    // Base bits (24..31)
     } DESCRIPTOR, *PDESCRIPTOR, far *LPDESCRIPTOR;
 
 typedef struct
     {
-    WORD Offset_0_15;	    // Entry point's offset, lower 16
-    WORD Selector;	    // Entry point's selector
-    BYTE DWord_Count;	    // (D)Word parameter count
-    BYTE Access_Rights;     // Present, dpl, system, type
-    WORD Offset_16_31;	    // Entry point's offset, upper 16
+    _WORD Offset_0_15;	    // Entry point's offset, lower 16
+    _WORD Selector;	    // Entry point's selector
+    _BYTE DWord_Count;	    // (D)Word parameter count
+    _BYTE Access_Rights;    // Present, dpl, system, type
+    _WORD Offset_16_31;	    // Entry point's offset, upper 16
     } CALLGATEDESCRIPTOR,* PCALLGATEDESCRIPTOR, far *LPCALLGATEDESCRIPTOR;
 
 /*********** Definitions for the access rights byte in a descriptor **********/
@@ -240,12 +241,16 @@ void _cdecl _enable(void);
 
 /* In .asm files. Call specifiers _cdecl or _fastcall MUST be provided */
 
+#ifndef _H2INC	// h2inc.exe throws away _fastcall declarations with a warning
 extern int _fastcall is_a20_enabled(void);
 extern int _fastcall isa_enable_a20(void);
 extern int _fastcall isa_disable_a20(void);
+#endif
 
 typedef int (_fastcall far *LPXMS)();	    // Ellipsis refused by compiler!
+#ifndef _H2INC	// h2inc.exe throws away _fastcall declarations with a warning
 extern LPXMS _fastcall GetXMSAddress(void);
+#endif
 extern LPXMS lpXMS;
 extern short wlpXMSValid;
 #define GetXMSVersion() lpXMS(0x0000)	    // Return version in BCD
@@ -253,14 +258,16 @@ extern short wlpXMSValid;
 #define xms_disable_a20() lpXMS(0x0600)     // Restore A20's previous state
 #define xms_query_a20() lpXMS(0x0700)	    // Return 0=Disabled 1=Enabled
 
-typedef WORD (_cdecl *PPROTCALLBACK)(PDESCRIPTOR, WORD);
-extern int _cdecl RM2PMAndCallBack(PPROTCALLBACK, WORD, WORD *);
+typedef _WORD (_cdecl *PPROTCALLBACK)(PDESCRIPTOR, _WORD);
+extern int _cdecl RM2PMAndCallBack(PPROTCALLBACK, _WORD, _WORD *);
 
-extern DWORD _cdecl _sgdt(void);    // Use in all modes.
-extern WORD _cdecl _sldt(void);     // Use only in PM
-extern DWORD _fastcall GetSegmentBase(WORD); // Get the base of a real mode segment
-extern DWORD _cdecl GetV86LinearAddress(void far *); // Get a linear address
-extern DWORD _cdecl ReturnEAX(void);	    // Copy EAX to DX:AX
+extern _DWORD _cdecl _sgdt(void);    // Use in all modes.
+extern _WORD _cdecl _sldt(void);     // Use only in PM
+#ifndef _H2INC	// h2inc.exe throws away _fastcall declarations with a warning
+extern _DWORD _fastcall GetSegmentBase(_WORD); // Get the base of a real mode segment
+#endif
+extern _DWORD _cdecl GetV86LinearAddress(void far *); // Get a linear address
+extern _DWORD _cdecl ReturnEAX(void);	    // Copy EAX to DX:AX
 
 extern int _cdecl identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
@@ -271,8 +278,8 @@ extern int disable_a20(void);	    // Return TRUE if succeeded
 
 /* Idemt for functions with many large size arguments */
 
-int _cdecl FlatCopy(DWORD dwDest, DWORD dwSource, DWORD dwLength);
-DWORD _cdecl MapPhysToLinear(DWORD dwBase, DWORD dwLength, DWORD dwFlags);
+int _cdecl FlatCopy(_DWORD dwDest, _DWORD dwSource, _DWORD dwLength);
+_DWORD _cdecl MapPhysToLinear(_DWORD dwBase, _DWORD dwLength, _DWORD dwFlags);
 
 //+-------------------------------------------------------------------------+//
 //+			   VCPI functions prototypes			    +//
@@ -281,13 +288,13 @@ DWORD _cdecl MapPhysToLinear(DWORD dwBase, DWORD dwLength, DWORD dwFlags);
 extern int _cdecl vcpi_detect(void);	    // Return 0 if VCPI present
 extern void _cdecl vcpi_cleanup(void);	    // Cleanup alloc. by vcpi_detect
 
-typedef WORD (_cdecl *PVCPICALLBACK)(PDESCRIPTOR, WORD);
-extern int _cdecl VCPI2PMAndCallBack(PVCPICALLBACK, WORD, WORD *);
+typedef _WORD (_cdecl *PVCPICALLBACK)(PDESCRIPTOR, _WORD);
+extern int _cdecl VCPI2PMAndCallBack(PVCPICALLBACK, _WORD, _WORD *);
 
 extern int _cdecl vm2real(void);	    // Return 0 if done
 
-typedef WORD (_cdecl *PRMCALLBACK)(WORD);
-extern int _cdecl VCPI2RMAndCallBack(PRMCALLBACK, WORD, WORD *);
+typedef _WORD (_cdecl *PRMCALLBACK)(_WORD);
+extern int _cdecl VCPI2RMAndCallBack(PRMCALLBACK, _WORD, _WORD *);
 
 extern int _cdecl vm2prot(void);
 #define vcpi2prot vm2prot		    // Consistent with dpmi2prot()
@@ -298,33 +305,33 @@ extern int _cdecl vm2prot(void);
 
 extern int _cdecl dpmi_detect(void);	  // Return 0 if a DPMI server is there
 extern int _cdecl dpmi2prot(void);	  // Switch to protected mode
-extern WORD _cdecl GetFlatDataDesc(void); // Get the 4 GB flat data segment sel.
-extern WORD _cdecl GetLDTSelfDesc(void);  // Set an LDT entry to access the LDT
-extern DWORD _cdecl GetPMLinearAddress(void far *); // Get a linear address
+extern _WORD _cdecl GetFlatDataDesc(void); // Get the 4 GB flat data segment sel.
+extern _WORD _cdecl GetLDTSelfDesc(void);  // Set an LDT entry to access the LDT
+extern _DWORD _cdecl GetPMLinearAddress(void far *); // Get a linear address
 
-typedef WORD (_cdecl *PDPMICALLBACK)(WORD);
-extern int _cdecl VM2PMAndCallBack(PDPMICALLBACK, WORD, WORD *);
+typedef _WORD (_cdecl *PDPMICALLBACK)(_WORD);
+extern int _cdecl VM2PMAndCallBack(PDPMICALLBACK, _WORD, _WORD *);
 
-typedef DWORD (_pascal *PRING0CALLBACK)(DWORD);
-typedef DWORD (_pascal far *LPRING0CALLBACK)(DWORD);
-extern DWORD PM2Ring0AndCallBack(PRING0CALLBACK, DWORD);
+typedef _DWORD (_pascal *PRING0CALLBACK)(_DWORD);
+typedef _DWORD (_pascal far *LPRING0CALLBACK)(_DWORD);
+extern _DWORD PM2Ring0AndCallBack(PRING0CALLBACK, _DWORD);
 
-extern DWORD PM2AppyAndCallBack(PRING0CALLBACK pCB, void *pParams,
-						    DWORD *pdwRetVal);
+extern _DWORD PM2AppyAndCallBack(PRING0CALLBACK pCB, void *pParams,
+						    _DWORD *pdwRetVal);
 /* Windows-compatible functions */
 
 UINT WINAPI AllocSelector(UINT);	  // Allocate a selector in LDT
 UINT WINAPI FreeSelector(UINT); 	  // Free a selector in LDT
 
-DWORD WINAPI GetSelectorBase(UINT);	  // Get the base of a prot mode segment
-UINT WINAPI SetSelectorBase(UINT, DWORD); // Set the base of a prot mode segment
-DWORD WINAPI GetSelectorLimit(UINT);	  // Get the limit of a prot mode seg.
-UINT WINAPI SetSelectorLimit(UINT, DWORD); // Set the limit of a prot mode seg.
+_DWORD WINAPI GetSelectorBase(UINT);	  // Get the base of a prot mode segment
+UINT WINAPI SetSelectorBase(UINT, _DWORD); // Set the base of a prot mode segment
+_DWORD WINAPI GetSelectorLimit(UINT);	  // Get the limit of a prot mode seg.
+UINT WINAPI SetSelectorLimit(UINT, _DWORD); // Set the limit of a prot mode seg.
 
 UINT WINAPI GlobalPageLock(HGLOBAL);	  // Lock a 4 KB page in memory
 UINT WINAPI GlobalPageUnlock(HGLOBAL);	  // Unlock a 4 KB page from memory
 
-DWORD WINAPI GlobalDosAlloc(DWORD);	  // Allocate a block of DOS memory
+_DWORD WINAPI GlobalDosAlloc(_DWORD);	  // Allocate a block of DOS memory
 UINT WINAPI GlobalDosFree(UINT);	  // Free a block of DOS memory
 
 //+-------------------------------------------------------------------------+//
