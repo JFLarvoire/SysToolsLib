@@ -67,6 +67,7 @@ UNIX_PROGRAMS = \
   redo            \
   remplace        \
   update          \
+  which		  \
   zap             \
 
 UNIX_REQS = MsvcLibX_debug_macros
