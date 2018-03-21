@@ -72,18 +72,20 @@
 *		    Bugfix: WIN64 will run .com files, which may be exe inside.
 *    2017-10-27 JFL Put MSC-specific pragmas within a #ifdef _MSC_VER/#endif. *
 *		    Version 1.9.					      *
+*    2018-03-21 JFL In verbose mode, display the programs time & links target.*
+*		    Version 1.10.					      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.9"
-#define PROGRAM_DATE    "2017-10-27"
+#define PROGRAM_VERSION "1.10"
+#define PROGRAM_DATE    "2018-03-21"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
-#define _UTF8_SOURCE		/* Force MsvcLibX.lib to use UTF-8 strings */
-
+#define _GNU_SOURCE		/* Force MsvcLibX.lib to use UTF-8 strings,
+				   and Unix to define lots of extras */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,6 +94,8 @@
 /* Use MinGW, or JFL's MsvcLibX library extensions for MS Visual C++ */
 #include <unistd.h>		/* For the access function */
 #include <dirent.h>		/* We use the DIR type and the dirent structure */
+#include <sys/stat.h>		/* To get the actual file time */
+#include <time.h>		/* To get the actual file time */
 
 /* MsvcLibX debugging macros */
 #include "debugm.h"
@@ -196,6 +200,12 @@ typedef unsigned char BYTE;
 #define FALSE 0
 #define TRUE 1
 
+/* Search flags */
+
+#define WHICH_ALL	0x01	    /* Display all commands found. Default: Just the first one */
+#define WHICH_VERBOSE	0x02	    /* Display verbose information */
+#define WHICH_TIME	0x04	    /* Display the file time */
+
 /* Global variables */
 
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
@@ -203,15 +213,14 @@ char szSystem32dir[FILENAME_MAX];
 char szSystem64dir[FILENAME_MAX];
 int iWoW = FALSE;		    /* TRUE = WIN32 program running in WIN64 */
 #endif
-int iSearchInCD = SEARCH_IN_CD;	    /* TRUE = Seach in the current directory first */
 shell_t shell = DEFAULT_SHELL;
 
 /* Prototypes */
 
 char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);
-int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iAll);
-int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt);
+int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iSearchFlags);
+int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iSearchFlags);
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
 size_t strnirepl(char *pszResultBuffer, size_t lResultBuffer, const char *pszString,
                  const char *pszSearch, const char *pszReplace);
@@ -221,15 +230,15 @@ int GetProcessName(pid_t pid, char *name, size_t lname);
 int FixNameCase(char *pszPathname);
 #endif
 #if defined(_MSDOS) || defined(_WIN32)
-int SearchCommandInternal(char *pszCommand);
+int SearchCommandInternal(char *pszCommand, int iSearchFlags);
 #endif
 #if defined(_WIN32)
 char **GetInternalCommands(void);    /* Get a NULL-terminated list of internal shell commands */
-int SearchCmdInternal(char *pszCommand);
+int SearchCmdInternal(char *pszCommand, int iSearchFlags);
 #endif
 #if defined(_WIN32) || defined(__unix__)
-int SearchPowerShellInternal(char *pszCommand);
-int SearchBashInternal(char *pszCommand);
+int SearchPowerShellInternal(char *pszCommand, int iSearchFlags);
+int SearchBashInternal(char *pszCommand, int iSearchFlags);
 #endif
 
 /*---------------------------------------------------------------------------*\
@@ -254,7 +263,7 @@ int main(int argc, char *argv[]) {
   char *pszTok;
   int iArg;
   char *arg;
-  int iAll = FALSE;
+  int iFlags = 0;
   int iFound = 0;
 #if defined(_WIN32)
   char szShellName[FILENAME_MAX+1];
@@ -264,6 +273,7 @@ int main(int argc, char *argv[]) {
   int iPath;
   int iVerbose = FALSE;
   int iInternal = -1;
+  int iSearchInCD = SEARCH_IN_CD;   /* TRUE = Search in the current directory first */
 
   for (iArg=1; iArg<argc; iArg++) { /* Process all command line arguments */
     arg = argv[iArg];
@@ -280,7 +290,7 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "a")		/* Display all matching programs */
 	  || streq(opt, "-all")) {
-	iAll = TRUE;
+	iFlags |= WHICH_ALL;
 	continue;
       }
       DEBUG_CODE(
@@ -302,9 +312,13 @@ int main(int argc, char *argv[]) {
 	iInternal = 0;
 	continue;
       }
+      /* Note: I considered adding a -t option to display the program time,
+         then changed my mind and added that feature to the existing -v option.
+         Still, I left the distinct WHICH_TIME flag, in case we revive that -t. */
       if (   streq(opt, "v")		/* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
+	iFlags |= WHICH_VERBOSE | WHICH_TIME;
 	continue;
       }
       if (   streq(opt, "V")		/* Get version */
@@ -348,7 +362,7 @@ int main(int argc, char *argv[]) {
       && getenv("NoDefaultCurrentDirectoryInExePath")) {
     iSearchInCD = FALSE; /* This disables search in the Current Directory first */
     if (iVerbose) printf("# Environment variable NoDefaultCurrentDirectoryInExePath is set => No search in .\n");
-    if (iAll) iSearchInCD = TRUE;	/* But if searching for all alternatives, keep showing that in . */
+    if (iFlags & WHICH_ALL) iSearchInCD = TRUE; /* But if searching for all alternatives, keep showing that in . */
   }
 #if defined(_MSC_VER)
 #pragma warning(default:4996) /* Restore the "'GetVersion': was declared deprecated" warning */
@@ -410,33 +424,33 @@ int main(int argc, char *argv[]) {
       switch (shell) {
 #if defined(_MSDOS) || defined(_WIN32)
 	case SHELL_COMMAND:
-	  iFound = SearchCommandInternal(pszCommand);
+	  iFound = SearchCommandInternal(pszCommand, iFlags);
 	  break;
 #endif
 #if defined(_WIN32)
 	case SHELL_CMD:
-	  iFound = SearchCmdInternal(pszCommand);
+	  iFound = SearchCmdInternal(pszCommand, iFlags);
 	  break;
 #endif
 #if defined(_WIN32) || defined(__unix__)
 	case SHELL_POWERSHELL:
-	  iFound = SearchPowerShellInternal(pszCommand);
+	  iFound = SearchPowerShellInternal(pszCommand, iFlags);
 	  break;
 	case SHELL_BASH:
-	  iFound = SearchBashInternal(pszCommand);
+	  iFound = SearchBashInternal(pszCommand, iFlags);
 	  break;
 #endif
 	default:
 	  iFound = FALSE;
 	  break;
       }
-      if (iFound && !iAll) continue;
+      if (iFound && !(iFlags & WHICH_ALL)) continue;
     }
 
     /* Then search the PATH */
     for (iPath=0; iPath < nPaths; iPath++) {
-      iFound = SearchProgramWithAnyExt(pathList[iPath], pszCommand, iAll);
-      if (iFound && !iAll) break;
+      iFound = SearchProgramWithAnyExt(pathList[iPath], pszCommand, iFlags);
+      if (iFound && !(iFlags & WHICH_ALL)) break;
     }
   }
 
@@ -456,17 +470,22 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
   char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
 #include "msvclibx_version.h"
 	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
     ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
     if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
   }
   if (!pszVer) pszVer = pszMainVer;
@@ -484,7 +503,7 @@ Options:\n\
   -a    Display all matches. Default: Display only the first one.\n\
   -i    Search for the shell internal commands first. (Default for cmd.exe)\n\
   -I    Do not search for the shell internal commands. (Faster)\n\
-  -v    Verbose node. Display extra status information.\n\
+  -v    Verbose node. Also display programs time, links target, etc.\n\
   -V    Display this program version and exit.\n\
 \n"
 #if defined(_WIN32)
@@ -687,15 +706,13 @@ cleanup_and_return:
 
 static char **ppszCmdInternals = NULL;
 
-int SearchCmdInternal(char *pszCommand);
-int SearchPowerShellInternal(char *pszCommand);
-
-int SearchCmdInternal(char *pszCommand) {
+int SearchCmdInternal(char *pszCommand, int iFlags) {
   char **ppszIntCmd;
+  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
   if (!ppszCmdInternals) ppszCmdInternals = GetInternalCommands();
   if (ppszCmdInternals) for (ppszIntCmd = ppszCmdInternals; *ppszIntCmd; ppszIntCmd++) {
     if (!_stricmp(pszCommand, *ppszIntCmd)) {
-      printf("cmd /c %s\n", *ppszIntCmd);
+      printf("%*scmd /c %s\n", iMargin, "", *ppszIntCmd);
       return TRUE;
       break;
     }
@@ -707,11 +724,12 @@ int SearchCmdInternal(char *pszCommand) {
 
 #if defined(_WIN32) || defined(__unix__)
 
-int SearchPowerShellInternal(char *pszCommand) {
+int SearchPowerShellInternal(char *pszCommand, int iFlags) {
   char szCmd[1024];
   int iRet;
+  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
   /* Generate a PowerShell command that gets internal commands by the given name, and displays which.exe output directly */
-  sprintf(szCmd, "powershell -ExecutionPolicy Bypass -c \"Get-Command %s -CommandType Alias, Cmdlet, Function, Workflow -ErrorAction SilentlyContinue | %% {\\\"PowerShell -c \\\"+$(if ($_.DisplayName) {$_.DisplayName} else {$_.Name})}\"", pszCommand);
+  sprintf(szCmd, "powershell -ExecutionPolicy Bypass -c \"Get-Command %s -CommandType Alias, Cmdlet, Function, Workflow -ErrorAction SilentlyContinue | %% {\\\"%*sPowerShell -c \\\"+$(if ($_.DisplayName) {$_.DisplayName} else {$_.Name})}\"", pszCommand, iMargin, "");
   DEBUG_PRINTF(("%s\n", szCmd));
   iRet = system(szCmd); /* Returns 0 if a command was found, else a non-0 error code */
   DEBUG_PRINTF(("  exit %d\n", iRet));
@@ -728,11 +746,12 @@ int SearchPowerShellInternal(char *pszCommand) {
 #define BASH "%%windir%%\\system32\\bash.exe"
 #endif
 
-int SearchBashInternal(char *pszCommand) {
+int SearchBashInternal(char *pszCommand, int iFlags) {
   char szCmd[1024];
   int iRet;
+  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
   /* Generate a bash command that gets help about internal commands, and displays which.exe output directly */
-  sprintf(szCmd, BASH " -c \"help %s >/dev/null 2>/dev/null && echo 'bash -c %s'\"", pszCommand, pszCommand);
+  sprintf(szCmd, BASH " -c \"help %s >/dev/null 2>/dev/null && echo '%*sbash -c %s'\"", pszCommand, iMargin, "", pszCommand);
   DEBUG_PRINTF(("%s\n", szCmd));
   iRet = system(szCmd); /* Returns 0 if a command was found, else a non-0 error code */
   DEBUG_PRINTF(("  exit %d\n", iRet));
@@ -814,7 +833,7 @@ cleanup_and_return:
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 #endif
 
-int SearchCommandInternal(char *pszCommand) {
+int SearchCommandInternal(char *pszCommand, int iFlags) {
   GetComspecCommands();
   /* TODO: Implement this */
   /* Gotcha: Some versions of DOS have a help.exe or help.com command,
@@ -844,7 +863,7 @@ int SearchCommandInternal(char *pszCommand) {
 |									      |
 |   Arguments	    pszPath		Directory to search in		      |
 |		    pszCommand		Program name to search for	      |
-|		    iAll		If TRUE, display all matches	      |
+|		    iFlags		Search flags			      |
 |									      |
 |   Notes	    							      |
 |									      |
@@ -853,28 +872,29 @@ int SearchCommandInternal(char *pszCommand) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iAll) {
+int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
   int iFound = FALSE;
   int i;
 
 #ifndef __unix__
   if (strchr(pszCommand, '.')) {
 #endif
-    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, NULL);
+    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, NULL, iFlags);
 #ifndef __unix__
   }
 #endif
   if (!initExtListDone) initExtList();
   for (i=0; ppszExt[i]; i++) {
-    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i]);
-    if (iFound && !iAll) return iFound;
+    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i], iFlags);
+    if (iFound && !(iFlags & WHICH_ALL)) return iFound;
   }
 
   return iFound;
 }
 
-int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt) {
+int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iFlags) {
   char szFname[FILENAME_MAX];
+  int nChars = 0;
 
   _makepath(szFname, "", pszPath, pszCommand, pszExt);
   DEBUG_PRINTF(("  Looking for \"%s\"", szFname));
@@ -883,7 +903,11 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt) {
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
     char szName2[FILENAME_MAX];
 #endif
-    DEBUG_PRINTF((" Matched with errno %d\n", errno));
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+    char target[PATH_MAX];
+#endif
+
+    DEBUG_PRINTF(("  Matched with errno %d\n", errno));
 #if defined(_WIN32)
     FixNameCase(pszName);
 #endif
@@ -893,10 +917,42 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt) {
       pszName = szName2;
     }
 #endif
-    printf("%s\n", pszName);
+    if (iFlags & WHICH_TIME) {
+      struct stat s;
+      struct tm *pTime;
+      int year, month, day, hour, minute, second;
+
+      /* Get the time stamp of the actual file, not that of the link! */
+      if (stat(pszName, &s) == -1) goto search_failed;
+      pTime = localtime(&(s.st_mtime)); /* Time of last data modification */
+      year = pTime->tm_year + 1900;
+      month = pTime->tm_mon + 1;
+      day = pTime->tm_mday;
+      hour = pTime->tm_hour;
+      minute = pTime->tm_min;
+      second = pTime->tm_sec;
+      nChars += printf("%04d-%02d-%02d %02d:%02d:%02d ", year, month, day, hour, minute, second);
+    }
+    nChars += printf("%s", pszName);
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+    if (iFlags & WHICH_VERBOSE) {
+      struct stat s;
+      /* Check if it's a link */
+      if (lstat(pszName, &s) == -1) goto search_failed;
+      if (S_ISLNK(s.st_mode)) { /* Yes, it's a link */
+      	if (readlink(pszName, target, PATH_MAX) == -1) goto search_failed;
+	nChars += printf(" -> %s", target); 
+      }
+    }
+#endif
+    printf("\n");
     return TRUE;	/* Match */
   }
-  DEBUG_PRINTF((" Error %d\n", errno));
+search_failed:
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+  if (nChars) printf("\n"); /* nChars cannot be > 0 for cases this is compiled out (MSDOS) */
+#endif
+  DEBUG_PRINTF(("  Error %d\n", errno));
   return FALSE;	/* No match */
 }
 
