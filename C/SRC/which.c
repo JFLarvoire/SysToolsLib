@@ -73,6 +73,9 @@
 *    2017-10-27 JFL Put MSC-specific pragmas within a #ifdef _MSC_VER/#endif. *
 *		    Version 1.9.					      *
 *    2018-03-21 JFL In verbose mode, display the programs time & links target.*
+*    2018-03-22 JFL Moved yesterday's change to new option -l, and changed -v *
+*		    to display comments about programs excluded.	      *
+*		    Fixed an error message when run in WIN32 LXSS bash.exe.   *
 *		    Version 1.10.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -80,7 +83,7 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.10"
-#define PROGRAM_DATE    "2018-03-21"
+#define PROGRAM_DATE    "2018-03-22"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -109,6 +112,14 @@ typedef enum {
   SHELL_POWERSHELL,			/* Windows PowerShell.exe */
   SHELL_BASH,				/* Unix bash */
 } shell_t;
+
+char *pszShells[] = {
+  "unknown",
+  "command.com",			/* Windows command.com */
+  "cmd.exe",				/* Windows cmd.exe */
+  "PowerShell",				/* Windows PowerShell.exe */
+  "bash",				/* Unix bash */
+};
 
 /************************ MS-DOS-specific definitions ************************/
 
@@ -204,7 +215,8 @@ typedef unsigned char BYTE;
 
 #define WHICH_ALL	0x01	    /* Display all commands found. Default: Just the first one */
 #define WHICH_VERBOSE	0x02	    /* Display verbose information */
-#define WHICH_TIME	0x04	    /* Display the file time */
+#define WHICH_LONG	0x04	    /* Display the file time */
+#define WHICH_XCD	0x08	    /* Force eXcluding files in CD */
 
 /* Global variables */
 
@@ -312,13 +324,15 @@ int main(int argc, char *argv[]) {
 	iInternal = 0;
 	continue;
       }
-      /* Note: I considered adding a -t option to display the program time,
-         then changed my mind and added that feature to the existing -v option.
-         Still, I left the distinct WHICH_TIME flag, in case we revive that -t. */
+      if (   streq(opt, "l")		/* Display the program time and link target */
+	  || streq(opt, "-long")) {
+	iFlags |= WHICH_LONG;
+	continue;
+      }
       if (   streq(opt, "v")		/* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
-	iFlags |= WHICH_VERBOSE | WHICH_TIME;
+	iFlags |= WHICH_VERBOSE | WHICH_LONG;
 	continue;
       }
       if (   streq(opt, "V")		/* Get version */
@@ -362,7 +376,6 @@ int main(int argc, char *argv[]) {
       && getenv("NoDefaultCurrentDirectoryInExePath")) {
     iSearchInCD = FALSE; /* This disables search in the Current Directory first */
     if (iVerbose) printf("# Environment variable NoDefaultCurrentDirectoryInExePath is set => No search in .\n");
-    if (iFlags & WHICH_ALL) iSearchInCD = TRUE; /* But if searching for all alternatives, keep showing that in . */
   }
 #if defined(_MSC_VER)
 #pragma warning(default:4996) /* Restore the "'GetVersion': was declared deprecated" warning */
@@ -401,7 +414,7 @@ int main(int argc, char *argv[]) {
   /* Build the list of directories to search in */
   if (iSearchInCD) {
     pathList = realloc(pathList, (sizeof(char *))*(++nPaths));
-    pathList[nPaths-1] = "";		/* Start with the current directory */
+    pathList[nPaths-1] = ".";		/* Start with the current directory */
   }
 #ifdef __unix__
 #define PATH_SEP ":"
@@ -446,6 +459,14 @@ int main(int argc, char *argv[]) {
       }
       if (iFound && !(iFlags & WHICH_ALL)) continue;
     }
+
+    /* In verbose mode, show eXcluded programs in CD */
+#if !defined(_MSDOS)
+    if ((iFlags & WHICH_ALL) && (iFlags & WHICH_VERBOSE) && !iSearchInCD
+        && strcmp(pathList[0], ".")) {
+      SearchProgramWithAnyExt(".", pszCommand, iFlags | WHICH_XCD);
+    }
+#endif
 
     /* Then search the PATH */
     for (iPath=0; iPath < nPaths; iPath++) {
@@ -503,7 +524,8 @@ Options:\n\
   -a    Display all matches. Default: Display only the first one.\n\
   -i    Search for the shell internal commands first. (Default for cmd.exe)\n\
   -I    Do not search for the shell internal commands. (Faster)\n\
-  -v    Verbose node. Also display programs time, links target, etc.\n\
+  -l    Long mode. Also display programs time, and links target.\n\
+  -v    Verbose mode. Like -l, plus comments about non-eligible programs.\n\
   -V    Display this program version and exit.\n\
 \n"
 #if defined(_WIN32)
@@ -708,7 +730,7 @@ static char **ppszCmdInternals = NULL;
 
 int SearchCmdInternal(char *pszCommand, int iFlags) {
   char **ppszIntCmd;
-  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
+  int iMargin = (iFlags & WHICH_LONG) ? 20 : 0; /* Margin to align with matches that display a file time */
   if (!ppszCmdInternals) ppszCmdInternals = GetInternalCommands();
   if (ppszCmdInternals) for (ppszIntCmd = ppszCmdInternals; *ppszIntCmd; ppszIntCmd++) {
     if (!_stricmp(pszCommand, *ppszIntCmd)) {
@@ -727,7 +749,7 @@ int SearchCmdInternal(char *pszCommand, int iFlags) {
 int SearchPowerShellInternal(char *pszCommand, int iFlags) {
   char szCmd[1024];
   int iRet;
-  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
+  int iMargin = (iFlags & WHICH_LONG) ? 20 : 0; /* Margin to align with matches that display a file time */
   /* Generate a PowerShell command that gets internal commands by the given name, and displays which.exe output directly */
   sprintf(szCmd, "powershell -ExecutionPolicy Bypass -c \"Get-Command %s -CommandType Alias, Cmdlet, Function, Workflow -ErrorAction SilentlyContinue | %% {\\\"%*sPowerShell -c \\\"+$(if ($_.DisplayName) {$_.DisplayName} else {$_.Name})}\"", pszCommand, iMargin, "");
   DEBUG_PRINTF(("%s\n", szCmd));
@@ -741,17 +763,39 @@ int SearchPowerShellInternal(char *pszCommand, int iFlags) {
 #if defined(_WIN32) || defined(__unix__)
 
 #if defined(__unix__)
-#define BASH "/bin/bash"
+/* The Unix version of system() runs sh, not bash, even if environment variable SHELL=/bin/bash.
+   So we need to start the real bash, and pass it our internal command detection script */
+#define BASH "$SHELL"
 #else /* WIN32 */
-#define BASH "%%windir%%\\system32\\bash.exe"
+/* The WIN32 version of system() runs cmd.exe, even when run from within bash.exe.
+   Also bash.exe is only present in the %windir%\SysNative directory,
+   not in the %windir%\SysWOW64 directory, so Win32 apps don't see it. */
+#define BASH   "%windir%\\System32\\bash.exe"
+#define BASH64 "%windir%\\SysNative\\bash.exe"
 #endif
 
 int SearchBashInternal(char *pszCommand, int iFlags) {
   char szCmd[1024];
   int iRet;
-  int iMargin = (iFlags & WHICH_TIME) ? 20 : 0; /* Margin to align with matches that display a file time */
+  int iMargin = (iFlags & WHICH_LONG) ? 20 : 0; /* Margin to align with matches that display a file time */
+  int n;
   /* Generate a bash command that gets help about internal commands, and displays which.exe output directly */
-  sprintf(szCmd, BASH " -c \"help %s >/dev/null 2>/dev/null && echo '%*sbash -c %s'\"", pszCommand, iMargin, "", pszCommand);
+#if defined(__unix__)	/* This is a Unix app running on Unix */
+  n = sprintf(szCmd, "%s", BASH);
+#elif defined(_WIN64)	/* This is a WIN64 app running on WIN64 */
+  n = sprintf(szCmd, "%s", BASH);
+#elif defined(_WIN32)
+ /* Special case for WIN32 on WIN64 */
+    if (iWoW) { 	/* This is a WIN32 app running on WIN64 */
+      n = sprintf(szCmd, "%s", BASH64);
+    } else {		/* This is a WIN32 app running on WIN32 */
+      n = sprintf(szCmd, "%s", BASH);
+    }
+#else
+  #error "Unsuported OS combination"
+#endif
+  n += sprintf(szCmd+n, " -c \"help %s >/dev/null 2>&1 && echo '%*sbash -c %s'\"", pszCommand, iMargin, "", pszCommand);
+
   DEBUG_PRINTF(("%s\n", szCmd));
   iRet = system(szCmd); /* Returns 0 if a command was found, else a non-0 error code */
   DEBUG_PRINTF(("  exit %d\n", iRet));
@@ -898,7 +942,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
 
   _makepath(szFname, "", pszPath, pszCommand, pszExt);
   DEBUG_PRINTF(("  Looking for \"%s\"", szFname));
-  if (!access(szFname, 0)) {
+  if (!access(szFname, F_OK)) {
     char *pszName = szFname;
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
     char szName2[FILENAME_MAX];
@@ -906,6 +950,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
     char target[PATH_MAX];
 #endif
+    int iExecutable;
 
     DEBUG_PRINTF(("  Matched with errno %d\n", errno));
 #if defined(_WIN32)
@@ -917,7 +962,14 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
       pszName = szName2;
     }
 #endif
-    if (iFlags & WHICH_TIME) {
+    iExecutable = !access(szFname, X_OK); /* access() returns 0=success, -1=error */
+    if (iFlags & WHICH_XCD) iExecutable = FALSE; /* CD not in PATH, so actually not executable */
+    if (!iExecutable) {
+      if (!(iFlags & WHICH_VERBOSE)) goto search_failed;
+      nChars += printf("# "); /* Display a comment showing the file, and why it's excluded */
+    }
+
+    if (iFlags & WHICH_LONG) {
       struct stat s;
       struct tm *pTime;
       int year, month, day, hour, minute, second;
@@ -935,7 +987,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
     }
     nChars += printf("%s", pszName);
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-    if (iFlags & WHICH_VERBOSE) {
+    if (iFlags & WHICH_LONG) {
       struct stat s;
       /* Check if it's a link */
       if (lstat(pszName, &s) == -1) goto search_failed;
@@ -945,6 +997,14 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
       }
     }
 #endif
+    if (!iExecutable) { /* Display a comment showing why it was excluded */
+      if (iFlags & WHICH_XCD) {
+      	nChars += printf(" # %s does not search in \".\"", pszShells[shell]);
+      } else {
+      	nChars += printf(" # Not executable");
+      }
+      goto search_failed;
+    }
     printf("\n");
     return TRUE;	/* Match */
   }
