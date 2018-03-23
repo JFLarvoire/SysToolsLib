@@ -15,11 +15,14 @@
 *   History:								      *
 *    2017-10-05 JFL Created this program, as a test of MsvcLibX's rmdir().    *
 *    2017-10-09 JFL Bug fix: The help screen was displayed twice.             *
+*    2018-03-23 JFL Fixed several problems with error messages.		      *
+*		    Added routine GetProgramNames(); Use global variables     *
+*		    program and progcmd for help, and all tagged messages.    *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.1"
-#define PROGRAM_DATE    "2017-10-09"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2018-03-23"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -80,6 +83,11 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /********************** End of OS-specific definitions ***********************/
 
+/* Global variables */
+char *program;	/* This program basename, with extension in Windows */
+char *progcmd;	/* This program invokation name, without extension in Windows */
+int GetProgramNames(char *argv0);	/* Initialize the above two */
+
 /* Forward declarations */
 char *version(int iVerbose);
 void usage(void);
@@ -116,6 +124,10 @@ int main(int argc, char *argv[]) {
   int nErr = 0;
   int iRet = 0;
 
+  /* Extract the program names from argv[0] */
+  GetProgramNames(argv[0]);
+
+  /* Process arguments */
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
     if (IsSwitch(arg)) {	/* It's a switch */
@@ -191,21 +203,15 @@ int main(int argc, char *argv[]) {
   }
   if (iErr) {
     DEBUG_PRINTF(("errno = %d\n", errno));
-    fprintf(stderr, "rd \"%s\": Error: %s!\n", pszPath, strerror(errno));
+    fprintf(stderr, "%s \"%s\": Error: %s!\n", program, pszPath, strerror(errno));
     nErr = 1;
   }
-  switch (nErr) {
-    case 0:
-      iRet = 0;
-      break;
-    case 1:
-      iRet = 1;
-      break;
-    default:
-      fprintf(stderr, "rd: %d files and directories remain to be deleted!\n", nErr);
-      iRet = 1;
-      break;
-    }
+  if (nErr) {
+    if (nErr > 1) fprintf(stderr, "%s: %d files or directories could not be deleted!\n", program, nErr);
+    iRet = 1;
+  } else {
+    iRet = 0;
+  }
 #ifdef __unix__
   printf("\n");
 #endif
@@ -246,12 +252,12 @@ char *version(int iVerbose) {
 
 void usage(void) {
   printf("\n\
-rd version %s\n\
+%s version %s\n\
 \n\
 Remove a directory\n\
 \n\
 Usage:\n\
-  rd [SWITCHES] DIRNAME\n\
+  %s [SWITCHES] DIRNAME\n\
 \n\
 Switches:\n\
   -?          Display this help message and exit\n"
@@ -268,11 +274,59 @@ Switches:\n\
   -X          NoExec mode: Display what will be deleted, but don't do it\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, version(FALSE));
+, program, version(FALSE), progcmd);
 #ifdef __unix__
   printf("\n");
 #endif
   exit(0);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetProgramNames					      |
+|									      |
+|   Description     Extract the program names from argv[0]		      |
+|									      |
+|   Parameters      char *argv[0]					      |
+|									      |
+|   Returns	    0							      |
+|									      |
+|   Notes	    Sets global variables program and progcmd.		      |
+|		    Designed to work independantly of MsvcLibX.		      |
+|		    							      |
+|   History								      |
+|    2018-03-23 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int GetProgramNames(char *argv0) {
+#if defined(_MSDOS) || defined(_WIN32)
+#if defined(_MSC_VER) /* Building with Microsoft tools */
+#define strlwr _strlwr
+#endif
+  int lBase;
+  char *pBase;
+  char *p;
+  pBase = strrchr(argv0, '\\');
+  if ((p = strrchr(argv0, '/')) > pBase) pBase = p;
+  if ((p = strrchr(argv0, ':')) > pBase) pBase = p;
+  if (!(pBase++)) pBase = argv0;
+  lBase = (int)strlen(pBase);
+  program = strdup(pBase);
+  strlwr(program);
+  progcmd = strdup(program);
+  if ((lBase > 4) && !strcmp(program+lBase-4, ".exe")) {
+    progcmd[lBase-4] = '\0';
+  } else {
+    program = realloc(strdup(program), lBase+4+1);
+    strcpy(program+lBase, ".exe");
+  }
+#else /* Build for Unix */
+#include <libgen.h>	/* For basename() */
+  program = basename(strdup(argv0)); /* basename() modifies its argument */
+  progcmd = program;
+#endif
+  return 0;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -307,6 +361,36 @@ int IsSwitch(char *pszArg) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
+|   Function	    NewPathName						      |
+|									      |
+|   Description     Join a directory name and a file name into a new pathname |
+|									      |
+|   Parameters      const char *path		The directory name, or NULL   |
+|		    const char *name		The file name		      |
+|		    							      |
+|   Returns	    0 = Success, else # of failures encountered.	      |
+|		    							      |
+|   Notes	    Wildcards allowed only in the name part of the pathname.  |
+|		    							      |
+|   History								      |
+|    2017-10-05 JFL Created this routine				      |
+|    2017-10-09 JFL Allow the path pointer to be NULL. If so, dup. the name.  |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+char *NewPathName(const char *path, const char *name) {
+  size_t lPath = path ? strlen(path) : 0;
+  size_t lName = strlen(name);
+  char *buf = malloc(lPath + lName + 2);
+  if (!buf) return NULL;
+  if (lPath) strcpy(buf, path);
+  if (lPath && (buf[lPath-1] != DIRSEPARATOR_CHAR)) buf [lPath++] = DIRSEPARATOR_CHAR;
+  strcpy(buf+lPath, name);
+  return buf;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
 |   Function	    rmdirRF						      |
 |									      |
 |   Description     Remove a directory, and all its files and subdirectories. |
@@ -314,7 +398,7 @@ int IsSwitch(char *pszArg) {
 |   Parameters      const char *path		The directory pathname	      |
 |		    int iFlags			Verbose & NoExec flags	      |
 |		    							      |
-|   Returns	    0 = Success, else failed.				      |
+|   Returns	    0 = Success, else # of failures encountered.	      |
 |		    							      |
 |   Notes	    							      |
 |		    							      |
@@ -326,17 +410,6 @@ int IsSwitch(char *pszArg) {
 #ifdef _MSC_VER
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
-
-char *NewPathName(const char *path, const char *name) {
-  size_t lPath = strlen(path);
-  size_t lName = strlen(name);
-  char *buf = malloc(lPath + lName + 2);
-  if (!buf) return NULL;
-  strcpy(buf, path);
-  if (lPath && (buf[lPath-1] != DIRSEPARATOR_CHAR)) buf [lPath++] = DIRSEPARATOR_CHAR;
-  strcpy(buf+lPath, name);
-  return buf;
-}
 
 int rmdirRF(const char *path, int iFlags) {
   char *pPath;
@@ -380,7 +453,7 @@ int rmdirRF(const char *path, int iFlags) {
 #endif
       case DT_REG:
       	if (iVerbose) printf("%s%s\n", pPath, pszSuffix);
-      	if (!iNoExec) iErr = unlink(pPath);
+      	if (!iNoExec) iErr = (unlink(pPath) != 0);
       	break;
       default:
       	iErr = 1;		/* We don't support deleting there */
@@ -393,8 +466,8 @@ int rmdirRF(const char *path, int iFlags) {
       	break;
     }
     if (iErr) {
-      fprintf(stderr, "rd: Error deleting \"%s%s\": %s\n", pDE->d_name, pszSuffix, strerror(errno));
-      nErr += 1;
+      if (pDE->d_type != DT_DIR) fprintf(stderr, "%s: Error deleting \"%s%s\": %s\n", program, pPath, pszSuffix, strerror(errno));
+      nErr += iErr;
       /* Continue the directory scan, looking for other files to delete */
     }
     free(pPath);
@@ -402,13 +475,14 @@ int rmdirRF(const char *path, int iFlags) {
   closedir(pDir);
 
   iErr = 0;
-  if (iVerbose) {
-    pszSuffix = DIRSEPARATOR_STRING;
-    if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
-    printf("%s%s\n", path, pszSuffix);
-  }
+  pszSuffix = DIRSEPARATOR_STRING;
+  if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
+  if (iVerbose) printf("%s%s\n", path, pszSuffix);
   if (!iNoExec) iErr = rmdir(path);
-  if (iErr) nErr += 1;
+  if (iErr) {
+    fprintf(stderr, "%s: Error deleting \"%s%s\": %s\n", program, path, pszSuffix, strerror(errno));
+    nErr += 1;
+  }
 
   RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
 }
