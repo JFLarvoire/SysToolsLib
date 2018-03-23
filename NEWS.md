@@ -4,13 +4,27 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-03-23
+### New
+- A new tools called sml2.exe, originating from my [libxml2 fork](https://github.com/JFLarvoire/libxml2).
+- C/SRC/which.c: New options -l & -v for diagnosing common search failures. which is now built by default for Linux.
+### Changed
+- C/NMakefile: Generalized the 'make release' mechanism created for adding ag.exe. Now adds any executable in Extras/bin/...  
+  Moved ag.exe there, and added sml2.exe there too.
+- *.mak: Automated the generation of link dependencies on outside libraries. No need to declare them manually anymore.  
+  This ensures the automatic relink of programs when their dependent libraries changed. No need to do a `make clean` anymore.
+### Fixed
+- No more compilation warnings in any version of Visual Studio 8 to 15.
+- C/Include/configure.bat: Fixed the search for the Windows kit 8.0.
+- C/SRC/rd.c, zap.c: Fixed misleading or missing error messages.
+
 ## [Unreleased] 2018-03-06
 ### New
 - C/SRC/2note.c: A program for sending a pipe output to a new Notepad instance.
 ### Changed
 - C/SRC/1clip.c, 2clip.c: Updated the help message to show actual system-specific code page numbers in all cases.
 - C/SRC/zap.c: Added options -i and -I. Ignore case in Windows by default. Added options -f and -rf, to delete complete directories.
-- All makefiles: Dynamically build the list of dependant libraries, and automatically relink only the programs that use them. 
+- All makefiles: Dynamically build the list of dependent libraries, and automatically relink only the programs that use them. 
 - Batch/Library.bat:
   New faster version of the FALSE.EXE macro.
   Simpler and faster versions of function is_dir.
@@ -624,7 +638,7 @@ Publicly released on github.com
 ### Changed
 - Tcl/cfdt.tcl		Added the --from option to copy the time of another file
 - Tcl/ilo.tcl		Allow specifying the list of systems in an @inputfile.  
-			Improved routine DnsSearchList, to avoid dependancy on twapi in most cases.				    
+			Improved routine DnsSearchList, to avoid dependency on twapi in most cases.				    
 			Improved heuristics to distinguish system and ilo names.
 - C/SRC/configure.bat	Fix the detection of the Microsoft Assembler
 
