@@ -21,6 +21,7 @@
 #    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
 #                   `make check` now checks if $bindir is in the PATH.        #
 #    2017-10-26 JFL Changed the default OUTDIR to bin.			      #
+#    2018-03-23 JFL Install which as Which, to avoid conflicts with Unix's.   #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -288,8 +289,10 @@ all: $(PROGRAMS)
 .PHONY: install
 install:
 	@for exe in $(PROGRAMS) ; do \
-	  echo cp -p $$PWD/$(XP)/$$exe $(bindir)/ ; \
-	       cp -p $$PWD/$(XP)/$$exe $(bindir)/ ; \
+	  dest=$$exe ; \
+	  if [ "$$dest" = "which" ] ; then dest=Which ; fi ; \
+	  echo cp -p $$PWD/$(XP)/$$exe $(bindir)/$$dest ; \
+	       cp -p $$PWD/$(XP)/$$exe $(bindir)/$$dest ; \
 	done
 	@if ! ( echo ":$(PATH):" | grep -q ":$(bindir):" ) ; then \
 	  >&2 echo WARNING: $(bindir) not in PATH. Please add it for the installed programs to work. ; \
