@@ -12,6 +12,7 @@ As far as I know, no other Windows port of Unix tools can do all that, if any.
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
+ag.exe		| -WL   | A port for Windows of 'The Silver Searcher', a _very fast_ file searcher.             | `ag --cc myvariable` &:# Find all references to myvariable in C sources in the current directory tree.
 backnum.exe	| DWL	| Make a backup copy of a file, appending a unique number to its name.	 		| `backnum myprogram.c` &:# Back it up before making a risky change
 cfdt.tcl	| -WL	| Change files dates and times. Option for using a Jpeg picture internal time.		| `cfdt --i2m *.jpg` &:# Change the files time to image time.
 dirc.exe	| DWL	| Compares directories side by side.							| `dirc oldDir newDir` &:# Compare directories based on the files time and size.
@@ -109,6 +110,7 @@ SML is XML made readable.
 Name		| OS   	| Description											 | Example
 ----------------|-------|------------------------------------------------------------------------------------------------|-------------
 sml.tcl		| -WL	| Convert XML files to a much simpler structured text format, and back.				 | `type config.xml | sml`
+sml2.exe	| -WL	| A rewrite of sml.tcl in C, based on libxml2. Options to reformat and indent the output.	 | `type config.xml | sml2 -f`
 show.tcl	| -WL	| Display files contents, or whole directory trees contents, in a simple structured text format. | `show /proc/fs`
 xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --dir config.xml /root/display`
 
@@ -149,8 +151,6 @@ sector.exe      | DW-   | Manage disk sectors. Options for dumping them, or copy
 smbios.exe      | DW-   | Manage the System Management BIOS.                                                    | `smbios -t 0:` &:# Dump SMBIOS table 0
 uuid.exe        | DW-   | Manage UUIDs.                                                                         | `uuid -s` &:# Display the system UUID
 
-(More to come!)
-
 ## Misc
 
 Name		| OS   	| Description										| Example
@@ -170,7 +170,7 @@ n.bat		| -W-	| Start Notepad										| `n readme.md`
 
 * All Tcl scripts require installing a Tcl interpreter.
 This interpreter is standard in Linux, but absent in Windows.
-See the README file in SysToolsLib's Tcl directory for instructions on how to install a Tcl interpreter in Windows.
+See the [README](../Tcl/README.md) file in SysToolsLib's Tcl directory for instructions on how to install a Tcl interpreter in Windows.
 
 * All tools (both scripts and C programs) support the -? option for help, and most share a few other common options:
 
