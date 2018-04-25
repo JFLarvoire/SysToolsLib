@@ -118,7 +118,7 @@ int MultiByteToWidePath(
     int iDrive0 = _getdrive();
     int iLen;
     WCHAR *pwszBuf2;
-    pwszBuf2 = malloc(sizeof(WCHAR) * UNICODE_PATH_MAX);
+    pwszBuf2 = malloc(sizeof(WCHAR) * WIDE_PATH_MAX);
     if (!pwszBuf2) goto cleanup_and_return;
     if (pwszName[1] == L':') {
       iDrive = pszName[0] - '@';		/* A=1, B=2, ... */
@@ -127,12 +127,12 @@ int MultiByteToWidePath(
       lRelPath -= 2;
     }
     if (iDrive && (iDrive != iDrive0)) _chdrive(iDrive);
-    iLen = (int)GetCurrentDirectoryW(UNICODE_PATH_MAX, pwszBuf2);
+    iLen = (int)GetCurrentDirectoryW(WIDE_PATH_MAX, pwszBuf2);
     if (iDrive && (iDrive != iDrive0)) _chdrive(iDrive0);
     if (pwszBuf2[iLen-1] != L'\\') pwszBuf2[iLen++] = L'\\';
     lstrcpyW(pwszBuf2+iLen, pwszRelPath);
     iLen += lRelPath;
-    iLen = CompactPathW(pwszBuf2, pwszBuf2, UNICODE_PATH_MAX);
+    iLen = CompactPathW(pwszBuf2, pwszBuf2, WIDE_PATH_MAX);
     if (iLen >= CRITICAL_LENGTH) { /* Then processing this pathname requires prepending a special prefix */
       DEBUG_CODE({
 	char *pszRelUtf8;
@@ -237,7 +237,7 @@ LPWSTR MultiByteToNewWidePath(
   LPCSTR pszName
 ) {
   WCHAR *pwszName;
-  int lName = UNICODE_PATH_MAX;	/* Number of WCHARS in the unicode name (Worst case) */
+  int lName = WIDE_PATH_MAX;	/* Number of WCHARS in the unicode name (Worst case) */
   int n;
   WCHAR *pwszName2;
 
