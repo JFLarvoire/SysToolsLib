@@ -132,13 +132,15 @@
 *                   Improved mkdirp() speed and error management.             *
 *		    Version 3.5.4.    					      *
 *    2018-02-27 JFL All updateall() returns done via :cleanup_and_return.     *
+*		    Version 3.5.5.    					      *
+*    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h. Version 3.5.6.   *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.5"
-#define PROGRAM_DATE    "2018-02-27"
+#define PROGRAM_VERSION "3.5.6"
+#define PROGRAM_DATE    "2018-04-24"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -185,21 +187,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 app. */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
-#define PATHNAME_SIZE PATH_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
@@ -215,13 +205,9 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE 13		/* 8.3 name length = 8+1+3+1 = 13 */
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 #define fullpath _fullpath
@@ -232,13 +218,9 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 #ifdef _OS2	/* To be defined on the command line for the OS/2 version */
 
-#define OS_NAME "OS/2"
-
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
-#define PATHNAME_SIZE CCHMAXPATH	/* FILENAME_MAX incorrect in stdio.h */
-#define NODENAME_SIZE CCHMAXPATHCOMP
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 #define fullpath _fullpath
@@ -249,28 +231,18 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 #ifdef __unix__		/* Automatically defined when targeting a Unix app. */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
 
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 
+/*
 #define _MAX_PATH  FILENAME_MAX
 #define _MAX_DRIVE 3
 #define _MAX_DIR   FILENAME_MAX
 #define _MAX_FNAME FILENAME_MAX
 #define _MAX_EXT   FILENAME_MAX
+*/
 
 #ifndef _S_IREAD
 #define _S_IREAD __S_IREAD
@@ -292,6 +264,13 @@ off_t _filelength(int hFile);
 #endif /* __unix__ */
 
 /********************** End of OS-specific definitions ***********************/
+
+#if (!defined(DIRSEPARATOR_CHAR)) || (!defined(EXE_OS_NAME))
+#error "Unidentified OS. Please define OS-specific settings for it."
+#endif
+
+#define PATHNAME_SIZE PATH_MAX
+#define NODENAME_SIZE (NAME_MAX+1)
 
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
@@ -587,7 +566,7 @@ int main(int argc, char *argv[])
 
 /* Get the program version string, optionally with libraries versions */
 char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
   char *pszVer = NULL;
   if (iLibsVer) {
     char *pszLibVer = ""
