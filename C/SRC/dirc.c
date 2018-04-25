@@ -206,13 +206,14 @@
 *		    Version 3.0.5.  					      *
 *    2017-10-02 JFL Fixed a conditional compilation bug in MSDOS.	      *
 *		    Version 3.0.6.    					      *
+*    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h. Version 3.0.7.   *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.6"
-#define PROGRAM_DATE    "2017-10-02"
+#define PROGRAM_VERSION "3.0.7"
+#define PROGRAM_DATE    "2018-04-24"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -273,19 +274,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef __unix__     /* Unix */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 #define DIRSEPARATOR '/'
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define IGNORECASE FALSE
 #define HAS_DRIVES FALSE
@@ -352,19 +341,7 @@ static char *strupr(char *pString)
 
 #include <conio.h>		/* For getch() */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
 #define DIRSEPARATOR '\\'
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 #define HAS_DRIVES TRUE
@@ -383,12 +360,7 @@ int SetMasterEnv(char *pszName, char *pszValue);
 
 #pragma warning(disable:4001) /* Ignore the "nonstandard extension 'single line comment' was used" warning */
 
-#define OS_NAME "DOS"
-
 #define DIRSEPARATOR '\\'
-/* #define PATHNAME_SIZE FILENAME_MAX */
-#define PATHNAME_SIZE 255		/* ~~jfl 2000-12-04 Thanks to chdirx(). */
-#define NODENAME_SIZE 13                /* 8.3 name length = 8+1+3+1 = 13 */
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 #define HAS_DRIVES TRUE
@@ -418,11 +390,7 @@ int SetMasterEnv(char *pszName, char *pszValue);
 #define INCL_VIO
 #include "os2.h"
 
-#define OS_NAME "OS/2"
-
 #define DIRSEPARATOR '\\'
-#define PATHNAME_SIZE CCHMAXPATH        /* FILENAME_MAX incorrect in stdio.h */
-#define NODENAME_SIZE CCHMAXPATHCOMP
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
 
@@ -434,13 +402,16 @@ int SetMasterEnv(char *pszName, char *pszValue);
 
 /*********************************** Other ***********************************/
 
-#ifndef OS_NAME
+#if (!defined(DIRSEPARATOR)) || (!defined(EXE_OS_NAME))
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
 /********************** End of OS-specific definitions ***********************/
 
 /* Local definitions */
+
+#define PATHNAME_SIZE PATH_MAX
+#define NODENAME_SIZE (NAME_MAX+1)
 
 /*
 #undef FALSE
@@ -957,7 +928,7 @@ int main(int argc, char *argv[])
 char *version(void) {
   return (PROGRAM_VERSION
 	  " " PROGRAM_DATE
-	  " " OS_NAME
+	  " " EXE_OS_NAME
 	  DEBUG_VERSION
 	  );
 }
