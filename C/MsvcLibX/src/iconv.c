@@ -20,6 +20,7 @@
 *    2017-05-11 JFL Fixed fputc() for files in binary mode.                   *
 *    2017-08-09 JFL Added fprintfM() and printfM().                           *
 *    2017-09-27 JFL Added standard C library routines iconv(), etc.	      *
+*    2018-04-24 JFL Added fputsW, vfprintfW(), fprintfW() and printfW().      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -494,6 +495,33 @@ int fputcU(int c, FILE *f) {
   return fputcM(c, f, CP_UTF8);
 }
 
+/* fputs a Wide string, converted to the output code page */
+int fputsW(const wchar_t *pWBuf, FILE *f) {
+  int iRet;
+  int iFile = fileno(f);
+
+  if (iFile >= FOPEN_MAX) {
+    DEBUG_PRINTF(("ERROR: File index too high: fputsW(..., %d)\n", iFile));
+  }
+
+  if (isWideFile(iFile)) {
+    iRet = fputws(pWBuf, f);
+  } else { /* Find the output file encoding */
+    UINT cpOut = systemCodePage;
+    size_t l = lstrlenW(pWBuf);
+    int n = (int)((4 * l) + 1);
+    char *pBuf = (char *)malloc(n);
+    if (!pBuf) return -1;
+    isTranslatedFile(iFile, cpOut, &cpOut); /* Change it to the console code page if needed */
+    n = WideCharToMultiByte(cpOut, 0, pWBuf, (int)l, pBuf, n, NULL, NULL);
+    pBuf[n] = '\0';
+    iRet = fputs(pBuf, f);
+    free(pBuf);
+  }
+  if ((iRet >= 0) && DEBUG_IS_ON()) fflush(f); /* Slower, but ensures we get everything before crashes! */
+  return iRet; /* Return the error (n<0) or success (n>=0) */
+}
+
 /* fputs an MBCS string, converted to the output code page */
 int fputsM(const char *buf, FILE *f, UINT cp) {
   int iRet;
@@ -546,9 +574,22 @@ int putsU(const char *buf) {
   return iRet;
 }
 
+int vfprintfW(FILE *f, const wchar_t *pwszFormat, va_list vl) { /* vfprintf Wide strings */
+  int n;
+  wchar_t wbuf[WIDE_PATH_MAX + 4096];
+
+  n = _vsnwprintf(wbuf, sizeof(wbuf)/sizeof(wchar_t), pwszFormat, vl);
+  if (n > 0) { /* If no error (n>=0), and something to output (n>0), do output */
+    int iErr = fputsW(wbuf, f);
+    if (iErr < 0) n = iErr;
+  }
+
+  return n;
+}
+
 int vfprintfM(FILE *f, const char *pszFormat, va_list vl, UINT cp) { /* vfprintf MCBS strings */
   int n;
-  char buf[UNICODE_PATH_MAX + 4096];
+  char buf[WIDE_PATH_MAX + 4096];
 
   n = _vsnprintf(buf, sizeof(buf), pszFormat, vl);
   if (n > 0) { /* If no error (n>=0), and something to output (n>0), do output */
@@ -565,6 +606,17 @@ int vfprintfA(FILE *f, const char *pszFormat, va_list vl) { /* vfprintf ANSI str
 
 int vfprintfU(FILE *f, const char *pszFormat, va_list vl) { /* vfprintf UTF-8 strings */
   return vfprintfM(f, pszFormat, vl, CP_UTF8);
+}
+
+int fprintfW(FILE *f, const wchar_t *pwszFormat, ...) { /* fprintf Wide strings */
+  va_list vl;
+  int n;
+
+  va_start(vl, pwszFormat);
+  n = vfprintfW(f, pwszFormat, vl);
+  va_end(vl);
+
+  return n;
 }
 
 int fprintfM(UINT cp, FILE *f, const char *pszFormat, ...) { /* fprintf UTF-8 strings */
@@ -595,6 +647,17 @@ int fprintfU(FILE *f, const char *pszFormat, ...) { /* fprintf UTF-8 strings */
 
   va_start(vl, pszFormat);
   n = vfprintfM(f, pszFormat, vl, CP_UTF8);
+  va_end(vl);
+
+  return n;
+}
+
+int printfW(const wchar_t *pwszFormat, ...) { /* printf Wide strings */
+  va_list vl;
+  int n;
+
+  va_start(vl, pwszFormat);
+  n = vfprintfW(stdout, pwszFormat, vl);
   va_end(vl);
 
   return n;
