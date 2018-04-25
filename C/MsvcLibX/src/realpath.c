@@ -25,6 +25,7 @@
 *    2017-10-03 JFL Added an ugly version of ResolveLinksM. To be fixed.      *
 *    2017-10-04 JFL Added WIN32 routine CompactPathW().			      *
 *    2017-10-30 JFL Added support for UNC paths in CompactPath[W]().	      *
+*    2018-04-24 JFL Use less memory in ResolveLinksU().			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -40,6 +41,7 @@
 #include <errno.h>
 #include <direct.h>	/* For _getdcwd() */
 #include <ctype.h>	/* For toupper() */
+#include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
 #include "debugm.h"
 
 #define TRUE 1
@@ -71,7 +73,11 @@ int CompactPath(const char *path, char *outbuf, size_t bufsize) {
   int i, j, inSize, outSize;
   char c = '\0';
   char lastc = '\0';
+#ifdef _WIN32 /* Don't use PATH_MAX for WIN32, as it's overkill for UTF8. Use the OS limit for UTF16 instead */
+#define MAX_SUBDIRS (WIDE_PATH_MAX / 2) /* Worst case is: \1\1\1\1\1\1... */
+#else
 #define MAX_SUBDIRS (PATH_MAX / 2) /* Worst case is: \1\1\1\1\1\1... */
+#endif
   const char *pParts[MAX_SUBDIRS];
   int lParts[MAX_SUBDIRS];
   int lPart = 0;
@@ -289,7 +295,7 @@ int CompactPathW(const WCHAR *path, WCHAR *outbuf, size_t bufsize) {
   int i, j, inSize, outSize;
   WCHAR c = L'\0';
   WCHAR lastc = L'\0';
-#define MAX_SUBDIRS (PATH_MAX / 2) /* Worst case is: \1\1\1\1\1\1... */
+#define MAX_SUBDIRS (WIDE_PATH_MAX / 2) /* Worst case is: \1\1\1\1\1\1... */
   const WCHAR *pParts[MAX_SUBDIRS];
   int lParts[MAX_SUBDIRS];
   int lPart = 0;
@@ -480,7 +486,8 @@ int ResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
 
 /* Get the canonic name of a file, after resolving all links in its pathname */
 int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
-  char target[UTF8_PATH_MAX];
+  char *target = NULL;
+  char *target2;
   int i;
   int iErr = 0;
   DWORD dwAttr;
@@ -495,6 +502,9 @@ int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, 
 
   DEBUG_ENTER(("ResolveLinks1(\"%s\", 0x%p, %ld, 0x%p, %d);\n", path, buf, bufsize, prev, iDepth));
 
+  target = malloc(UTF8_PATH_MAX);
+  if (!target) RETURN_INT_COMMENT(-1, ("Not enough memory\n"));
+
   /* Convert relative paths to absolute paths */
   if (!(   ((path[0] == '\\') || (path[0] == '/'))
         || (    path[0]
@@ -504,6 +514,7 @@ int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, 
     path0 = malloc(UTF8_PATH_MAX);
     if (!path0) RETURN_INT(-1); /* errno = ENOMEM */
     if (!GetFullPathNameU(path, UTF8_PATH_MAX, path0, NULL)) {
+      free(target);
       free(path0);
       errno = EINVAL;
       RETURN_INT(-1);
@@ -522,6 +533,7 @@ int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, 
       if (path[0] == '\\') {
 	if ((iBuf+1U) >= bufsize) {
 resolves_too_long:
+	  free(target);
 	  free(path0);
 	  errno = ENAMETOOLONG;
 	  RETURN_INT_COMMENT(-1, ("Name too long\n"));
@@ -572,11 +584,12 @@ resolves_too_long:
 	  lstrcpy(buf+iBuf, path+iPath);
 	}
       }
+      free(target);
       free(path0);
       RETURN_INT_COMMENT(-1, ("No such file: \"%s\"\n", buf));
     }
     if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
-      nRead = readlinkU(buf, target, sizeof(target));
+      nRead = readlinkU(buf, target, UTF8_PATH_MAX);
       if (nRead == -1) {
 	if (errno == EINVAL) { /* This is a reparse point, but not a symlink or a junction */
 	  goto file_or_directory;
@@ -588,6 +601,7 @@ resolves_too_long:
 	    lstrcpy(buf+iBuf, path+iPath);
 	  }
 	}
+	free(target);
 	free(path0);
         RETURN_INT_COMMENT(-1, ("Dangling link: \"%s\"\n", buf));
       }
@@ -626,6 +640,7 @@ resolves_too_long:
       /* Check for max depth */
       if (iDepth == SYMLOOP_MAX) {
 	errno = ELOOP;
+	free(target);
 	free(path0);
 	RETURN_INT_COMMENT(-1, ("Max symlink depth reached: \"%s\"\n", buf));
       }
@@ -633,15 +648,19 @@ resolves_too_long:
       for (pList = prev ; pList; pList = pList->prev) {
       	if (!lstrcmpi(buf, pList->path)) {
       	  errno = ELOOP;
+	  free(target);
 	  free(path0);
 	  RETURN_INT_COMMENT(-1, ("Loop found: \"%s\"\n", buf));
 	}
       }
       /* OK, no loop, so repeat the process for that new path */
       lstrcpy(target, buf); /* Keep that as a reference in the linked list, in case there are further links */
+      target2 = realloc(target, strlen(target)+1);
+      if (target2) target = target2;
       list.prev = prev;
       list.path = target;
       iErr = ResolveLinksU1(target, buf, bufsize, &list, iDepth+1);
+      free(target);
       free(path0);
       RETURN_INT_COMMENT(iErr, ("\"%s\"\n", buf));
     } else { /* It's a normal file or directory */
@@ -652,18 +671,21 @@ file_or_directory:
 	  buf[iBuf++] = '\\';
 	  lstrcpy(buf+iBuf, path+iPath);
 	}
+	free(target);
 	free(path0);
 	RETURN_INT_COMMENT(-1, ("File where dir expected: \"%s\"\n", buf));
       }
     }
   }
 
+  free(target);
   free(path0);
   RETURN_INT_COMMENT(0, ("Success: \"%s\"\n", buf));
 }
 
 int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
-  char path1[UTF8_PATH_MAX];
+  char *path1;
+  char *path2;
   int nSize;
   NAMELIST root;
   int iErr;
@@ -677,25 +699,33 @@ int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
     RETURN_INT_COMMENT(-1, ("Empty pathname\n"));
   }
 
+  path1 = malloc(UTF8_PATH_MAX);
+  if (!path1) RETURN_INT_COMMENT(-1, ("Not enough memory\n"));
+
   /* Normalize the input path, using a single \ as path separator */
-  nSize = CompactPath(path, path1, sizeof(path1));
+  nSize = CompactPath(path, path1, UTF8_PATH_MAX);
   if (nSize == -1) { /* CompactPath() already sets errno = ENAMETOOLONG */
+    free(path1);
     RETURN_INT_COMMENT(-1, ("Path too long\n"));
   }
   if (path1[nSize-1] == '\\') { /* Spec says resolution must implicitly add a trailing dot, */
-    if (nSize == sizeof(path1)) {    /*  to ensure that the last component is a directory. */
+    if (nSize == UTF8_PATH_MAX) {    /*  to ensure that the last component is a directory. */
+      free(path1);
       errno = ENAMETOOLONG;
       RETURN_INT_COMMENT(-1, ("Path too long after adding .\n"));
     }
     path1[nSize++] = '.'; /* So add it explicitely */
     path1[nSize] = '\0';
   }
+  path2 = realloc(path1, nSize+1); /* Resize the buffer to fit the name length */
+  if (path2) path1 = path2;
   root.path = path1;
   root.prev = NULL;
   iErr = ResolveLinksU1(path1, buf, bufsize, &root, 0);
   nSize = lstrlen(buf);
   /* Remove the final dot added above, if needed. */
   if ((nSize >= 2) && (buf[nSize-2] == '\\') && (buf[nSize-1] == '.')) buf[--nSize] = '\0';
+  free(path1);
   RETURN_INT_COMMENT(iErr, ("\"%s\"\n", buf));
 }
 
