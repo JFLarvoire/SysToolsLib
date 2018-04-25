@@ -21,13 +21,14 @@
 *    2016-09-12 JFL Moved WIN32 UTF-8 routines to the MsvcLibX library.       *
 *                   Minor tweaks to fix compilation in Linux.                 *
 *		    Version 1.1.1.					      *
+*    2018-04-24 JFL Use NAME_MAX from limits.h. Version 1.1.2.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2016-09-15"
+#define PROGRAM_VERSION "1.1.2"
+#define PROGRAM_DATE    "2018-04-24"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -39,6 +40,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>	/* For the symlink and readlink functions */
+#include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
 
 /* MsvcLibX debugging macros */
 #include "debugm.h"
@@ -49,16 +51,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
 #include <windows.h>		/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <iconv.h>              /* For the codePage variable */
 
@@ -68,7 +60,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /*********************************** Other ***********************************/
 
-#ifndef OS_NAME
+#if (!defined(EXE_OS_NAME))
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -104,8 +96,8 @@ int main(int argc, char *argv[]) {
   int i;
   char *pszPath = NULL;
   ssize_t n = -1;
-  char buf[FILENAME_MAX] = "";
-  char absName[FILENAME_MAX];
+  char buf[NAME_MAX] = "";
+  char absName[NAME_MAX];
   int bGetAbsName = TRUE;
   int bResolveLinks = TRUE;
   int bResolveShortNames = TRUE;
@@ -247,7 +239,7 @@ report_err:
 char *version(void) {
   return (PROGRAM_VERSION
 	  " " PROGRAM_DATE
-	  " " OS_NAME
+	  " " EXE_OS_NAME
 	  DEBUG_VERSION
 	  );
 }
