@@ -63,7 +63,7 @@
 char *getcwdM(char *buf, size_t bufSize, UINT cp) {
   int n;
   WCHAR *pwBuf;
-  DWORD dwBufSize = UNICODE_PATH_MAX; /* This should be sufficient in all cases. Even if not, the buf will be extended below */
+  DWORD dwBufSize = WIDE_PATH_MAX; /* This should be sufficient in all cases. Even if not, the buf will be extended below */
   DWORD dwSize;
   WCHAR *pwDir;
 
