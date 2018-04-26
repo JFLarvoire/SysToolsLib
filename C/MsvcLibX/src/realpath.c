@@ -26,6 +26,7 @@
 *    2017-10-04 JFL Added WIN32 routine CompactPathW().			      *
 *    2017-10-30 JFL Added support for UNC paths in CompactPath[W]().	      *
 *    2018-04-24 JFL Use less memory in ResolveLinksU().			      *
+*    2018-04-26 JFL Added routine ConcatPathW().       			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -440,6 +441,110 @@ buffer_is_too_small:
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
+|   Function	    ConcatPathW						      |
+|									      |
+|   Description	    Concatenate two paths				      |
+|									      |
+|   Parameters	    const WCHAR *pwszHead   First Pathname	 	      |
+|		    const WCHAR *pwszTail   Second Pathname	 	      |
+|		    WCHAR *pwszBuf	    Output buffer. If NULL, alloc one.|
+|		    size_t lBuf		    Output buffer size in WCHARS.     |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   Returns	    The output buffer address, or NULL & errno set if failed. |
+|		    							      |
+|   History								      |
+|    2018-04-25 JFL Created this routine                                      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+WCHAR *ConcatPathW(const WCHAR *pwszHead, const WCHAR *pwszTail, WCHAR *pwszBuf, size_t lBuf) {
+  int iBuf = 0;
+  int iAlloc = FALSE;	/* TRUE if pwszBuf was allocated here */
+  int iReAlloc = FALSE;	/* TRUE if pwszBuf should be reallocated in the end */
+  int l;
+
+  DEBUG_WPRINTF((L"ConcatPathW(\"%s\", \"%s\", %p, %Iu);\n", pwszHead, pwszTail, pwszBuf, lBuf));
+
+  if (!pwszBuf) {
+    iAlloc = TRUE;
+    if (!lBuf) {
+      iReAlloc = TRUE;
+      lBuf = WIDE_PATH_MAX;
+    }
+    pwszBuf = malloc(lBuf * sizeof(WCHAR));
+    if (!pwszBuf) return NULL;
+  }
+  if (lBuf < 1) {
+fail_no_space:
+    errno = ENOSPC;
+    if (iAlloc) free(pwszBuf);
+    return NULL;
+  }
+  if (!pwszHead) pwszHead = L"";
+  /* Skip the \\?\ prefix, if any */
+  if (!strncmpW(pwszTail, L"\\\\?\\UNC\\", 8)) {
+    if (lBuf < 3) goto fail_no_space;
+    pwszTail += 8;	/* Remove the '\\?\UNC\' prefix */
+    pwszBuf[iBuf++] = L'\\';
+    pwszBuf[iBuf++] = L'\\';
+    pwszHead = L"";	/* Throw away the irrelevant base path. */
+    goto drive_copy_done;
+  } else if (!strncmpW(pwszTail, L"\\\\?\\", 4)) {
+    pwszTail += 4;
+    pwszHead = L"";	/* Throw away the irrelevant base path. */
+    /* Fall through, to copy the tail drive. */
+  }
+  /* First copy the drive */
+  if (pwszTail[0] && (pwszTail[1] == L':')) { /* If the tail has a drive specified */
+    if (lBuf < 3) goto fail_no_space;
+    if (pwszHead[0] && (pwszHead[1] == L':')) { /* If the base also has one */
+      WCHAR wcBaseDrive = pwszHead[0];	/* Then do a case-independant comparison */
+      WCHAR wcTailDrive = pwszTail[0];
+      if (wcBaseDrive >= L'a') wcBaseDrive -= (L'a' - L'A'); /* Convert to upper case */
+      if (wcTailDrive >= L'a') wcTailDrive -= (L'a' - L'A'); /* Convert to upper case */
+      if (wcTailDrive != wcBaseDrive) {
+      	pwszHead = L"";	/* If they're different, throw away the irrelevant base path. */
+      } else {
+	pwszHead += 2;	/* Else skip the base drive */
+      }
+    }
+    pwszBuf[iBuf++] = pwszTail[0];	/* Use the tail drive */
+    pwszBuf[iBuf++] = L':';
+    pwszTail += 2;
+  } else if (pwszHead[0] && (pwszHead[1] == L':')) { /* If only the base has a drive */
+    if (lBuf < 3) goto fail_no_space;
+    pwszBuf[iBuf++] = pwszHead[0];	/* Then use the base drive */
+    pwszBuf[iBuf++] = L':';
+    pwszHead += 2;
+  } /* Else neither the base nor the tail have a drive specified */
+drive_copy_done:
+  pwszBuf[iBuf] = L'\0';
+  /* Next copy the path */
+  if (pwszTail[0] != L'\\') {	/* The tail is a relative path */
+    l = lstrlenW(pwszHead);
+    if ((iBuf+l+2) >= (int)lBuf) goto fail_no_space;
+    lstrcpyW(pwszBuf+iBuf, pwszHead);
+    iBuf += l;
+    pwszBuf[iBuf++] = L'\\';
+  }
+  l = lstrlenW(pwszTail);
+  if ((iBuf+l+1) >= (int)lBuf) goto fail_no_space;
+  lstrcpyW(pwszBuf+iBuf, pwszTail);
+  iBuf += l;
+  /* Then remove the . and .. parts */
+  l = CompactPathW(pwszBuf, pwszBuf, lBuf);
+  /* Finally, if it's a new buffer of unspecified size, minimize its size */
+  if (iReAlloc) {
+    WCHAR *pwszBuf2 = realloc(pwszBuf, (l + 1) * sizeof(WCHAR));
+    if (pwszBuf2) pwszBuf = pwszBuf2;
+  }
+  return pwszBuf;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
 |   Function	    ResolveLinks					      |
 |									      |
 |   Description	    Resolve all link names within a pathname		      |
@@ -621,13 +726,13 @@ resolves_too_long:
 	DEBUG_PRINTF(("// Relative link to \"%s\"\n", target));
 	/* So it'll replace the tail name in the output path */
 	iBuf = iBuf1; /* The index right after the last path separator */
-	DEBUG_PRINTF(("AppendPath(\"%.*s\", \"%s\"); // Target tail\n", iBuf, buf, target));
+	DEBUG_PRINTF(("ResolveLinks1(\"%.*s\", \"%s\"); // Target tail\n", iBuf, buf, target));
 	if (((size_t)iBuf+lstrlen(target)) >= bufsize) goto resolves_too_long;
 	lstrcpy(buf+iBuf, target);
 	iBuf = CompactPath(buf, buf, bufsize);
       }
       /* Append the remainder of the input path, if any */
-      DEBUG_PRINTF(("AppendPath(\"%s\", \"%s\"); // Path tail\n", buf, path+iPath));
+      DEBUG_PRINTF(("ResolveLinks1(\"%s\", \"%s\"); // Path tail\n", buf, path+iPath));
       if (path[iPath]) {
 	if (iBuf && (buf[iBuf-1] != '\\')) {
 	  if ((iBuf+1U) >= bufsize) goto resolves_too_long;
