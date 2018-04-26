@@ -326,7 +326,6 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   // Other types of junctions/mount points do not continue with a drive letter.
   // For example: '\??\Volume{5e58015c-ba64-4048-928d-06aa03c983f9}\' */
   nRead = lstrlenW(buf);
-#define strncmpW(s1, s2, l) (CompareStringW(LOCALE_INVARIANT, 0, s1, l, s2, l)-2)
   if ((nRead >= 7) && (!strncmpW(buf, L"\\??\\", 4))) {
     if (!strncmpW(buf+5, L":\\", 2)) {
       nRead -= 4;
