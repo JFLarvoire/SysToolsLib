@@ -327,7 +327,7 @@ FILE *fdopenX(int iFile, const char *pszMode) {
    Returns, which prevents file I/O functions from crashing when passed invalid file numbers.
    (See https://msdn.microsoft.com/en-us/library/a9yf33zb.aspx)
    The file I/O functions return an error and set errno with EBADF or EINVAL instead */
-#undef wprintf /* In case MsvcLibX eventually redefines it */
+#undef wprintf
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 void voidInvalidParameterHandler(const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved) {
 #if 0  /* The following does not work. All arguments are NULL */
@@ -406,6 +406,7 @@ int isTranslatedFile(int iFile, UINT cp, UINT *pcpOut) {
 #undef printf
 #undef fprintf
 #undef vfprintf
+#undef wprintf
 #undef fputs
 #undef fputc
 #undef fwrite
