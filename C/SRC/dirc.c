@@ -27,7 +27,6 @@
 *		    Instead use the strncpyz() macro, which is safer.         *
 *		    							      *
 *   History:								      *
-*		    							      *
 *    1990-03-21 JFL Initial version 1.0 created by jf.larvoire@hp.com.	      *
 *    1990-06-22 JFL Added argument -b, -d and -bd to list only common         *
 *		     or different files. Version 1.1.			      *
@@ -211,6 +210,7 @@
 *		    Windows and Unix, to avoid stack overflow issues.         *
 *    2018-04-26 JFL Do not display the | path separator when listing one dir. *
 *		    Changed the -debug option to -D.                          *
+*		    Option -V now displays the MsvcLibX library version.      *
 *		    Version 3.1.    					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -513,7 +513,7 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 
 /* Function prototypes */
 
-char *version(void);		    /* Build a string with the program versions */
+char *version(int iLibsVer);	    /* Build a string with the program versions */
 void usage(void);                   /* Display a brief help and exit */
 void finis(int retcode);            /* Return to the initial drive & exit */
 int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
@@ -775,7 +775,7 @@ int main(int argc, char *argv[])
                 continue;
 	    }
 	    if (streq(arg+1, "V")) {	/* Display version */
-		printf("%s\n", version());
+		printf("%s\n", version(TRUE));
                 finis(0);
 	    }
 	    if (streq(arg+1, "w")) {	/* Set output width */
@@ -943,12 +943,26 @@ int main(int argc, char *argv[])
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " EXE_OS_NAME
-	  DEBUG_VERSION
-	  );
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
+    ;
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 #if IGNORECASE != 0
@@ -1041,7 +1055,7 @@ Switches:\n\
 #ifdef __unix__
 "\n"
 #endif
-, version());
+, version(FALSE));
 
     finis(0);
     }
@@ -1175,7 +1189,6 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     if (!pattern) pattern = PATTERN_ALL;
     strncpyz(pattern2, pattern, NODENAME_SIZE);
 
-    DEBUG_PRINTF(("lis(); // 0\n"));
 #if HAS_DRIVES
     initdrive = (char)_getdrive();
 
@@ -1193,7 +1206,6 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
         }
 #endif
 
-    DEBUG_PRINTF(("lis(); // 1\n"));
     getdir(initdir, PATHNAME_SIZE);
 
     if (startdir[0] == DIRSEPARATOR)
