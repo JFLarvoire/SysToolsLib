@@ -10,6 +10,7 @@
 *    2014-02-28 JFL Created this module.				      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
 *    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
+*    2018-04-25 JFL Manage the current directory locally for paths > 260 ch.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -108,23 +109,31 @@ int chdir(const char *pszDir)
 |		    by prepending a \\?\ prefix.			      |
 |		    https://stackoverflow.com/a/44519069/2215591	      |
 |		    							      |
-|		    To fix this, use a manifest defining longPathAware=true.  |
-|		    Setting longPathAware=true will lift the 260-bytes WIN32  |
-|		    APIs limitation in Windows 10 version 1607 and later,     |
-|		    if and only if the registry value LongPathsEnabled in     |
-|		    HKLM\SYSTEM\CurrentControlSet\Control\FileSystem is set   |
-|		    to 1.						      |
+|		    In Windows 10 version 1607 and later, this can be fixed   |
+|		    by using a manifest defining longPathAware=true, AND      |
+|		    by setting the registry value LongPathsEnabled to 1 in    |
+|		    HKLM\SYSTEM\CurrentControlSet\Control\FileSystem.         |
+|		    Using both lifts the 260-bytes WIN32 APIs limitation.     |
 |		    							      |
 |		    If support for long path lengths in older versions of     |
 |		    Windows is desired (XP to 8), then avoid using chdir() or |
 |		    SetCurrentDirectoryW().				      |
 |		    							      |
+|		    As a weak workaround, for paths longer than 260 bytes,    |
+|		    this routine locally manages the current directory.	      |
+|		    No attempt is made to manage multiple drive-specific      |
+|		    current directories, as the goal is Unix-compatibility,   |
+|		    not Windows compatibility.				      |
+|		    							      |
 |   History:								      |
 |    2014-02-28 JFL Created this routine                               	      |
 |    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      |
 |                   Added common routine chdirM, called by chdirA and chdirU. |
+|    2018-04-25 JFL Manage the current directory locally for paths > 260 ch.  |
 *									      *
 \*---------------------------------------------------------------------------*/
+
+WCHAR *pwszLongCurrentDir = NULL;
 
 int chdirM(const char *pszDir, UINT cp) {
   WCHAR *pwszDir;
@@ -139,9 +148,26 @@ int chdirM(const char *pszDir, UINT cp) {
 
   bDone = SetCurrentDirectoryW(pwszDir);
   if (!bDone) {
+    if (   (GetLastError() == ERROR_FILENAME_EXCED_RANGE) /* The filename is too long, */
+        && (lstrlen(pszDir) < WIDE_PATH_MAX)) {		  /* But it does not look too long */
+      /* Then try caching a local current directory */
+      WCHAR *pwsz;
+      if (!pwszLongCurrentDir) pwszLongCurrentDir = getcwdW(NULL, 0);
+      pwsz = ConcatPathW(pwszLongCurrentDir, pwszDir, NULL, 0);
+      if (pwsz) {
+      	if (pwszLongCurrentDir) free(pwszLongCurrentDir);
+      	pwszLongCurrentDir = pwsz;
+      	goto exit_chdirM;
+      }
+    }
     errno = Win32ErrorToErrno();
     iErr = -1;
   }
+  if (pwszLongCurrentDir) {
+    free(pwszLongCurrentDir);
+    pwszLongCurrentDir = NULL;
+  }
+exit_chdirM:
   free(pwszDir);
   DEBUG_QUIET_LEAVE();
   return iErr;
