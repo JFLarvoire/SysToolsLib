@@ -31,6 +31,7 @@
 
 #include <windows.h>
 #include <direct.h>	/* For _getdrive() */
+#include <string.h>
 #include <errno.h>
 #include <unistd.h>	/* For CompactPathW() */
 
@@ -85,8 +86,6 @@ LPWSTR MultiByteToNewWideString(UINT cp, DWORD dwFlags, LPCSTR pszStr) {
 \*---------------------------------------------------------------------------*/
 
 #define CRITICAL_LENGTH 240 /* Documented as 255 or 260, but some APIs (ex: CreateDirectoryW) fail between 240 and 250 */
-
-#define strncmpW(s1, s2, l) (CompareStringW(LOCALE_INVARIANT, 0, s1, l, s2, l)-2)
 
 int MultiByteToWidePath(
   UINT nCodePage,
