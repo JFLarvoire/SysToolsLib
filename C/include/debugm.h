@@ -127,6 +127,8 @@
 *		    Bug fix in _VSNPRINTF_EMULATION.			      *
 *    2017-10-30 JFL Added macro DEBUG_QUIET_LEAVE().			      *
 *    2018-02-02 JFL Added several missing DEBUG_xxx_COMMENT() macros.         *
+*    2018-04-25 JFL Added macro DEBUG_WPRINTF().                              *
+*    2018-04-25 JFL Added macros DEBUG_WENTER() and DEBUG_WLEAVE().           *
 *		    							      *
 *        (C) Copyright 2016 Hewlett Packard Enterprise Development LP         *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -251,6 +253,7 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 /* The enter and leave variants print, then respectively increase or decrease indentation,
    to make recursive calls easier to review. */
 #define DEBUG_FPRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); fprintf args;})
+#define DEBUG_WPRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); wprintf args;})
 #if defined(_MSDOS)
 #define DEBUG_PRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
 #define XDEBUG_PRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
@@ -258,9 +261,11 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define DEBUG_PRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {debug_printf args;})
 #define XDEBUG_PRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {debug_printf args;})
 #endif /* defined(_MSDOS) */
-#define DEBUG_ENTER(args)  DEBUG_DO(DEBUG_PRINTF(args); iIndent += DEBUG_INDENT_STEP;)
-#define DEBUG_LEAVE(args)  DEBUG_DO(DEBUG_PRINTF(args); iIndent -= DEBUG_INDENT_STEP;)
-#define DEBUG_QUIET_LEAVE()  DEBUG_DO(iIndent -= DEBUG_INDENT_STEP;)
+#define DEBUG_ENTER(args)   DEBUG_DO(DEBUG_PRINTF(args); iIndent += DEBUG_INDENT_STEP;)
+#define DEBUG_WENTER(args)  DEBUG_DO(DEBUG_WPRINTF(args); iIndent += DEBUG_INDENT_STEP;)
+#define DEBUG_LEAVE(args)   DEBUG_DO(DEBUG_PRINTF(args); iIndent -= DEBUG_INDENT_STEP;)
+#define DEBUG_WLEAVE(args)  DEBUG_DO(DEBUG_WPRINTF(args); iIndent -= DEBUG_INDENT_STEP;)
+#define DEBUG_QUIET_LEAVE() DEBUG_DO(iIndent -= DEBUG_INDENT_STEP;)
 
 #define DEBUG_RETURN_INT(i, comment) DEBUG_DO(int DEBUG_i = (i); \
   DEBUG_LEAVE(("return %d; // " comment "\n", DEBUG_i)); return DEBUG_i;)
@@ -350,10 +355,13 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define DEBUG_PRINT_INDENT() DEBUG_DO_NOTHING() /* Print call-depth spaces */
 
 #define DEBUG_FPRINTF(args) DEBUG_DO_NOTHING()  /* Print a debug string to a stream */
+#define DEBUG_WPRINTF(args) DEBUG_DO_NOTHING()  /* Print a wide debug string to stdout */
 #define DEBUG_PRINTF(args)  DEBUG_DO_NOTHING()  /* Print a debug string to stdout */
 #define XDEBUG_PRINTF(args) DEBUG_DO_NOTHING()  /* Print an extra debug string to stdout */
 #define DEBUG_ENTER(args)   DEBUG_DO_NOTHING()  /* Print and increase indent */
+#define DEBUG_WENTER(args)  DEBUG_DO_NOTHING()  /* Print and increase indent */
 #define DEBUG_LEAVE(args)   DEBUG_DO_NOTHING()  /* Print and decrease indent */
+#define DEBUG_WLEAVE(args)  DEBUG_DO_NOTHING()  /* Print and decrease indent */
 #define DEBUG_QUIET_LEAVE() DEBUG_DO_NOTHING()  /* Print and decrease indent */
 
 #define DEBUG_RETURN_INT(i, comment) return(i)
