@@ -4,7 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2018-03-23
+## [Unreleased] 2018-04-26
+### New
+- C/MsvcLibX/src/iconv.c: Added a routine printfW(), for printing wide strings with the correct conversions.
+- C/MsvcLibX/include/stdio.h: Define wprintf() as printfW().
+- C/Include/debugm.h: Added macros DEBUG_WPRINTF(), DEBUG_WENTER() and DEBUG_WLEAVE(), using wprintf(). 
+### Fixed
+- C/MsvcLibX/src/chdir.c getcwd.c: For paths > 260 bytes, on systems without the Windows 10 workaround,
+  manage the current directory locally. (Not used by any other stdio library routine for now, so don't expect stdio
+  calls with relative paths to work if the current directory length is > 260 bytes.)
+- C/SRC/dirc.c, truename.c: Minor improvements to take advantage of the above changes. Now lists paths > 260 bytes correctly.
+
+## [1.12] 2018-03-26
 ### New
 - A new tools called sml2.exe, originating from my [libxml2 fork](https://github.com/JFLarvoire/libxml2).
 - C/SRC/which.c: New options -l & -v for diagnosing common search failures. which is now built by default for Linux.
