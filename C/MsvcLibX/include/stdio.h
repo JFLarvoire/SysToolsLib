@@ -92,6 +92,7 @@ extern int printfA(const char *pszFormat, ...);
 #define fprintf fprintfA	/* For outputing ANSI strings */
 #define printf printfA		/* For outputing ANSI strings */
 #endif
+#define wprintf printfW
 #if _MSC_VER < 1500 /* Up to VS 8/2005, fputws() is broken. It outputs just the 1st character. */
 extern int fputwsW(const wchar_t *pws, FILE *f);
 #define fputws fputwsW		/* Use our workaround routine instead */
