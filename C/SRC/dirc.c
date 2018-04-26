@@ -206,14 +206,19 @@
 *		    Version 3.0.5.  					      *
 *    2017-10-02 JFL Fixed a conditional compilation bug in MSDOS.	      *
 *		    Version 3.0.6.    					      *
-*    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h. Version 3.0.7.   *
+*    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h.                  *
+*    2018-04-25 JFL Dynamically allocate PATHNAME variables from the heap in  *
+*		    Windows and Unix, to avoid stack overflow issues.         *
+*    2018-04-26 JFL Do not display the | path separator when listing one dir. *
+*		    Changed the -debug option to -D.                          *
+*		    Version 3.1.    					      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.7"
-#define PROGRAM_DATE    "2018-04-24"
+#define PROGRAM_VERSION "3.1"
+#define PROGRAM_DATE    "2018-04-26"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -413,6 +418,19 @@ int SetMasterEnv(char *pszName, char *pszValue);
 #define PATHNAME_SIZE PATH_MAX
 #define NODENAME_SIZE (NAME_MAX+1)
 
+#if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
+  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
+  #define NEW_PATHNAME_BUF(var) char var[PATHNAME_SIZE]
+#else	/* Avoid stack overflows by storing too large variables on stack */
+  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
+  #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
+#endif
+#if !PATHNAME_BUFS_IN_HEAP
+  #define FREE_PATHNAME_BUF(var) do {} while (0)
+#else
+  #define FREE_PATHNAME_BUF(var) free(var);
+#endif
+
 /*
 #undef FALSE
 #undef TRUE
@@ -551,7 +569,7 @@ int main(int argc, char *argv[])
     char *from = NULL;          /* What directory to list */
     char *to = NULL;            /* What directory to compare it to */
     char *pattern = NULL;       /* Wildcards pattern */
-    char path[PATHNAME_SIZE];   /* Temporary pathname */
+    NEW_PATHNAME_BUF(path);     /* Temporary pathname */
     BOOL both = FALSE;		/* If true, list only files present in both paths */
     BOOL diff = FALSE;		/* If true, list only files that don't match */
     int i;
@@ -618,7 +636,7 @@ int main(int argc, char *argv[])
                 continue;
 	    }
             DEBUG_CODE(
-	      if (streq(arg+1, "debug")) {
+	      if ((streq(arg+1, "D")) || (streq(arg+1, "debug"))) {
 		DEBUG_ON();
 		continue;
 	      }
@@ -970,7 +988,7 @@ Switches:\n\
   -c          Compare the actual data of the files. May take a long time!\n"
 #ifdef _DEBUG
 "\
-  -debug      Output debug information.\n"
+  -D          Output debug information.\n"
 #endif
 "\
   -e          Stop when failing to enter a directory.\n\
@@ -1124,8 +1142,9 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 #if HAS_DRIVES
     char initdrive;                 /* Initial drive. Restored when done. */
 #endif
-    char initdir[PATHNAME_SIZE];    /* Initial directory. Restored when done. */
-    char path[PATHNAME_SIZE];       /* Temporary pathname */
+    NEW_PATHNAME_BUF(initdir);	    /* Initial directory. Restored when done. */
+    NEW_PATHNAME_BUF(path);	    /* Temporary pathname */
+    NEW_PATHNAME_BUF(pathname);
     int err;
     char pattern2[NODENAME_SIZE];
     char *pname;
@@ -1135,8 +1154,20 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, %d, 0x%X, 0x%lX, 0x%lX);\n", startdir, pattern,
                  nfif, col, attrib, (unsigned long)datemin, (unsigned long)datemax));
 
+#if PATHNAME_BUFS_IN_HEAP
+    if ((!initdir) || (!path)) {
+        FREE_PATHNAME_BUF(initdir);
+        FREE_PATHNAME_BUF(path);
+        FREE_PATHNAME_BUF(pathname);
+	RETURN_INT_COMMENT(nfif, ("Out of memory\n"));
+    }
+#endif
+
     if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
-      RETURN_INT_COMMENT(nfif, ("NUL\n"));
+	FREE_PATHNAME_BUF(initdir);
+	FREE_PATHNAME_BUF(path);
+        FREE_PATHNAME_BUF(pathname);
+	RETURN_INT_COMMENT(nfif, ("NUL\n"));
     }
 
     if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
@@ -1144,6 +1175,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     if (!pattern) pattern = PATTERN_ALL;
     strncpyz(pattern2, pattern, NODENAME_SIZE);
 
+    DEBUG_PRINTF(("lis(); // 0\n"));
 #if HAS_DRIVES
     initdrive = (char)_getdrive();
 
@@ -1161,6 +1193,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
         }
 #endif
 
+    DEBUG_PRINTF(("lis(); // 1\n"));
     getdir(initdir, PATHNAME_SIZE);
 
     if (startdir[0] == DIRSEPARATOR)
@@ -1181,7 +1214,9 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     err = FALSE;                        /* Assume success */
     if (startdir[0])
         {
+#if !HAS_MSVCLIBX
         DEBUG_PRINTF(("chdir(\"%s\");\n", path));
+#endif
         err = chdir(path);
         }
 
@@ -1210,6 +1245,9 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
             if (iVerbose || !iContinue)
               fprintf(stderr, "Error: Cannot access directory %s.\n", path);
 	    if (iContinue) {
+	      FREE_PATHNAME_BUF(initdir);
+	      FREE_PATHNAME_BUF(path);
+	      FREE_PATHNAME_BUF(pathname);
 	      RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
 	    }
             finis(RETCODE_INACCESSIBLE);
@@ -1232,7 +1270,6 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	while ((pDirent = readdir(pDir)))
 	    {
 	    struct stat st;
-	    char pathname[PATHNAME_SIZE];
 	    DEBUG_CODE(
 	      char *reason;
 	      char szType[16];
@@ -1350,6 +1387,9 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     _chdrive(initdrive);
 #endif
 
+    FREE_PATHNAME_BUF(initdir);
+    FREE_PATHNAME_BUF(path);
+    FREE_PATHNAME_BUF(pathname);
     RETURN_INT(nfif);
     }
 #ifdef _MSC_VER
@@ -1577,24 +1617,28 @@ void affichePaths(void)
 
     l = CountCharacters(path1, CP_UTF8);
     printf("%s", path1);
-    if (l <= iColumnSize)
-        printf("%*s", iColumnSize - l, "");
-    else
+    if (path2[0])
         {
-        printflf();
-        printf("%*s", iColumnSize, "");
+	if (l <= iColumnSize)
+	    printf("%*s", iColumnSize - l, "");
+	else
+	    {
+	    printflf();
+	    printf("%*s", iColumnSize, "");
+	    }
+    
+	l = CountCharacters(path2, CP_UTF8);
+	if (l <= iColumnSize)
+	    printf(" | %*s", iColumnSize - l, "");
+	else
+	    {
+	    int iCols2 = iCols-(l+1);
+	    printf(" |");
+	    printflf();
+	    if (iCols2 > 0) printf("%*s", iCols2, "");
+	    }
+	printf("%s", path2);
         }
-
-    l = CountCharacters(path2, CP_UTF8);
-    if (l <= iColumnSize)
-        printf(" | %*s", iColumnSize - l, "");
-    else
-        {
-        printf(" |");
-        printflf();
-        printf("%*s", iCols-(l+1), "");
-        }
-    printf("%s", path2);
 
     printflf();
     printflf();
@@ -1832,12 +1876,14 @@ int CompareToNext(fif **ppfif) /* Compare file date with next entry in fiflist *
     /* If in filecomp mode, check if same data files with different dates */
     if (filecomp && !deltasize && !S_ISDIR(pfif1->st.st_mode))
         {   /* Let the actual data decide */
-        char name1[PATHNAME_SIZE];
-        char name2[PATHNAME_SIZE];
+        NEW_PATHNAME_BUF(name1);
+        NEW_PATHNAME_BUF(name2);
 
         makepathname(name1, path1, pfif1->name);
         makepathname(name2, path2, pfif2->name);
         dif = filecompare(name1, name2);
+        FREE_PATHNAME_BUF(name1);
+        FREE_PATHNAME_BUF(name2);
         if (!dif) DEBUG_RETURN_INT(0, "Contents are identical"); /* They are actually identical */
         if (deltatime) DEBUG_RETURN_INT(SIGN(deltatime), "Timestamps and contents differ");
         DEBUG_RETURN_INT(SIGN(dif), "Contents differ");
@@ -2046,9 +2092,19 @@ int descend(char *from, char *to, char *pattern,
     fif **directories;
     fif **ppfif;
     uint16_t wFlags = 0x8000 | _A_SUBDIR | _A_SYSTEM | _A_HIDDEN;
+    NEW_PATHNAME_BUF(name1);
+    NEW_PATHNAME_BUF(name2);
 
     DEBUG_ENTER(("descend(\"%s\", \"%s\", \"%s\", 0x%X, %d, %d, %d, 0x%lX, 0x%lX);\n", from, to, pattern,
       		 attrib, both, diff, zero, (unsigned long)datemin, (unsigned long)datemax));
+
+#if PATHNAME_BUFS_IN_HEAP
+    if ((!name1) || (!name2)) {
+	FREE_PATHNAME_BUF(name1);
+	FREE_PATHNAME_BUF(name2);
+	RETURN_CONST_COMMENT(0, ("Out of memory\n"));
+    }
+#endif
 
     /* Get all subdirectories */
     nfif = 0;
@@ -2059,8 +2115,6 @@ int descend(char *from, char *to, char *pattern,
 
     for (i=0; i<nfif; i++)
         {
-        char name1[PATHNAME_SIZE];
-        char name2[PATHNAME_SIZE];
         char *pname1;
         char *pname2;
         char *pn1;
@@ -2129,6 +2183,8 @@ int descend(char *from, char *to, char *pattern,
         } /* End for */
 
     FreeFifArray(directories);
+    FREE_PATHNAME_BUF(name1);
+    FREE_PATHNAME_BUF(name2);
     RETURN_CONST(0);
     }
 
@@ -2271,17 +2327,24 @@ int makepathname(char *buf, char *path, char *node)
 
 char *getdir(char *buf, int len)  /* Get current directory without the drive */
     {
-    char line[PATHNAME_SIZE];
+    NEW_PATHNAME_BUF(line);
     char *pszRoot = line;
 
-    if (!getcwd(line, PATHNAME_SIZE))
+#if PATHNAME_BUFS_IN_HEAP
+    if (!line) return NULL;
+#endif
+
+    if (!getcwd(line, PATHNAME_SIZE)) {
+        FREE_PATHNAME_BUF(line);
         return NULL;
+    }
 
     if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
 
     if (line[1] == ':') pszRoot = line+2;
     strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
 
+    FREE_PATHNAME_BUF(line);
     return buf;
     }
 
