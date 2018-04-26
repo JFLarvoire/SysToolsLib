@@ -3559,6 +3559,78 @@ if defined TYPEVAR set %TYPEVAR%=%TYPE%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        ReadPassword					      #
+:#                                                                            #
+:#  Description     Prompt for a password string, displaying only stars       #
+:#                                                                            #
+:#  Arguments       VAR="Prompt string"					      #
+:#                                                                            #
+:#  Notes 	    Returns the password string in variable VAR.              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2017-03-16 APA Published at https://www.dostips.com/forum/viewtopic.php?f=3&t=8442&sid=7d459deb904a629c16a11e6f9bd658be#p55984
+:#   2017-03-26 JFL Fixed a problem with the '!' character changed to a ')' in the password string.
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:ReadPassword var="prompt"
+
+rem Read a password
+rem Antonio Perez Ayala
+
+rem Initialize variables
+setlocal EnableDelayedExpansion
+rem Get a CarriageReturn (ASCII 13) character
+for /F %%a in ('copy /Z "%~F0" NUL') do set "CR=%%a"
+rem Get a BackSpace (ASCII 8) character
+for /F %%a in ('echo prompt $H ^| cmd') do set "BS=%%a"
+
+rem Show the prompt and start reading
+set /P "=%~2" < NUL
+set "input="
+set i=0
+
+rem Get the localized xcopy prompt
+set "msg="
+for /F "delims=" %%a in ('echo.^|xcopy /W "%~F0" "%~F0" 2^>NUL') do if not defined msg set "msg=%%a"
+
+:ReadPassword.nextKey
+   set "key="
+   for /F "delims=" %%a in ('xcopy /W "%~F0" "%~F0" 2^>NUL') do if not defined key set "key=%%a"
+
+   rem Remove the localized xcopy prompt from the beginning of the string
+   set key=!key:%msg%=!
+   rem If the key is a question mark, it'll have been lost in the set "key=%%a" above
+   if not defined key set "key=^!"
+
+   rem If key is CR: terminate input
+   if "!key:~-1!" equ "!CR!" goto :ReadPassword.endRead
+
+   rem If key is BS: delete last char, if any
+   set "key=!key:~-1!"
+   if "!key!" equ "!BS!" (
+      if %i% gtr 0 (
+         set /P "=!BS! !BS!" < NUL
+         set "input=!input:~0,-1!"
+         set /A i-=1
+      )
+      goto nextKey
+   )
+
+   rem Else: show and accept the key
+   set /P "=*" < NUL
+   set "input=!input!!key!"
+   set /A i+=1
+
+goto :ReadPassword.nextKey
+
+:ReadPassword.endRead
+echo/
+endlocal & set "%~1=%input%"
+exit /B
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        Test*                                                     #
 :#                                                                            #
 :#  Description     Misc test routines for testing the debug library itself   #
