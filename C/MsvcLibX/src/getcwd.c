@@ -92,7 +92,7 @@ WCHAR *getcwdW(WCHAR *pwBuf, size_t dwBufSize) {
   int iAlloc = FALSE;	/* TRUE if pwBuf allocated here */
   int iReAlloc = FALSE;	/* TRUE if pwBuf should be reallocated in the end */
 
-  DEBUG_ENTER(("getcwdW(0x%p, %Iu);\n", pwBuf, dwBufSize));
+  DEBUG_ENTER(("getcwd(0x%p, %Iu);\n", pwBuf, dwBufSize));
 
   if (!pwBuf) {
     iAlloc = TRUE;
