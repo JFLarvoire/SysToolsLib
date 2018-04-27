@@ -21,6 +21,7 @@
 *    2017-08-09 JFL Added fprintfM() and printfM().                           *
 *    2017-09-27 JFL Added standard C library routines iconv(), etc.	      *
 *    2018-04-24 JFL Added fputsW, vfprintfW(), fprintfW() and printfW().      *
+*    2018-04-27 JFL Added MultiByteToNewWideString() from iconv.c.            *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -161,6 +162,25 @@ int CountCharacters(const char *string, UINT cp) {
     return -1;
   }
   return n;
+}
+
+/* Allocate a new wide string converted from the input multi-byte string */
+/* In case of failure, sets errno */
+WCHAR *MultiByteToNewWideStringEx(UINT cp, DWORD dwFlags, const char *string) {
+  int l = lstrlen(string);
+  int n = (2*l)+1;	/* Worst case for the number of WCHARs needed */
+  WCHAR *pwBuf = (WCHAR *)malloc(n * sizeof(WCHAR));
+  WCHAR *pwBuf2;
+  if (!pwBuf) return NULL;
+  n = MultiByteToWideChar(cp, dwFlags, string, (int)(l+1), pwBuf, n);
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    free(pwBuf);
+    return NULL;
+  }
+  pwBuf2 = realloc(pwBuf, n * sizeof(WCHAR));
+  if (pwBuf2) pwBuf = pwBuf2;
+  return pwBuf;
 }
 
 /*---------------------------------------------------------------------------*\
