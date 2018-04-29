@@ -11,6 +11,9 @@
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
 *    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
 *    2018-04-25 JFL Manage the current directory locally for paths > 260 ch.  *
+*    2018-04-28 JFL Split chdirW off of chdirM.				      *
+*    2018-04-29 JFL Make sure chdirW always enters the deepest possible dir.  *
+*                   Improved the error handling.                              *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -135,41 +138,84 @@ int chdir(const char *pszDir)
 
 WCHAR *pwszLongCurrentDir = NULL;
 
-int chdirM(const char *pszDir, UINT cp) {
-  WCHAR *pwszDir;
+int chdirW(const WCHAR *pwszDir) {
+  WCHAR *pwszCD = NULL;
+  WCHAR *pwszAbsDir = NULL;
+  WCHAR *pwszPrefixedAbsDir = NULL;
   BOOL bDone;
   int iErr = 0;
 
-  DEBUG_ENTER(("chdir(\"%s\");\n", pszDir));
+  DEBUG_WENTER((L"chdir(\"%s\");\n", pwszDir));
 
-  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
-  pwszDir = MultiByteToNewWidePath(cp, pszDir);
-  if (!pwszDir) return -1;
+  /* Make sure every path is an absolute path with a drive letter or UNC prefix */
+  pwszCD = getcwdW(NULL, 0);
+  if (!pwszCD) goto chdirW_failed;
+  pwszAbsDir = ConcatPathW(pwszCD, pwszDir, NULL, 0);
+  if (!pwszAbsDir) goto chdirW_failed;
 
-  bDone = SetCurrentDirectoryW(pwszDir);
+  /* Make sure long paths have the \\? prefix */
+  pwszPrefixedAbsDir = CorrectNewWidePath(pwszAbsDir);
+  if (!pwszPrefixedAbsDir) goto chdirW_failed;
+
+/* Due to SetCurrentDirectoryW bug, prefixing the CD does not help.
+   As this confuses some applications, use the non-prefixed CD for now. */
+#define pwszSETDIR pwszAbsDir /* pwszAbsDir or pwszPrefixedAbsDir */
+
+  bDone = SetCurrentDirectoryW(pwszSETDIR);
   if (!bDone) {
+    int lAbsDir = lstrlenW(pwszSETDIR);
+    WCHAR *pwszParent = NULL;
     if (   (GetLastError() == ERROR_FILENAME_EXCED_RANGE) /* The filename is too long, */
-        && (lstrlen(pszDir) < WIDE_PATH_MAX)) {		  /* But it does not look too long */
-      /* Then try caching a local current directory */
-      WCHAR *pwsz;
-      if (!pwszLongCurrentDir) pwszLongCurrentDir = getcwdW(NULL, 0);
-      pwsz = ConcatPathW(pwszLongCurrentDir, pwszDir, NULL, 0);
-      if (pwsz) {
-      	if (pwszLongCurrentDir) free(pwszLongCurrentDir);
-      	pwszLongCurrentDir = pwsz;
-      	goto exit_chdirM;
+        && (lAbsDir < WIDE_PATH_MAX)) {			  /* But it does not look too long */
+      /* Validate that this pwszAbsDir directory exists */
+      iErr = _waccess(pwszPrefixedAbsDir, 0);
+      if (iErr) goto exit_chdirW;
+      /* Then cache it locally */
+      if (pwszLongCurrentDir) free(pwszLongCurrentDir);
+      pwszLongCurrentDir = pwszAbsDir;
+      /* Kludge: Change Windows CD to the deepest directory that is accessible */
+      pwszParent = malloc((lAbsDir+1) * sizeof(WCHAR));
+      if (pwszParent) {
+      	lstrcpyW(pwszParent, pwszSETDIR);
+	do {
+	  while ((lAbsDir > 0) && (pwszParent[--lAbsDir] != L'\\')) ;
+	  pwszParent[lAbsDir] = L'\0';
+	  bDone = SetCurrentDirectoryW(pwszParent);
+	} while ((lAbsDir > 0) && !bDone);
+	free(pwszParent);
       }
+      goto exit_chdirW; /* Pretend success */
     }
     errno = Win32ErrorToErrno();
-    iErr = -1;
+    goto chdirW_failed;
   }
   if (pwszLongCurrentDir) {
     free(pwszLongCurrentDir);
     pwszLongCurrentDir = NULL;
   }
-exit_chdirM:
-  free(pwszDir);
+  goto exit_chdirW; /* Success */
+chdirW_failed:
+  iErr = -1;
+exit_chdirW:
+  DEBUG_WPRINTF((L"return %d; // \"%s\"\n", iErr, pwszAbsDir));
+  free(pwszPrefixedAbsDir);
+  if (pwszLongCurrentDir != pwszAbsDir) free(pwszAbsDir);
+  free(pwszCD);
   DEBUG_QUIET_LEAVE();
+  return iErr;
+}
+
+int chdirM(const char *pszDir, UINT cp) {
+  WCHAR *pwszDir;
+  int iErr;
+
+  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
+  pwszDir = MultiByteToNewWideString(cp, pszDir);
+  if (!pwszDir) return -1;
+  
+  iErr = chdirW(pwszDir);
+
+  free(pwszDir);
   return iErr;
 }
 
