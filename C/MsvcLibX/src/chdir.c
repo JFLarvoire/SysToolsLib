@@ -144,6 +144,9 @@ int chdirW(const WCHAR *pwszDir) {
   WCHAR *pwszPrefixedAbsDir = NULL;
   BOOL bDone;
   int iErr = 0;
+  DEBUG_CODE(
+  WCHAR *pwszWhere = L"Windows";
+  )
 
   DEBUG_WENTER((L"chdir(\"%s\");\n", pwszDir));
 
@@ -184,6 +187,9 @@ int chdirW(const WCHAR *pwszDir) {
 	} while ((lAbsDir > 0) && !bDone);
 	free(pwszParent);
       }
+      DEBUG_CODE(
+      pwszWhere = L"MsvcLibX";
+      )
       goto exit_chdirW; /* Pretend success */
     }
     errno = Win32ErrorToErrno();
@@ -197,7 +203,7 @@ int chdirW(const WCHAR *pwszDir) {
 chdirW_failed:
   iErr = -1;
 exit_chdirW:
-  DEBUG_WPRINTF((L"return %d; // \"%s\"\n", iErr, pwszAbsDir));
+  DEBUG_WPRINTF((L"return %d; // [%s] \"%s\"\n", iErr, pwszWhere, pwszAbsDir));
   free(pwszPrefixedAbsDir);
   if (pwszLongCurrentDir != pwszAbsDir) free(pwszAbsDir);
   free(pwszCD);

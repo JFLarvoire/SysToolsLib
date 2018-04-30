@@ -91,6 +91,9 @@ WCHAR *getcwdW(WCHAR *pwBuf, size_t dwBufSize) {
   WCHAR *pwDir;
   int iAlloc = FALSE;	/* TRUE if pwBuf allocated here */
   int iReAlloc = FALSE;	/* TRUE if pwBuf should be reallocated in the end */
+  DEBUG_CODE(
+  WCHAR *pwszWhere = L"Windows";
+  )
 
   DEBUG_ENTER(("getcwd(0x%p, %Iu);\n", pwBuf, dwBufSize));
 
@@ -110,6 +113,9 @@ WCHAR *getcwdW(WCHAR *pwBuf, size_t dwBufSize) {
     } else {
       dwSize += 1; /* Buffer size needed */
     }
+    DEBUG_CODE(
+    pwszWhere = L"MsvcLibX";
+    )
   } else {					/* Else ask Windows' */
     dwSize = GetCurrentDirectoryW((DWORD)dwBufSize, pwBuf);
   }
@@ -142,7 +148,7 @@ getcwdW_failed:
     WCHAR *pwBuf2 = realloc(pwBuf, (dwSize + 1) * sizeof(WCHAR));
     if (pwBuf2) pwBuf = pwBuf2;
   }
-  DEBUG_WLEAVE((L"return \"%s\";\n", pwBuf));
+  DEBUG_WLEAVE((L"return \"%s\"; // [%s]\n", pwBuf, pwszWhere));
   return pwBuf;
 }
 
