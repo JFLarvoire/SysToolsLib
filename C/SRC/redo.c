@@ -37,13 +37,19 @@
 *    2016-01-08 JFL Fixed all warnings in Linux. Version 3.0.2.		      *
 *    2016-09-20 JFL Bug fix: The Win32 version did not process empty args.    *
 *		    Version 3.0.3.  					      *
+*    2018-04-29 JFL Make sure WIN32 pathname buffers are larger than 260 B.   *
+*		    Document WIN32 redo limitations in help.		      *
+*    2018-04-30 JFL Check errors for all calls to chdir() and getcwd().	      *
+*                   Make sure all aborts display consistent error messages.   *
+*		    Rewrote finis() so that it displays errors internally.    *
+*		    Version 3.1.  					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.3"
-#define PROGRAM_DATE    "2016-09-20"
+#define PROGRAM_VERSION "3.1"
+#define PROGRAM_DATE    "2018-04-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -62,6 +68,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <fnmatch.h>
+#include <stdarg.h>
 
 /* MsvcLibX debugging macros */
 #include "debugm.h"
@@ -77,11 +84,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
 #define DIRSEPARATOR '\\'
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE 13				/* 8.3 name length = 8+1+3+1 = 13 */
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
 
@@ -105,11 +108,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define INCL_VIO
 #include "os2.h" 
 
-#define OS_NAME "OS/2"
 
 #define DIRSEPARATOR '\\'
-#define PATHNAME_SIZE 260				/* FILENAME_MAX incorrect in stdio.h */
-#define NODENAME_SIZE 32				/* Should be 255, but OK & conserves memory */
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
 
@@ -126,19 +126,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _WIN32			/* Automatically defined when targeting a Win32 applic. */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
 #define DIRSEPARATOR '\\'
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
 
@@ -155,26 +143,13 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef __unix__     /* Unix */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 #define DIRSEPARATOR '/'
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define HAS_DRIVES FALSE
 
 #include <ctype.h>
 
-static char *strlwr(char *pString)
-{
+static char *strlwr(char *pString) {
   char c;
   char *pc = pString;
   for ( ; (c=*pc); pc++) *pc = tolower(c);
@@ -215,11 +190,33 @@ intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv);
 
 #endif /* __unix__ */
 
+/*********************************** Other ***********************************/
+
+#if (!defined(DIRSEPARATOR)) || (!defined(EXE_OS_NAME))
+#error "Unidentified OS. Please define OS-specific settings for it."
+#endif
+
 /********************** End of OS-specific definitions ***********************/
 
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME
-
 /* Local definitions */
+
+#define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
+#define NODENAME_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
+
+#if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
+  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
+  #define NEW_PATHNAME_BUF(var) char var[PATHNAME_SIZE]
+#else	/* Avoid stack overflows by storing too large variables on stack */
+  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
+  #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
+#endif
+#if !PATHNAME_BUFS_IN_HEAP
+  #define TRIM_PATHNAME_BUF(var) do {} while (0)
+  #define FREE_PATHNAME_BUF(var) do {} while (0)
+#else
+  #define TRIM_PATHNAME_BUF(var) do {char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0)
+  #define FREE_PATHNAME_BUF(var) free(var);
+#endif
 
 #undef FALSE
 #undef TRUE
@@ -234,6 +231,7 @@ typedef enum {
 #define RETCODE_TOO_MANY_FILES 2    /* Note: Value 2 required by HP Preload -env option */
 #define RETCODE_NO_MEMORY 3
 #define RETCODE_INACCESSIBLE 4
+#define RETCODE_EXEC_ERROR 5
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
@@ -384,8 +382,9 @@ char *internes[] = {            /* Internal commands. (Only those not duplicated
 
 /* Forward references */
 
+char *version(int iLibsVer);	    /* Build a string with the program versions */
 bool interne(char *);		    /* Is a command internal? */
-void finis(int retcode);	    /* Return to the initial drive & exit */
+void finis(int retcode, ...);	    /* Return to the initial drive & exit */
 void usage(int iErr);               /* Display a brief help and exit */
 
 int descend(char *from, int fif0);  /* Recurse the directory tree */
@@ -420,152 +419,171 @@ char *getdir(char *, int);          /* Get the current drive directory */
 *                                                                             *
 ******************************************************************************/
 
-int main(int argc, char *argv[])
-    {
-    int arg1;   /* First meaningfull argument */
-    int cmd1;	/* First offset in command array */
-    int i;
-    char *pszConclusion = "Redo done";
-    char *pszFrom = NULL;
+int main(int argc, char *argv[]) {
+  int arg1;   /* First meaningfull argument */
+  int cmd1;	/* First offset in command array */
+  int i;
+  char *pszConclusion = "Redo done";
+  char *pszFrom = NULL;
+  int iErr;
+  char *pcd;
 
-    _flushall(); /* Make sure the above line went to a file if the output is
-                    redirected */
+  _flushall(); /* Make sure the above line went to a file if the output is
+		  redirected */
 
-    /* Parse the command line */
+  /* Parse the command line */
 
-    for (i=1; i<argc; i++) {
-        char *arg = argv[i];
-        if ((arg[0] == '-') || (arg[0] == '/')) { /* It's a switch */
-            char *option = arg+1;
-                                        /* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-                                        */
-	    if (streq(option, "?")) {
-		usage(0);
-	    }
-            DEBUG_CODE(
-		if (streq(option, "d")) {
-		    DEBUG_ON();
-		    continue;
-		}
-	    )
-	    if (streq(option, "from")) {
-		if ((i+1)<argc)
-		    pszFrom = argv[++i];
-		else
-		    usage(1);
-                continue;
-	    }
-	    if (streq(option, "q")) {
-		iVerbose = FALSE;
-		pszConclusion = NULL;
-                continue;
-	    }
-	    if (streq(option, "v")) {
-		iVerbose = TRUE;
-                continue;
-	    }
-	    if (streq(option, "V")) {	    /* -V: Display the version */
-		printf("%s\n", PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME);
-		exit(0);
-	    }
-	    printf("Unrecognized switch %s. Ignored.\n", arg);
-            continue;
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if ((arg[0] == '-') || (arg[0] == '/')) { /* It's a switch */
+      char *option = arg+1;
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(option, "?")) {
+	usage(0);
+      }
+      DEBUG_CODE(
+	if (streq(option, "d")) {
+	  DEBUG_ON();
+	  continue;
 	}
-        break;  /* Ignore other arguments */
+      )
+      if (streq(option, "from")) {
+	if ((i+1)<argc) {
+	  pszFrom = argv[++i];
+	} else {
+	  usage(1);
+	}
+	continue;
+      }
+      if (streq(option, "q")) {
+	iVerbose = FALSE;
+	pszConclusion = NULL;
+	continue;
+      }
+      if (streq(option, "v")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (streq(option, "V")) {	    /* -V: Display the version */
+	printf("%s\n", version(TRUE));
+	exit(0);
+      }
+      printf("Unrecognized switch %s. Ignored.\n", arg);
+      continue;
     }
-    arg1 = i;
+    break;  /* Ignore other arguments */
+  }
+  arg1 = i;
 
-    if (argc <= arg1) {   /* If there is no command line, exit immediately */
-	usage(1);
-    }
+  if (argc <= arg1) {   /* If there is no command line, exit immediately */
+    usage(1);
+  }
 
-    if (iVerbose) printf("Redo version " VERSION "\n");
+  if (iVerbose) printf("Redo version %s\n", version(FALSE));
 
-    /* Build the sub command line to execute recursively */
+  /* Build the sub command line to execute recursively */
 
-    cmd1 = 0;
-    if (interne(argv[arg1]))        /* Is it an internal command? */
-        {
+  cmd1 = 0;
+  if (interne(argv[arg1])) {      /* Is it an internal command? */
 #if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
-	command[0] = getenv("COMSPEC"); /* If yes, run a secondary command  */
-	command[1] = "/C";		/* processor.			    */
+    command[0] = getenv("COMSPEC"); /* If yes, run a secondary command  */
+    command[1] = "/C";		/* processor.			    */
 #elif defined(__unix__)
-	command[0] = getenv("SHELL");  /* If yes, run a secondary command  */
-	command[1] = "-c";		/* processor.			    */
+    command[0] = getenv("SHELL");  /* If yes, run a secondary command  */
+    command[1] = "-c";		/* processor.			    */
 #endif
-	cmd1 = 2;
-        }
-    for (i=0; (arg1+i)<argc; i++)    /* Copy the arguments */
-	{
-	if ((cmd1+i)==(MAXARGS-1))	/* If destination array full */
-	    {
-	    printf("Warning: Arguments beyond the %dth ignored.\n", i);
-	    break;
-	    }
-	command[cmd1+i] = argv[arg1+i];
-	}
-    command[cmd1+i] = NULL;
+    cmd1 = 2;
+  }
+  for (i=0; (arg1+i)<argc; i++) {  /* Copy the arguments */
+    if ((cmd1+i)==(MAXARGS-1)) {	/* If destination array full */
+      printf("Warning: Arguments beyond the %dth ignored.\n", i);
+      break;
+    }
+    command[cmd1+i] = argv[arg1+i];
+  }
+  command[cmd1+i] = NULL;
 
-    /* Save the initial state, and change to the start directory. */
+  /* Save the initial state, and change to the start directory. */
 
 #if HAS_DRIVES
-    iInitDrive = _getdrive();
-    DEBUG_PRINTF(("Init drive = %c:\n", iInitDrive + '@'));
-    if (pszFrom && pszFrom[0] && (pszFrom[1]==':'))
-	{
-	_chdrive(toupper(pszFrom[0])-'@');  // Change to the requested drive
-	pszFrom += 2;			    // Skip the drive
-	}
-    DEBUG_PRINTF(("Work drive = %c:\n", _getdrive() + '@'));
+  iInitDrive = _getdrive();
+  DEBUG_PRINTF(("Init drive = %c:\n", iInitDrive + '@'));
+  if (pszFrom && pszFrom[0] && (pszFrom[1]==':')) {
+    _chdrive(toupper(pszFrom[0])-'@');  // Change to the requested drive
+    pszFrom += 2;			    // Skip the drive
+  }
+  DEBUG_PRINTF(("Work drive = %c:\n", _getdrive() + '@'));
 #endif
-    
-    getdir(szInitDir, PATHNAME_SIZE);
-    DEBUG_PRINTF(("Init directory = %s\n", szInitDir));
-    if (!pszFrom) 
-	pszFrom = szInitDir;
-    chdir(pszFrom);
-    getdir(szStartDir, PATHNAME_SIZE);	// Get the canonic name for the start directory.
-    DEBUG_PRINTF(("Work directory = %s\n", szStartDir));
-    iRelat = (int)strlen(szStartDir);
-    if (iRelat > 1) iRelat += 1;	// If not the root, account for the
-					//  trailing backslash.
-    /* Recurse */
-    descend(szStartDir, 0);
+  
+  pcd = getdir(szInitDir, PATHNAME_SIZE);
+  if (!pcd) {
+    finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  }
+  DEBUG_PRINTF(("Init directory = %s\n", szInitDir));
+  if (!pszFrom) 
+      pszFrom = szInitDir;
+  iErr = chdir(pszFrom);
+  if (iErr) {
+    finis(RETCODE_INACCESSIBLE, "Cannot access directory \"%s\"", pszFrom);
+  }
+  pcd = getdir(szStartDir, PATHNAME_SIZE);	// Get the canonic name for the start directory.
+  if (!pcd) {
+    finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  }
+  DEBUG_PRINTF(("Work directory = %s\n", szStartDir));
+  iRelat = (int)strlen(szStartDir);
+  if (iRelat > 1) iRelat += 1;	// If not the root, account for the
+				      //  trailing backslash.
+  /* Recurse */
+  descend(szStartDir, 0);
 
-    if (iVerbose) printf("%s\n", pszConclusion);
-    finis(0);
-    return 0;
-    }
+  if (iVerbose) printf("%s\n", pszConclusion);
+  finis(0);
+  return 0;
+}
 
-void finis(int retcode)
-    {
-    chdir(szInitDir);
-#if HAS_DRIVES
-    _chdrive(iInitDrive);
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    usage						      |
+|									      |
+|   Description:    Display a brief help screen 			      |
+|									      |
+|   Parameters:     None						      |
+|									      |
+|   Returns:	    Does not return					      |
+|									      |
+|   History:								      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
 #endif
-    exit(retcode);
-    }
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
+    ;
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
+}
 
-bool interne(char *com)    /* Is com an internal command? */
-    {
-    char nom[15];
-    int i;
-
-    strncpyz(nom, com, 15);
-    strlwr(nom);
-
-    for (i=0; i<(sizeof(internes)/sizeof(char *)); i++)
-        if (strcmp(nom, internes[i]) == 0) return(TRUE);
-
-    return(FALSE);
-    }
-
-void usage(int iErr)
-    {
-    printf("\
-Redo version " VERSION " - Execute a command recursively\n\
+void usage(int iErr) {
+  printf("\
+Redo version %s - Execute a command recursively\n\
 \n\
 Usage: redo [SWITCHES] {COMMAND LINE}\n\
 \n\
@@ -575,8 +593,22 @@ Switches:\n\
 \n\
 Command line:     Any valid command and arguments.\n\
                   The special sequence \"{}\" is replaced by the current\n\
-                   directory name, relative to the initial directory.\n\
+                  directory name, relative to the initial directory.\n\
 \n"
+#ifdef _WIN32
+"\
+Known issue with long pathnames > 260 bytes: Windows versions up to 8 cannot\n\
+change the current directory to such long pathnames. Windows 10 can, but only\n\
+if it's been enabled in the registry.\n\
+On all versions of Windows, and whether or not the Windows 10 registry fix has\n\
+been enabled, redo can enumerate paths of any length, and sets the {} sequence\n\
+correctly.\n\
+If there's a chance that you might have paths longer than 260 bytes in the tree\n\
+below your current directory, do not rely on the current directory set by redo,\n\
+but use the {} sequence to generate commands with absolute paths arguments.\n\
+And of course, use a command that is compatible with paths > 260 bytes.\n\
+\n"
+#endif
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
@@ -586,9 +618,64 @@ Command line:     Any valid command and arguments.\n\
 #ifdef __unix__
 "\n"
 #endif
-);
-    exit(iErr);
+, version(FALSE));
+  exit(iErr);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    finis						      |
+|									      |
+|   Description:    Display opt. msgs; Restore current path and drv, and exit.|
+|									      |
+|   Parameters:     retcode	The exit code				      |
+|		    pszFormat	Optional format string to pass to printf      |
+|		    ...		Optional printf arguments		      |
+|		    							      |
+|   Notes:	    If retcode is not 0, but no error message is needed, it   |
+|		    is necessary to pass a NULL for pszFormat.		      |
+|		    							      |
+|   Returns:	    Does not return					      |
+|									      |
+|   History:								      |
+|    2018-04-30 JFL Redesigned with optional error messages to display.       |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+void finis(int retcode, ...) {
+  if (retcode) { /* There might be an error message to report */
+    va_list vl;
+    char *pszFormat;
+
+    va_start(vl, retcode);
+    pszFormat = va_arg(vl, char *);
+    if (pszFormat) { /* There is an error message to report */
+      fprintf(stderr, "redo: Error: ");
+      vfprintf(stderr, pszFormat, vl);
+      fputs(".\n", stderr);
     }
+    va_end(vl);
+  }
+
+  chdir(szInitDir);	/* Don't test errors, as we're likely to be here due to another error */
+#if HAS_DRIVES
+  _chdrive(iInitDrive);
+#endif
+  exit(retcode);
+}
+
+bool interne(char *com) {  /* Is com an internal command? */
+  char nom[15];
+  int i;
+
+  strncpyz(nom, com, 15);
+  strlwr(nom);
+
+  for (i=0; i<(sizeof(internes)/sizeof(char *)); i++)
+    if (strcmp(nom, internes[i]) == 0) return(TRUE);
+
+  return(FALSE);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -612,34 +699,38 @@ Command line:     Any valid command and arguments.\n\
 *                                                                             *
 ******************************************************************************/
 
-int descend(char *from, int fif0)
-    {
-    int fif1;
-    int nfif;
-    int i;
-    fif **ppfif;
+int descend(char *from, int fif0) {
+  int fif1;
+  int nfif;
+  int i;
+  fif **ppfif;
 
-    /* Get all subdirectories */
-    DEBUG_PRINTF(("Descending into %s.\n", from));
-    fif1 = lis(from, PATTERN_ALL, fif0, 0x8016);
-    nfif = fif1 - fif0;
-    ppfif = AllocFifArray(nfif);
-    trie(ppfif, nfif);
+  /* Get all subdirectories */
+  DEBUG_ENTER(("descend(\"%s\", %d);\n", from, fif0));
+  fif1 = lis(from, PATTERN_ALL, fif0, 0x8016);
+  nfif = fif1 - fif0;
+  ppfif = AllocFifArray(nfif);
+  trie(ppfif, nfif);
 
-    for (i=0; i<nfif; i++)
-        {
-        char name1[PATHNAME_SIZE];
+  for (i=0; i<nfif; i++) {
+    NEW_PATHNAME_BUF(name1);
 
-	makepathname(name1, from, ppfif[i]->name);
-	DEBUG_PRINTF(("Directory %s\n", name1));
+#if PATHNAME_BUFS_IN_HEAP
+    if (!name1) break;
+#endif
 
-	descend(name1, fif1);
-	}
+    makepathname(name1, from, ppfif[i]->name);
+    TRIM_PATHNAME_BUF(name1);
 
-    FreeFifArray(ppfif);
+    descend(name1, fif1);
 
-    return 0;
-    }
+    FREE_PATHNAME_BUF(name1);
+  }
+
+  FreeFifArray(ppfif);
+
+  RETURN_INT(0);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -662,79 +753,76 @@ int descend(char *from, int fif0)
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-void DoPerPath(void)
-    {
-    int err;
-    int i;
-    char path[PATHNAME_SIZE];
-    char *pc;
-    char *command2[MAXARGS+1];	/* Command and argument list secondary copy */
-    int iDem;
-    char *ppath;
+void DoPerPath(void) {
+  int err;
+  int i;
+  NEW_PATHNAME_BUF(path);
+  char *pc;
+  char *command2[MAXARGS+1];	/* Command and argument list secondary copy */
+  int iDem;
+  char *ppath;
 
-    DEBUG_ENTER(("DoPerPath();\n"));
+  DEBUG_ENTER(("DoPerPath();\n"));
 
-    getcwd(path, PATHNAME_SIZE);
-    ppath = path;
-#if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
-    ppath += 2;	/* Skip the drive letter */
+#if PATHNAME_BUFS_IN_HEAP
+  if (!path) finis(RETCODE_NO_MEMORY, "Not enough memory for execution");
 #endif
-    iDem = streq(szStartDir, ppath);
-    ppath += iRelat - iDem;
 
-    for (i=0; i<MAXARGS; i++)
-	{
-	char *pc2;
-	char c;
+  pc = getcwd(path, PATHNAME_SIZE);
+  if (!pc) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  ppath = path;
+#if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
+  ppath += 2;	/* Skip the drive letter */
+#endif
+  iDem = streq(szStartDir, ppath);
+  ppath += iRelat - iDem;
 
-	pc = command[i];
-	if (!pc) break;
-	// ~~jfl 1995-09-25 Removed: if (streq(pc, "%.")) command2[i] = path;
-	//		    Instead expand string with RELATIVE path
-	pc2 = malloc(max(PATHNAME_SIZE, 128));
-	if (!pc2) {
-	    fprintf(stderr, "Redo: Not enough memory for command.\n");
-	    finis(1);
-	}
-	command2[i] = pc2;
-	do  {
-	    c = *(pc++);
-	    *(pc2++) = c;
-	    if (   ((c == '%') && (*pc == '.'))  /* Initial redo-specific tag */
-	        || ((c == '{') && (*pc == '}'))) /* New find-specific tag */
-		{
-		pc2 -= 1;   /* Back up over the % sign */
-		/* Copy the part of the path relative to the initial path */
-		if (!iDem)
-		    strcpy(pc2, ppath);
-		else	    /* ~~jfl 1996-07-19 */
-		    strcpy(pc2, ".");
-		pc2 += strlen(pc2);	// Move to the end of string
-		pc += 1;		// Skip the period
-		}
-	    } while (c);
-	// Free the end of string
-	command2[i] = realloc(command2[i], ++pc2 - command2[i]);
-	DEBUG_PRINTF(("arg[%d] = \"%s\";\n", i, command2[i]));
-	}
-    command2[i] = NULL;
+  for (i=0; i<MAXARGS; i++) {
+    char *pc2;
+    char c;
 
-    if (iVerbose) {
-	printf("[%s]", path);
-	for (i=0; (pc=command2[i]); i++) printf("%s ", pc);
-	printf("\n");
-    }
-    err = (int)spawnvp(P_WAIT, command2[0], command2);
-    if (err == -1) {
-	fprintf(stderr, "Redo: Can't execute the command.\n");
-        finis(1);
-    }
-    if (err) printf("\nRedo: %s returns error # %d.\n", command2[0], err);
+    pc = command[i];
+    if (!pc) break;
+    // ~~jfl 1995-09-25 Removed: if (streq(pc, "%.")) command2[i] = path;
+    //		    Instead expand string with RELATIVE path
+    pc2 = malloc(max(PATHNAME_SIZE, 128));
+    if (!pc2) finis(RETCODE_NO_MEMORY, "Not enough memory for command");
+    command2[i] = pc2;
+    do {
+      c = *(pc++);
+      *(pc2++) = c;
+      if (   ((c == '%') && (*pc == '.'))    /* Initial redo-specific tag */
+	  || ((c == '{') && (*pc == '}'))) { /* New find-specific tag */
+	pc2 -= 1;   /* Back up over the % sign */
+	/* Copy the part of the path relative to the initial path */
+	if (!iDem)
+	    strcpy(pc2, ppath);
+	else	    /* ~~jfl 1996-07-19 */
+	    strcpy(pc2, ".");
+	pc2 += strlen(pc2);	// Move to the end of string
+	pc += 1;		// Skip the period
+      }
+    } while (c);
+    // Free the end of string
+    command2[i] = realloc(command2[i], ++pc2 - command2[i]);
+    DEBUG_PRINTF(("arg[%d] = \"%s\";\n", i, command2[i]));
+  }
+  command2[i] = NULL;
 
-    for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
+  if (iVerbose) {
+    printf("[%s]", path);
+    for (i=0; (pc=command2[i]); i++) printf("%s ", pc);
+    printf("\n");
+  }
+  err = (int)spawnvp(P_WAIT, command2[0], command2);
+  if (err == -1) finis(RETCODE_EXEC_ERROR, "Cannot execute the command");
+  if (err) printf("\nredo: %s returns error # %d.\n", command2[0], err);
 
-    DEBUG_LEAVE(("return;\n"));
-    }
+  for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
+
+  FREE_PATHNAME_BUF(path);
+  RETURN();
+}
 
 #ifdef _MSC_VER
 #pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
@@ -767,179 +855,193 @@ void DoPerPath(void)
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-int lis(char *startdir, char *pattern, int nfif, ushort attrib)
-    {
+int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
 #if HAS_DRIVES
-    char initdrive;                 /* Initial drive. Restored when done. */
+  char initdrive;                 /* Initial drive. Restored when done. */
 #endif
-    char initdir[PATHNAME_SIZE];    /* Initial directory. Restored when done. */
-    char path[PATHNAME_SIZE];       /* Temporary pathname */
-    int err;
-    char pattern2[NODENAME_SIZE];
-    char *pname;
-    DIR *pDir;
-    struct dirent *pDirent;
+  NEW_PATHNAME_BUF(initdir);	    /* Initial directory. Restored when done. */
+  NEW_PATHNAME_BUF(path);	    /* Temporary pathname */
+  NEW_PATHNAME_BUF(pathname);
+  int err;
+  char pattern2[NODENAME_SIZE];
+  char *pname;
+  DIR *pDir;
+  struct dirent *pDirent;
+  char *pcd;
 
-    DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, 0x%X);\n", startdir, pattern, nfif, attrib));
+  DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, 0x%X);\n", startdir, pattern, nfif, attrib));
 
-    if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
-      RETURN_INT_COMMENT(nfif, ("NUL\n"));
+#if PATHNAME_BUFS_IN_HEAP
+  if ((!initdir) || (!path)) {
+      FREE_PATHNAME_BUF(initdir);
+      FREE_PATHNAME_BUF(path);
+      FREE_PATHNAME_BUF(pathname);
+      RETURN_INT_COMMENT(nfif, ("Out of memory\n"));
+  }
+#endif
+
+  if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
+      FREE_PATHNAME_BUF(initdir);
+      FREE_PATHNAME_BUF(path);
+      FREE_PATHNAME_BUF(pathname);
+    RETURN_INT_COMMENT(nfif, ("NUL\n"));
+  }
+
+  if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
+
+  if (!pattern) pattern = PATTERN_ALL;
+  strncpyz(pattern2, pattern, NODENAME_SIZE);
+
+#if HAS_DRIVES
+  initdrive = (char)_getdrive();
+
+  if (startdir[1] == ':') {
+    if (startdir[0] >= 'a') startdir[0] -= 'a' - 'A';
+    DEBUG_PRINTF(("chdrive(%c);\n", startdir[0]));
+    err = _chdrive(startdir[0] - '@');
+    if (err) finis(RETCODE_INACCESSIBLE, "Cannot access drive %c\n:", startdir[0]);
+    startdir += 2;
+  }
+#endif
+
+  pcd = getdir(initdir, PATHNAME_SIZE);
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+
+  if (startdir[0] == DIRSEPARATOR) {
+    strncpyz(path, startdir, PATHNAME_SIZE);
+  } else {
+    char szSeparator[2];
+    szSeparator[0] = DIRSEPARATOR;
+    szSeparator[1] = '\0';
+    /* Make the path absolute */
+    strncpyz(path, initdir, PATHNAME_SIZE);
+    if (path[1]) strcat(path, szSeparator);
+    strcat(path, startdir);
+  }
+
+  err = FALSE;                        /* Assume success */
+  if (startdir[0]) {
+#if !HAS_MSVCLIBX
+    DEBUG_PRINTF(("chdir(\"%s\");\n", path));
+#endif
+    err = chdir(path);
+  }
+
+  if (err) {
+    char *pc;
+
+    /* Directory not found. See if this is because of a file name pattern */
+    pc = strrchr(path, DIRSEPARATOR);   /* Search for the trailing backslash */
+    if (pc) {
+      /* If found, assume a pattern follows */
+      strncpyz(pattern2, pc+1, NODENAME_SIZE);
+
+      if (pc > path) {		/* Remove the pattern. General case */
+	  *pc = '\0';		/* Remove the backslash and wildcards */
+      } else {			/* Special case of the root directory */
+	  path[1] = '\0';	/* Same thing but leave the backslash */
+      }
+
+      DEBUG_PRINTF(("// Backtrack 1 level and split pattern\n"));
+#if !HAS_MSVCLIBX
+      DEBUG_PRINTF(("chdir(\"%s\");\n", path));
+#endif
+      err = chdir(path);
     }
 
-    if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
+    if (!pc || err) {
+      fprintf(stderr, "redo: Error: Cannot access directory %s.\n", path);
+      FREE_PATHNAME_BUF(initdir);
+      FREE_PATHNAME_BUF(path);
+      FREE_PATHNAME_BUF(pathname);
+      RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
+    }
+  }
 
-    if (!pattern) pattern = PATTERN_ALL;
-    strncpyz(pattern2, pattern, NODENAME_SIZE);
+  pcd = getcwd(path, PATHNAME_SIZE);
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
 
-#if HAS_DRIVES
-    initdrive = (char)_getdrive();
+  /* Execute the routine once for this path */
+  DoPerPath();
 
-    if (startdir[1] == ':')
-        {
-        if (startdir[0] >= 'a') startdir[0] -= 'a' - 'A';
-        DEBUG_PRINTF(("chdrive(%c);\n", startdir[0]));
-        err = _chdrive(startdir[0] - '@');
-        if (err)
-            {
-            fprintf(stderr, "Error: Cannot access drive %c\n:", startdir[0]);
-            finis(RETCODE_INACCESSIBLE);
-            }
-        startdir += 2;
-        }
-#endif
+  /* start looking for all files */
+  pDir = opendir(path);
+  if (pDir) {
+    while (pDir && (pDirent = readdir(pDir))) {
+      struct stat st;
+      DEBUG_CODE(
+	char *reason;
+      )
 
-    getdir(initdir, PATHNAME_SIZE);
-
-    if (startdir[0] == DIRSEPARATOR)
-        {
-        strncpyz(path, startdir, PATHNAME_SIZE);
-        }
-    else
-        {
-	char szSeparator[2];
-	szSeparator[0] = DIRSEPARATOR;
-	szSeparator[1] = '\0';
-        /* Make the path absolute */
-        strncpyz(path, initdir, PATHNAME_SIZE);
-        if (path[1]) strcat(path, szSeparator);
-        strcat(path, startdir);
-        }
-
-    err = FALSE;                        /* Assume success */
-    if (startdir[0])
-        {
-        DEBUG_PRINTF(("chdir(\"%s\");\n", path));
-        err = chdir(path);
-        }
-
-    if (err)
-        {
-        char *pc;
-
-        /* Directory not found. See if this is because of a file name pattern */
-        pc = strrchr(path, DIRSEPARATOR);   /* Search for the trailing backslash */
-        if (pc)
-            {
-            /* If found, assume a pattern follows */
-            strncpyz(pattern2, pc+1, NODENAME_SIZE);
-
-            if (pc > path)              /* Remove the pattern. General case */
-                *pc = '\0';             /* Remove the backslash and wildcards */
-            else                            /* Special case of the root directory */
-                path[1] = '\0';     /* Same thing but leave the backslash */
-
-	    DEBUG_PRINTF(("chdir(\"%s\"); // Backtrack 1 level and split pattern\n", path));
-            err = chdir(path);
-            }
-
-        if (!pc || err)
-            {
-	    fprintf(stderr, "Error: Cannot access directory %s.\n", path);
-	    RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
-	    }
-        }
-
-    getcwd(path, PATHNAME_SIZE);
-
-    /* Execute the routine once for this path */
-    DoPerPath();
-
-    /* start looking for all files */
-    pDir = opendir(path);
-    if (pDir) {
-	while (pDir && (pDirent = readdir(pDir)))
-	    {
-	    struct stat st;
-	    char pathname[PATHNAME_SIZE];
-	    DEBUG_CODE(
-	      char *reason;
-	    )
-
-	    makepathname(pathname, path, pDirent->d_name);
+      makepathname(pathname, path, pDirent->d_name);
 #if !_DIRENT2STAT_DEFINED
-	    lstat(pathname, &st);
+      lstat(pathname, &st);
 #else
-	    dirent2stat(pDirent, &st);
+      dirent2stat(pDirent, &st);
 #endif
-	    DEBUG_PRINTF(("// Found %10s %12s\n",
-		  (pDirent->d_type == DT_DIR) ? "Directory" :
-		  (pDirent->d_type == DT_LNK) ? "Link" :
-		  (pDirent->d_type == DT_REG) ? "File" :
-		  "Other",
-		  pDirent->d_name));
-	    DEBUG_CODE(reason = "it's .";)
-	    if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
-		    DEBUG_CODE(&& (reason = "it's .."))
-		 && !streq(pDirent->d_name, "..")
-		    DEBUG_CODE(&& (reason = "it's not a directory"))
-		 && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
-		      || (pDirent->d_type == DT_DIR))
-		    DEBUG_CODE(&& (reason = "it's a directory"))
-		 && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
-		      || (pDirent->d_type != DT_DIR))
-		    DEBUG_CODE(&& (reason = "the pattern does not match"))
-		 && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
-	       )
-		{
-		fif *pfif;
+      DEBUG_PRINTF(("// Found %10s %12s\n",
+	    (pDirent->d_type == DT_DIR) ? "Directory" :
+	    (pDirent->d_type == DT_LNK) ? "Link" :
+	    (pDirent->d_type == DT_REG) ? "File" :
+	    "Other",
+	    pDirent->d_name));
+      DEBUG_CODE(reason = "it's .";)
+      if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
+	      DEBUG_CODE(&& (reason = "it's .."))
+	   && !streq(pDirent->d_name, "..")
+	      DEBUG_CODE(&& (reason = "it's not a directory"))
+	   && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
+		|| (pDirent->d_type == DT_DIR))
+	      DEBUG_CODE(&& (reason = "it's a directory"))
+	   && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
+		|| (pDirent->d_type != DT_DIR))
+	      DEBUG_CODE(&& (reason = "the pattern does not match"))
+	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
+	 ) {
+	fif *pfif;
 
-		DEBUG_PRINTF(("// OK\n"));
-		pfif = (fif *)malloc(sizeof(fif));
-		pname = strdup(pDirent->d_name);
-		if (!pfif || !pname)
-		    {
-		    closedir(pDir);
-		    finis(RETCODE_NO_MEMORY);
-		    }
-		pfif->name = pname;
-		pfif->st = st;
+	DEBUG_PRINTF(("// OK\n"));
+	pfif = (fif *)malloc(sizeof(fif));
+	pname = strdup(pDirent->d_name);
+	if (!pfif || !pname) {
+	  closedir(pDir);
+	  finis(RETCODE_NO_MEMORY, "Out of memory for directory access");
+	}
+	pfif->name = pname;
+	pfif->st = st;
 #if _MSVCLIBX_STAT_DEFINED
-		DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
-		DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
+	DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
+	DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
 #endif /* _MSVCLIBX_STAT_DEFINED */
-		// Note: The pointer to the name is copied as well.
-		pfif->next = firstfif;
-		firstfif = pfif;
-		nfif += 1;
-		}
-	    else
-		{
-		DEBUG_PRINTF(("// Ignored because %s\n", reason));
-		}
-	    }
-    
-	closedir(pDir);
+	// Note: The pointer to the name is copied as well.
+	pfif->next = firstfif;
+	firstfif = pfif;
+	nfif += 1;
+      } else {
+	DEBUG_PRINTF(("// Ignored because %s\n", reason));
+      }
     }
-    DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
-    chdir(initdir);         /* Restore the initial directory */
+
+    closedir(pDir);
+  }
+#if !HAS_MSVCLIBX
+  DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
+#endif
+  err = chdir(initdir);         /* Restore the initial directory */
+  if (err) {
+    finis(RETCODE_INACCESSIBLE, "Cannot return to directory \"%s\"\n:", initdir);
+  }
 
 #if HAS_DRIVES
-    DEBUG_PRINTF(("chdrive(%c);\n", initdrive + '@'));
-    _chdrive(initdrive);
+  DEBUG_PRINTF(("chdrive(%c);\n", initdrive + '@'));
+  _chdrive(initdrive);
 #endif
 
-    RETURN_INT(nfif);
-    }
+  FREE_PATHNAME_BUF(initdir);
+  FREE_PATHNAME_BUF(path);
+  FREE_PATHNAME_BUF(pathname);
+  RETURN_INT(nfif);
+}
 
 #ifdef _MSC_VER
 #pragma warning(default:4706)
@@ -967,21 +1069,20 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib)
 *                                                                             *
 ******************************************************************************/
 
-int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2)
-    {
-    int ret;
+int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2) {
+  int ret;
 
-    /* List directories before files */
-    ret = S_ISDIR((*ppfif2)->st.st_mode) - S_ISDIR((*ppfif1)->st.st_mode);
-    if (ret) return ret;
+  /* List directories before files */
+  ret = S_ISDIR((*ppfif2)->st.st_mode) - S_ISDIR((*ppfif1)->st.st_mode);
+  if (ret) return ret;
 
-    /* If both files, or both directories, list names alphabetically */
-    ret = _strnicmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
-    if (ret) return ret;
+  /* If both files, or both directories, list names alphabetically */
+  ret = _strnicmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
+  if (ret) return ret;
 
-    /* Finally do a case dependant comparison */
-    return strncmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
-    }
+  /* Finally do a case dependant comparison */
+  return strncmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1007,10 +1108,9 @@ int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2)
 
 typedef int (CDECL *pCompareProc)(const void *item1, const void *item2);
 
-void trie(fif **ppfif, int nfif)
-    {
-    qsort(ppfif, nfif, sizeof(fif *), (pCompareProc)cmpfif);
-    }
+void trie(fif **ppfif, int nfif) {
+  qsort(ppfif, nfif, sizeof(fif *), (pCompareProc)cmpfif);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1030,33 +1130,27 @@ void trie(fif **ppfif, int nfif)
 *                                                                             *
 ******************************************************************************/
 
-fif **AllocFifArray(size_t nfif)
-    {
-    fif **ppfif;
-    fif *pfif;
-    size_t i;
+fif **AllocFifArray(size_t nfif) {
+  fif **ppfif;
+  fif *pfif;
+  size_t i;
 
-    /* Allocate an array for sorting */
-    ppfif = (fif **)malloc((nfif+1) * sizeof(fif *));
-    if (!ppfif)
-	{
-	fprintf(stderr, "Redo: Cannot allocate fif array.\n");
-	finis(1);
-	}
-    /* Fill the array with pointers to the list of structures */
-    pfif = firstfif;
-    for (i=0; i<nfif; i++)
-	{
-	ppfif[i] = pfif;
-	pfif = pfif->next;
-	}
-    /* Make sure following the linked list ends with the array */
-    if (nfif) ppfif[nfif-1]->next = NULL;
-    /* Make sure FreeFifArray works in all cases. */
-    ppfif[nfif] = NULL;
+  /* Allocate an array for sorting */
+  ppfif = (fif **)malloc((nfif+1) * sizeof(fif *));
+  if (!ppfif) finis(RETCODE_NO_MEMORY, "Out of memory for fif array");
+  /* Fill the array with pointers to the list of structures */
+  pfif = firstfif;
+  for (i=0; i<nfif; i++) {
+    ppfif[i] = pfif;
+    pfif = pfif->next;
+  }
+  /* Make sure following the linked list ends with the array */
+  if (nfif) ppfif[nfif-1]->next = NULL;
+  /* Make sure FreeFifArray works in all cases. */
+  ppfif[nfif] = NULL;
 
-    return ppfif;
-    }
+  return ppfif;
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1076,20 +1170,18 @@ fif **AllocFifArray(size_t nfif)
 *                                                                             *
 ******************************************************************************/
 
-void FreeFifArray(fif **ppfif)
-    {
-    fif **ppf;
+void FreeFifArray(fif **ppfif) {
+  fif **ppf;
 
-    for (ppf=ppfif; *ppf; ppf++)
-	{
-	free((*ppf)->name);
-	free(*ppf);
-	}
+  for (ppf=ppfif; *ppf; ppf++) {
+    free((*ppf)->name);
+    free(*ppf);
+  }
 
-    free(ppfif);
+  free(ppfif);
 
-    return;
-    }
+  return;
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1112,20 +1204,18 @@ void FreeFifArray(fif **ppfif)
 *                                                                             *
 ******************************************************************************/
 
-int makepathname(char *buf, char *path, char *node)
-    {
-    int l;
+int makepathname(char *buf, char *path, char *node) {
+  int l;
 
-    strncpyz(buf, path, PATHNAME_SIZE - 1);
-    l = (int)strlen(buf);
-    if (l && (buf[l-1] != DIRSEPARATOR) && (buf[l-1] != ':'))
-        {
-        buf[l++] = DIRSEPARATOR;
-        buf[l] = 0;
-        }
-    strncpyz(buf+l, node, PATHNAME_SIZE - l);
-    return 0;
-    }
+  strncpyz(buf, path, PATHNAME_SIZE - 1);
+  l = (int)strlen(buf);
+  if (l && (buf[l-1] != DIRSEPARATOR) && (buf[l-1] != ':')) {
+    buf[l++] = DIRSEPARATOR;
+    buf[l] = 0;
+  }
+  strncpyz(buf+l, node, PATHNAME_SIZE - l);
+  return 0;
+}
 
 /*****************************************************************************\
 *                                                                             *
@@ -1147,21 +1237,27 @@ int makepathname(char *buf, char *path, char *node)
 *                                                                             *
 \*****************************************************************************/
 
-char *getdir(char *buf, int len)  /* Get current directory without the drive */
-    {
-    char line[PATHNAME_SIZE];
-    char *pszRoot = line;
+char *getdir(char *buf, int len) { /* Get current directory without the drive */
+  NEW_PATHNAME_BUF(line);
+  char *pszRoot = line;
 
-    if (!getcwd(line, PATHNAME_SIZE))
-        return NULL;
+#if PATHNAME_BUFS_IN_HEAP
+  if (!line) return NULL;
+#endif
 
-    if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
+  if (!getcwd(line, PATHNAME_SIZE)) {
+    FREE_PATHNAME_BUF(line);
+    return NULL;
+  }
 
-    if (line[1] == ':') pszRoot = line+2;
-    strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
+  if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
 
-    return buf;
-    }
+  if (line[1] == ':') pszRoot = line+2;
+  strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
+
+  FREE_PATHNAME_BUF(line);
+  return buf;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -1219,5 +1315,4 @@ intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv) {
 }
 
 #endif /* defined(__unix__) */
-
 
