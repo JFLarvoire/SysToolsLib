@@ -208,9 +208,12 @@
 *    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h.                  *
 *    2018-04-25 JFL Dynamically allocate PATHNAME variables from the heap in  *
 *		    Windows and Unix, to avoid stack overflow issues.         *
-*    2018-04-26 JFL Do not display the | path separator when listing one dir. *
+*    2018-04-26 JFL Make sure WIN32 pathname buffers are larger than 260 B.   *
+*		    Do not display the | path separator when listing one dir. *
 *		    Changed the -debug option to -D.                          *
 *		    Option -V now displays the MsvcLibX library version.      *
+*    2018-04-30 JFL Check errors for all calls to chdir() and getcwd().	      *
+*		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.1.    					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -218,7 +221,7 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2018-04-26"
+#define PROGRAM_DATE    "2018-04-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -257,6 +260,7 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <iconv.h>
+#include <stdarg.h>
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
 typedef unsigned long uintmax_t;
@@ -415,8 +419,8 @@ int SetMasterEnv(char *pszName, char *pszValue);
 
 /* Local definitions */
 
-#define PATHNAME_SIZE PATH_MAX
-#define NODENAME_SIZE (NAME_MAX+1)
+#define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
+#define NODENAME_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
 
 #if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
   #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
@@ -426,8 +430,10 @@ int SetMasterEnv(char *pszName, char *pszValue);
   #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
 #endif
 #if !PATHNAME_BUFS_IN_HEAP
+  #define TRIM_PATHNAME_BUF(var) do {} while (0)
   #define FREE_PATHNAME_BUF(var) do {} while (0)
 #else
+  #define TRIM_PATHNAME_BUF(var) do {char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0)
   #define FREE_PATHNAME_BUF(var) free(var);
 #endif
 
@@ -436,11 +442,10 @@ int SetMasterEnv(char *pszName, char *pszValue);
 #undef TRUE
 */
 
-typedef enum
-    {
-    bFALSE = 0,
-    bTRUE = 1
-    } BOOL;
+typedef enum {
+  bFALSE = 0,
+  bTRUE = 1
+} BOOL;
 
 #define SIGN(x)  ( ((x) >= 0) ? 1 : -1 )
 #define SIGN3(x) ( ((x) == 0) ? 0 : SIGN(x) )
@@ -464,16 +469,15 @@ typedef int (*PSTATFUNC)(const char *path, struct stat *buf);
 
 /* Directory scan functions definitions */
 
-typedef struct fif	    /* OS-independant FInd File structure */
-    {
-    char *name; 		/* File node name, ending with a NUL */
-    struct stat st;		/* File size, time, etc */
+typedef struct fif {	    /* OS-independant FInd File structure */
+  char *name; 			/* File node name, ending with a NUL */
+  struct stat st;		/* File size, time, etc */
 #ifndef _MSDOS
-    char *target; 		/* Link target name, for links */
+  char *target; 		/* Link target name, for links */
 #endif
-    int column;
-    struct fif *next;
-    } fif;
+  int column;
+  struct fif *next;
+} fif;
 
 /* Global variables */
 
@@ -515,7 +519,7 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 
 char *version(int iLibsVer);	    /* Build a string with the program versions */
 void usage(void);                   /* Display a brief help and exit */
-void finis(int retcode);            /* Return to the initial drive & exit */
+void finis(int retcode, ...);       /* Return to the initial drive & exit */
 int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
 
 int lis(char *, char *, int, int, int, time_t, time_t); /* Scan a directory */
@@ -564,370 +568,360 @@ int FixNameCase(char *pszPathname); /* Correct the case of an existing pathname 
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int main(int argc, char *argv[])
-    {
-    char *from = NULL;          /* What directory to list */
-    char *to = NULL;            /* What directory to compare it to */
-    char *pattern = NULL;       /* Wildcards pattern */
-    NEW_PATHNAME_BUF(path);     /* Temporary pathname */
-    BOOL both = FALSE;		/* If true, list only files present in both paths */
-    BOOL diff = FALSE;		/* If true, list only files that don't match */
-    int i;
-    int nfif = 0;
-    BOOL recur = FALSE;         /* If true, list subdirectories recursively */
-    /* File attributes to search, ie. all but disk labels. */
+int main(int argc, char *argv[]) {
+  char *from = NULL;          /* What directory to list */
+  char *to = NULL;            /* What directory to compare it to */
+  char *pattern = NULL;       /* Wildcards pattern */
+  NEW_PATHNAME_BUF(path);     /* Temporary pathname */
+  BOOL both = FALSE;		/* If true, list only files present in both paths */
+  BOOL diff = FALSE;		/* If true, list only files that don't match */
+  int i;
+  int nfif = 0;
+  BOOL recur = FALSE;         /* If true, list subdirectories recursively */
+  /* File attributes to search, ie. all but disk labels. */
 #if defined(__unix__)
-    int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK | _A_DEVICE);
+  int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK | _A_DEVICE);
 #elif defined(_WIN32)
-    int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK);
+  int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK);
 #else // DOS or OS/2
-    int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN);
+  int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN);
 #endif
-    int ndir;                   /* Directory number */
-    BOOL zero = FALSE;          /* If TRUE, Don't display anything if no file */
-    time_t datemin = 0;		/* Minimum date stamp */
-    time_t datemax = TIME_T_MAX;/* Maximum date stamp */
-    char *dateminarg = NULL;    /* Minimum date argument */
-    char *datemaxarg = NULL;    /* Maximum date argument */
-    fif **fiflist;		/* Array of fif pointers for sorting */
-    int iStats = FALSE;
+  int ndir;                   /* Directory number */
+  BOOL zero = FALSE;          /* If TRUE, Don't display anything if no file */
+  time_t datemin = 0;		/* Minimum date stamp */
+  time_t datemax = TIME_T_MAX;/* Maximum date stamp */
+  char *dateminarg = NULL;    /* Minimum date argument */
+  char *datemaxarg = NULL;    /* Maximum date argument */
+  fif **fiflist;		/* Array of fif pointers for sorting */
+  int iStats = FALSE;
 #ifdef _MSDOS
-    char *pszOneToEnv = NULL;	/* Copy one file name to environment variable */
+  char *pszOneToEnv = NULL;	/* Copy one file name to environment variable */
 #endif
-    int iBudget;
+  int iBudget;
 
 #if HAS_DRIVES
-    init_drive = (char)_getdrive();
+  init_drive = (char)_getdrive();
 #endif
-    getdir(init_dir, PATHNAME_SIZE);
+  getdir(init_dir, PATHNAME_SIZE);
 
-    for (i=1; i<argc; i++) {
-        char *arg = argv[i];
-        if (IsSwitch(arg)) {	/* It's a switch */
-                                        /* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-                                        */
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if (IsSwitch(arg)) {	/* It's a switch */
+      char *opt = arg+1;
+				    /* Don't forget to add switches to...
+					... the Recurse list below,
+					... the Usage display further down.
+				    */
 #ifdef _WIN32
-	    if (streq(arg+1, "A")) {	/* Force encoding output with the ANSI code page */
-                cp = CP_ACP;
-                continue;
-	    }
+      if (streq(opt, "A")) {	/* Force encoding output with the ANSI code page */
+	cp = CP_ACP;
+	continue;
+      }
 #endif
-	    if (streq(arg+1, "b")) {
-                both = TRUE;
-                continue;
-	    }
-	    if (streq(arg+1, "bd")) {
-                both = TRUE;
-                diff = TRUE;
-                continue;
-	    }
-	    if (streq(arg+1, "c")) {
-                filecomp = TRUE;
-                continue;
-	    }
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-					*/
-	    if (streq(arg+1, "d")) {
-                diff = TRUE;
-                continue;
-	    }
-            DEBUG_CODE(
-	      if ((streq(arg+1, "D")) || (streq(arg+1, "debug"))) {
-		DEBUG_ON();
-		continue;
-	      }
-	    )
-	    if (streq(arg+1, "e")) {
-		iContinue = 0;
-                continue;
-	    }
-	    if (streq(arg+1, "E")) {
-		iContinue = 1;
-                continue;
-	    }
+      if (streq(opt, "b")) {
+	both = TRUE;
+	continue;
+      }
+      if (streq(opt, "bd")) {
+	both = TRUE;
+	diff = TRUE;
+	continue;
+      }
+      if (streq(opt, "c")) {
+	filecomp = TRUE;
+	continue;
+      }
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(opt, "d")) {
+	diff = TRUE;
+	continue;
+      }
+      DEBUG_CODE(
+	if ((streq(opt, "D")) || (streq(opt, "debug"))) {
+	  DEBUG_ON();
+	  continue;
+	}
+      )
+      if (streq(opt, "e")) {
+	iContinue = 0;
+	continue;
+      }
+      if (streq(opt, "E")) {
+	iContinue = 1;
+	continue;
+      }
 #ifdef _MSDOS
-	    if (streq(arg+1, "env")) {
-		if ((i+1) < argc)
-		    pszOneToEnv = argv[++i];
-		else
-		    usage();
-                continue;
-	    }
+      if (streq(opt, "env")) {
+	if ((i+1) < argc)
+	  pszOneToEnv = argv[++i];
+	else
+	  usage();
+	continue;
+      }
 #endif
-	    if (streq(arg+1, "f")) {
-                attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
-                continue;
-	    }
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-					*/
-	    if (streq(arg+1, "from")) {
-                dateminarg = argv[++i];
-                if (!parse_date(dateminarg, &datemin)) {
-                    printf("Invalid date format: -from %s", dateminarg);
-                    printflf();
-                    dateminarg = NULL;
-		}
-                continue;
-	    }
-	    if (streq(arg+1, "g")) {	/* Debug: Get screen dimensions */
-                printf("\nScreen size: %d lines", GetScreenRows());
-                printf(" * %d columns\n", GetScreenColumns());
-                finis(0);
-	    }
-	    if (   streq(arg+1, "help")
-                || streq(arg+1, "-help")
-                || streq(arg+1, "h")
-                || streq(arg+1, "?")) {
-                usage();
-	    }
-	    if (streq(arg+1, "i")) {
-                ignorezone = TRUE;          /* Ignore time zone differences */
-                continue;
-	    }
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-					*/
-	    if (streq(arg+1, "j")) {
-                ignoretime = TRUE;	/* Ignore file date and time completely */
-                continue;
-	    }
-            if (streq(arg+1, "K")) {
-                ignorecase = TRUE;	/* Ignore case completely in file names */
-                continue;
-	    }
-            if (streq(arg+1, "k")) {
-                ignorecase = FALSE;	/* Consider case meaninful in file names */
-                continue;
-	    }
-            if (streq(arg+1, "L")) {
-                pStat = stat;		/* Compare link targets */
-                continue;
-	    }
-	    if (streq(arg+1, "nologo")) { /* Kept for compatibility with old scripts using it. */
-                continue;               /* Do nothing */
-	    }
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-					*/
-#ifdef _WIN32
-	    if (streq(arg+1, "O")) {	/* Force encoding output with the OEM code page */
-                cp = CP_OEMCP;
-                continue;
-	    }
-#endif
-	    if (streq(arg+1, "p")) {
-                iPause = GetScreenRows() - 1; /* Pause once per screen */
-                continue;
-	    }
-	    if (streq(arg+1, "r")) {	/* Alias for -d -f -s -z */
-                diff = TRUE;
-                attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
-                recur = TRUE;
-                zero = TRUE;
-                continue;
-	    }
-	    if (streq(arg+1, "s")) {	/* Recursive search */
-                recur = TRUE;
-                continue;
-	    }
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-					*/
-	    if (streq(arg+1, "t")) {	/* Display statistics */
-		iStats = TRUE;
-                continue;
-	    }
-	    if (streq(arg+1, "to")) {
-                datemaxarg = argv[++i];
-                if (!parse_date(datemaxarg, &datemax)) {
-                    printf("Invalid date format: -to %s", datemaxarg);
-                    printflf();
-                    datemaxarg = NULL;
-		}
-                datemax += 86399;	/* Index of the last second of that day */
-                continue;
-	    }
-	    if (streq(arg+1, "u")) {	/* Display names in upper case */
-		iUpperCase = TRUE;
-                continue;
-	    }
-#ifdef _WIN32
-	    if (streq(arg+1, "U")) {	/* Force encoding output with the UTF-8 code page */
-                cp = CP_UTF8;
-                continue;
-	    }
-#endif
-					/* Don't forget to add switches to...
-                                            ... the Recurse list below,
-                                            ... the Usage display further down.
-                                        */
-	    if (streq(arg+1, "v")) {	/* Verbose mode */
-		iVerbose = TRUE;
-                continue;
-	    }
-	    if (streq(arg+1, "V")) {	/* Display version */
-		printf("%s\n", version(TRUE));
-                finis(0);
-	    }
-	    if (streq(arg+1, "w")) {	/* Set output width */
-		if (((i+1) < argc) && !IsSwitch(argv[i+1])) {
-		    iCols = atoi(argv[++i]);
-		}
-		continue;
-	    }
-#ifdef _WIN32
-	    if (streq(arg+1, "x")) {
-                attrib |= _A_SHORT;     /* Dummy attribute to force using short names */
-                continue;
-	    }
-#endif
-	    if (streq(arg+1, "z")) {
-                zero = TRUE;
-                continue;
-	    }
-	    printf("Unrecognized switch %s. Ignored.", arg);
-            printflf();
-            continue;
-	} /* End if it's a switch */
-        /* If it's an argument */
-        if (!from) {
-            from = arg;
-            continue;
+      if (streq(opt, "f")) {
+	attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
+	continue;
+      }
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(opt, "from")) {
+	dateminarg = argv[++i];
+	if (!parse_date(dateminarg, &datemin)) {
+	  printf("Invalid date format: -from %s", dateminarg);
+	  printflf();
+	  dateminarg = NULL;
 	}
-        if (!to) {
-            to = arg;
-            continue;
+	continue;
+      }
+      if (streq(opt, "g")) {	/* Debug: Get screen dimensions */
+	printf("\nScreen size: %d lines", GetScreenRows());
+	printf(" * %d columns\n", GetScreenColumns());
+	finis(0);
+      }
+      if (   streq(opt, "help")
+	  || streq(opt, "-help")
+	  || streq(opt, "h")
+	  || streq(opt, "?")) {
+	usage();
+      }
+      if (streq(opt, "i")) {
+	ignorezone = TRUE;          /* Ignore time zone differences */
+	continue;
+      }
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(opt, "j")) {
+	ignoretime = TRUE;	/* Ignore file date and time completely */
+	continue;
+      }
+      if (streq(opt, "K")) {
+	ignorecase = TRUE;	/* Ignore case completely in file names */
+	continue;
+      }
+      if (streq(opt, "k")) {
+	ignorecase = FALSE;	/* Consider case meaninful in file names */
+	continue;
+      }
+      if (streq(opt, "L")) {
+	pStat = stat;		/* Compare link targets */
+	continue;
+      }
+      if (streq(opt, "nologo")) { /* Kept for compatibility with old scripts using it. */
+	continue;		  /* Do nothing */
+      }
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+#ifdef _WIN32
+      if (streq(opt, "O")) {	/* Force encoding output with the OEM code page */
+	cp = CP_OEMCP;
+	continue;
+      }
+#endif
+      if (streq(opt, "p")) {
+	iPause = GetScreenRows() - 1; /* Pause once per screen */
+	continue;
+      }
+      if (streq(opt, "r")) {	/* Alias for -d -f -s -z */
+	diff = TRUE;
+	attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
+	recur = TRUE;
+	zero = TRUE;
+	continue;
+      }
+      if (streq(opt, "s")) {	/* Recursive search */
+	recur = TRUE;
+	continue;
+      }
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(opt, "t")) {	/* Display statistics */
+	iStats = TRUE;
+	continue;
+      }
+      if (streq(opt, "to")) {
+	datemaxarg = argv[++i];
+	if (!parse_date(datemaxarg, &datemax)) {
+	  printf("Invalid date format: -to %s", datemaxarg);
+	  printflf();
+	  datemaxarg = NULL;
 	}
-        if (!pattern) {
-            pattern = arg;
-            continue;
+	datemax += 86399;	/* Index of the last second of that day */
+	continue;
+      }
+      if (streq(opt, "u")) {	/* Display names in upper case */
+	iUpperCase = TRUE;
+	continue;
+      }
+#ifdef _WIN32
+      if (streq(opt, "U")) {	/* Force encoding output with the UTF-8 code page */
+	cp = CP_UTF8;
+	continue;
+      }
+#endif
+				  /* Don't forget to add switches to...
+				      ... the Recurse list below,
+				      ... the Usage display further down.
+				  */
+      if (streq(opt, "v")) {	/* Verbose mode */
+	iVerbose = TRUE;
+	continue;
+      }
+      if (streq(opt, "V")) {	/* Display version */
+	printf("%s\n", version(TRUE));
+	finis(0);
+      }
+      if (streq(opt, "w")) {	/* Set output width */
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) {
+	  iCols = atoi(argv[++i]);
 	}
-        printf("Unexpected argument \"%s\" ignored.", arg);
-        printflf();
-        break;  /* Ignore other arguments */
+	continue;
+      }
+#ifdef _WIN32
+      if (streq(opt, "x")) {
+	attrib |= _A_SHORT;     /* Dummy attribute to force using short names */
+	continue;
+      }
+#endif
+      if (streq(opt, "z")) {
+	zero = TRUE;
+	continue;
+      }
+      printf("Unrecognized switch %s. Ignored.", arg);
+      printflf();
+      continue;
+    } /* End if it's a switch */
+    /* If it's an argument */
+    if (!from) {
+      from = arg;
+      continue;
     }
+    if (!to) {
+      to = arg;
+      continue;
+    }
+    if (!pattern) {
+      pattern = arg;
+      continue;
+    }
+    printf("Unexpected argument \"%s\" ignored.", arg);
+    printflf();
+    break;  /* Ignore other arguments */
+  }
 
 #if defined(_WIN32)
-    DEBUG_PRINTF(("// Outputing using code page %d\n", cp));
+  DEBUG_PRINTF(("// Outputing using code page %d\n", cp));
 #endif
 
-    /* Dynamically size columns based on screen width */
-    iRows = GetScreenRows();
-    if (!iCols) iCols = GetScreenColumns(); // If not forced by the -w option
-    if (iCols < 80) iCols = 100; // Don't allow anything below 80. Dflt=100.
-    iBudget = (iCols - 4) / 2;  // Space available for each directory output.
-    iBudget -= 18; // Remove minimal date/time fieds: " YY/MM/DD HH:MM:SS"
-    if (iBudget >= 22)
-	{
-	iYearWidth = 4; // Display the century too.
-	iBudget -= 2;
-	}
-    if (iBudget > (iNameWidth + iSizeWidth))
-	{
-	int iExtra = iBudget - (iNameWidth + iSizeWidth);
-	iSizeWidth += iExtra/4;
-	iNameWidth += (iExtra - iExtra/4);
-	}
+  /* Dynamically size columns based on screen width */
+  iRows = GetScreenRows();
+  if (!iCols) iCols = GetScreenColumns(); // If not forced by the -w option
+  if (iCols < 80) iCols = 100; // Don't allow anything below 80. Dflt=100.
+  iBudget = (iCols - 4) / 2;  // Space available for each directory output.
+  iBudget -= 18; // Remove minimal date/time fieds: " YY/MM/DD HH:MM:SS"
+  if (iBudget >= 22) {
+    iYearWidth = 4; // Display the century too.
+    iBudget -= 2;
+  }
+  if (iBudget > (iNameWidth + iSizeWidth)) {
+    int iExtra = iBudget - (iNameWidth + iSizeWidth);
+    iSizeWidth += iExtra/4;
+    iNameWidth += (iExtra - iExtra/4);
+  }
 
 #ifdef _OS2
 /* Make sure to include os2.h at the beginning of this file, and before that
-    to define the INCL_DOSMISC constant to enable the necessary section */
+  to define the INCL_DOSMISC constant to enable the necessary section */
 
-    DEBUG_CODE_IF_ON(
-	uint8_t mode;
+  DEBUG_CODE_IF_ON(
+    uint8_t mode;
 
-        DosGetMachineMode(&mode);
-        switch (mode)
-            {
-            case MODE_REAL:
-                printf("Running in DOS mode.\n");
-                break;
-            case MODE_PROTECTED:
-                printf("Running in OS/2 mode.\n");
-                break;
-            default:
-                printf("Running neither in DOS nor in OS/2 mode!?!\n");
-                break;
-            }
-    )
+    DosGetMachineMode(&mode);
+    switch (mode) {
+      case MODE_REAL:
+	printf("Running in DOS mode.\n");
+	break;
+      case MODE_PROTECTED:
+	printf("Running in OS/2 mode.\n");
+	break;
+      default:
+	printf("Running neither in DOS nor in OS/2 mode!?!\n");
+	break;
+    }
+  )
 #endif
 
-    getdir(path, PATHNAME_SIZE);    /* Get current directory full pathname */
-    if (!from) from = path;
+  getdir(path, PATHNAME_SIZE);    /* Get current directory full pathname */
+  if (!from) from = path;
 
 #ifndef __unix__
-    FixNameCase(from);
-    if (to) FixNameCase(to);
+  FixNameCase(from);
+  if (to) FixNameCase(to);
 #endif // !defined(__unix__)
 
-    nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax);
-    if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax);
-    DEBUG_PRINTF(("nfif = %d;\n", nfif));
+  nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax);
+  if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax);
+  DEBUG_PRINTF(("nfif = %d;\n", nfif));
 
-    fiflist = AllocFifArray(nfif);
-    trie(fiflist, nfif);
-    affiche(fiflist, nfif, ndir, both, diff, zero);
-    FreeFifArray(fiflist);
+  fiflist = AllocFifArray(nfif);
+  trie(fiflist, nfif);
+  affiche(fiflist, nfif, ndir, both, diff, zero);
+  FreeFifArray(fiflist);
 
-    if (recur)
-        {
-        descend(from, to, pattern, attrib, both, diff, zero,
-                    datemin, datemax);
-        if (lNFileFound) /* Only list the total if it's not null */
-            {
-	    printflf();
-	    printf("Total: %ld files or directories listed.", lNFileFound);
-	    printflf();
-	    }
-	}
+  if (recur) {
+    descend(from, to, pattern, attrib, both, diff, zero, datemin, datemax);
+    if (lNFileFound) { /* Only list the total if it's not null */
+      printflf();
+      printf("Total: %ld files or directories listed.", lNFileFound);
+      printflf();
+    }
+  }
 
 #ifdef _MSDOS
-    /* Move the single line found to the given environment variable */
-    if (pszOneToEnv)	// If the -env option was specified
-	{
-	switch (lLFileFound)	// How many lines were found?
-	    {
-	    case 0:
-		finis(RETCODE_NO_FILE);
-	    case 1:
-		i = SetMasterEnv(pszOneToEnv, fiflist[0]->name);
-		if (i) printf("Out of environment space.\n");
-		finis(RETCODE_SUCCESS);
-	    default:
-		finis(RETCODE_TOO_MANY_FILES);
-	    }
-	}
+  /* Move the single line found to the given environment variable */
+  if (pszOneToEnv) {	// If the -env option was specified
+    switch (lLFileFound) {	// How many lines were found?
+      case 0:
+	finis(RETCODE_NO_FILE, NULL);
+      case 1:
+	i = SetMasterEnv(pszOneToEnv, fiflist[0]->name);
+	if (i) printf("Out of environment space.\n");
+	finis(RETCODE_SUCCESS);
+      default:
+	finis(RETCODE_TOO_MANY_FILES, NULL);
+    }
+  }
 #endif
 
-    if (iStats)
-	{
-	printflf();
-	printf("Listed %ld files in %s. Total size %"PRIuMAX" bytes.",
-		    lLFileFound, from, llLTotalSize);
-	printflf();
-	}
-    if (iStats && to)
-	{
-	printf("Listed %ld files in %s. Total size %"PRIuMAX" bytes.",
-		    lRFileFound, to, llRTotalSize);
-	printflf();
-	printf("%ld files were equal. Total size %"PRIuMAX" bytes.",
-		    lEFileFound, llETotalSize);
-	printflf();
-	}
+  if (iStats) {
+    printflf();
+    printf("Listed %ld files in %s. Total size %"PRIuMAX" bytes.",
+		lLFileFound, from, llLTotalSize);
+    printflf();
+  }
+  if (iStats && to) {
+    printf("Listed %ld files in %s. Total size %"PRIuMAX" bytes.",
+		lRFileFound, to, llRTotalSize);
+    printflf();
+    printf("%ld files were equal. Total size %"PRIuMAX" bytes.",
+		lEFileFound, llETotalSize);
+    printflf();
+  }
 
-    finis(RETCODE_SUCCESS);
-    return 0; // Satisfy the compiler.
-    }
+  finis(RETCODE_SUCCESS);
+  return 0; // Satisfy the compiler.
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -973,9 +967,8 @@ char *version(int iLibsVer) {
 #define IGNORECASEDEFAULT ""
 #endif
 
-void usage(void)
-    {
-    printf("\n\
+void usage(void) {
+  printf("\n\
 Dirc version %s\n\
 \n\
 Compare directories side by side, sorted by file names.\n\
@@ -1057,45 +1050,51 @@ Switches:\n\
 #endif
 , version(FALSE));
 
-    finis(0);
-    }
+  finis(0);
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function:	    finis						      |
 |									      |
-|   Description:    Cleanup current path and drive, and exit.		      |
+|   Description:    Display opt. msgs; Restore current path and drv, and exit.|
 |									      |
-|   Parameters:     The exit code					      |
-|									      |
+|   Parameters:     retcode	The exit code				      |
+|		    pszFormat	Optional format string to pass to printf      |
+|		    ...		Optional printf arguments		      |
+|		    							      |
+|   Notes:	    If retcode is not 0, but no error message is needed, it   |
+|		    is necessary to pass a NULL for pszFormat.		      |
+|		    							      |
 |   Returns:	    Does not return					      |
 |									      |
 |   History:								      |
+|    2018-04-30 JFL Redesigned with optional error messages to display.       |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-void finis(int retcode)
-    {
-    switch (retcode)
-        {
-	case RETCODE_SUCCESS:
-	case RETCODE_NO_FILE:
-	case RETCODE_TOO_MANY_FILES:
-            break;
-        case RETCODE_NO_MEMORY:
-            printf("Not enough memory.\n");
-            break;
-        default:
-            break;
-        }
+void finis(int retcode, ...) {
+  if (retcode) { /* There might be an error message to report */
+    va_list vl;
+    char *pszFormat;
+
+    va_start(vl, retcode);
+    pszFormat = va_arg(vl, char *);
+    if (pszFormat) { /* There is an error message to report */
+      fprintf(stderr, "dirc: Error: ");
+      vfprintf(stderr, pszFormat, vl);
+      fputs(".\n", stderr);
+    }
+    va_end(vl);
+  }
 
 #if HAS_DRIVES
-    _chdrive(init_drive);
+  _chdrive(init_drive);
 #endif
-    chdir(init_dir);
+  chdir(init_dir); /* Don't test errors, as we're likely to be here due to another error */
 
-    exit(retcode);
-    }
+  exit(retcode);
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -1113,14 +1112,13 @@ void finis(int retcode)
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    return (   (*pszArg == '-')
+int IsSwitch(char *pszArg) {
+  return (   (*pszArg == '-')
 #ifndef __unix__
-            || (*pszArg == '/')
+	  || (*pszArg == '/')
 #endif
-           ); /* It's a switch */
-    }
+	 ); /* It's a switch */
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1151,259 +1149,253 @@ int IsSwitch(char *pszArg)
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
-	    time_t datemin, time_t datemax)
-    {
+	    time_t datemin, time_t datemax) {
 #if HAS_DRIVES
-    char initdrive;                 /* Initial drive. Restored when done. */
+  char initdrive;                 /* Initial drive. Restored when done. */
 #endif
-    NEW_PATHNAME_BUF(initdir);	    /* Initial directory. Restored when done. */
-    NEW_PATHNAME_BUF(path);	    /* Temporary pathname */
-    NEW_PATHNAME_BUF(pathname);
-    int err;
-    char pattern2[NODENAME_SIZE];
-    char *pname;
-    DIR *pDir;
-    struct dirent *pDirent;
+  NEW_PATHNAME_BUF(initdir);	    /* Initial directory. Restored when done. */
+  NEW_PATHNAME_BUF(path);	    /* Temporary pathname */
+  NEW_PATHNAME_BUF(pathname);
+  int err;
+  char pattern2[NODENAME_SIZE];
+  char *pname;
+  DIR *pDir;
+  struct dirent *pDirent;
+  char *pcd;
 
-    DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, %d, 0x%X, 0x%lX, 0x%lX);\n", startdir, pattern,
-                 nfif, col, attrib, (unsigned long)datemin, (unsigned long)datemax));
+  DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, %d, 0x%X, 0x%lX, 0x%lX);\n", startdir, pattern,
+	       nfif, col, attrib, (unsigned long)datemin, (unsigned long)datemax));
 
 #if PATHNAME_BUFS_IN_HEAP
-    if ((!initdir) || (!path)) {
-        FREE_PATHNAME_BUF(initdir);
-        FREE_PATHNAME_BUF(path);
-        FREE_PATHNAME_BUF(pathname);
-	RETURN_INT_COMMENT(nfif, ("Out of memory\n"));
-    }
-#endif
-
-    if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
-	FREE_PATHNAME_BUF(initdir);
-	FREE_PATHNAME_BUF(path);
-        FREE_PATHNAME_BUF(pathname);
-	RETURN_INT_COMMENT(nfif, ("NUL\n"));
-    }
-
-    if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
-
-    if (!pattern) pattern = PATTERN_ALL;
-    strncpyz(pattern2, pattern, NODENAME_SIZE);
-
-#if HAS_DRIVES
-    initdrive = (char)_getdrive();
-
-    if (startdir[1] == ':')
-        {
-        if (startdir[0] >= 'a') startdir[0] -= 'a' - 'A';
-        DEBUG_PRINTF(("chdrive(%c);\n", startdir[0]));
-        err = _chdrive(startdir[0] - '@');
-        if (err)
-            {
-            fprintf(stderr, "Error: Cannot access drive %c\n:", startdir[0]);
-            finis(RETCODE_INACCESSIBLE);
-            }
-        startdir += 2;
-        }
-#endif
-
-    getdir(initdir, PATHNAME_SIZE);
-
-    if (startdir[0] == DIRSEPARATOR)
-        {
-        strncpyz(path, startdir, PATHNAME_SIZE);
-        }
-    else
-        {
-	char szSeparator[2];
-	szSeparator[0] = DIRSEPARATOR;
-	szSeparator[1] = '\0';
-        /* Make the path absolute */
-        strncpyz(path, initdir, PATHNAME_SIZE);
-        if (path[1]) strcat(path, szSeparator);
-        strcat(path, startdir);
-        }
-
-    err = FALSE;                        /* Assume success */
-    if (startdir[0])
-        {
-#if !HAS_MSVCLIBX
-        DEBUG_PRINTF(("chdir(\"%s\");\n", path));
-#endif
-        err = chdir(path);
-        }
-
-    if (err)
-        {
-        char *pc;
-
-        /* Directory not found. See if this is because of a file name pattern */
-        pc = strrchr(path, DIRSEPARATOR);   /* Search for the trailing backslash */
-        if (pc)
-            {
-            /* If found, assume a pattern follows */
-            strncpyz(pattern2, pc+1, NODENAME_SIZE);
-
-            if (pc > path)              /* Remove the pattern. General case */
-                *pc = '\0';             /* Remove the backslash and wildcards */
-            else                            /* Special case of the root directory */
-                path[1] = '\0';     /* Same thing but leave the backslash */
-
-	    DEBUG_PRINTF(("chdir(\"%s\"); // Backtrack 1 level and split pattern\n", path));
-            err = chdir(path);
-            }
-
-        if (!pc || err)
-            {
-            if (iVerbose || !iContinue)
-              fprintf(stderr, "Error: Cannot access directory %s.\n", path);
-	    if (iContinue) {
-	      FREE_PATHNAME_BUF(initdir);
-	      FREE_PATHNAME_BUF(path);
-	      FREE_PATHNAME_BUF(pathname);
-	      RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
-	    }
-            finis(RETCODE_INACCESSIBLE);
-            }
-        }
-
-    getcwd(path, PATHNAME_SIZE);
-    if (col == 1)
-        {
-        strncpyz(path1, path, PATHNAME_SIZE);
-        }
-    else
-        {
-        strncpyz(path2, path, PATHNAME_SIZE);
-        }
-
-    /* start looking for all files */
-    pDir = opendir(path);
-    if (pDir) {
-	while ((pDirent = readdir(pDir)))
-	    {
-	    struct stat st;
-	    DEBUG_CODE(
-	      char *reason;
-	      char szType[16];
-	      sprintf(szType, "d_type=%u", (unsigned)(pDirent->d_type));
-	    )
-
-	    makepathname(pathname, path, pDirent->d_name);
-#if !_DIRENT2STAT_DEFINED
-	    pStat(pathname, &st);
-	    if (!pDirent->d_type) { /* Some filesystems don't set this field */
-	      /* Since we've called stat anyway, copy the type from there */
-	      if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
-	      if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-	      if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
-#endif
-#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
-	      if (S_ISBLK(st.st_mode)) pDirent->d_type = DT_BLK;
-#endif
-#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* In DOS it's defined, but always returns 0 */
-	      if (S_ISCHR(st.st_mode)) pDirent->d_type = DT_CHR;
-#endif
-#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* In DOS it's defined, but always returns 0 */
-	      if (S_ISFIFO(st.st_mode)) pDirent->d_type = DT_FIFO;
-#endif
-#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
-	      if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
-#endif
-	    }
-#else
-	    if (pStat == lstat) {
-	      dirent2stat(pDirent, &st);
-	    } else {
-	      stat(pathname, &st);
-	    }
-#endif
-	    DEBUG_PRINTF(("// Found %10s %12s %lx\n",
-		  (pDirent->d_type == DT_DIR) ? "Directory" :
-		  (pDirent->d_type == DT_LNK) ? "Link" :
-		  (pDirent->d_type == DT_REG) ? "File" :
-		  szType,
-		  pDirent->d_name,
-		  (unsigned long)(st.st_mtime)));
-	    DEBUG_CODE(reason = "it's .";)
-	    if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
-		    DEBUG_CODE(&& (reason = "it's .."))
-		 && !streq(pDirent->d_name, "..")
-		    DEBUG_CODE(&& (reason = "it's not a directory"))
-		 && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
-		      || (pDirent->d_type == DT_DIR))
-		    DEBUG_CODE(&& (reason = "it's a directory"))
-		 && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
-		      || (pDirent->d_type != DT_DIR))
-		    DEBUG_CODE(&& (reason = "the date is out of range"))
-	         && (st.st_mtime >= datemin) /* Skip files outside date range */
-	         && (st.st_mtime <= datemax)
-		    DEBUG_CODE(&& (reason = "the pattern does not match"))
-		 && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
-	       )
-		{
-		fif *pfif;
-
-		DEBUG_PRINTF(("// OK\n"));
-		pfif = (fif *)malloc(sizeof(fif));
-		pname = strdup(pDirent->d_name);
-		if (!pfif || !pname)
-		    {
-		    closedir(pDir);
-		    finis(RETCODE_NO_MEMORY);
-		    }
-		pfif->name = pname;
-		pfif->st = st;
-#if _MSVCLIBX_STAT_DEFINED
-		DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
-		DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
-#endif /* _MSVCLIBX_STAT_DEFINED */
-#ifndef _MSDOS
-		pfif->target = NULL;
-		if (pDirent->d_type == DT_LNK) {
-		  char *pTarget = malloc(PATHNAME_SIZE);
-		  int lTarget;
-		  if (!pTarget) {
-		    closedir(pDir);
-		    finis(RETCODE_NO_MEMORY);
-		  }
-		  lTarget = (int)readlink(pathname, pTarget, PATHNAME_SIZE);
-		  if (lTarget != -1) {
-		    pTarget[lTarget] = '\0';
-		    pTarget = realloc(pTarget, lTarget+1);
-		    pfif->target = pTarget;
-		  } else {
-		    free(pTarget);
-		  }
-		}
-#endif
-		// Note: The pointer to the name is copied as well.
-		pfif->column = col;
-		pfif->next = firstfif;
-		firstfif = pfif;
-		nfif += 1;
-		}
-	    else
-		{
-		DEBUG_PRINTF(("// Ignored because %s\n", reason));
-		}
-	    }
-    
-	closedir(pDir);
-    }
-    DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
-    chdir(initdir);         /* Restore the initial directory */
-
-#if HAS_DRIVES
-    DEBUG_PRINTF(("chdrive(%c);\n", initdrive + '@'));
-    _chdrive(initdrive);
-#endif
-
+  if ((!initdir) || (!path)) {
     FREE_PATHNAME_BUF(initdir);
     FREE_PATHNAME_BUF(path);
     FREE_PATHNAME_BUF(pathname);
-    RETURN_INT(nfif);
+    RETURN_INT_COMMENT(nfif, ("Out of memory\n"));
+  }
+#endif
+
+  if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
+    FREE_PATHNAME_BUF(initdir);
+    FREE_PATHNAME_BUF(path);
+    FREE_PATHNAME_BUF(pathname);
+    RETURN_INT_COMMENT(nfif, ("NUL\n"));
+  }
+
+  if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
+
+  if (!pattern) pattern = PATTERN_ALL;
+  strncpyz(pattern2, pattern, NODENAME_SIZE);
+
+#if HAS_DRIVES
+  initdrive = (char)_getdrive();
+
+  if (startdir[1] == ':') {
+    if (startdir[0] >= 'a') startdir[0] -= 'a' - 'A';
+    DEBUG_PRINTF(("chdrive(%c);\n", startdir[0]));
+    err = _chdrive(startdir[0] - '@');
+    if (err) finis(RETCODE_INACCESSIBLE, "Cannot access drive %c", startdir[0]);
+    startdir += 2;
+  }
+#endif
+
+  pcd = getdir(initdir, PATHNAME_SIZE);
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+
+  if (startdir[0] == DIRSEPARATOR) {
+    strncpyz(path, startdir, PATHNAME_SIZE);
+  } else {
+    char szSeparator[2];
+    szSeparator[0] = DIRSEPARATOR;
+    szSeparator[1] = '\0';
+    /* Make the path absolute */
+    strncpyz(path, initdir, PATHNAME_SIZE);
+    if (path[1]) strcat(path, szSeparator);
+    strcat(path, startdir);
+  }
+
+  err = FALSE;                        /* Assume success */
+  if (startdir[0]) {
+#if !HAS_MSVCLIBX
+    DEBUG_PRINTF(("chdir(\"%s\");\n", path));
+#endif
+    err = chdir(path);
+  }
+
+  if (err) {
+    char *pc;
+
+    /* Directory not found. See if this is because of a file name pattern */
+    pc = strrchr(path, DIRSEPARATOR);   /* Search for the trailing backslash */
+    if (pc) {
+      /* If found, assume a pattern follows */
+      strncpyz(pattern2, pc+1, NODENAME_SIZE);
+
+      if (pc > path) {		/* Remove the pattern. General case */
+	  *pc = '\0';		/* Remove the backslash and wildcards */
+      } else {			/* Special case of the root directory */
+	  path[1] = '\0';	/* Same thing but leave the backslash */
+      }
+
+      DEBUG_PRINTF(("// Backtrack 1 level and split pattern\n"));
+#if !HAS_MSVCLIBX
+      DEBUG_PRINTF(("chdir(\"%s\");\n", path));
+#endif
+      err = chdir(path);
     }
+
+    if (!pc || err) {
+      if (iVerbose || !iContinue) {
+	fprintf(stderr, "dirc: Error: Cannot access directory %s.\n", path);
+      }
+      if (iContinue) {
+	FREE_PATHNAME_BUF(initdir);
+	FREE_PATHNAME_BUF(path);
+	FREE_PATHNAME_BUF(pathname);
+	RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
+      }
+      finis(RETCODE_INACCESSIBLE, NULL);
+    }
+  }
+
+  pcd = getcwd(path, PATHNAME_SIZE);
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+
+  if (col == 1) {
+    strncpyz(path1, path, PATHNAME_SIZE);
+  } else {
+    strncpyz(path2, path, PATHNAME_SIZE);
+  }
+
+  /* start looking for all files */
+  pDir = opendir(path);
+  if (pDir) {
+    while ((pDirent = readdir(pDir))) {
+      struct stat st;
+      DEBUG_CODE(
+	char *reason;
+	char szType[16];
+	sprintf(szType, "d_type=%u", (unsigned)(pDirent->d_type));
+      )
+
+      makepathname(pathname, path, pDirent->d_name);
+#if !_DIRENT2STAT_DEFINED
+      pStat(pathname, &st);
+      if (!pDirent->d_type) { /* Some filesystems don't set this field */
+	/* Since we've called stat anyway, copy the type from there */
+	if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
+	if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+	if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
+#endif
+#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
+	if (S_ISBLK(st.st_mode)) pDirent->d_type = DT_BLK;
+#endif
+#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* In DOS it's defined, but always returns 0 */
+	if (S_ISCHR(st.st_mode)) pDirent->d_type = DT_CHR;
+#endif
+#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* In DOS it's defined, but always returns 0 */
+	if (S_ISFIFO(st.st_mode)) pDirent->d_type = DT_FIFO;
+#endif
+#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
+	if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
+#endif
+      }
+#else
+      if (pStat == lstat) {
+	dirent2stat(pDirent, &st);
+      } else {
+	stat(pathname, &st);
+      }
+#endif
+      DEBUG_PRINTF(("// Found %10s %12s %lx\n",
+	    (pDirent->d_type == DT_DIR) ? "Directory" :
+	    (pDirent->d_type == DT_LNK) ? "Link" :
+	    (pDirent->d_type == DT_REG) ? "File" :
+	    szType,
+	    pDirent->d_name,
+	    (unsigned long)(st.st_mtime)));
+      DEBUG_CODE(reason = "it's .";)
+      if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
+	      DEBUG_CODE(&& (reason = "it's .."))
+	   && !streq(pDirent->d_name, "..")
+	      DEBUG_CODE(&& (reason = "it's not a directory"))
+	   && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
+		|| (pDirent->d_type == DT_DIR))
+	      DEBUG_CODE(&& (reason = "it's a directory"))
+	   && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
+		|| (pDirent->d_type != DT_DIR))
+	      DEBUG_CODE(&& (reason = "the date is out of range"))
+	   && (st.st_mtime >= datemin) /* Skip files outside date range */
+	   && (st.st_mtime <= datemax)
+	      DEBUG_CODE(&& (reason = "the pattern does not match"))
+	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
+	 ) {
+	fif *pfif;
+
+	DEBUG_PRINTF(("// OK\n"));
+	pfif = (fif *)malloc(sizeof(fif));
+	pname = strdup(pDirent->d_name);
+	if (!pfif || !pname) {
+	  closedir(pDir);
+	  finis(RETCODE_NO_MEMORY, "Out of memory for directory access");
+	}
+	pfif->name = pname;
+	pfif->st = st;
+#if _MSVCLIBX_STAT_DEFINED
+	DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
+	DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
+#endif /* _MSVCLIBX_STAT_DEFINED */
+#ifndef _MSDOS
+	pfif->target = NULL;
+	if (pDirent->d_type == DT_LNK) {
+	  char *pTarget = malloc(PATHNAME_SIZE);
+	  int lTarget;
+	  if (!pTarget) {
+	    closedir(pDir);
+	    finis(RETCODE_NO_MEMORY, "Out of memory");
+	  }
+	  lTarget = (int)readlink(pathname, pTarget, PATHNAME_SIZE);
+	  if (lTarget != -1) {
+	    pTarget[lTarget] = '\0';
+	    pTarget = realloc(pTarget, lTarget+1);
+	    pfif->target = pTarget;
+	  } else {
+	    free(pTarget);
+	  }
+	}
+#endif
+	// Note: The pointer to the name is copied as well.
+	pfif->column = col;
+	pfif->next = firstfif;
+	firstfif = pfif;
+	nfif += 1;
+      } else {
+	DEBUG_PRINTF(("// Ignored because %s\n", reason));
+      }
+    }
+
+    closedir(pDir);
+  }
+#if !HAS_MSVCLIBX
+  DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
+#endif
+  err = chdir(initdir);         /* Restore the initial directory */
+  if (err) {
+    finis(RETCODE_INACCESSIBLE, "Cannot return to directory \"%s\"\n:", initdir);
+  }
+
+#if HAS_DRIVES
+  DEBUG_PRINTF(("chdrive(%c);\n", initdrive + '@'));
+  _chdrive(initdrive);
+#endif
+
+  FREE_PATHNAME_BUF(initdir);
+  FREE_PATHNAME_BUF(path);
+  FREE_PATHNAME_BUF(pathname);
+  RETURN_INT(nfif);
+}
+
 #ifdef _MSC_VER
 #pragma warning(default:4706)
 #endif
@@ -1429,43 +1421,40 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 *                                                                             *
 ******************************************************************************/
 
-int CDECL cmpfif(const fif **fif1, const fif **fif2)
-    {
-    int ret;
-    int bIsDir1, bIsDir2;
+int CDECL cmpfif(const fif **fif1, const fif **fif2) {
+  int ret;
+  int bIsDir1, bIsDir2;
 
-    /* List directories before files */
+  /* List directories before files */
 #if _MSVCLIBX_STAT_DEFINED
-    bIsDir1 = (((*fif1)->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY);
-    bIsDir2 = (((*fif2)->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY);
+  bIsDir1 = (((*fif1)->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY);
+  bIsDir2 = (((*fif2)->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY);
 #else
-    bIsDir1 = S_ISDIR((*fif1)->st.st_mode);
-    bIsDir2 = S_ISDIR((*fif2)->st.st_mode);
+  bIsDir1 = S_ISDIR((*fif1)->st.st_mode);
+  bIsDir2 = S_ISDIR((*fif2)->st.st_mode);
 #endif
-    ret = bIsDir2 - bIsDir1;
+  ret = bIsDir2 - bIsDir1;
+  if (ret) return ret;
+
+  /* If both files, or both directories, sort case-independantly */
+  ret = strnicmp((*fif1)->name, (*fif2)->name, NODENAME_SIZE);
+  if (ret) return ret;
+
+  /* If same name except for the case, sort upper case first */
+  if (!ignorecase) {  /* But do it only if requested */
+    ret = strncmp((*fif1)->name, (*fif2)->name, NODENAME_SIZE);
     if (ret) return ret;
+  }
 
-    /* If both files, or both directories, sort case-independantly */
-    ret = strnicmp((*fif1)->name, (*fif2)->name, NODENAME_SIZE);
-    if (ret) return ret;
-
-    /* If same name except for the case, sort upper case first */
-    if (!ignorecase)    /* But do it only if requested */
-        {
-        ret = strncmp((*fif1)->name, (*fif2)->name, NODENAME_SIZE);
-        if (ret) return ret;
-        }
-
-    /* If same names, list column 1 before column 2 */
-    return (*fif1)->column - (*fif2)->column;
-    }
+  /* If same names, list column 1 before column 2 */
+  return (*fif1)->column - (*fif2)->column;
+}
 
 typedef int (* CDECL CMPFUNC)(const void *p1, const void *p2); // Strict type for C++
 
-void trie(fif **ppfif, int nfif)
-    {
-    qsort(ppfif, nfif, sizeof(fif *), (CMPFUNC)cmpfif);
-    }
+void trie(fif **ppfif, int nfif) {
+  qsort(ppfif, nfif, sizeof(fif *), (CMPFUNC)cmpfif);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1490,346 +1479,314 @@ void trie(fif **ppfif, int nfif)
 *                                                                             *
 ******************************************************************************/
 
-int affiche(fif **ppfif, int nfif, int ndirs, BOOL both, BOOL diff, BOOL zero)
-    {
-    int i;
-    int col = 1;                      /* Current column */
-    int difference;
-    int nfiles = 0;
-    int paths_done = FALSE;
+int affiche(fif **ppfif, int nfif, int ndirs, BOOL both, BOOL diff, BOOL zero) {
+  int i;
+  int col = 1;                      /* Current column */
+  int difference;
+  int nfiles = 0;
+  int paths_done = FALSE;
 
-    DEBUG_ENTER(("affiche(...);\n"));
+  DEBUG_ENTER(("affiche(...);\n"));
 
-    for (i=0; i<nfif; i++)
-        {
-	difference = CompareToNext(ppfif+i); /* Compare ith file date with (i+1)th */
+  for (i=0; i<nfif; i++) {
+    difference = CompareToNext(ppfif+i); /* Compare ith file date with (i+1)th */
 
-	if (diff && (difference == 0))
-            {
-            i += 1;
-            continue;                   /* skip both if files match */
-            }
+    if (diff && (difference == 0)) {
+      i += 1;
+      continue;                   /* skip both if files match */
+    }
 
-        if (both && (col == 1) && (difference == MISMATCH))
-            continue;                   /* If both and no matching file, skip */
+    if (both && (col == 1) && (difference == MISMATCH)) {
+      continue;                    /* If both and no matching file, skip */
+    }
 
-        /* Ready to display the first file */
+    /* Ready to display the first file */
 
-        if (!paths_done)               /* But diplay the paths names first */
-            {
-            affichePaths();
-            paths_done = TRUE;
-            }
+    if (!paths_done) {             /* But diplay the paths names first */
+      affichePaths();
+      paths_done = TRUE;
+    }
 
-        if ((col == 1) && (ppfif[i]->column == 2))
-            {
-            if (both) continue;         /* If both and no matching file, skip */
-            affiche1(NULL, 1);
-            printf(" < ");
-            col = 2;
-            }
+    if ((col == 1) && (ppfif[i]->column == 2)) {
+      if (both) continue;          /* If both and no matching file, skip */
+      affiche1(NULL, 1);
+      printf(" < ");
+      col = 2;
+    }
 
-        affiche1(ppfif[i], col);       /* Display file characteristics */
+    affiche1(ppfif[i], col);       /* Display file characteristics */
 
-	/* Compute statistics about files displayed */
+    /* Compute statistics about files displayed */
 
-	if (col == 1)
-	    {
-	    lLFileFound += 1;
-	    llLTotalSize += ppfif[i]->st.st_size;
-	    if (!difference)
-		{
-		lEFileFound += 1;
-		llETotalSize += ppfif[i]->st.st_size;
-		}
-	    }
-	else
-	    {
-	    lRFileFound += 1;
-	    llRTotalSize += ppfif[i]->st.st_size;
-	    }
+    if (col == 1) {
+      lLFileFound += 1;
+      llLTotalSize += ppfif[i]->st.st_size;
+      if (!difference) {
+	lEFileFound += 1;
+	llETotalSize += ppfif[i]->st.st_size;
+      }
+    } else {
+      lRFileFound += 1;
+      llRTotalSize += ppfif[i]->st.st_size;
+    }
 
-	/* Display the comparison results */
+    /* Display the comparison results */
 
-	if (ndirs == 1) 	       /* If one directory, go to next line */
-            {
-            nfiles += 1;
-            printflf();
-            continue;
-            }
+    if (ndirs == 1) {	       /* If one directory, go to next line */
+      nfiles += 1;
+      printflf();
+      continue;
+    }
 
-	if (col == 1)
-            {
-            col = 2;
-            switch (difference)
-                {
-                case 0:
-                    printf(" = ");
-                    break;
-                case 1:
-                    printf(" > ");
-                    break;
-                case -1:
-                    printf(" < ");
-                    break;
-                case 2:
-                    printf(" } ");
-                    break;
-                case -2:
-                    printf(" { ");
-                    break;
-                case 3:
-                    printf(" # ");
-                    break;
-                case MISMATCH:
-                    nfiles += 1;
-                    printf(" >");
-                    printflf();
-                    col = 1;
-                    break;
-                default:
-                    nfiles += 1;
-                    printf(" ?!?");
-                    printflf();
-                    col = 1;
-                    break;
-                }
-            }
-        else
-            {
-            nfiles += 1;
-            printflf();
-            col = 1;
-            }
-        }
+    if (col == 1) {
+      col = 2;
+      switch (difference) {
+	case 0:
+	  printf(" = ");
+	  break;
+	case 1:
+	  printf(" > ");
+	  break;
+	case -1:
+	  printf(" < ");
+	  break;
+	case 2:
+	  printf(" } ");
+	  break;
+	case -2:
+	  printf(" { ");
+	  break;
+	case 3:
+	  printf(" # ");
+	  break;
+	case MISMATCH:
+	  nfiles += 1;
+	  printf(" >");
+	  printflf();
+	  col = 1;
+	  break;
+	default:
+	  nfiles += 1;
+	  printf(" ?!?");
+	  printflf();
+	  col = 1;
+	  break;
+      }
+    } else {
+      nfiles += 1;
+      printflf();
+      col = 1;
+    }
+  }
 
-    if (col == 2)
-        {
-        nfiles += 1;
-        printflf();
-        }
-
-    if (zero && !nfiles) RETURN_CONST(0);
-
-    if (!paths_done) affichePaths();
+  if (col == 2) {
+    nfiles += 1;
     printflf();
-    printf("%d files or directories listed.", nfiles);
-    printflf();
-    lNFileFound += nfiles;
+  }
 
+  if (zero && !nfiles) RETURN_CONST(0);
+
+  if (!paths_done) affichePaths();
+  printflf();
+  printf("%d files or directories listed.", nfiles);
+  printflf();
+  lNFileFound += nfiles;
+
+  RETURN_CONST(0);
+}
+
+void affichePaths(void) {
+  int l;
+  int iColumnSize = (iCols/2) - 2;
+
+  printflf();
+
+  l = CountCharacters(path1, CP_UTF8);
+  printf("%s", path1);
+  if (path2[0]) {
+    if (l <= iColumnSize) {
+	printf("%*s", iColumnSize - l, "");
+    } else {
+      printflf();
+      printf("%*s", iColumnSize, "");
+    }
+
+    l = CountCharacters(path2, CP_UTF8);
+    if (l <= iColumnSize) {
+      printf(" | %*s", iColumnSize - l, "");
+    } else {
+      int iCols2 = iCols-(l+1);
+      printf(" |");
+      printflf();
+      if (iCols2 > 0) printf("%*s", iCols2, "");
+    }
+    printf("%s", path2);
+  }
+
+  printflf();
+  printflf();
+}
+
+int affiche1(fif *pfif, int col) {
+  int seconde;
+  int minute;
+  int heure;
+  int jour;
+  int mois;
+  int an;
+  char nicename[NODENAME_SIZE+6]; /* 3 for prefix and 3 for suffix */
+  char *pNicename = nicename+3;   /* Leave room for prefix */
+  int iShowSize = 1;
+  int l;
+  int iNamePlusSize = iNameWidth + iSizeWidth;
+  int iColumnSize = (iCols/2) - 2;
+  char szSize[22] = ""; /* Buffer for the file size string, good for 64-bit sizes */
+  int nSize = 0;        /* Size of the szSize string */
+  struct tm *pTime;
+
+  DEBUG_ENTER(("affiche1(%p, %d);\n", pfif, col));
+
+  if (!pfif) {    /* Display spaces occupying same length as normal output */
+    printf("%*s", iColumnSize, "");
     RETURN_CONST(0);
-    }
+  }
 
-void affichePaths(void)
-    {
-    int l;
-    int iColumnSize = (iCols/2) - 2;
+  pTime = LocalFileTime(&(pfif->st.st_mtime)); // Time of last data modification
+  seconde = pTime->tm_sec;
+  minute = pTime->tm_min;
+  heure = pTime->tm_hour;
+  jour = pTime->tm_mday;
+  mois = pTime->tm_mon + 1;
+  an = pTime->tm_year + 1900;
 
-    printflf();
-
-    l = CountCharacters(path1, CP_UTF8);
-    printf("%s", path1);
-    if (path2[0])
-        {
-	if (l <= iColumnSize)
-	    printf("%*s", iColumnSize - l, "");
-	else
-	    {
-	    printflf();
-	    printf("%*s", iColumnSize, "");
-	    }
-    
-	l = CountCharacters(path2, CP_UTF8);
-	if (l <= iColumnSize)
-	    printf(" | %*s", iColumnSize - l, "");
-	else
-	    {
-	    int iCols2 = iCols-(l+1);
-	    printf(" |");
-	    printflf();
-	    if (iCols2 > 0) printf("%*s", iCols2, "");
-	    }
-	printf("%s", path2);
-        }
-
-    printflf();
-    printflf();
-    }
-
-int affiche1(fif *pfif, int col)
-    {
-    int seconde;
-    int minute;
-    int heure;
-    int jour;
-    int mois;
-    int an;
-    char nicename[NODENAME_SIZE+6]; /* 3 for prefix and 3 for suffix */
-    char *pNicename = nicename+3;   /* Leave room for prefix */
-    int iShowSize = 1;
-    int l;
-    int iNamePlusSize = iNameWidth + iSizeWidth;
-    int iColumnSize = (iCols/2) - 2;
-    char szSize[22] = ""; /* Buffer for the file size string, good for 64-bit sizes */
-    int nSize = 0;        /* Size of the szSize string */
-    struct tm *pTime;
-
-    DEBUG_ENTER(("affiche1(%p, %d);\n", pfif, col));
-
-    if (!pfif)      /* Display spaces occupying same length as normal output */
-        {
-        printf("%*s", iColumnSize, "");
-        RETURN_CONST(0);
-        }
-
-    pTime = LocalFileTime(&(pfif->st.st_mtime)); // Time of last data modification
-    seconde = pTime->tm_sec;
-    minute = pTime->tm_min;
-    heure = pTime->tm_hour;
-    jour = pTime->tm_mday;
-    mois = pTime->tm_mon + 1;
-    an = pTime->tm_year + 1900;
-
-    strncpyz(pNicename, pfif->name, NODENAME_SIZE);
-    // ~~jfl 1995-01-17 Removed strlwr to distinguish case in file names
+  strncpyz(pNicename, pfif->name, NODENAME_SIZE);
+  // ~~jfl 1995-01-17 Removed strlwr to distinguish case in file names
 #ifdef _MSDOS
-    strlwr(pNicename);                   /* More readable in lower case */
+  strlwr(pNicename);                   /* More readable in lower case */
 #endif
-    if (iUpperCase) strupr(pNicename);	/* Do just the opposite if requested */
+  if (iUpperCase) strupr(pNicename);	/* Do just the opposite if requested */
 
-    /* Output the name */
-    if (S_ISDIR(pfif->st.st_mode))
-        {
+  /* Output the name */
+  if (S_ISDIR(pfif->st.st_mode)) {
 #if 1
 #if defined(__unix__)
-        { /* Append an OS-dependant directory separator */
-	  int n = (int)strlen(pNicename);
-	  pNicename[n++] = DIRSEPARATOR;
-	  pNicename[n] = '\0';
-        }
+    { /* Append an OS-dependant directory separator */
+      int n = (int)strlen(pNicename);
+      pNicename[n++] = DIRSEPARATOR;
+      pNicename[n] = '\0';
+    }
 #endif /* defined(__unix__) */
 #else  /* Experiment with [brackets] around the directory name for Windows */
 #if defined(__unix__)
-        strcat(pNicename, "/");
+    strcat(pNicename, "/");
 #else
-	*(--pNicename) = '[';
-        strcat(pNicename, "]");
+    *(--pNicename) = '[';
+    strcat(pNicename, "]");
 #endif /* defined(__unix__) */
 #endif /* 1 */
-	iShowSize = 0;
-        }
-    if (   S_ISCHR(pfif->st.st_mode)
+    iShowSize = 0;
+  }
+  if (   S_ISCHR(pfif->st.st_mode)
 #if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
-        || S_ISBLK(pfif->st.st_mode)
+      || S_ISBLK(pfif->st.st_mode)
 #endif // defined(S_ISBLK)
-       )
-        {
-        // strcat(pNicename, " !");
-	iShowSize = 0;
-	}
+     ) {
+    // strcat(pNicename, " !");
+    iShowSize = 0;
+  }
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-    if (S_ISLNK(pfif->st.st_mode))
-        {
+  if (S_ISLNK(pfif->st.st_mode)) {
 #if 0 && defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
-	if ((pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) {
-	  strcat(pNicename, "\\"); /* Junctions and symlinkds behave like directories in Windows */
-	}
+    if ((pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) {
+      strcat(pNicename, "\\"); /* Junctions and symlinkds behave like directories in Windows */
+    }
 #endif
-        strcat(pNicename, " -> ");
-	if (pfif->target) strcat(pNicename, pfif->target);
-	iShowSize = 0; /* Ignore the size for links. In Windows, it's always 0. In Linux it's the link name size. */
-        }
+    strcat(pNicename, " -> ");
+    if (pfif->target) strcat(pNicename, pfif->target);
+    iShowSize = 0; /* Ignore the size for links. In Windows, it's always 0. In Linux it's the link name size. */
+  }
 #endif // defined(S_ISLNK)
 #if defined(S_ISFIFO) && S_ISFIFO(S_IFIFO) /* In DOS it's defined, but always returns 0 */
-    if (S_ISFIFO(pfif->st.st_mode))
-        {
-        strcat(pNicename, "|");
-	iShowSize = 0;
-        }
+  if (S_ISFIFO(pfif->st.st_mode)) {
+    strcat(pNicename, "|");
+    iShowSize = 0;
+  }
 #endif // defined(S_ISFIFO)
 #if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
-    if (S_ISSOCK(pfif->st.st_mode))
-        {
-        strcat(pNicename, "=");
-	iShowSize = 0;
-        }
+  if (S_ISSOCK(pfif->st.st_mode)) {
+    strcat(pNicename, "=");
+    iShowSize = 0;
+  }
 #endif // defined(S_ISSOCK)
-    l = printf("%s", pNicename);	   /* Returns the number of bytes in the name */
+  l = printf("%s", pNicename);	   /* Returns the number of bytes in the name */
 #if !defined(_MSDOS)	/* For DOS, the # of bytes is the same as the # of characters */ 
-    l = CountCharacters(pNicename, CP_UTF8);
+  l = CountCharacters(pNicename, CP_UTF8);
 #endif
 
-    /* Output the size */
-    if (iShowSize) /* This is a normal file, and we need to display the size */
-	{
-	int nBytes = sizeof(pfif->st.st_size); /* Could this be made a compile-time constant? */
-	char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
-	nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
-	}
-    else           /* This is a special file, do not display a size */
-        {
+  /* Output the size */
+  if (iShowSize) { /* This is a normal file, and we need to display the size */
+    int nBytes = sizeof(pfif->st.st_size); /* Could this be made a compile-time constant? */
+    char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
+    nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
+  } else {         /* This is a special file, do not display a size */
 #if !defined(__unix__)
-	if (S_ISDIR(pfif->st.st_mode)) { // This is a directory
+    if (S_ISDIR(pfif->st.st_mode)) { // This is a directory
 #if defined(_WIN32)
-	  nSize = sprintf(szSize, "<DIR>     "); // Add 5 spaces to align with <JUNCTION> and <SYMLINKD>
+      nSize = sprintf(szSize, "<DIR>     "); // Add 5 spaces to align with <JUNCTION> and <SYMLINKD>
 #elif defined(_MSDOS)
-	  nSize = sprintf(szSize, "<DIR>  "); // Allow fitting output in 80 columns
+      nSize = sprintf(szSize, "<DIR>  "); // Allow fitting output in 80 columns
 #endif
-	}
+    }
 #endif
 
-	if (S_ISCHR(pfif->st.st_mode)) {
-	  nSize = sprintf(szSize, "<CHARDEV>"); // This is a character device
-	}
+    if (S_ISCHR(pfif->st.st_mode)) {
+      nSize = sprintf(szSize, "<CHARDEV>"); // This is a character device
+    }
 #if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
-	if (S_ISBLK(pfif->st.st_mode)) {
-	  nSize = sprintf(szSize, "<BLCKDEV>"); // This is a block device
-	}
+    if (S_ISBLK(pfif->st.st_mode)) {
+      nSize = sprintf(szSize, "<BLCKDEV>"); // This is a block device
+    }
 #endif // defined(S_ISBLK)
 
 #if defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
-	if (S_ISLNK(pfif->st.st_mode)) {
-	  if (pfif->st.st_ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
-	    nSize = sprintf(szSize, "<JUNCTION>"); // This is a junction
-	  } else if (pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) {
-	    nSize = sprintf(szSize, "<SYMLINKD>"); // This is a symlinkd
-	  }
-        }
+    if (S_ISLNK(pfif->st.st_mode)) {
+      if (pfif->st.st_ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
+	nSize = sprintf(szSize, "<JUNCTION>"); // This is a junction
+      } else if (pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) {
+	nSize = sprintf(szSize, "<SYMLINKD>"); // This is a symlinkd
+      }
+    }
 #endif
 
 #if defined(S_ISFIFO) && S_ISFIFO(S_IFIFO) /* In DOS it's defined, but always returns 0 */
-	if (S_ISFIFO(pfif->st.st_mode)) {
-	  nSize = sprintf(szSize, "<FIFO>   "); // This is a fifo
-	}
+    if (S_ISFIFO(pfif->st.st_mode)) {
+      nSize = sprintf(szSize, "<FIFO>   "); // This is a fifo
+    }
 #endif // defined(S_ISFIFO)
 #if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
-	if (S_ISSOCK(pfif->st.st_mode)) {
-	  nSize = sprintf(szSize, "<SOCKET> "); // This is a network socket
-	}
-#endif // defined(S_ISSOCK)
-	}
-    /* Make sure name+size fits in the column */
-    if ((l+1+nSize) > iNamePlusSize) /* It does not. Output the size on the next line */ 
-        {
-        printflf();
-	l = 0; /* Current offset on the next line */
-        if (col == 2) printf("%*s", iColumnSize+3, ""); /* + 3 for separation */
-	}
-    printf("%*s %s", iNamePlusSize-(l+1+nSize), "", szSize);
-
-    /* Output the date and time */
-    if (iYearWidth == 2) 
-        {
-	printf(" %02d-%02d-%02d %02d:%02d:%02d",
-		an % 100, mois, jour, heure, minute, seconde);
-	}
-    else
-        {
-	printf(" %04d-%02d-%02d %02d:%02d:%02d",
-		an, mois, jour, heure, minute, seconde);
-	}
-    RETURN_CONST(0);
+    if (S_ISSOCK(pfif->st.st_mode)) {
+      nSize = sprintf(szSize, "<SOCKET> "); // This is a network socket
     }
+#endif // defined(S_ISSOCK)
+  }
+  /* Make sure name+size fits in the column */
+  if ((l+1+nSize) > iNamePlusSize) { /* It does not. Output the size on the next line */ 
+    printflf();
+    l = 0; /* Current offset on the next line */
+    if (col == 2) printf("%*s", iColumnSize+3, ""); /* + 3 for separation */
+  }
+  printf("%*s %s", iNamePlusSize-(l+1+nSize), "", szSize);
+
+  /* Output the date and time */
+  if (iYearWidth == 2) {
+    printf(" %02d-%02d-%02d %02d:%02d:%02d",
+	    an % 100, mois, jour, heure, minute, seconde);
+  } else {
+    printf(" %04d-%02d-%02d %02d:%02d:%02d",
+	    an, mois, jour, heure, minute, seconde);
+  }
+  RETURN_CONST(0);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1849,96 +1806,91 @@ int affiche1(fif *pfif, int col)
 *                                                                             *
 ******************************************************************************/
 
-int CompareToNext(fif **ppfif) /* Compare file date with next entry in fiflist */
-    {
-    long deltatime;                 /* Date and Time difference, in seconds */
-    int deltasize;                  /* Sign of the difference, or 0 if equal */
-    fif *pfif1;
-    fif *pfif2;
-    int dif;
+int CompareToNext(fif **ppfif) { /* Compare file date with next entry in fiflist */
+  long deltatime;                 /* Date and Time difference, in seconds */
+  int deltasize;                  /* Sign of the difference, or 0 if equal */
+  fif *pfif1;
+  fif *pfif2;
+  int dif;
 
-    pfif1 = ppfif[0];
-    pfif2 = ppfif[1];
-    DEBUG_ENTER(("CompareToNext(%p); // \"%s\" / \"%s\"\n", ppfif, pfif1->name, pfif2?pfif2->name:""));
-    if (!pfif2) DEBUG_RETURN_INT(MISMATCH, "No next entry");	/* No next entry */
+  pfif1 = ppfif[0];
+  pfif2 = ppfif[1];
+  DEBUG_ENTER(("CompareToNext(%p); // \"%s\" / \"%s\"\n", ppfif, pfif1->name, pfif2?pfif2->name:""));
+  if (!pfif2) DEBUG_RETURN_INT(MISMATCH, "No next entry");	/* No next entry */
 
-    /* ~~jfl 95/06/12 Can't compare a file to a directory */
-    dif = S_ISDIR(pfif1->st.st_mode);
-    dif ^= S_ISDIR(pfif2->st.st_mode);
-    if (dif) DEBUG_RETURN_INT(MISMATCH, "Types differ");
+  /* ~~jfl 95/06/12 Can't compare a file to a directory */
+  dif = S_ISDIR(pfif1->st.st_mode);
+  dif ^= S_ISDIR(pfif2->st.st_mode);
+  if (dif) DEBUG_RETURN_INT(MISMATCH, "Types differ");
 
-    /* Compare names, with or without case depending on command */
-    if (ignorecase)
-        dif = stricmp(pfif1->name, pfif2->name);
-    else
-        dif = strcmp(pfif1->name, pfif2->name);
-    if (dif)
-        DEBUG_RETURN_INT(MISMATCH, "Names differ");	/* Names don't match */
+  /* Compare names, with or without case depending on command */
+  if (ignorecase) {
+    dif = stricmp(pfif1->name, pfif2->name);
+  } else {
+    dif = strcmp(pfif1->name, pfif2->name);
+  }
+  if (dif) DEBUG_RETURN_INT(MISMATCH, "Names differ");	/* Names don't match */
 
-    deltatime = (long)pfif1->st.st_mtime;
-    deltatime -= (long)pfif2->st.st_mtime;
+  deltatime = (long)pfif1->st.st_mtime;
+  deltatime -= (long)pfif2->st.st_mtime;
 
-    if (pfif1->st.st_size < pfif2->st.st_size)
-      deltasize = -1;
-    else if (pfif1->st.st_size > pfif2->st.st_size)
-      deltasize = 1;
-    else
-      deltasize = 0;
+  if (pfif1->st.st_size < pfif2->st.st_size) {
+    deltasize = -1;
+  } else if (pfif1->st.st_size > pfif2->st.st_size) {
+    deltasize = 1;
+  } else {
+    deltasize = 0;
+  }
 
-    /* If in filecomp mode, check if same data files with different dates */
-    if (filecomp && !deltasize && !S_ISDIR(pfif1->st.st_mode))
-        {   /* Let the actual data decide */
-        NEW_PATHNAME_BUF(name1);
-        NEW_PATHNAME_BUF(name2);
+  /* If in filecomp mode, check if same data files with different dates */
+  if (filecomp && !deltasize && !S_ISDIR(pfif1->st.st_mode)) { /* Let the actual data decide */
+    NEW_PATHNAME_BUF(name1);
+    NEW_PATHNAME_BUF(name2);
 
-        makepathname(name1, path1, pfif1->name);
-        makepathname(name2, path2, pfif2->name);
-        dif = filecompare(name1, name2);
-        FREE_PATHNAME_BUF(name1);
-        FREE_PATHNAME_BUF(name2);
-        if (!dif) DEBUG_RETURN_INT(0, "Contents are identical"); /* They are actually identical */
-        if (deltatime) DEBUG_RETURN_INT(SIGN(deltatime), "Timestamps and contents differ");
-        DEBUG_RETURN_INT(SIGN(dif), "Contents differ");
-        }
+    makepathname(name1, path1, pfif1->name);
+    makepathname(name2, path2, pfif2->name);
+    dif = filecompare(name1, name2);
+    FREE_PATHNAME_BUF(name1);
+    FREE_PATHNAME_BUF(name2);
+    if (!dif) DEBUG_RETURN_INT(0, "Contents are identical"); /* They are actually identical */
+    if (deltatime) DEBUG_RETURN_INT(SIGN(deltatime), "Timestamps and contents differ");
+    DEBUG_RETURN_INT(SIGN(dif), "Contents differ");
+  }
 
-    /* If same file name, compare date and time */
-    if (!ignoretime && deltatime)       /* If comparison expected, and there is a difference */
-        {
-        int sign;               /* Sign of deltatime */
+  /* If same file name, compare date and time */
+  if (!ignoretime && deltatime) {     /* If comparison expected, and there is a difference */
+    int sign;               /* Sign of deltatime */
 
-        sign = (deltatime > 0) ? 1 : -1;        /* Sign of the difference */
+    sign = (deltatime > 0) ? 1 : -1;        /* Sign of the difference */
 
-        if (ignorezone)     /* Special case if we wish to ignore time-zone differences */
-            {   /* Ignore differences that are an integer number of hours  less than 24 hours */
-            int deltaseconds;
+    if (ignorezone) {   /* Special case if we wish to ignore time-zone differences */
+      /* Ignore differences that are an integer number of hours  less than 24 hours */
+      int deltaseconds;
 
-            deltaseconds = (int)(deltatime % 3600);
-            if (deltaseconds < 0) deltaseconds += 3600;
-            deltatime /= 3600;                   /* Convert difference to hours */
-            if ((deltatime > 23) || (deltatime < -23))
-                DEBUG_RETURN_INT(sign, "Timestamps differ > 1 day"); /* More than 1 day of diff. */
-            switch (deltaseconds)   // ~~jfl 1996-09-16
-                {
-                case 0:
-                case 2:
-                case 3600-2:
-                /* Assume the difference isn't meaningful. Go compare the size. */
-                break;
-                default:
-                DEBUG_RETURN_INT(sign, "Timestamps differ > 2 seconds");
-                }
-            }
-        else        /* Common case where any date & time difference counts */
-            {
-            DEBUG_RETURN_INT(sign, "Timestamps differ");
-            }
-        }
-
-    /* If same date & time, compare size */
-    if (deltasize) DEBUG_RETURN_INT(deltasize, "Sizes differ (yet times match)");
-
-    DEBUG_RETURN_INT(0, "Same files");
+      deltaseconds = (int)(deltatime % 3600);
+      if (deltaseconds < 0) deltaseconds += 3600;
+      deltatime /= 3600;                   /* Convert difference to hours */
+      if ((deltatime > 23) || (deltatime < -23))
+	  DEBUG_RETURN_INT(sign, "Timestamps differ > 1 day"); /* More than 1 day of diff. */
+      switch (deltaseconds) { // ~~jfl 1996-09-16
+	case 0:
+	case 2:
+	case 3600-2:
+	/* Assume the difference isn't meaningful. Go compare the size. */
+	break;
+	default:
+	DEBUG_RETURN_INT(sign, "Timestamps differ > 2 seconds");
+      }
+    } else {      /* Common case where any date & time difference counts */
+      DEBUG_RETURN_INT(sign, "Timestamps differ");
     }
+  }
+
+  /* If same date & time, compare size */
+  if (deltasize) DEBUG_RETURN_INT(deltasize, "Sizes differ (yet times match)");
+
+  DEBUG_RETURN_INT(0, "Same files");
+}
 
 /******************************************************************************
 *                                                                             *
@@ -1975,93 +1927,88 @@ int CompareToNext(fif **ppfif) /* Compare file date with next entry in fiflist *
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-int filecompare(char *name1, char *name2)   /* Compare two files */
-    {
-    static char *pbuf1 = NULL;
-    static char *pbuf2 = NULL;
-    FILE *f1;
-    FILE *f2;
-    size_t l1, l2;
-    int dif;
+int filecompare(char *name1, char *name2) { /* Compare two files */
+  static char *pbuf1 = NULL;
+  static char *pbuf2 = NULL;
+  FILE *f1;
+  FILE *f2;
+  size_t l1, l2;
+  int dif;
 #ifndef _MSDOS
-    int err1, err2;
-    struct stat st1;
-    struct stat st2;
+  int err1, err2;
+  struct stat st1;
+  struct stat st2;
 #endif // _MSDOS
 
-    DEBUG_ENTER(("filecompare(\"%s\", \"%s\");\n", name1, name2));
+  DEBUG_ENTER(("filecompare(\"%s\", \"%s\");\n", name1, name2));
 
-    if (!pbuf1)
-        {
-        pbuf1 = (char *)malloc(FBUFSIZE);
-        pbuf2 = (char *)malloc(FBUFSIZE);
-        if (!pbuf2)
-            {
-            finis(RETCODE_NO_MEMORY);   /* Note: This is still DIRC-specific */
-            }
-        }
+  if (!pbuf1) {
+    pbuf1 = (char *)malloc(FBUFSIZE);
+    pbuf2 = (char *)malloc(FBUFSIZE);
+    if (!pbuf2) {
+      finis(RETCODE_NO_MEMORY, "Out of memory");   /* Note: This is still DIRC-specific */
+    }
+  }
 
-    /* For links to directories, compare the link targets */
+  /* For links to directories, compare the link targets */
 #ifndef _MSDOS
-    err1 = lstat(name1, &st1);
-    err2 = lstat(name2, &st2);
-    if ((!err1) && S_ISLNK(st1.st_mode) && (!err2) && S_ISLNK(st2.st_mode)) {
+  err1 = lstat(name1, &st1);
+  err2 = lstat(name2, &st2);
+  if ((!err1) && S_ISLNK(st1.st_mode) && (!err2) && S_ISLNK(st2.st_mode)) {
 #if defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
-      if ((st1.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) && (st2.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY))
+    if ((st1.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) && (st2.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY))
 #else
-      err1 = stat(name1, &st1);
-      err2 = stat(name2, &st2);
-      if (err1 && err2) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
-      if (err1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
-      if (err2) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
-      if (S_ISDIR(st1.st_mode) && S_ISDIR(st2.st_mode))
+    err1 = stat(name1, &st1);
+    err2 = stat(name2, &st2);
+    if (err1 && err2) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
+    if (err1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
+    if (err2) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
+    if (S_ISDIR(st1.st_mode) && S_ISDIR(st2.st_mode))
 #endif
-	{
-	int n1 = (int)readlink(name1, pbuf1, FBUFSIZE);
-	int n2 = (int)readlink(name2, pbuf2, FBUFSIZE);
-	if ((n1 == -1) && (n2 == -1)) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
-        if (n1 == -1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
-        if (n2 == -1) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
-        pbuf1[n1] = '\0';
-        pbuf2[n2] = '\0';
-	dif = strcmp(pbuf1, pbuf2);
-	RETURN_INT_COMMENT(dif, ("Link targets are %s\n", dif ? "different" : "identical"));
-      }
+      {
+      int n1 = (int)readlink(name1, pbuf1, FBUFSIZE);
+      int n2 = (int)readlink(name2, pbuf2, FBUFSIZE);
+      if ((n1 == -1) && (n2 == -1)) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
+      if (n1 == -1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
+      if (n2 == -1) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
+      pbuf1[n1] = '\0';
+      pbuf2[n2] = '\0';
+      dif = strcmp(pbuf1, pbuf2);
+      RETURN_INT_COMMENT(dif, ("Link targets are %s\n", dif ? "different" : "identical"));
     }
+  }
 #endif // _MSDOS
 
-    /* For files or links to files, compare the data itself */
-    f1 = fopen(name1, "rb");
-    f2 = fopen(name2, "rb");
-    if ((!f1) && (!f2)) RETURN_INT_COMMENT(0, ("Neither file exists.\n"));
-    if (!f1) {
-      fclose(f2);
-      RETURN_INT_COMMENT(-3, ("The first file does not exist.\n"));
-    }
-    if (!f2) {
-      fclose(f1);
-      RETURN_INT_COMMENT( 3, ("The second file does not exist.\n"));
-    }
-
-    dif = 0;
-    while ((l1 = fread(pbuf1, 1, FBUFSIZE, f1)))
-        {
-        l2 = fread(pbuf2, 1, FBUFSIZE, f2);
-        if (l1 > l2) {dif = 1; break;}
-        if (l1 < l2) {dif = -1; break;}
-        dif = memcmp(pbuf1, pbuf2, l1);
-        if (dif)
-            {
-            dif = (dif > 0) ? 2 : -2;
-            break;   /* If different data found, return immediately */
-            }
-        }
-
-    fclose(f1);
+  /* For files or links to files, compare the data itself */
+  f1 = fopen(name1, "rb");
+  f2 = fopen(name2, "rb");
+  if ((!f1) && (!f2)) RETURN_INT_COMMENT(0, ("Neither file exists.\n"));
+  if (!f1) {
     fclose(f2);
+    RETURN_INT_COMMENT(-3, ("The first file does not exist.\n"));
+  }
+  if (!f2) {
+    fclose(f1);
+    RETURN_INT_COMMENT( 3, ("The second file does not exist.\n"));
+  }
 
-    RETURN_INT_COMMENT(dif, ("Files are %s\n", dif ? "different" : "identical"));
+  dif = 0;
+  while ((l1 = fread(pbuf1, 1, FBUFSIZE, f1))) {
+    l2 = fread(pbuf2, 1, FBUFSIZE, f2);
+    if (l1 > l2) {dif = 1; break;}
+    if (l1 < l2) {dif = -1; break;}
+    dif = memcmp(pbuf1, pbuf2, l1);
+    if (dif) {
+      dif = (dif > 0) ? 2 : -2;
+      break;   /* If different data found, return immediately */
     }
+  }
+
+  fclose(f1);
+  fclose(f2);
+
+  RETURN_INT_COMMENT(dif, ("Files are %s\n", dif ? "different" : "identical"));
+}
 #ifdef _MSC_VER
 #pragma warning(default:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
@@ -2097,108 +2044,99 @@ int filecompare(char *name1, char *name2)   /* Compare two files */
 int descend(char *from, char *to, char *pattern,
                 int attrib,
                 BOOL both, BOOL diff, BOOL zero,
-		time_t datemin, time_t datemax)
-    {
-    int nfif;
-    int i;
-    fif **directories;
-    fif **ppfif;
-    uint16_t wFlags = 0x8000 | _A_SUBDIR | _A_SYSTEM | _A_HIDDEN;
-    NEW_PATHNAME_BUF(name1);
-    NEW_PATHNAME_BUF(name2);
+		time_t datemin, time_t datemax) {
+  int nfif;
+  int i;
+  fif **directories;
+  fif **ppfif;
+  uint16_t wFlags = 0x8000 | _A_SUBDIR | _A_SYSTEM | _A_HIDDEN;
+  NEW_PATHNAME_BUF(name1);
+  NEW_PATHNAME_BUF(name2);
 
-    DEBUG_ENTER(("descend(\"%s\", \"%s\", \"%s\", 0x%X, %d, %d, %d, 0x%lX, 0x%lX);\n", from, to, pattern,
-      		 attrib, both, diff, zero, (unsigned long)datemin, (unsigned long)datemax));
+  DEBUG_ENTER(("descend(\"%s\", \"%s\", \"%s\", 0x%X, %d, %d, %d, 0x%lX, 0x%lX);\n", from, to, pattern,
+	       attrib, both, diff, zero, (unsigned long)datemin, (unsigned long)datemax));
 
 #if PATHNAME_BUFS_IN_HEAP
-    if ((!name1) || (!name2)) {
-	FREE_PATHNAME_BUF(name1);
-	FREE_PATHNAME_BUF(name2);
-	RETURN_CONST_COMMENT(0, ("Out of memory\n"));
-    }
-#endif
-
-    /* Get all subdirectories */
-    nfif = 0;
-    if (from) nfif = lis(from, PATTERN_ALL, nfif, 1, wFlags, 0, TIME_T_MAX);
-    if (to) nfif = lis(to, PATTERN_ALL, nfif, 2, wFlags, 0, TIME_T_MAX);
-    directories = AllocFifArray(nfif);
-    trie(directories, nfif);
-
-    for (i=0; i<nfif; i++)
-        {
-        char *pname1;
-        char *pname2;
-        char *pn1;
-        int nfif2;
-        int ndir;
-
-        pn1 = directories[i]->name;
-        path1[0] = path2[0] = '\0'; /* Cleanup static title buffers */
-        pname1 = pname2 = NULL;
-        ndir = 1;
-        if (from)
-            {
-            makepathname(name1, from, pn1);
-            pname1 = name1;
-            DEBUG_PRINTF(("// Descent possible into %s\n", name1));
-            }
-        name2[0] = '\0';
-        if (to)
-            {
-            makepathname(name2, to, pn1);
-            pname2 = name2;
-            ndir = 2;
-            DEBUG_PRINTF(("// and into %s\n", name2));
-            }
-        if (   to
-             && ((i+1) < nfif)
-             && (ignorecase ?
-                    !stricmp(directories[i]->name, directories[i+1]->name)
-                  : streq(directories[i]->name, directories[i+1]->name)  ) )
-            {   /* Both subdirectories match */
-            i += 1;
-            nfif2 = lis(name1, pattern, 0, 1, attrib,
-                            datemin, datemax);
-            if (to) nfif2 = lis(name2, pattern, nfif2, 2, attrib,
-                                    datemin, datemax);
-            ppfif = AllocFifArray(nfif2);
-            trie(ppfif, nfif2);
-            affiche(ppfif, nfif2, ndir, both, diff, zero);
-            FreeFifArray(ppfif);
-
-            descend(pname1, pname2, pattern, attrib, both, diff, zero,
-                        datemin, datemax);
-            }
-        else if (!both)
-            {
-            DEBUG_PRINTF(("// There is no directory %s",
-                       (directories[i]->column == 1) ? name2 : name1));
-            if (directories[i]->column == 1)
-                {
-                pname2 = NULL;
-                nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax);
-                }
-            else
-                {
-                pname1 = NULL;
-                nfif2 = lis(name2, pattern, 0, 2, attrib, datemin, datemax);
-                }
-            ppfif = AllocFifArray(nfif2);
-            trie(ppfif, nfif2);
-            affiche(ppfif, nfif2, ndir, both, diff, zero);
-            FreeFifArray(ppfif);
-
-            descend(pname1, pname2, pattern, attrib, both, diff, zero,
-                        datemin, datemax);
-            }
-        } /* End for */
-
-    FreeFifArray(directories);
+  if ((!name1) || (!name2)) {
     FREE_PATHNAME_BUF(name1);
     FREE_PATHNAME_BUF(name2);
-    RETURN_CONST(0);
+    RETURN_CONST_COMMENT(0, ("Out of memory\n"));
+  }
+#endif
+
+  /* Get all subdirectories */
+  nfif = 0;
+  if (from) nfif = lis(from, PATTERN_ALL, nfif, 1, wFlags, 0, TIME_T_MAX);
+  if (to) nfif = lis(to, PATTERN_ALL, nfif, 2, wFlags, 0, TIME_T_MAX);
+  directories = AllocFifArray(nfif);
+  trie(directories, nfif);
+
+  for (i=0; i<nfif; i++) {
+    char *pname1;
+    char *pname2;
+    char *pn1;
+    int nfif2;
+    int ndir;
+
+    pn1 = directories[i]->name;
+    path1[0] = path2[0] = '\0'; /* Cleanup static title buffers */
+    pname1 = pname2 = NULL;
+    ndir = 1;
+    if (from) {
+      makepathname(name1, from, pn1);
+      pname1 = name1;
+      DEBUG_PRINTF(("// Descent possible into %s\n", name1));
     }
+    name2[0] = '\0';
+    if (to) {
+      makepathname(name2, to, pn1);
+      pname2 = name2;
+      ndir = 2;
+      DEBUG_PRINTF(("// and into %s\n", name2));
+    }
+    if (   to
+	 && ((i+1) < nfif)
+	 && (ignorecase ?
+		!stricmp(directories[i]->name, directories[i+1]->name)
+	      : streq(directories[i]->name, directories[i+1]->name)  ) ) {
+      /* Both subdirectories match */
+      i += 1;
+      nfif2 = lis(name1, pattern, 0, 1, attrib,
+		      datemin, datemax);
+      if (to) nfif2 = lis(name2, pattern, nfif2, 2, attrib,
+			      datemin, datemax);
+      ppfif = AllocFifArray(nfif2);
+      trie(ppfif, nfif2);
+      affiche(ppfif, nfif2, ndir, both, diff, zero);
+      FreeFifArray(ppfif);
+
+      descend(pname1, pname2, pattern, attrib, both, diff, zero,
+		  datemin, datemax);
+    } else if (!both) {
+      DEBUG_PRINTF(("// There is no directory %s",
+		 (directories[i]->column == 1) ? name2 : name1));
+      if (directories[i]->column == 1) {
+	pname2 = NULL;
+	nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax);
+      } else {
+	pname1 = NULL;
+	nfif2 = lis(name2, pattern, 0, 2, attrib, datemin, datemax);
+      }
+      ppfif = AllocFifArray(nfif2);
+      trie(ppfif, nfif2);
+      affiche(ppfif, nfif2, ndir, both, diff, zero);
+      FreeFifArray(ppfif);
+
+      descend(pname1, pname2, pattern, attrib, both, diff, zero,
+		  datemin, datemax);
+    }
+  } /* End for */
+
+  FreeFifArray(directories);
+  FREE_PATHNAME_BUF(name1);
+  FREE_PATHNAME_BUF(name2);
+  RETURN_CONST(0);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -2218,32 +2156,27 @@ int descend(char *from, char *to, char *pattern,
 *                                                                             *
 ******************************************************************************/
 
-fif **AllocFifArray(size_t nfif)
-    {
-    fif **ppfif;
-    fif *pfif;
-    size_t i;
+fif **AllocFifArray(size_t nfif) {
+  fif **ppfif;
+  fif *pfif;
+  size_t i;
 
-    /* Allocate an array for sorting */
-    ppfif = (fif **)malloc((nfif+1) * sizeof(fif *));
-    if (!ppfif)
-        {
-        finis(RETCODE_NO_MEMORY);
-        }
-    /* Fill the array with pointers to the list of structures */
-    pfif = firstfif;
-    for (i=0; i<nfif; i++)
-        {
-        ppfif[i] = pfif;
-        pfif = pfif->next;
-        }
-    /* Make sure following the linked list ends with the array */
-    if (nfif) ppfif[nfif-1]->next = NULL;
-    /* Make sure FreeFifArray works in all cases. */
-    ppfif[nfif] = NULL;
+  /* Allocate an array for sorting */
+  ppfif = (fif **)malloc((nfif+1) * sizeof(fif *));
+  if (!ppfif) finis(RETCODE_NO_MEMORY, "Out of memory for fif array");
+  /* Fill the array with pointers to the list of structures */
+  pfif = firstfif;
+  for (i=0; i<nfif; i++) {
+    ppfif[i] = pfif;
+    pfif = pfif->next;
+  }
+  /* Make sure following the linked list ends with the array */
+  if (nfif) ppfif[nfif-1]->next = NULL;
+  /* Make sure FreeFifArray works in all cases. */
+  ppfif[nfif] = NULL;
 
-    return ppfif;
-    }
+  return ppfif;
+}
 
 /******************************************************************************
 *                                                                             *
@@ -2263,23 +2196,21 @@ fif **AllocFifArray(size_t nfif)
 *                                                                             *
 ******************************************************************************/
 
-void FreeFifArray(fif **ppfif)
-    {
-    fif **ppf;
+void FreeFifArray(fif **ppfif) {
+  fif **ppf;
 
-    for (ppf=ppfif; *ppf; ppf++)
-        {
-        free((*ppf)->name);
+  for (ppf=ppfif; *ppf; ppf++) {
+    free((*ppf)->name);
 #ifndef _MSDOS
-        free((*ppf)->target);
+    free((*ppf)->target);
 #endif
-        free(*ppf);
-        }
+    free(*ppf);
+  }
 
-    free(ppfif);
+  free(ppfif);
 
-    return;
-    }
+  return;
+}
 
 /******************************************************************************
 *                                                                             *
@@ -2302,20 +2233,18 @@ void FreeFifArray(fif **ppfif)
 *                                                                             *
 ******************************************************************************/
 
-int makepathname(char *buf, char *path, char *node)
-    {
-    int l;
+int makepathname(char *buf, char *path, char *node) {
+  int l;
 
-    strncpyz(buf, path, PATHNAME_SIZE - 1);
-    l = (int)strlen(buf);
-    if (l && (buf[l-1] != DIRSEPARATOR) && (buf[l-1] != ':'))
-        {
-        buf[l++] = DIRSEPARATOR;
-        buf[l] = 0;
-        }
-    strncpyz(buf+l, node, PATHNAME_SIZE - l);
-    return 0;
-    }
+  strncpyz(buf, path, PATHNAME_SIZE - 1);
+  l = (int)strlen(buf);
+  if (l && (buf[l-1] != DIRSEPARATOR) && (buf[l-1] != ':')) {
+    buf[l++] = DIRSEPARATOR;
+    buf[l] = 0;
+  }
+  strncpyz(buf+l, node, PATHNAME_SIZE - l);
+  return 0;
+}
 
 /*****************************************************************************\
 *                                                                             *
@@ -2337,28 +2266,27 @@ int makepathname(char *buf, char *path, char *node)
 *                                                                             *
 \*****************************************************************************/
 
-char *getdir(char *buf, int len)  /* Get current directory without the drive */
-    {
-    NEW_PATHNAME_BUF(line);
-    char *pszRoot = line;
+char *getdir(char *buf, int len) { /* Get current directory without the drive */
+  NEW_PATHNAME_BUF(line);
+  char *pszRoot = line;
 
 #if PATHNAME_BUFS_IN_HEAP
-    if (!line) return NULL;
+  if (!line) return NULL;
 #endif
 
-    if (!getcwd(line, PATHNAME_SIZE)) {
-        FREE_PATHNAME_BUF(line);
-        return NULL;
-    }
-
-    if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
-
-    if (line[1] == ':') pszRoot = line+2;
-    strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
-
+  if (!getcwd(line, PATHNAME_SIZE)) {
     FREE_PATHNAME_BUF(line);
-    return buf;
-    }
+    return NULL;
+  }
+
+  if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
+
+  if (line[1] == ':') pszRoot = line+2;
+  strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
+
+  FREE_PATHNAME_BUF(line);
+  return buf;
+  }
 
 /*****************************************************************************\
 *                                                                             *
@@ -2382,42 +2310,41 @@ char *getdir(char *buf, int len)  /* Get current directory without the drive */
 *                                                                             *
 \*****************************************************************************/
 
-int parse_date(char *token, time_t *pdate)
-    {
-    int day, month, year;
-    char c[8]; /* We expect 1 char + 1 NUL, but leave extra space in case of misformed dates */
-    struct tm sTM = {0};
+int parse_date(char *token, time_t *pdate) {
+  int day, month, year;
+  char c[8]; /* We expect 1 char + 1 NUL, but leave extra space in case of misformed dates */
+  struct tm sTM = {0};
 
-    if (*token == '-') { /* Assume an integer number of days from 00:00:00 today */
-      if (!sscanf(token+1, "%d", &day)) return FALSE;
-      *pdate = time(NULL) - 86400 * (time_t)day;
-      *pdate -= (*pdate % 86400);
-      return TRUE;
-    }
-    if (sscanf(token, "%d%[-/]%d%[-/]%d", &year, &c[0], &month, &c[0], &day) < 5) return FALSE;
+  if (*token == '-') { /* Assume an integer number of days from 00:00:00 today */
+    if (!sscanf(token+1, "%d", &day)) return FALSE;
+    *pdate = time(NULL) - 86400 * (time_t)day;
+    *pdate -= (*pdate % 86400);
+    return TRUE;
+  }
+  if (sscanf(token, "%d%[-/]%d%[-/]%d", &year, &c[0], &month, &c[0], &day) < 5) return FALSE;
 
-    // Compute the year relative to 1970, allowing (70-99,0-69) = 1970-2069
-    if (year < 0) return FALSE;
-    if (year < 100) {
-      year += 30; // year -= 70; year += 100;
-      year %= 100;    // Result valid from 1970 to 2069
-      year += 1970;
-    }
-    if (year < 1970) return FALSE;
+  // Compute the year relative to 1970, allowing (70-99,0-69) = 1970-2069
+  if (year < 0) return FALSE;
+  if (year < 100) {
+    year += 30; // year -= 70; year += 100;
+    year %= 100;    // Result valid from 1970 to 2069
+    year += 1970;
+  }
+  if (year < 1970) return FALSE;
 
-    if (month < 1) return FALSE;
-    if (month > 12) return FALSE;
+  if (month < 1) return FALSE;
+  if (month > 12) return FALSE;
 
-    if (day < 1) return FALSE;
-    if (day > 31) return FALSE;
-    
-    sTM.tm_year = year - 1900;	/* tm years are 1900-based */
-    sTM.tm_mon = month - 1;	/* tm months are 0-based */
-    sTM.tm_mday = day;		/* tm days are 1-based. Logic, isn't it? */
+  if (day < 1) return FALSE;
+  if (day > 31) return FALSE;
+  
+  sTM.tm_year = year - 1900;	/* tm years are 1900-based */
+  sTM.tm_mon = month - 1;	/* tm months are 0-based */
+  sTM.tm_mday = day;		/* tm days are 1-based. Logic, isn't it? */
 
-    *pdate = mktime(&sTM);
-    return (*pdate != (time_t)-1L);
-    }
+  *pdate = mktime(&sTM);
+  return (*pdate != (time_t)-1L);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -2448,14 +2375,13 @@ int parse_date(char *token, time_t *pdate)
 /* Make sure to include os2.h at the beginning of this file, and before that
     to define the INCL_VIO constant to enable the necessary section */
 
-int GetScreenRows(void)
-    {
-    VIOMODEINFO vmi;
+int GetScreenRows(void) {
+  VIOMODEINFO vmi;
 
-    VioGetMode(&vmi, 0);
+  VioGetMode(&vmi, 0);
 
-    return vmi.row;
-    }
+  return vmi.row;
+}
 
 #endif
 
@@ -2470,25 +2396,23 @@ int GetScreenRows(void)
 /* Make sure to include windows.h at the beginning of this file, and especially
     the kernel section */
 
-int GetScreenRows(void)
-    {
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
+int GetScreenRows(void) {
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-    if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-        return 0;   /* Disable pause mode if console size unknown */
+  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    return 0;   /* Disable pause mode if console size unknown */
 
-    return csbi.srWindow.Bottom + 1 - csbi.srWindow.Top;
-    }
+  return csbi.srWindow.Bottom + 1 - csbi.srWindow.Top;
+}
 
-int GetScreenColumns(void)
-    {
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
+int GetScreenColumns(void) {
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-    if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-        return 0;   /* Disable pause mode if console size unknown */
+  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    return 0;   /* Disable pause mode if console size unknown */
 
-    return csbi.srWindow.Right + 1 - csbi.srWindow.Left;
-    }
+  return csbi.srWindow.Right + 1 - csbi.srWindow.Left;
+}
 
 #endif
 
@@ -2500,18 +2424,16 @@ int GetScreenColumns(void)
 
 #ifdef _MSDOS
 
-int GetScreenRows(void)
-    {
-    uint8_t far *fpc;
+int GetScreenRows(void) {
+  uint8_t far *fpc;
 
-    fpc = (uint8_t far *)0x00400084L;	// *fpc = Index of the last row
-    return *fpc + 1;               	// Number of rows
-    }
+  fpc = (uint8_t far *)0x00400084L;	// *fpc = Index of the last row
+  return *fpc + 1;               	// Number of rows
+}
 
-int GetScreenColumns(void)
-    {
-    return *(int far *)0x0040004AL;
-    }
+int GetScreenColumns(void) {
+  return *(int far *)0x0040004AL;
+}
 
 #endif
 
@@ -2532,44 +2454,41 @@ int GetScreenColumns(void)
 static char term_buffer[2048];
 static int tbInitDone = FALSE;
 
-int init_terminal_data()
-    {
-    char *termtype;
-    int success;
+int init_terminal_data() {
+  char *termtype;
+  int success;
 
-    if (tbInitDone) return 0;
+  if (tbInitDone) return 0;
 
-    termtype = getenv ("TERM");
-    if (termtype == 0) {
-      printf("Specify a terminal type with `setenv TERM <yourtype>'.\n");
-      exit(1);
-    }
+  termtype = getenv ("TERM");
+  if (termtype == 0) {
+    printf("Specify a terminal type with `setenv TERM <yourtype>'.\n");
+    exit(1);
+  }
 
-    success = tgetent (term_buffer, termtype);
-    if (success < 0) {
-      printf("Could not access the termcap data base.\n");
-      exit(1);
-    }
-    if (success == 0) {
-      printf("Terminal type `%s' is not defined.\n", termtype);
-      exit(1);
-    }
+  success = tgetent (term_buffer, termtype);
+  if (success < 0) {
+    printf("Could not access the termcap data base.\n");
+    exit(1);
+  }
+  if (success == 0) {
+    printf("Terminal type `%s' is not defined.\n", termtype);
+    exit(1);
+  }
 
-    tbInitDone = TRUE;
-    return 0;
-    }
+  tbInitDone = TRUE;
+  return 0;
+}
 
-int GetScreenRows(void)
-    {
-    init_terminal_data();
-    return tgetnum("li");
-    }
+int GetScreenRows(void) {
+  init_terminal_data();
+  return tgetnum("li");
+}
 
-int GetScreenColumns(void)
-    {
-    init_terminal_data();
-    return tgetnum ("co");
-    }
+int GetScreenColumns(void) {
+  init_terminal_data();
+  return tgetnum ("co");
+}
 
 #else
 
@@ -2664,27 +2583,26 @@ int GetScreenColumns(void) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-void printflf(void)
-   {
-   static int nlines = 0;
-   int c;
-
-   printf("\n");
-
-   if (!iPause) return;
-
-   nlines += 1;
-   if (nlines < iPause) return;
-   nlines = 0;
-
-   fflush(stdin);		/* Flush any leftover characters */
-   printf("Press any key to continue... ");
-   c = _getch();		/* Pause until a key is pressed */
-   fflush(stdin);		/* Flush any additional characters that may be left */
-   printf("\r                                   \r");
-   if (c==3 || c==27) finis(0);	/* Ctrl-C or ESC pressed. Exit immediately. */
-   return;
-   }
+void printflf(void) {
+  static int nlines = 0;
+  int c;
+  
+  printf("\n");
+  
+  if (!iPause) return;
+  
+  nlines += 1;
+  if (nlines < iPause) return;
+  nlines = 0;
+  
+  fflush(stdin);		/* Flush any leftover characters */
+  printf("Press any key to continue... ");
+  c = _getch();			/* Pause until a key is pressed */
+  fflush(stdin);		/* Flush any additional characters that may be left */
+  printf("\r                                   \r");
+  if (c==3 || c==27) finis(0);	/* Ctrl-C or ESC pressed. Exit immediately. */
+  return;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -2706,18 +2624,16 @@ void printflf(void)
 
 #pragma warning(disable:4704)	// Ignore the inline assembler warning
 
-uint16_t GetPsp(void)
-    {
-    register uint16_t psp;
-    _asm
-	{
-	mov	ah, 51h
-	int	21h
-	mov	psp, bx
-	}
-    return psp;
+uint16_t GetPsp(void) {
+  register uint16_t psp;
+  _asm {
+    mov	ah, 51h
+    int	21h
+    mov	psp, bx
+  }
+  return psp;
 // #pragma warning(disable:4035)	// Ignore the no return value warning
-    }
+}
 // #pragma warning(default:4035)
 #pragma warning(default:4704)	// Restore the inline assembler warning
 
@@ -2756,105 +2672,97 @@ uint16_t GetPsp(void)
 
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 
-int SetMasterEnv(char *pszName, char *pszValue)
-    {
-    uint16_t wPsp;		// PSP segment
-    uint16_t wParentPsp;	// Parent process PSP segment
-    uint16_t wEnv;		// Environment segment
-    char far *lpEnv;		// Environment base address
-    uint16_t wEnvSize;		// Environment size
-    char far *lpName;		// Current variable name
-    char far *lpc;
-    char c;
+int SetMasterEnv(char *pszName, char *pszValue) {
+  uint16_t wPsp;		// PSP segment
+  uint16_t wParentPsp;	// Parent process PSP segment
+  uint16_t wEnv;		// Environment segment
+  char far *lpEnv;		// Environment base address
+  uint16_t wEnvSize;		// Environment size
+  char far *lpName;		// Current variable name
+  char far *lpc;
+  char c;
 
-    // ~~jfl 1999-02-15 Under MS-DOS 7, lower case variable names are possible.
-    // strupr(pszName);    // MS-DOS SET command changes variable to upper case.
+  // ~~jfl 1999-02-15 Under MS-DOS 7, lower case variable names are possible.
+  // strupr(pszName);    // MS-DOS SET command changes variable to upper case.
 
-    // Walk up the parent chain until command.com, which is its own parent.
-    for (wPsp = GetPsp();	// The Program Segment Prefix for this program
-	 wPsp != (wParentPsp = FARWORD(wPsp, 0x16));
-	 wPsp = wParentPsp)	// Walk up our parent process' PSP
-	 {
+  // Walk up the parent chain until command.com, which is its own parent.
+  for (wPsp = GetPsp();	// The Program Segment Prefix for this program
+       wPsp != (wParentPsp = FARWORD(wPsp, 0x16));
+       wPsp = wParentPsp) {	// Walk up our parent process' PSP
 #if NEEDED
-	 if (iVerbose) printf("PSP=%04X, Parent at %04X\n", wPsp, wParentPsp);
+       if (iVerbose) printf("PSP=%04X, Parent at %04X\n", wPsp, wParentPsp);
 #endif
-	 }
+     }
 
-    // Get command.com environment
-    wEnv = FARWORD(wPsp, 0x2C);
-    lpEnv = (char far *)FARPTR(wEnv, 0);
-    // ~~jfl 1999-06-29. Convert paras to bytes.
-    wEnvSize = FARWORD(WORD1(lpEnv)-1, 3) << 4;
+  // Get command.com environment
+  wEnv = FARWORD(wPsp, 0x2C);
+  lpEnv = (char far *)FARPTR(wEnv, 0);
+  // ~~jfl 1999-06-29. Convert paras to bytes.
+  wEnvSize = FARWORD(WORD1(lpEnv)-1, 3) << 4;
 #if NEEDED
-    if (iVerbose) printf("Environment at %lp, size 0x%X\n", lpEnv, wEnvSize);
+  if (iVerbose) printf("Environment at %lp, size 0x%X\n", lpEnv, wEnvSize);
 #endif
-    // Scan the environment for our variable
-    for (lpName=lpEnv; *lpName; )
-	{
-	char *pcn;
+  // Scan the environment for our variable
+  for (lpName=lpEnv; *lpName; ) {
+    char *pcn;
 
-	for (lpc = lpName, pcn = pszName; *pcn; lpc++, pcn++)
-	    {
-	    if (*lpc != *pcn) break;
-	    }
-
-	if ((!*pcn) && (*lpc == '='))
-	    {
-	    lpc += 1; // lpc = environment string value
-	    break;    // Found!
-	    }
-
-	while (*lpName) lpName++;   // Skip that environment string
-	lpName++;		    // Skip the trailing NUL
-	}
-#if NEEDED
-    if (iVerbose)
-	{
-	char string[100];
-	_fstrncpy(string, lpName, sizeof(string));
-	if (string[0])
-	    printf("Found \"%s\"\n", string);
-	else
-	    printf("%s not found.\n", pszName);
-	}
-#endif
-
-    // Move up the rest of the environment
-    if (*lpName)
-	{
-	char far *lpNextName;
-	for (lpc=lpName; *lpc; lpc++) ;
-	lpNextName = lpc + 1;
-	while (*lpNextName)
-	    {
-	    for ((lpc=lpNextName); c=*lpc; lpc++) *(lpName++) = c;
-	    *(lpName++) = '\0';
-	    lpNextName = lpc+1;
-	    }
-	}
-    *lpName = '\0';		    // Temporary end of list
-    if (!pszValue || !pszValue[0]) return 0;	// Just delete the string
-
-    // Append our string
-    wEnvSize -= (uint16_t)(lpName-lpEnv);
-    if (wEnvSize < (uint16_t)(strlen(pszName)+strlen(pszValue)+3))
-	{
-#if NEEDED
-	if (iVerbose) printf("Out of environment space\n");
-#endif
-	return 1;	   // Out of environment space
-	}
-    while ((*(lpName++)=*(pszName++)));	// Copy the name and trailing NUL
-    *(lpName-1) = '=';			// Overwrite the previous NUL
-    while ((*(lpName++)=*(pszValue++)));// Copy the value and trailing NUL
-    *(lpName++) = '\0'; 		// Append the final NUL
-
-#if NEEDED
-    if (iVerbose) printf("String \"%s=%s\" added.\n", pszName, pszValue);
-#endif
-
-    return 0;
+    for (lpc = lpName, pcn = pszName; *pcn; lpc++, pcn++) {
+      if (*lpc != *pcn) break;
     }
+
+    if ((!*pcn) && (*lpc == '=')) {
+      lpc += 1; // lpc = environment string value
+      break;    // Found!
+    }
+
+    while (*lpName) lpName++;   // Skip that environment string
+    lpName++;		    // Skip the trailing NUL
+  }
+#if NEEDED
+  if (iVerbose {
+    char string[100];
+    _fstrncpy(string, lpName, sizeof(string));
+    if (string[0]) {
+      printf("Found \"%s\"\n", string);
+    } else {
+      printf("%s not found.\n", pszName);
+    }
+  }
+#endif
+
+  // Move up the rest of the environment
+  if (*lpName) {
+    char far *lpNextName;
+    for (lpc=lpName; *lpc; lpc++) ;
+    lpNextName = lpc + 1;
+    while (*lpNextName) {
+      for ((lpc=lpNextName); c=*lpc; lpc++) *(lpName++) = c;
+      *(lpName++) = '\0';
+      lpNextName = lpc+1;
+    }
+  }
+  *lpName = '\0';		 	   // Temporary end of list
+  if (!pszValue || !pszValue[0]) return 0;	// Just delete the string
+
+  // Append our string
+  wEnvSize -= (uint16_t)(lpName-lpEnv);
+  if (wEnvSize < (uint16_t)(strlen(pszName)+strlen(pszValue)+3)) {
+#if NEEDED
+    if (iVerbose) printf("Out of environment space\n");
+#endif
+    return 1;	   // Out of environment space
+  }
+  while ((*(lpName++)=*(pszName++)));	// Copy the name and trailing NUL
+  *(lpName-1) = '=';			// Overwrite the previous NUL
+  while ((*(lpName++)=*(pszValue++)));	// Copy the value and trailing NUL
+  *(lpName++) = '\0'; 			// Append the final NUL
+
+#if NEEDED
+  if (iVerbose) printf("String \"%s=%s\" added.\n", pszName, pszValue);
+#endif
+
+  return 0;
+}
 
 #pragma warning(default:4706)
 
@@ -2957,7 +2865,7 @@ int FixNameCase(char *pszPathname) {
   pDir = opendir(pszPath);
   if (!pDir) {
     if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
-    RETURN_BOOL_COMMENT(FALSE, ("Can't open directory \"%s\"\n", pszPath));
+    RETURN_BOOL_COMMENT(FALSE, ("Cannot open directory \"%s\"\n", pszPath));
   }
   while ((pDE = readdir(pDir))) {
     if (_stricmp(pszName, pDE->d_name)) continue; /* Names differ */
