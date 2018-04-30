@@ -55,13 +55,18 @@
 *    2017-10-31 JFL Added options -i and -I. Changed the default back to      *
 *		    iContinue = FALSE, negating the 2012-01-09 decision above.*
 *		    Version 3.2.					      *
+*    2018-04-29 JFL Make sure WIN32 pathname buffers are larger than 260 B.   *
+*		    Changed option -d to -D, and -debug to -d.		      *
+*    2018-04-30 JFL Check errors for all calls to chdir() and getcwd().	      *
+*		    Rewrote finis() so that it displays errors internally.    *
+*		    Version 3.3.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.2"
-#define PROGRAM_DATE    "2017-10-31"
+#define PROGRAM_VERSION "3.3"
+#define PROGRAM_DATE    "2018-04-30"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -81,6 +86,7 @@
 #include <fnmatch.h>		/* We use wild card file name matching */
 #include <unistd.h>		/* For chdir() */
 #include <errno.h>
+#include <stdarg.h>
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
 typedef unsigned long uintmax_t;
@@ -100,8 +106,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE 13                /* 8.3 name length = 8+1+3+1 = 13 */
+#define HAS_DRIVES TRUE
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
@@ -115,8 +120,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
+#define HAS_DRIVES TRUE
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
@@ -130,8 +134,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "\\"
-#define PATHNAME_SIZE CCHMAXPATH	/* FILENAME_MAX incorrect in stdio.h */
-#define NODENAME_SIZE CCHMAXPATHCOMP
+#define HAS_DRIVES TRUE
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
@@ -145,8 +148,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define DIRSEPARATOR_CHAR '/'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "/"
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE FILENAME_MAX
+#define HAS_DRIVES FALSE
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define IGNORECASE FALSE
 
@@ -154,9 +156,33 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #endif /* defined(__unix__) */
 
+/*********************************** Other ***********************************/
+
+#if (!defined(DIRSEPARATOR_CHAR)) || (!defined(EXE_OS_NAME))
+#error "Unidentified OS. Please define OS-specific settings for it."
+#endif
+
 /********************** End of OS-specific definitions ***********************/
 
 /* Local definitions */
+
+#define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
+#define NODENAME_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
+
+#if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
+  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
+  #define NEW_PATHNAME_BUF(var) char var[PATHNAME_SIZE]
+#else	/* Avoid stack overflows by storing too large variables on stack */
+  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
+  #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
+#endif
+#if !PATHNAME_BUFS_IN_HEAP
+  #define TRIM_PATHNAME_BUF(var) do {} while (0)
+  #define FREE_PATHNAME_BUF(var) do {} while (0)
+#else
+  #define TRIM_PATHNAME_BUF(var) do {char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0)
+  #define FREE_PATHNAME_BUF(var) free(var);
+#endif
 
 /* Define a type for the total size. Must be at least 48bits for large disk sizes. */
 /* Note: constant _INTEGRAL_MAX_BITS >= 64 is not defined on some Unix systems. */
@@ -207,9 +233,9 @@ char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
 
 /* Function prototypes */
 
-char *version(void);		    /* Build a string with the program versions */
+char *version(int iLibsVer);	    /* Build a string with the program versions */
 void usage(void);                   /* Display a brief help and exit */
-void finis(int retcode);            /* Return to the initial drive & exit */
+void finis(int retcode, ...);       /* Return to the initial drive & exit */
 int parse_date(char *token, time_t *pdate); /* Convert the argument to a time_t */
 int Size2String(char *pBuf, total_t ll); /* Convert size to a decimal, with a comma every 3 digits */
 int Size2StringWithUnit(char *pBuf, total_t llSize); /* Idem, appending the user-specified unit */
@@ -260,11 +286,12 @@ int main(int argc, char *argv[]) {
         || (arg[0] == '/')
 #endif
        ) { /* It's a switch */
-      if (streq(arg+1, "b")) {
+      char *opt = arg+1;
+      if (streq(opt, "b")) {
 	band = TRUE;
 	continue;
       }
-      if (streq(arg+1, "c")) {
+      if (streq(opt, "c")) {
 	iUseCsz = TRUE; /* Use the cluster size for size calculations */
 	if (   ((i+1) < argc)
 	    && sscanf(argv[i+1], "%ld", &csz)
@@ -273,17 +300,17 @@ int main(int argc, char *argv[]) {
 	}
       continue;
       }
-      if (streq(arg+1, "d")) {
+      if (streq(opt, "D")) {
 	sOpts.subdirs = TRUE;
 	continue;
       }
 #ifdef _DEBUG
-      if (streq(arg+1, "debug")) {
+      if (streq(opt, "d")) {
 	DEBUG_ON();
 	continue;
       }
 #endif
-      if (streq(arg+1, "from")) {
+      if (streq(opt, "from")) {
 	dateminarg = argv[++i];
 	if (!parse_date(dateminarg, &fConstraints.datemin)) {
 	  fprintf(stderr, "Error: Invalid date format: -from %s\n", dateminarg);
@@ -291,50 +318,50 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
-      if (   streq(arg+1, "help")
-	  || streq(arg+1, "h")
-	  || streq(arg+1, "?")) {
+      if (   streq(opt, "help")
+	  || streq(opt, "h")
+	  || streq(opt, "?")) {
 	usage();
       }
-      if (streq(arg+1, "g")) {
+      if (streq(opt, "g")) {
 	pszUnit = "GB";
 	continue;
       }
-      if (streq(arg+1, "H")) {
+      if (streq(opt, "H")) {
 	iHuman = FALSE;
 	continue;
       }
-      if (streq(arg+1, "i")) {
+      if (streq(opt, "i")) {
 	iContinue = TRUE;
 	continue;
       }
-      if (streq(arg+1, "I")) {
+      if (streq(opt, "I")) {
 	iContinue = FALSE;
 	continue;
       }
-      if (streq(arg+1, "k")) {
+      if (streq(opt, "k")) {
 	pszUnit = "KB";
 	continue;
       }
-      if (streq(arg+1, "m")) {
+      if (streq(opt, "m")) {
 	pszUnit = "MB";
 	continue;
       }
-      if (streq(arg+1, "nologo")) continue; /* Old option retired */
-      if (streq(arg+1, "q")) {
+      if (streq(opt, "nologo")) continue; /* Old option retired */
+      if (streq(opt, "q")) {
 	iQuiet = TRUE;
 	continue;
       }
-      if (   streq(arg+1, "r")
-      	  || streq(arg+1, "s")) {
+      if (   streq(opt, "r")
+      	  || streq(opt, "s")) {
 	sOpts.recur = TRUE;
 	continue;
       }
-      if (streq(arg+1, "t")) {
+      if (streq(opt, "t")) {
 	sOpts.total = TRUE;
 	continue;
       }
-      if (streq(arg+1, "to")) {
+      if (streq(opt, "to")) {
 	datemaxarg = argv[++i];
 	if (!parse_date(datemaxarg, &fConstraints.datemax)) {
 	  fprintf(stderr, "Error: Invalid date format: -to %s\n", datemaxarg);
@@ -342,12 +369,12 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
-      if (streq(arg+1, "v")) {
+      if (streq(opt, "v")) {
 	iVerbose = TRUE;
 	continue;
       }
-      if (streq(arg+1, "V")) {
-	printf("%s\n", version());
+      if (streq(opt, "V")) {
+	printf("%s\n", version(TRUE));
 	exit (0);
       }
       fprintf(stderr, "Warning: Unrecognized switch %s. Ignored.\n", arg);
@@ -415,30 +442,33 @@ int main(int argc, char *argv[]) {
 #endif
 
   /* Get the initial drive, and change to the target drive if provided */
-#ifndef __unix__
+#if HAS_DRIVES
   init_drive = (char)getdrive();
   if (from && (from[1] == ':')) {
     if (from[0] >= 'a') from[0] -= 'a' - 'A';
     DEBUG_PRINTF(("chdrv(%d); // Drive %c:'\n", from[0] - '@', from[0]));
     err = chdrive(from[0] - '@');
     if (err) {
-      fprintf(stderr, "Error: Cannot access drive %c:\n", from[0]);
-      finis(RETCODE_INACCESSIBLE);
+      finis(RETCODE_INACCESSIBLE, "Cannot access drive %c", from[0]);
     }
     from += 2;
   }
 #endif
 
   /* Current directory on the target drive */
-  getcwd(init_dir, PATHNAME_SIZE);
+  pc = getcwd(init_dir, PATHNAME_SIZE);
+  if (!pc) {
+    finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  }
 
   /* Go to the target directory */
   if (from && from[0]) {
+#if !HAS_MSVCLIBX
     DEBUG_PRINTF(("chdir(\"%s\");\n", from));
+#endif
     err = chdir(from);
     if (err) {
-      fprintf(stderr, "Error: Cannot access directory %s.\n", from);
-      finis(RETCODE_INACCESSIBLE);
+      finis(RETCODE_INACCESSIBLE, "Cannot access directory %s", from);
     }
   }
 
@@ -467,12 +497,26 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " EXE_OS_NAME
-	  DEBUG_VERSION
-	  );
+/* Get the program version string, optionally with libraries versions */
+char *version(int iLibsVer) {
+  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
+  char *pszVer = NULL;
+  if (iLibsVer) {
+    char *pszLibVer = ""
+#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
+#include "msvclibx_version.h"
+	  " ; MsvcLibX " MSVCLIBX_VERSION
+#endif
+#if defined(__SYSLIB_H__)	/* If used SysLib */
+#include "syslib_version.h"
+	  " ; SysLib " SYSLIB_VERSION
+#endif
+    ;
+    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
+    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
+  }
+  if (!pszVer) pszVer = pszMainVer;
+  return pszVer;
 }
 
 void usage(void) {
@@ -488,10 +532,10 @@ Switches:\n\
   -b	      Skip a line every 5 lines, to improve readability.\n\
   -c	      Use the actual cluster size to compute the total size.\n\
   -c size     Use the specified cluster size to compute the total size.\n\
-  -d	      Compare every subdirectory of the target directory.\n"
+  -D	      Compare every subdirectory of the target directory.\n"
 #ifdef _DEBUG
 "\
-  -debug      Output debug information.\n"
+  -d          Output debug information.\n"
 #endif
 "\
   -from Y-M-D List only files starting from that date.\n\
@@ -521,24 +565,48 @@ Pattern:      Wildcards pattern. Default: " PATTERN_ALL "\n\
 #ifdef __unix__
 "\n"
 #endif
-, version());
+, version(FALSE));
 
   exit(0);
 }
 
-void finis(int retcode) {
-  switch (retcode) {
-    case RETCODE_SUCCESS:
-      break;
-    case RETCODE_NO_MEMORY:
-      printf("Not enough memory.\n");
-      break;
-    default:
-      break;
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    finis						      |
+|									      |
+|   Description:    Display opt. msgs; Restore current path and drv, and exit.|
+|									      |
+|   Parameters:     retcode	The exit code				      |
+|		    pszFormat	Optional format string to pass to printf      |
+|		    ...		Optional printf arguments		      |
+|		    							      |
+|   Notes:	    If retcode is not 0, but no error message is needed, it   |
+|		    is necessary to pass a NULL for pszFormat.		      |
+|		    							      |
+|   Returns:	    Does not return					      |
+|									      |
+|   History:								      |
+|    2018-04-30 JFL Redesigned with optional error messages to display.       |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+void finis(int retcode, ...) {
+  if (retcode) { /* There might be an error message to report */
+    va_list vl;
+    char *pszFormat;
+
+    va_start(vl, retcode);
+    pszFormat = va_arg(vl, char *);
+    if (pszFormat) { /* There is an error message to report */
+      fprintf(stderr, "dirsize: Error: ");
+      vfprintf(stderr, pszFormat, vl);
+      fputs(".\n", stderr);
+    }
+    va_end(vl);
   }
 
-  chdir(init_dir);
-#ifndef __unix__
+  chdir(init_dir);	/* Don't test errors, as we're likely to be here due to another error */
+#if HAS_DRIVES
   chdrive(init_drive);
 #endif
 
@@ -594,7 +662,7 @@ int SelectFilesCB(const struct dirent *pDE, void *p) {
 total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
   total_t size = 0;
   total_t dSize;
-  char szCurDir[PATHNAME_SIZE];
+  NEW_PATHNAME_BUF(szCurDir);
   struct dirent *pDE;
   struct dirent **ppDE;
   struct dirent **pDElist;
@@ -605,11 +673,16 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
 
   DEBUG_ENTER(("ScanFiles(%p);\n", pConstraints));
 
+#if PATHNAME_BUFS_IN_HEAP
+  if (!szCurDir) {
+    finis(RETCODE_NO_MEMORY, "Out of memory");
+  }
+#endif
+
   /* Scan all files */
   nDE = scandirX(".", &pDElist, SelectFilesCB, NULL, pConstraints);
   if (nDE < 0) {
-    fprintf(stderr, "Error: Out of directory handles.\n");
-    finis(RETCODE_NO_MEMORY);
+    finis(RETCODE_NO_MEMORY, "Out of directory handles");
   }
   for (ppDE = pDElist; nDE--; ppDE++) {
     pDE = *ppDE;
@@ -641,11 +714,16 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
     pOpts->depth -= 1;
     if (pOpts->total) size += dSize;  /* Totalize sizes */
     if (pOpts->recur) {
-      getcwd(szCurDir, sizeof(szCurDir)); /* Canonic name of the target directory */
+      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+      if (!pcd) {
+	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+      }
+      TRIM_PATHNAME_BUF(szCurDir);
       affiche(szCurDir, size);
     }
   }
 
+  FREE_PATHNAME_BUF(szCurDir);
   DEBUG_LEAVE(("return %" TOTAL_FMT ";\n", size));
   return size;
 }
@@ -686,15 +764,20 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
   int nDE;
   int iErr;
   struct stat sStat;
-  char szCurDir[PATHNAME_SIZE];
+  NEW_PATHNAME_BUF(szCurDir);
 
   DEBUG_ENTER(("ScanDirs(%p);\n", pConstraints));
+
+#if PATHNAME_BUFS_IN_HEAP
+  if (!szCurDir) {
+    finis(RETCODE_NO_MEMORY, "Out of memory");
+  }
+#endif
 
   /* Get all subdirectories */
   nDE = scandir(".", &pDElist, SelectDirsCB, alphasort);
   if (nDE < 0) {
-    fprintf(stderr, "Error: Out of directory handles.\n");
-    finis(RETCODE_NO_MEMORY);
+    finis(RETCODE_NO_MEMORY, "Out of directory handles");
   }
   for (ppDE = pDElist; nDE--; ppDE++) {
     pDE = *ppDE;
@@ -710,22 +793,32 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
 #endif
     iErr = chdir(pDE->d_name);
     if (iErr) {
-      char *pszSeverity = iContinue ? "Warning" : "Error";
+      char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
       if (iVerbose || !iContinue) {
-	getcwd(szCurDir, sizeof(szCurDir));   /* Canonic name of the target directory */
+	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+	if (!pcd) {
+	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory, nor access %s. %s", pDE->d_name, strerror(errno));
+	}
       	fprintf(stderr, "%s: Cannot access directory %s" DIRSEPARATOR_STRING "%s. %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
       }
-      if (!iContinue) finis(RETCODE_INACCESSIBLE);
+      if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
     } else {
       dSize = ScanFiles(pOpts, pConstraints);
       if (!pOpts->depth) {
-	getcwd(szCurDir, sizeof(szCurDir));   /* Canonic name of the target directory */
+	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+	if (!pcd) {
+	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+	}
+	/* Don't trim the pathname here, as we're in a loop, and subsequent paths might be longer */
 	affiche(szCurDir, dSize);
       }
 #if !HAS_MSVCLIBX
       DEBUG_PRINTF(("chdir(\"..\");\n"));
 #endif
       iErr = chdir("..");
+      if (iErr) {
+	finis(RETCODE_INACCESSIBLE, "Cannot return to \"%s\" parent directory. %s", szCurDir, strerror(errno));
+      }
   
       size += dSize;  /* Totalize sizes */
     }
@@ -734,6 +827,7 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
   }
   free(pDElist);
 
+  FREE_PATHNAME_BUF(szCurDir);
   DEBUG_LEAVE(("return %" TOTAL_FMT ";\n", size));
   return size;
 }
@@ -1090,15 +1184,22 @@ long GetClusterSize(char drive)	       /* Get cluster size */
 #ifdef __unix__
 
 long GetClusterSize(char drive)	{       /* Get cluster size */
-  char path[PATHNAME_SIZE];
+  NEW_PATHNAME_BUF(path);
   struct stat st;
   int iErr;
+
+#if PATHNAME_BUFS_IN_HEAP
+  if (!path) {
+    finis(RETCODE_NO_MEMORY, "Out of memory");
+  }
+#endif
 
   if (drive != 0) return 0;		/* No such thing under Unix */
   if (!getcwd(path, PATHNAME_SIZE)) return 0;
   if (strcmp(path, "/")) strcpy(path, ".");
   iErr = stat(path, &st);
   if (iErr) st.st_blksize = 0;
+  FREE_PATHNAME_BUF(path);
   return st.st_blksize;
 }
 
@@ -1162,7 +1263,12 @@ int scandirX(const char *pszName,
   while ((pDirent = readdir(pDir))) {
     if (!pDirent->d_type) { /* Some filesystems don't set this field */
       struct stat st;
-      char szName[PATHNAME_SIZE];
+      NEW_PATHNAME_BUF(szName);
+#if PATHNAME_BUFS_IN_HEAP
+      if (!szName) {
+	finis(RETCODE_NO_MEMORY, "Out of memory");
+      }
+#endif
       sprintf(szName, "%s/%s", pszName, pDirent->d_name);
       lstat(szName, &st);
       if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
@@ -1182,6 +1288,7 @@ int scandirX(const char *pszName,
 #if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
       if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
 #endif
+      FREE_PATHNAME_BUF(szName);
     }
     if (cbSelect && !cbSelect(pDirent, pRef)) continue; /* We don't want this one. Continue search. */
     /* OK, we've selected this one. So append a copy of this dirent to the list. */
