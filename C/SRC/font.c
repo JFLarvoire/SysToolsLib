@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *		    							      *
 *   Filename	    font.c						      *
 *		    							      *
@@ -8,17 +8,18 @@
 *    https://msdn.microsoft.com/en-us/library/windows/desktop/dd144821(v=vs.85).aspx
 *		    							      *
 *   History								      *
-*    2014-02-27 JFL Created the codepage.c program.                           *
-*    2018-01-24 JFL Display console font information relevant to codepages.   *
+*    2018-01-24 JFL Created this program.				      *
 *    2018-03-07 JFL Corrected the help screen.				      *
+*    2018-05-02 JFL Corrected again the help screen.			      *
 *		    							      *
-*         � Copyright 2017 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.1"
-#define PROGRAM_DATE    "2018-03-07"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2018-05-02"
 
+#define _UTF8_SOURCE
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #include <stdio.h>
@@ -176,7 +177,7 @@ char *version(int iLibsVer) {
 
 void usage(void) {
   printf("\n\
-font version %s - Get information this system's fonts.\n\
+font version %s - Get information about this system's fonts.\n\
 \n\
 Usage: font [SWITCHES] [CODEPAGE]\n\
 \n\
@@ -188,7 +189,7 @@ Switches:\n\
   -v          Display verbose information\n\
   -V          Display this program version and exit\n\
 \n\
-Author: Jean-Francois Larvoire\n\
+Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ", version(FALSE));
 #ifdef __unix__
   printf("\n");
