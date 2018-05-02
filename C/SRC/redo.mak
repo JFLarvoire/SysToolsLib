@@ -23,3 +23,13 @@
 
 # Memory model for 16-bit C compilation and misc macros
 MEM=L			# Memory model for C compilation
+
+!IF "$(T)"=="DOS"
+SOURCES=redo.c
+!ELSE # WIN95, WIN32, WIN64
+SOURCES=redo.c
+!IF EXIST("redo.rc")	# WIN95, WIN32, WIN64
+SOURCES=redo.c redo.rc
+!ENDIF
+!ENDIF
+
