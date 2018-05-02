@@ -4,9 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.13] 2018-05-02
+### New
+- C/SRC/font.c: A new program to get information about available fonts.
+
 ## [Unreleased] 2018-04-26
 ### Fixed
-- C/SRC/dirsize.c, redo.c: Make sure WIN32 pathname buffers are larger than 260 Bytes.  
+- C/SRC/dirc.c, dirsize.c, redo.c: Make sure WIN32 pathname buffers are larger than 260 Bytes.  
   Together with 2018-04-26 changes, this ensures that dirsize and redo support paths > 260 bytes.  
   Redo still has an unavoidable limitation, documented in the help, in Windows installations without the Windows 10
   260-bytes paths fix enabled in the registry. (But it does generate correct commands when using {} arg replacements.)
