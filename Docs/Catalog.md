@@ -88,6 +88,7 @@ cascade.tcl			| -W-	| Align a set of similar windows regularly. Uses Twapi.					
 Disable-IPv6Components.ps1	| -W-	| Disables Windows IPv6 component. Useful for diagnosing networking issues.		|
 driver.exe			| -W-	| Manage Windows 9X and 2000+ drivers.							|
 Enable-IPv6Components.ps1	| -W-	| Enables Windows IPv6 component. Useful for diagnosing networking issues.		|
+font.exe                 	| -W-	| Display information about available fonts.                              		| `font -f` &:# Enumerate fixed-width fonts usable in the console
 Get-ProductKey.ps1		| -W-	| Display the product key used for activating Windows.					|
 hosts.bat			| -W-	| Edit the hosts file with notepad							| `hosts` &:# Must be run as administrator, else the hosts file can't be saved
 IESec.ps1			| -W-	| Display Internet Explorer security mode settings.					|
