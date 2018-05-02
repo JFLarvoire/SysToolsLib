@@ -465,7 +465,7 @@ WCHAR *ConcatPathW(const WCHAR *pwszHead, const WCHAR *pwszTail, WCHAR *pwszBuf,
   int iReAlloc = FALSE;	/* TRUE if pwszBuf should be reallocated in the end */
   int l;
 
-  DEBUG_WPRINTF(("ConcatPathW(\"%s\", \"%s\", %p, %Iu);\n", pwszHead, pwszTail, pwszBuf, lBuf));
+  DEBUG_WPRINTF((L"ConcatPathW(\"%s\", \"%s\", %p, %Iu);\n", pwszHead, pwszTail, pwszBuf, lBuf));
 
   if (!pwszBuf) {
     iAlloc = TRUE;
