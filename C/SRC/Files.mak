@@ -29,6 +29,7 @@ PROGRAMS = \
   dirsize.exe     \
   driver.exe      \
   dump.exe        \
+  font.exe        \
   gpt.exe         \
   inicomp.exe     \
   lessive.exe     \
@@ -106,6 +107,8 @@ ZIPSOURCES =		 \
   exe                    \
   exe.bat                \
   Files.mak              \
+  font.c		 \
+  font.mak		 \
   gpt.cpp		 \
   gpt.mak		 \
   inicomp.c              \
