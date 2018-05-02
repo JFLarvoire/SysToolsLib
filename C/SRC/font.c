@@ -177,7 +177,7 @@ char *version(int iLibsVer) {
 
 void usage(void) {
   printf("\n\
-font version %s - Get information about this system's fonts.\n\
+font version %s - Get information about this system's fonts\n\
 \n\
 Usage: font [SWITCHES] [CODEPAGE]\n\
 \n\
