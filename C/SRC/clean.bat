@@ -15,13 +15,14 @@
 :#   2015-10-27 JFL Added the BIOS and WIN95 target dirs.                     #
 :#   2015-12-09 JFL Added support for a config.bat file defining an %OUTDIR%. #
 :#   2017-10-26 JFL The default OUTDIR is now bin\.			      #
+:#   2018-05-02 JFL Use zap.exe instead of zap.bat.			      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-10-26"
+set "VERSION=2018-05-02"
 set "ARG0=%~f0"
 set "SCRIPT=%~nx0"
 set "TOOLS=%~dp0"
@@ -39,7 +40,7 @@ goto :eof
 
 :main
 set "CONFIG.BAT=config.%COMPUTERNAME%.bat"
-set "CMD=zap.bat"
+for %%z in ("zap.exe") do set "ZAP=%%~$PATH:z" &:# Was set "ZAP=call zap.bat"
 
 goto :get_arg
 :next_arg
@@ -48,7 +49,7 @@ shift
 if .%1.==.. goto help
 if .%1.==.-?. goto help
 if .%1.==./?. goto help
-if .%1.==.-X. set "CMD=%CMD% -X" & goto :next_arg
+if .%1.==.-X. set "ZAP=%ZAP% -X" & goto :next_arg
 
 if exist %CONFIG.BAT% call %CONFIG.BAT% &:# Possibly defines %OUTDIR%
 
@@ -65,7 +66,7 @@ for %%d in (ARM BIOS DOS WIN95 IA64 WINXP WIN32 WIN64) do (
   set "DIR=%BP%%%d"
   if exist !DIR! (
     pushd !DIR!
-    call %CMD% -p !DIR!\ -r %1.*
+    %ZAP% -p !DIR!\ -r %1.*
     popd
   )
 )
