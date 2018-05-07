@@ -137,6 +137,7 @@ tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Win
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
 TimeX.bat	| -W-	| Time the execution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
 touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
+unixtime.tcl    | -WL   | Convert a Unix Epoch time (# of seconds since Jan 1970) to a readable time, and back. | `unixtime "Thu Jan 4 03:00:09 PST 2018"`
 umountw.bat     | -W-   | Unmount a .wim Windows disk Image using a Unix-like command.                          | `umountw` &:# Unmounts the image at the default C:\mnt\wim
 vcvars.bat      | -W-   | Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
 whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
