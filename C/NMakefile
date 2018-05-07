@@ -168,6 +168,7 @@ release:
 	:# Add 32-bits programs (from the selected dir in WIN95 WINXP WIN32)
 	%MSG% Adding C WIN32 programs from %PROGRAMS_DIR%
 	pushd "%PROGRAMS_DIR%"
+	for %%p in ("%CD%") do set "WIN32=%%~nxp"
 	:# But some programs may not have been built, if the necessary libraries are missing.
 	set "ALL_PROGRAMS=%PROGRAMS%"
 	set "PROGRAMS="
@@ -176,10 +177,10 @@ release:
 	  if exist %%p (
 	    set "PROGRAMS=!PROGRAMS! %%p"
 	  ) else if exist "..\WIN32\%%~p" (
-	    %MSG% Warning: %%p not found. Using that in WIN32 instead.
+	    %MSG% Warning: %WIN32%\%%p not found. Using that in WIN32 instead.
 	    set "PROGRAMS2=!PROGRAMS2! %%p"
 	  ) else (
-	    %MSG% Warning: %%p not found
+	    %MSG% Warning: %WIN32%\%%p not found
 	  )
 	)
 	if defined PROGRAMS (
