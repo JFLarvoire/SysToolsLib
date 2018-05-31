@@ -134,13 +134,22 @@
 *    2018-02-27 JFL All updateall() returns done via :cleanup_and_return.     *
 *		    Version 3.5.5.    					      *
 *    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h. Version 3.5.6.   *
+*    2018-05-31 JFL Use the new zapFile() and zapDir() from zap.c.            *
+*		    Added option -e to erase target files not in the source.  *
+*                   Bug fix: The force option did corrupt the mode flag.      *
+*                   Copy empty directories if the copyempty flag is set.      *
+*                   Bug fix: Avoid a crash in update_link() on invalid links. *
+*                   Prefix all error messages with the program name.          *
+*                   Bug fix: mkdirp() worked, but returned an error, if the   *
+*		     path contained a trailing [back]slash.		      *
+*		    Version 3.6.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.5.6"
-#define PROGRAM_DATE    "2018-04-24"
+#define PROGRAM_VERSION "3.6"
+#define PROGRAM_DATE    "2018-05-31"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -311,8 +320,9 @@ static int iRecur = 0;			/* Recursive update */
 // UINT cp = 0;				/* Initial console code page */
 #define cp codePage			/* Initial console code page in iconv.c */
 #endif
+static int iErase = 0;			/* Flag indicating Erase mode */
 
-/* forward references */
+/* Forward references */
 
 char *version(int iVerbose);		/* Build the version string. If verbose, append library versions */
 void usage(void);			/* Display usage */
@@ -340,6 +350,28 @@ void stcgfn(char *, const char *);	/* Get file name */
 void stcgfp(char *, const char *);	/* Get file path */
 void strmfp(char *, const char *, const char *);    /* Make file pathname */
 void strsfp(const char *, char *, char *);          /* Split file pathname */
+char *NewPathName(const char *path, const char *name); /* Create a new pathname */
+/* zap functions options */
+typedef struct zapOpts {
+  int iFlags;
+  char *pszPrefix;
+} zapOpts;
+/* zapOpts iFlags */
+#define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
+#define FLAG_NOEXEC	0x0002		/* Do not actually execute */
+#define FLAG_RECURSE	0x0004		/* Recursive operation */
+#define FLAG_NOCASE	0x0008		/* Ignore case */
+#define FLAG_FORCE	0x0010		/* Force operation on read-only files */
+int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
+int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
+int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
+int zapDirM(const char *path, int iMode, zapOpts *pzo); /* Faster */
+
+/* Global program name variables */
+char *program;	/* This program basename, with extension in Windows */
+char *progcmd;	/* This program invokation name, without extension in Windows */
+int GetProgramNames(char *argv0);	/* Initialize the above two */
+int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
 
 /* Exit front end, with support for the optional final pause */
 void do_exit(int n) {
@@ -380,6 +412,9 @@ int main(int argc, char *argv[])
     int nErrors = 0;
     int iExit = 0;
 
+    /* Extract the program names from argv[0] */
+    GetProgramNames(argv[0]);
+
     for (argn = 1; ((argn<argc) && IsSwitch(argv[argn])); argn += 1)
         {
         arg = argv[argn];
@@ -412,6 +447,13 @@ int main(int argc, char *argv[])
 	    continue;
             }
         )
+	if (   streq(arg, "-e")     /* Erase mode on */
+	    || streq(arg, "--erase"))
+            {
+	    iErase = TRUE;
+	    if (iVerbose) printf("Erase mode on.\n");
+	    continue;
+            }
 	if (   streq(arg, "-E")     /* NoEmpty mode on */
 	    || streq(arg, "-noempty")  /* The historical name of that switch */
 	    || streq(arg, "--noempty"))
@@ -543,7 +585,7 @@ int main(int argc, char *argv[])
       sprintf(szDrive, "%c:\\", target[0]);
       iErr = stat(szDrive, &s);
       if (iErr) {
-	fprintf(stderr, "Error: Cannot access drive %c: %s\n", target[0], strerror(errno));
+	printError("Error: Cannot access drive %c: %s", target[0], strerror(errno));
 	do_exit(1);
       }
     }
@@ -556,7 +598,7 @@ int main(int argc, char *argv[])
         }
 
     if (nErrors) { /* Display a final summary, as the errors may have scrolled up beyond view */
-      fprintf(stderr, "Error: %d file(s) failed to be updated\n", nErrors);
+      printError("Error: %d file(s) failed to be updated", nErrors);
       iExit = 1;
     }
 
@@ -607,12 +649,13 @@ Switches:\n"
   -d|--debug    Output debug information.\n"
 #endif
 "\
-  -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\
-  -F|--force    Force mode. Overwrite read-only files.\n\
+  -e|--erase    Erase mode. Delete destination files not in the source.\n\
+  -E|--noempty  Noempty mode. Don't copy empty file.\n\
 ", version(0));
 
     printf("\
-  -E|--noempty  Noempty mode. Don't copy empty file.\n\
+  -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\
+  -F|--force    Force mode. Overwrite read-only files.\n\
   -h|--help|-?  Display this help screen.\n\
   -i|--ignorecase    Case-insensitive pattern matching. Default for DOS/Windows.\n\
   -k|--casesensitive Case-sensitive pattern matching. Default for Unix.\n"
@@ -713,6 +756,10 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     int err;
     int nErrors = 0;
     int iTargetDirExisted;
+    zapOpts zo = {FLAG_VERBOSE, "- "};
+    if (iRecur) zo.iFlags |= FLAG_RECURSE;
+    if (test) zo.iFlags |= FLAG_NOEXEC;
+    if (force) zo.iFlags |= FLAG_FORCE;
 
     DEBUG_ENTER(("updateall(\"%s\", \"%s\");\n", p1, p2));
 
@@ -725,7 +772,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     name = malloc(PATHNAME_SIZE);
     fullpathname = malloc(PATHNAME_SIZE);
     if ((!path0) || (!path1) || (!path2) || (!path3) || (!path) || (!name) || (!fullpathname)) {
-      fprintf(stderr, "Error: Not enough memory\n");
+      printError("Error: Not enough memory");
       nErrors += 1;
       goto cleanup_and_return;
     }
@@ -789,7 +836,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     /* Scan all files that match the wild cards */
     pDir = opendir(path0);
     if (!pDir) {
-      fprintf(stderr, "Error: can't open directory \"%s\": %s\n", path0, strerror(errno));
+      printError("Error: can't open directory \"%s\": %s", path0, strerror(errno));
       nErrors += 1;
       goto cleanup_and_return;
     }
@@ -806,25 +853,80 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       if (pDE->d_type == DT_LNK) {
-	err = update_link(path1, path2);
+	err = update_link(path1, path2); /* Displays error messages on stderr */
       }
       else
 #endif
       {
-      	err = update(path1, path2);
+      	err = update(path1, path2); /* Does not display error messages on stderr */
+	if (err) {
+	  printError("Error: Failed to create \"%s\". %s", path2, strerror(errno));
+	}
       }
       if (err) {
-      	fprintf(stderr, "Error: Failed to create \"%s\". %s.\n", path2, strerror(errno));
       	nErrors += 1;
       	/* Continue the directory scan, looking for other files to update */
       }
     }
     closedir(pDir);
 
+    /* Scan target files that might be erased */
+    if (iErase) {
+      fullpath(path2, p2, PATHNAME_SIZE); /* Build absolute pathname of source */
+      pDir = opendir(p2);
+      if (pDir) {
+	while ((pDE = readdir(pDir))) {
+	  struct stat sStat;
+	  if (streq(pDE->d_name, ".")) continue;    /* Skip the . directory */
+	  if (streq(pDE->d_name, "..")) continue;   /* Skip the .. directory */
+	  DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+	  if (fnmatch(pattern, pDE->d_name, iFnmFlag) == FNM_NOMATCH) continue;
+	  strmfp(path3, path2, pDE->d_name);  /* Compute the target file pathname */
+	  DEBUG_PRINTF(("// Found %s\n", path3));
+	  strmfp(path1, path0, pDE->d_name); /* Compute the corresponding source file pathname */
+	  if (access(path1, F_OK) == -1) { /* If that source file does not exist */
+	    char *pszType = "file";
+#if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
+	    err = dirent2stat(pDE, &sStat);
+#else /* Unix has to query it separately */
+	    err = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
+#endif
+	    if (err) {
+	      printError("Error: Can't stat \"%s\"", path1);
+	      nErrors += 1;
+	      continue;
+	    }
+	    switch (pDE->d_type) {
+	      case DT_DIR:
+		err = zapDirM(path3, sStat.st_mode, &zo);
+		nErrors += err;
+		break;
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+	      case (DT_LNK):
+	      	pszType = "link";
+		// Fall through
+#endif
+	      case DT_REG:
+	      	err = zapFileM(path3, sStat.st_mode, &zo);
+		if (err) {
+		  printError("Error: Failed to remove \"%s\"", path3);
+		  nErrors += 1;
+		}
+		break;
+	      default:
+		printError("Error: Can't delete \"%s\"", path3);
+		nErrors += 1;
+		break;
+	    }
+	  }
+	}
+      }
+    }
+
     if (iRecur) { /* Parse the directory again, looking for actual directories (not junctions nor symlinkds) */
       pDir = opendir(path0);
       if (!pDir) {
-	fprintf(stderr, "Error: Can't open directory \"%s\": %s\n", path0, strerror(errno));
+	printError("Error: Can't open directory \"%s\": %s", path0, strerror(errno));
       	nErrors += 1;
         goto cleanup_and_return;
       }
@@ -853,26 +955,28 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 		    as we're interested only in its inner files, and there may be none to copy */
 	  } else {
 	    if (p2_exists && !p2_is_dir) {
-	      err = unlink(path2);	/* Delete the conflicting file/link */
+	      err = zapFile(path2, &zo); /* Delete the conflicting file/link */
 	      if (err) {
-		fprintf(stderr, "Error: Failed to remove \"%s\"\n", path2);
+		printError("Error: Failed to remove \"%s\"", path2);
 		nErrors += 1;
 		continue;	/* Try updating something else */
 	      }
 	      p2_exists = FALSE;
 	    }
-#if 0	    /* 2015-01-12 JFL Don't create the directory now, as it may never be needed,
+	    /* 2015-01-12 JFL Don't create the directory now, as it may never be needed,
 				if there are no files that match the input pattern */
-	    if (!p2_exists) {	/* Create the missing target directory */
+	    /* 2018-05-31 JFL Actually do it, but only if the copyempty flag is set */
+	    if (copyempty && !p2_exists) { /* Create the missing target directory */
 	      printf("%s\\\n", fullpathname);
-	      err = mkdirp(path2, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	      if (err) {
-		fprintf(stderr, "Error: Failed to create directory \"%s\"\n", p2);
-		nErrors += 1;
-		continue;	/* Try updating something else */
+	      if (!test) {
+	      	err = mkdirp(path2, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if (err) {
+		  printError("Error: Failed to create directory \"%s\". %s", path2, strerror(errno));
+		  nErrors += 1;
+		  continue;	/* Try updating something else */
+		}
 	      }
 	    }
-#endif
 	  }
 	}
 
@@ -942,31 +1046,22 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* If the target exists, make sure it's a file */
     e = lstat(p2, &sP2stat); /* Use lstat to avoid following links */
     if (e == 0) {
+      zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
+      if (test) zo.iFlags |= FLAG_NOEXEC;
+      if (force) zo.iFlags |= FLAG_FORCE;
       if (S_ISDIR(sP2stat.st_mode)) {	/* If the target is a directory */
-	if (!test) {
-	  e = rmdir(p2);		/* Then remove it */
-	} else {
-	  if (iVerbose) {
-	    DEBUG_PRINTF(("// "));
-	    printf("Would delete directory %s\n", p2);
-	  }
-	  p2 = ""; /* Trick older() to think the target is deleted */
-	}
+      	zo.iFlags |= FLAG_VERBOSE; /* Show what's deleted, beyond the obvious target itself */
+      	e = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
+	if (test) p2 = ""; /* Trick older() to think the target is deleted */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       } else if (S_ISLNK(sP2stat.st_mode)) { /* Else if it's a link */
-	if (!test) {
-	  e = unlink(p2); /* Then deletes the link, not its target. */
-	} else {
-	  if (iVerbose) {
-	    DEBUG_PRINTF(("// "));
-	    printf("Would delete link %s\n", p2);
-	  }
-	  p2 = ""; /* Trick older() to think the target is deleted */
-	}
+      	zo.iFlags &= ~FLAG_VERBOSE; /* No need to show that that target is deleted */
+	e = zapFileM(p2, sP2stat.st_mode, &zo);	/* Deletes the link, not its target. */
+	if (test) p2 = ""; /* Trick older() to think the target is deleted */
 #endif /* defined(S_ISLNK) */
       } /* Else the target is a plain file */
       if (e) {
-      	fprintf(stderr, "Failed to remove \"%s\"\n", p2);
+      	printError("Failed to remove \"%s\"", p2);
       	RETURN_INT(e);
       }
     }
@@ -1078,49 +1173,45 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
         RETURN_CONST(0);
         }
 
-    if (!iVerbose) printf("%s\n", name);
+    printf("%s\n", name);
 
     if (bP2Exists) { // Then the target has to be removed, even if it's a link
+      zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
+      if (test) zo.iFlags |= FLAG_NOEXEC;
+      if (force) zo.iFlags |= FLAG_FORCE;
       // First, in force mode, prevent failures if the target is read-only
       if (force && !(sP2stat.st_mode & S_IWRITE)) {
-      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", p2, _S_IWRITE));
-      	err = chmod(p2, _S_IWRITE); /* Try making the target file writable */
+      	int iMode = sP2stat.st_mode | S_IWRITE;
+      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", p2, iMode));
+      	err = chmod(p2, iMode); /* Try making the target file writable */
       	DEBUG_PRINTF(("  return %d; // errno = %d\n", err, errno));
       }
       if (S_ISDIR(sP2stat.st_mode)) {
-	if (!test) err = rmdir(p2);		/* Then remove it */
-	else {
-	  if (iVerbose) {
-	    DEBUG_PRINTF(("// "));
-	    printf("Would delete directory %s\n", p2);
-	  }
-	}
+      	zo.iFlags |= FLAG_VERBOSE; /* Show what's deleted, beyond the obvious target itself */
+	err = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
       } else { // It's a file or a link
-	if (!test) err = unlink(p2); // If it's a link, deletes the link, not its target.
-	else if (!S_ISLNK(sP2stat.st_mode)) {
-	  if (iVerbose) {
-	    DEBUG_PRINTF(("// "));
-	    printf("Would delete file %s\n", p2);
-	  }
-	} // Else it's a link. Deleting it is normal, not worth mentioning in verbose mode.
+      	zo.iFlags &= ~FLAG_VERBOSE; /* No need to show that that target is deleted */
+	err = zapFileM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
+      	if (err) printError("Error: Failed to remove \"%s\"", p2);
       }
-      if (err) {
-      	fprintf(stderr, "Failed to remove \"%s\"\n", p2);
-      	RETURN_INT(err);
-      }
+      if (err) RETURN_INT(err);
     }
 
     strsfp(p2, path, NULL);
     if (!exists(path)) {
       err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       if (err) {
-      	fprintf(stderr, "\nError: Failed to create directory \"%s\". %s\n", path, strerror(errno));
+      	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
 	RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
       }
     }
 
     DEBUG_CODE(iSize = (int)) 
-    readlink(p1, target1, sizeof(target1));
+    err = (readlink(p1, target1, sizeof(target1)) < 0);
+    if (err) { /* This may fail for Linux Sub-System Symbolic Links */
+      printError("Error: Failed to read link \"%s\"", p1);
+      RETURN_INT(err);
+    }
 
     DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
     // e = copy(p1, p2);
@@ -1134,6 +1225,9 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 #endif
     err = symlink(target1, p2);
     if (!err) copydate(p2, p1);
+    if (err) {
+      printError("Error: Failed to create link \"%s\". %s", p2, strerror(errno));
+    }
 
     RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
     }
@@ -1202,8 +1296,11 @@ retry_open_targetfile:
     pfd = fopen(name2, "wb");
     if (!pfd) {
       if ((errno == EACCES) && (nAttempt == 1) && force) {
-      	int iErr = chmod(name2, _S_IWRITE); /* Try making the target file writable */
-      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", name2, _S_IWRITE));
+      	struct stat sStat = {0};
+      	int iErr = stat(name2, &sStat);
+      	int iMode = sStat.st_mode | _S_IWRITE;
+      	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", name2, iMode));
+      	iErr = chmod(name2, iMode); /* Try making the target file writable */
       	DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
       	if (!iErr) {
 	  nAttempt += 1;
@@ -1278,7 +1375,7 @@ int copy(char *name1, char *name2)
     if (!exists(path)) {
       e = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       if (e) {
-      	fprintf(stderr, "\nError: Failed to create directory \"%s\". %s\n", path, strerror(errno));
+      	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
       	return e;
       }
     }
@@ -1290,10 +1387,10 @@ int copy(char *name1, char *name2)
         case 0:
             break;
         case 1:
-	    fprintf(stderr, "\nError reading from file \"%s\"\n", name1);
+	    printError("Error reading from file \"%s\"", name1);
             break;
         case 2:
-	    fprintf(stderr, "\nError writing to file \"%s\"\n", name2);
+	    printError("Error writing to file \"%s\"", name2);
             break;
         default:
             break;
@@ -1420,6 +1517,8 @@ time_t getmodified(char *name) {
 |    2017-10-04 JFL Improved the error handling, stopping at the first error. |
 |		    Avoid testing access repeatedly if we know it'll fail.    |
 |    2017-10-06 JFL Added the iVerbose arguement.			      |
+|    2018-05-31 JFL Bug fix: This worked, but returned an error, if the path  |
+|		     contained a trailing [back]slash.			      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -1471,6 +1570,7 @@ int mkdirp(const char *pszPath0, mode_t pszMode) {
 	iSkipTest = TRUE; /* We know future existence tests will fail */
       }
       *pc = c; /* Restore pszPath */
+      if (c && !pc[1]) break; /* This was the trailing [back]slash */
     }
   }
   free(pszPath);
@@ -1789,4 +1889,288 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength) {
 }
 
 #endif /* _WIN32 */
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetProgramNames					      |
+|									      |
+|   Description     Extract the program names from argv[0]		      |
+|									      |
+|   Parameters      char *argv[0]					      |
+|									      |
+|   Returns	    0							      |
+|									      |
+|   Notes	    Sets global variables program and progcmd.		      |
+|		    Designed to work independantly of MsvcLibX.		      |
+|		    							      |
+|   History								      |
+|    2018-03-23 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int GetProgramNames(char *argv0) {
+#if defined(_MSDOS) || defined(_WIN32)
+#if defined(_MSC_VER) /* Building with Microsoft tools */
+#define strlwr _strlwr
+#endif
+  int lBase;
+  char *pBase;
+  char *p;
+  pBase = strrchr(argv0, '\\');
+  if ((p = strrchr(argv0, '/')) > pBase) pBase = p;
+  if ((p = strrchr(argv0, ':')) > pBase) pBase = p;
+  if (!(pBase++)) pBase = argv0;
+  lBase = (int)strlen(pBase);
+  program = strdup(pBase);
+  strlwr(program);
+  progcmd = strdup(program);
+  if ((lBase > 4) && !strcmp(program+lBase-4, ".exe")) {
+    progcmd[lBase-4] = '\0';
+  } else {
+    program = realloc(strdup(program), lBase+4+1);
+    strcpy(program+lBase, ".exe");
+  }
+#else /* Build for Unix */
+#include <libgen.h>	/* For basename() */
+  program = basename(strdup(argv0)); /* basename() modifies its argument */
+  progcmd = program;
+#endif
+  return 0;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    printError						      |
+|									      |
+|   Description     Print error messages with a consistent format	      |
+|									      |
+|   Parameters      char *pszFormat					      |
+|		    ...							      |
+|		    							      |
+|   Returns	    The number of characters written			      |
+|									      |
+|   Notes	    Uses global variables program and progcmd,		      |
+|		    set by GetProgramNames().				      |
+|		    							      |
+|   History								      |
+|    2018-05-31 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int printError(char *pszFormat, ...) {
+  va_list vl;
+  int n;
+
+  n = fprintf(stderr, "%s: ", program);
+  va_start(vl, pszFormat);
+  n += vfprintf(stderr, pszFormat, vl);
+  n += fprintf(stderr, ".\n");
+  va_end(vl);
+
+  return n;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    NewPathName						      |
+|									      |
+|   Description     Join a directory name and a file name into a new pathname |
+|									      |
+|   Parameters      const char *path		The directory name, or NULL   |
+|		    const char *name		The file name		      |
+|		    							      |
+|   Returns	    0 = Success, else # of failures encountered.	      |
+|		    							      |
+|   Notes	    Wildcards allowed only in the name part of the pathname.  |
+|		    							      |
+|   History								      |
+|    2017-10-05 JFL Created this routine				      |
+|    2017-10-09 JFL Allow the path pointer to be NULL. If so, dup. the name.  |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+char *NewPathName(const char *path, const char *name) {
+  size_t lPath = path ? strlen(path) : 0;
+  size_t lName = strlen(name);
+  char *buf = malloc(lPath + lName + 2);
+  if (!buf) return NULL;
+  if (lPath) strcpy(buf, path);
+  if (lPath && (buf[lPath-1] != DIRSEPARATOR_CHAR)) buf [lPath++] = DIRSEPARATOR_CHAR;
+  strcpy(buf+lPath, name);
+  return buf;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    zapDir						      |
+|									      |
+|   Description     Remove a directory, and all its files and subdirectories. |
+|									      |
+|   Parameters      const char *path		The directory pathname	      |
+|		    int iFlags			Verbose & NoExec flags	      |
+|		    							      |
+|   Returns	    0 = Success, else # of failures encountered.	      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2017-10-05 JFL Created this routine				      |
+|    2018-05-31 JFL Changed the iFlags argument to zapOpts *pzo.	      |
+|		    The FLAG_FORCE flag now deletes read-only files.	      |
+|		    Split zapFile() off of zapDir().			      |
+|		    Added zapXxxM routines, with an additional iMode argument,|
+|		     to avoid unnecessary slow calls to lstat() in Windows.   |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifdef _MSC_VER
+#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
+#pragma warning(disable:4459) /* Ignore the "declaration of 'VARIABLE' hides global declaration" warning */
+#endif
+
+int zapFileM(const char *path, int iMode, zapOpts *pzo) {
+  int iFlags = pzo->iFlags;
+  char *pszSuffix = "";
+  int iErr = 0;
+
+  DEBUG_ENTER(("zapFileM(\"%s\", 0x%04X);\n", path, iMode));
+
+  if (S_ISDIR(iMode)) {
+    errno = EISDIR;
+    RETURN_INT(1);
+  }
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+  if (S_ISLNK(iMode)) {
+    pszSuffix = ">";
+  }
+#endif
+
+  if (iFlags & FLAG_VERBOSE) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  if (iFlags & FLAG_NOEXEC) RETURN_INT(0);
+  if (iFlags & FLAG_FORCE) {
+    if (!(iMode & S_IWRITE)) {
+      iMode |= S_IWRITE;
+      DEBUG_PRINTF(("chmod(%p, 0x%X);\n", path, iMode));
+      iErr = -chmod(path, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+    }
+    if (iErr) RETURN_INT(iErr);
+  }
+  iErr = -unlink(path); /* If error, iErr = 1 = # of errors */
+
+  RETURN_INT(iErr);
+}
+
+int zapFile(const char *path, zapOpts *pzo) {
+  int iErr;
+  struct stat sStat;
+
+  DEBUG_ENTER(("zapFile(\"%s\");\n", path));
+
+  iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
+  if (iErr) RETURN_INT(1);
+  
+  iErr = zapFileM(path, sStat.st_mode, pzo);
+  RETURN_INT(iErr);
+}
+
+int zapDirM(const char *path, int iMode, zapOpts *pzo) {
+  char *pPath;
+  int iErr;
+  struct stat sStat;
+  DIR *pDir;
+  struct dirent *pDE;
+  int nErr = 0;
+  int iFlags = pzo->iFlags;
+  int iVerbose = iFlags & FLAG_VERBOSE;
+  int iNoExec = iFlags & FLAG_NOEXEC;
+  char *pszSuffix;
+
+  DEBUG_ENTER(("zapDirM(\"%s\", 0x%04X);\n", path, iMode));
+
+  if (!S_ISDIR(iMode)) {
+    errno = ENOTDIR;
+    RETURN_INT(1);
+  }
+
+  pDir = opendir(path);
+  if (!pDir) RETURN_INT(1);
+  while ((pDE = readdir(pDir))) {
+    DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+    pPath = NewPathName(path, pDE->d_name);
+    pszSuffix = "";
+#if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
+    iErr = dirent2stat(pDE, &sStat);
+#else /* Unix has to query it separately */
+    iErr = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
+#endif
+    if (!iErr) switch (pDE->d_type) {
+      case DT_DIR:
+      	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
+      	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
+      	iErr = zapDirM(pPath, sStat.st_mode, pzo);
+      	pszSuffix = DIRSEPARATOR_STRING;
+      	break;
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+      case DT_LNK:
+      	pszSuffix = ">";
+      	/* Fall through into the DT_REG case */
+#endif
+      case DT_REG:
+	iErr = zapFileM(pPath, sStat.st_mode, pzo);
+      	break;
+      default:
+      	iErr = 1;		/* We don't support deleting there */
+#if defined(ENOSYS)
+      	errno = ENOSYS;		/* Function not supported */
+#else
+      	errno = EPERM;		/* Operation not permitted */
+#endif
+      	pszSuffix = "?";
+      	break;
+    }
+    if (iErr) {
+      if (pDE->d_type != DT_DIR) printError("Error deleting \"%s%s\": %s", pPath, pszSuffix, strerror(errno));
+      nErr += iErr;
+      /* Continue the directory scan, looking for other files to delete */
+    }
+    free(pPath);
+  }
+  closedir(pDir);
+
+  iErr = 0;
+  pszSuffix = DIRSEPARATOR_STRING;
+  if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
+  if (iVerbose) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  if (!iNoExec) iErr = rmdir(path);
+  if (iErr) {
+    printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
+    nErr += 1;
+  }
+
+  RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
+}
+
+int zapDir(const char *path, zapOpts *pzo) {
+  int iErr;
+  struct stat sStat;
+
+  DEBUG_ENTER(("zapDir(\"%s\");\n", path));
+
+  iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
+  if (iErr) {
+    printError("Error: Can't stat \"%s\": %s", path, strerror(errno));
+    RETURN_INT(1);
+  }
+  
+  iErr = zapDirM(path, sStat.st_mode, pzo);
+  RETURN_INT(iErr);
+}
+
+#ifdef _MSC_VER
+#pragma warning(default:4706)
+#pragma warning(default:4459)
+#endif
 
