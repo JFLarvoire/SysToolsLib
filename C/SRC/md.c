@@ -15,11 +15,13 @@
 *   History:								      *
 *    2017-10-04 JFL Created this program, as a test of MsvcLibX's mkdir().    *
 *    2017-10-11 JFL Updated the help screen for Windows. Version 1.0.1.       *
+*    2018-05-31 JFL Bug fix: mkdirp() worked, but returned an error, if the   *
+*		     path contained a trailing [back]slash. Version 1.0.2.    *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.1"
-#define PROGRAM_DATE    "2017-10-11"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2018-05-31"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -362,6 +364,7 @@ int mkdirp(const char *pszPath0, mode_t pszMode, int iVerbose) {
 	iSkipTest = TRUE; /* We know future existence tests will fail */
       }
       *pc = c; /* Restore pszPath */
+      if (c && !pc[1]) break; /* This was the trailing [back]slash */
     }
   }
   free(pszPath);
