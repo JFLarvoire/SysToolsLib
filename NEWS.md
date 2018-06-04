@@ -4,6 +4,36 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-06-04
+### New
+- Tcl/unixtime.tcl: New script for converting Unix time stamps (# of seconds since 1970-01-01) <--> ISO 8601 date/time
+### Changed
+- Batch/Library.bat:  
+  Added function :Sub.Init to create a SUB variable containing a SUB (Ctrl-Z) character.
+- Batch/PySetup.bat:  
+  Also search %HOMEDRIVE% if it's not C:.
+- C/SRC/redo.mak:  
+  Added optional support for a redo.rc, if present in the current directory.
+- C/SRC/update.c:  
+  Added option -e to erase target files not in the source.  
+  Copy empty directories if the copyempty flag is set.  
+  Prefix all error messages with the program name.
+- C/SRC/zap.c:  
+  The force option now deletes read-only files. It's not necessary for recursive deletions anymore.  
+  Prefix all error messages with the program name.
+- Tcl/base64dec.tcl:  
+  Added option -q|--quiet.
+- Tcl/base64enc.tcl:  
+  The base64 package is not always available.
+- Tcl/rxrename.tcl:  
+  Added option -- to stop parsing options.
+### Fixed
+- C/SRC/update.c:  
+  The force option did corrupt the mode flag.  
+  Avoid a crash in update_link() on invalid links.
+- Tcl/rxrename.tcl:  
+  Fixed an exception when renaming files beginning with a -.
+
 ## [1.13] 2018-05-02
 ### New
 - C/SRC/font.c: A new program to get information about available fonts.
