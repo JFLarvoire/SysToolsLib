@@ -8,13 +8,18 @@
 #   Notes                                                                     #
 #                                                                             #
 #   History                                                                   #
-#    2008/12/31 JFL Created this script.                                      #
-#    2009/12/17 JFL Quote the output, to make it easier to verify correctness.#
+#    2008-12-31 JFL Created this script.                                      #
+#    2009-12-17 JFL Quote the output, to make it easier to verify correctness.#
 #                   Added options -i and -I.                                  #
+#    2018-05-12 JFL Fixed an exception when renaming files beginning with a -.#
+#                   Added option -- to stop parsing options.                  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
+
+# Set defaults
+set version "2018-05-12"
 
 # Set global defaults
 set script [file tail $argv0]   ; # This script name.
@@ -89,6 +94,7 @@ Batch rename using regular expressions.
 Usage: $argv0 [OPTIONS] rxOld [rxNew]
 
 Options:
+  --                Stop parsing further options
   -h, --help, -?    Display this help screen
   -q, --quiet       No output
   -v, --verbose     Verbose output
@@ -105,39 +111,49 @@ set nocase "-nocase" ; # Whether to ignore case
 # Scan all arguments.
 set args $argv
 set noExec 0
+set getOpts 1
 while {"$args" != ""} {
   set arg [PopArg]
-  switch -- $arg {
-    "-d" - "--debug" {
-      incr verbosity 2
-    }
-    "-h" - "--help" - "-?" {
-      puts -nonewline $usage
-      exit 0
-    }
-    "-i" - "--ignorecase" {
-      set nocase "-nocase"
-    }
-    "-I" - "--noignorecase" {
-      set nocase ""
-    }
-    "-q" - "--quiet" { # Verbose flag
-      incr verbosity -1
-    }
-    "-v" - "--verbose" { # Verbose flag
-      incr verbosity
-    }
-    "-X" - "--noexec" {
-      set noExec 1
-    }
-    default {
-      if [string match -* $arg] {
-	puts stderr "Unknown option: $arg. Ignored."
-      } elseif {"$rxOld" == ""} {
-	set rxOld $arg
-      } elseif {"$rxNew" == ""} {
-	set rxNew $arg
+  if {$getOpts && [string match -* $arg]} { # It's an option
+    switch -- $arg {
+      "--" {
+	set getOpts 0
       }
+      "-d" - "--debug" {
+	incr verbosity 2
+      }
+      "-h" - "--help" - "-?" {
+	puts -nonewline $usage
+	exit 0
+      }
+      "-i" - "--ignorecase" {
+	set nocase "-nocase"
+      }
+      "-I" - "--noignorecase" {
+	set nocase ""
+      }
+      "-q" - "--quiet" { # Verbose flag
+	incr verbosity -1
+      }
+      "-v" - "--verbose" { # Verbose flag
+	incr verbosity
+      }
+      "-V" - "--version" { # Display the program version
+	puts $version
+	exit 0
+      }
+      "-X" - "--noexec" {
+	set noExec 1
+      }
+      default {
+	puts stderr "Unknown option: $arg. Ignored."
+      }
+    }
+  } else { # It's a regular expression
+    if {"$rxOld" == ""} {
+      set rxOld $arg
+    } elseif {"$rxNew" == ""} {
+      set rxNew $arg
     }
   }
 }
@@ -179,7 +195,7 @@ foreach name [glob -nocomplain *] {
     }
   }
   if {(!$noExec) && ("$rxNew" != {\0})} {
-    file rename $name $newName
+    file rename -- $name $newName
   }
 }
 if {$verbosity > 1} {
