@@ -15,6 +15,7 @@ Batch\echoargs.bat
 Batch\ERRORLEV.BAT
 Batch\flvcache.bat
 Batch\gccache.bat
+Batch\history.bat
 Batch\hosts.bat
 Batch\ie.bat
 Batch\iecache.bat
