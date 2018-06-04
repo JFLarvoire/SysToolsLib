@@ -60,13 +60,15 @@
 *    2018-04-30 JFL Check errors for all calls to chdir() and getcwd().	      *
 *		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.3.					      *
+*    2018-05-31 JFL Changed #if DIRENT2STAT_DEFINED to _DIRENT2STAT_DEFINED.  *
+*		    Version 3.3.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.3"
-#define PROGRAM_DATE    "2018-04-30"
+#define PROGRAM_VERSION "3.3.1"
+#define PROGRAM_DATE    "2018-05-31"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -637,7 +639,7 @@ int SelectFilesCB(const struct dirent *pDE, void *p) {
 
   if (pDE->d_type != DT_REG) return FALSE;	/* We want only files */
 
-#ifdef DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
+#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
   iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
   iErr = lstat(pDE->d_name, &sStat);
@@ -688,7 +690,7 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
     pDE = *ppDE;
     memset(&sStat, 0, sizeof(sStat));
 
-#ifdef DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
+#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
     iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
     iErr = lstat(pDE->d_name, &sStat);
@@ -782,7 +784,7 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
   for (ppDE = pDElist; nDE--; ppDE++) {
     pDE = *ppDE;
 
-#ifdef DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
+#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
     iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
     iErr = lstat(pDE->d_name, &sStat);
