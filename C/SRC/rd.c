@@ -18,11 +18,14 @@
 *    2018-03-23 JFL Fixed several problems with error messages.		      *
 *		    Added routine GetProgramNames(); Use global variables     *
 *		    program and progcmd for help, and all tagged messages.    *
+*    2018-05-31 JFL Use the new zapFile() and zapDir() from zap.c.            *
+*                   Use routine printError() for all error messages.          *
+*		    Version 1.1.					      *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.2"
-#define PROGRAM_DATE    "2018-03-23"
+#define PROGRAM_VERSION "1.1"
+#define PROGRAM_DATE    "2018-05-31"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -62,6 +65,8 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
+#pragma warning(disable:4996)	/* Ignore the deprecated name warning */
+
 #endif /* defined(_WIN32) */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -87,12 +92,27 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 char *program;	/* This program basename, with extension in Windows */
 char *progcmd;	/* This program invokation name, without extension in Windows */
 int GetProgramNames(char *argv0);	/* Initialize the above two */
+int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
 
 /* Forward declarations */
 char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
-int rmdirRF(const char *path, int iFlags); /* Remove a directory, and all its files and subdirectories. */
+/* zap functions options */
+typedef struct zapOpts {
+  int iFlags;
+  char *pszPrefix;
+} zapOpts;
+/* zapOpts iFlags */
+#define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
+#define FLAG_NOEXEC	0x0002		/* Do not actually execute */
+#define FLAG_RECURSE	0x0004		/* Recursive operation */
+#define FLAG_NOCASE	0x0008		/* Ignore case */
+#define FLAG_FORCE	0x0010		/* Force operation on read-only files */
+int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
+int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
+int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
+int zapDirM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -109,9 +129,6 @@ int rmdirRF(const char *path, int iFlags); /* Remove a directory, and all its fi
 |    2014-02-05 JFL Created this routine                                      |
 *									      *
 \*---------------------------------------------------------------------------*/
-
-#define FLAG_VERBOSE	0x0001
-#define FLAG_NOEXEC	0x0002
 
 int main(int argc, char *argv[]) {
   int i;
@@ -187,10 +204,10 @@ int main(int argc, char *argv[]) {
   if (iTest) {		/* Call the raw rmdir() function */
     iErr = rmdir(pszPath);
   } else if (iForce) {	/* Recursively delete everything */
-    int iFlags = 0;
-    if (iVerbose) iFlags |= FLAG_VERBOSE;
-    if (iNoExec) iFlags |= FLAG_NOEXEC;
-    nErr = rmdirRF(pszPath, iFlags);
+    zapOpts zo = {FLAG_RECURSE | FLAG_NOCASE, ""};
+    if (iVerbose) zo.iFlags |= FLAG_VERBOSE;
+    if (iNoExec) zo.iFlags |= FLAG_NOEXEC;
+    nErr = zapDir(pszPath, &zo);
   } else {		/* Invoke the rmdir() function, if needed */
     if (exists(pszPath)) {
       if (iVerbose) {
@@ -203,11 +220,11 @@ int main(int argc, char *argv[]) {
   }
   if (iErr) {
     DEBUG_PRINTF(("errno = %d\n", errno));
-    fprintf(stderr, "%s \"%s\": Error: %s!\n", program, pszPath, strerror(errno));
+    printError("Failed to delete \"%s\": %s", pszPath, strerror(errno));
     nErr = 1;
   }
   if (nErr) {
-    if (nErr > 1) fprintf(stderr, "%s: %d files or directories could not be deleted!\n", program, nErr);
+    if (nErr > 1) printError("%d files or directories could not be deleted", nErr);
     iRet = 1;
   } else {
     iRet = 0;
@@ -331,6 +348,38 @@ int GetProgramNames(char *argv0) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
+|   Function	    printError						      |
+|									      |
+|   Description     Print error messages with a consistent format	      |
+|									      |
+|   Parameters      char *pszFormat					      |
+|		    ...							      |
+|		    							      |
+|   Returns	    The number of characters written			      |
+|									      |
+|   Notes	    Uses global variables program and progcmd,		      |
+|		    set by GetProgramNames().				      |
+|		    							      |
+|   History								      |
+|    2018-05-31 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int printError(char *pszFormat, ...) {
+  va_list vl;
+  int n;
+
+  n = fprintf(stderr, "%s: ", program);
+  va_start(vl, pszFormat);
+  n += vfprintf(stderr, pszFormat, vl);
+  n += fprintf(stderr, ".\n");
+  va_end(vl);
+
+  return n;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
 |   Function	    IsSwitch						      |
 |									      |
 |   Description     Test if a command line argument is a switch.	      |
@@ -391,7 +440,7 @@ char *NewPathName(const char *path, const char *name) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    rmdirRF						      |
+|   Function	    zapDir						      |
 |									      |
 |   Description     Remove a directory, and all its files and subdirectories. |
 |									      |
@@ -404,6 +453,11 @@ char *NewPathName(const char *path, const char *name) {
 |		    							      |
 |   History								      |
 |    2017-10-05 JFL Created this routine				      |
+|    2018-05-31 JFL Changed the iFlags argument to zapOpts *pzo.	      |
+|		    The FLAG_FORCE flag now deletes read-only files.	      |
+|		    Split zapFile() off of zapDir().			      |
+|		    Added zapXxxM routines, with an additional iMode argument,|
+|		     to avoid unnecessary slow calls to lstat() in Windows.   |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -411,39 +465,88 @@ char *NewPathName(const char *path, const char *name) {
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-int rmdirRF(const char *path, int iFlags) {
+int zapFileM(const char *path, int iMode, zapOpts *pzo) {
+  int iFlags = pzo->iFlags;
+  char *pszSuffix = "";
+  int iErr = 0;
+
+  DEBUG_ENTER(("zapFileM(\"%s\", 0x%04X);\n", path, iMode));
+
+  if (S_ISDIR(iMode)) {
+    errno = EISDIR;
+    RETURN_INT(1);
+  }
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+  if (S_ISLNK(iMode)) {
+    pszSuffix = ">";
+  }
+#endif
+
+  if (iFlags & FLAG_VERBOSE) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  if (iFlags & FLAG_NOEXEC) RETURN_INT(0);
+  if (iFlags & FLAG_FORCE) {
+    if (!(iMode & S_IWRITE)) {
+      iMode |= S_IWRITE;
+      DEBUG_PRINTF(("chmod(%p, 0x%X);\n", path, iMode));
+      iErr = -chmod(path, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+    }
+    if (iErr) RETURN_INT(iErr);
+  }
+  iErr = -unlink(path); /* If error, iErr = 1 = # of errors */
+
+  RETURN_INT(iErr);
+}
+
+int zapFile(const char *path, zapOpts *pzo) {
+  int iErr;
+  struct stat sStat;
+
+  DEBUG_ENTER(("zapFile(\"%s\");\n", path));
+
+  iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
+  if (iErr) RETURN_INT(1);
+  
+  iErr = zapFileM(path, sStat.st_mode, pzo);
+  RETURN_INT(iErr);
+}
+
+int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   char *pPath;
   int iErr;
-  struct stat sstat;
+  struct stat sStat;
   DIR *pDir;
   struct dirent *pDE;
   int nErr = 0;
+  int iFlags = pzo->iFlags;
   int iVerbose = iFlags & FLAG_VERBOSE;
   int iNoExec = iFlags & FLAG_NOEXEC;
   char *pszSuffix;
 
-  DEBUG_ENTER(("rmdirRF(\"%s\");\n", path));
+  DEBUG_ENTER(("zapDirM(\"%s\", 0x%04X);\n", path, iMode));
 
-  iErr = lstat(path, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
-  if (iErr && (errno == ENOENT) && !iVerbose) return 0; /* Already deleted. Not an error. */
-  if (iErr) return 1;
-  if (!S_ISDIR(sstat.st_mode)) {
+  if (!S_ISDIR(iMode)) {
     errno = ENOTDIR;
-    return 1;
+    RETURN_INT(1);
   }
 
   pDir = opendir(path);
-  if (!pDir) return 1;
+  if (!pDir) RETURN_INT(1);
   while ((pDE = readdir(pDir))) {
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
-    iErr = 0;
     pPath = NewPathName(path, pDE->d_name);
     pszSuffix = "";
-    switch (pDE->d_type) {
+#if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
+    iErr = dirent2stat(pDE, &sStat);
+#else /* Unix has to query it separately */
+    iErr = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
+#endif
+    if (!iErr) switch (pDE->d_type) {
       case DT_DIR:
       	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
       	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
-      	iErr = rmdirRF(pPath, iFlags);
+      	iErr = zapDirM(pPath, sStat.st_mode, pzo);
       	pszSuffix = DIRSEPARATOR_STRING;
       	break;
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
@@ -452,8 +555,7 @@ int rmdirRF(const char *path, int iFlags) {
       	/* Fall through into the DT_REG case */
 #endif
       case DT_REG:
-      	if (iVerbose) printf("%s%s\n", pPath, pszSuffix);
-      	if (!iNoExec) iErr = (unlink(pPath) != 0);
+	iErr = zapFileM(pPath, sStat.st_mode, pzo);
       	break;
       default:
       	iErr = 1;		/* We don't support deleting there */
@@ -466,7 +568,7 @@ int rmdirRF(const char *path, int iFlags) {
       	break;
     }
     if (iErr) {
-      if (pDE->d_type != DT_DIR) fprintf(stderr, "%s: Error deleting \"%s%s\": %s\n", program, pPath, pszSuffix, strerror(errno));
+      if (pDE->d_type != DT_DIR) printError("Error deleting \"%s%s\": %s", pPath, pszSuffix, strerror(errno));
       nErr += iErr;
       /* Continue the directory scan, looking for other files to delete */
     }
@@ -477,14 +579,31 @@ int rmdirRF(const char *path, int iFlags) {
   iErr = 0;
   pszSuffix = DIRSEPARATOR_STRING;
   if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
-  if (iVerbose) printf("%s%s\n", path, pszSuffix);
+  if (iVerbose) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
   if (!iNoExec) iErr = rmdir(path);
   if (iErr) {
-    fprintf(stderr, "%s: Error deleting \"%s%s\": %s\n", program, path, pszSuffix, strerror(errno));
+    printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
     nErr += 1;
   }
 
   RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
+}
+
+int zapDir(const char *path, zapOpts *pzo) {
+  int iErr;
+  struct stat sStat;
+
+  DEBUG_ENTER(("zapDir(\"%s\");\n", path));
+
+  iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
+  if (iErr) {
+    printError("Error: Can't stat \"%s\": %s", path, strerror(errno));
+    RETURN_INT(1);
+  }
+  
+  iErr = zapDirM(path, sStat.st_mode, pzo);
+  RETURN_INT(iErr);
 }
 
 #ifdef _MSC_VER
