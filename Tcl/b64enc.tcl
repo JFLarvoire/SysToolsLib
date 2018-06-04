@@ -9,13 +9,14 @@
 #                                                                             #
 #   History:								      #
 #    2017-11-17 JFL Created this program.                                     #
+#    2017-11-19 JFL The base64 package is not always available.               #
 #                                                                             #
 #         © Copyright 2017 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-set version "2017-11-17"
+set version "2017-11-19"
 set script [file tail $::argv0]    ; # This script name.
 set verbosity 1                    ; # 0=quiet; 1=normal; 2=verbose; 3=debug
 proc Debug {} { expr $::verbosity > 2 }
@@ -76,12 +77,17 @@ while {"$args" != ""} {
   }
 }
 
-# Make sure Tcl does not change anything in our back.
+# Make sure Tcl does not change anything.
 fconfigure stdin -translation binary
 # Do not change the output translation, as we're just outputing ASCII.
 
-package require base64
-
 set buf [read stdin]
-set encoded [base64::encode -maxlen $length $buf]
-puts -nonewline $encoded
+set err [catch {
+  package require base64	;# Not all Tcl installations have that package available
+  set encoded [base64::encode -maxlen $length $buf]
+  puts -nonewline $encoded
+} errMsg]
+if {$err} { # Revert to my old code, which is slow, but more resilient to illegal characters
+  puts stderr "Error: $errMsg."
+  # TODO: Provide a pure Tcl alternative
+}
