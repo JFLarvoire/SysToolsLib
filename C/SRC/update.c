@@ -889,7 +889,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 #if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
 	    err = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
-	    err = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
+	    err = -lstat(path3, &sStat); /* If error, iErr = 1 = # of errors */
 #endif
 	    if (err) {
 	      printError("Error: Can't stat \"%s\"", path1);
@@ -909,7 +909,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	      case DT_REG:
 	      	err = zapFileM(path3, sStat.st_mode, &zo);
 		if (err) {
-		  printError("Error: Failed to remove \"%s\"", path3);
+		  printError("Error: Failed to remove %s \"%s\"", pszType, path3);
 		  nErrors += 1;
 		}
 		break;
@@ -1138,7 +1138,7 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     int err;
     char name[PATHNAME_SIZE];
     char target1[PATHNAME_SIZE];
-    DEBUG_CODE(int iSize;)
+    int iSize;
 #if _MSVCLIBX_STAT_DEFINED
     struct stat sP1stat;
 #endif
@@ -1206,14 +1206,13 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
       }
     }
 
-    DEBUG_CODE(iSize = (int)) 
-    err = (readlink(p1, target1, sizeof(target1)) < 0);
-    if (err) { /* This may fail for Linux Sub-System Symbolic Links */
+    iSize = (int)readlink(p1, target1, sizeof(target1));
+    if (iSize < 0) { /* This may fail for Linux Sub-System Symbolic Links */
       printError("Error: Failed to read link \"%s\"", p1);
-      RETURN_INT(err);
+      RETURN_INT(1);
     }
-
     DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
+
     // e = copy(p1, p2);
 #if _MSVCLIBX_STAT_DEFINED
     err = lstat(p1, &sP1stat); // Use lstat to avoid following links
