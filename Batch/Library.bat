@@ -360,6 +360,11 @@ goto :eof
 call :Call.Init
 goto Call.end
 
+:Sub.Init # Create a SUB variable containing a SUB (Ctrl-Z) character
+>NUL copy /y NUL + NUL /a "%TEMP%\1A.chr" /a
+for /f %%c in (%TEMP%\1A.chr) do set "SUB=%%c"
+exit /b
+
 :Call.Init
 if not defined LCALL set "LCALL=call"	&:# Macro to call functions in this library
 set "POPARG=%LCALL% :PopArg"
