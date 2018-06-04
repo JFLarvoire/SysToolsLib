@@ -18,6 +18,7 @@
 :#   2017-01-24 JFL Added steps for the InstallPath and PythonPath setup.     #
 :#                  Always display test results, even in setup mode.	      #
 :#   2017-04-14 JFL Added a check of Explorer File Extensions User Choice.    #
+:#   2018-04-13 JFL Also search %HOMEDRIVE% if it's not C:.                   #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -25,7 +26,7 @@
 
 :init_batch
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-04-14"
+set "VERSION=2018-04-13"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1727,6 +1728,7 @@ goto :EOF
 
 :Main
 set "SEARCHDRIVES=C U"		&:# List of drives where to search for python.exe.
+if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE:~0,1% %SEARCHDRIVES%"
 set "PYTHONVER="		&:# Version to use. Default: The most recent one
 set "ACTION="
 set ">DEBUGOUT=>&2"	&:# Send debug output to stderr, so that it does not interfere with subroutines output capture
