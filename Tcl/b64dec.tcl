@@ -15,13 +15,14 @@
 #                   Use the base64::decode library routine by default.        #
 #                   Added option -V.                                          #
 #    2017-11-19 JFL Use tell instead of chan tell. This works in Tcl <= 8.4.  #
+#                   Added option -q|--quiet.                                  #
 #                                                                             #
 #         © Copyright 2017 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-set version "2017-11-19"
+set version "2017-11-20"
 set script [file tail $::argv0]    ; # This script name.
 set verbosity 1                    ; # 0=quiet; 1=normal; 2=verbose; 3=debug
 proc Debug {} { expr $::verbosity > 2 }
@@ -76,6 +77,7 @@ Usage: $script <input >output
 
 Options:
   -h, --help, -?        Display this help screen and exit.
+  -q, --quiet           Do not display warnings in case base64::decode fails
   -V, --version         Display this script version
 }]
 
@@ -90,6 +92,9 @@ while {"$args" != ""} {
     "-h" - "--help" - "-?" - "/?" {
       puts $usage
       exit 0
+    }
+    "-q" - "--quiet" {
+      set verbosity 0
     }
     "-V" - "--version" {	# Display this library version
       puts $version
@@ -118,13 +123,15 @@ if {[tell stdout] == -1} { # This is the console or a pipe
 fconfigure stdout -translation $translation
 
 set string [read stdin]
-set err [catch { # Use modern fast methods
-  package require base64
+set err [catch { # Use modern fast methods if possible.
+  package require base64	;# Not all Tcl installations have that package available
   set decoded [base64::decode $string] ;# This may fail if there are invalid characters
-  puts -nonewline $decoded
-} output]
-if {$err} { # Revert to my old code, which is slow, but more resilient to illegal characters
-  puts stderr "Warning: $output"
+  puts -nonewline $decoded	;# Success
+} errMsg]
+if {$err} { # Revert to my old code, which is slow, but has no dependency, and is more resilient to illegal characters
+  if {$verbosity} {
+    puts stderr "Warning: $errMsg. Trying again with a different, but slower, method."
+  }
   # Convert all characters arriving on standard input
   set bitBuf 0 ; # Bit buffer
   set nBits 0  ; # Number of valid bits in the bit buffer
