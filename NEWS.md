@@ -6,6 +6,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2018-06-04
 ### New
+- Batch/history.bat: Display a list of previous commands entered at the cmd prompt.
 - Tcl/unixtime.tcl: New script for converting Unix time stamps (# of seconds since 1970-01-01) <--> ISO 8601 date/time
 ### Changed
 - Batch/Library.bat:  
