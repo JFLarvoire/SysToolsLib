@@ -68,14 +68,15 @@
 :#   2017-08-29 JFL Fixed the type command output.			      #
 :#   2017-09-05 JFL Fixed the set -t option.      			      #
 :#                  Remove PowerShell-like drive colons and trailing \.       #
-:#                  In verbose mode, type now "casts" the value type.        #
+:#                  In verbose mode, type now "casts" the value type.         #
+:#   2018-06-13 JFL Added command md to create a key.			      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-09-05"
+set "VERSION=2018-06-13"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1692,7 +1693,22 @@ if defined OPTS set "CMD=!CMD! !OPTS!"
 
 :#----------------------------------------------------------------------------#
 
-:# Delete a key and all its contents. %1=Parent key pathname.
+:# Create a key. %1=Key pathname.
+:md
+:mkdir
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "KEY=%~1"
+if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
+set "OPTS="
+if "%~2"=="-f" set "OPTS=/f"	&:# Force writing without confirmation
+set CMD=reg add "!KEY!"
+if defined OPTS set "CMD=!CMD! !OPTS!"
+%EXEC% %CMD%
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+
+:# Delete a key and all its contents. %1=Key pathname.
 :rd
 :rmdir
 %FUNCTION% EnableExtensions EnableDelayedExpansion
@@ -1823,6 +1839,7 @@ echo Commands:
 echo   del PATH\NAME        Delete a key value
 echo   dir PATH             List subkeys/ and values names (1)
 echo   keys PATH            List subkeys names
+echo   md PATH              Create a key
 echo   open PATH            Open regedit.exe at the given key
 echo   rd PATH              Delete a key, and all sub-keys and value
 echo   set PATH\NAME DATA   Set the key value content 
