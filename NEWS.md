@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-07-02
+### Changed
+- Batch/hosts.bat: Removed the dependancy on elevate.exe, using it only if it is available.
+  Added option -X to test what command is executed.
+- Batch/regx.bat: Added command md to create a key.
+### Fixed
+- Batch/timex.bat: Now passes ! characters correctly in the command arguments.
+
 ## [Unreleased] 2018-06-04
 ### New
 - Batch/history.bat: Display a list of previous commands entered at the cmd prompt.
