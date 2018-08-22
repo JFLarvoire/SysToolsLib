@@ -16,13 +16,14 @@
 :#   2018-01-23 JFL Added option -2 to output the result to stderr.           #
 :#   2018-07-02 JFL Updated the debugging library to its latest version.      #
 :#                  Fixed an issue with arguments containing a '!'.           #
+:#   2018-08-22 JFL Don't display the command in verbose mode.                #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2018-07-02"
+set "VERSION=2018-08-22"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0"				&:# Script path
 set "SPATH=%SPATH:~0,-1%"			&:# Script path, without the trailing \
@@ -1295,7 +1296,7 @@ set STARTED=%HOUR%:%MINUTE%:%SECOND%.%MS%
 
 setlocal DisableDelayedExpansion &:# Else the ! characters do not make it through (Even if we use !ARGS!)
 for /l %%n in (1,1,%NLOOPS%) do (
-  %EXEC% %ARGS%
+  %EXEC% -V %ARGS%
 )
 
 call :Now
