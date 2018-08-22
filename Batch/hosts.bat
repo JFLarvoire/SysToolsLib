@@ -18,6 +18,7 @@
 :#      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
+
 setlocal EnableExtensions EnableDelayedExpansion
 goto :main
 
@@ -51,7 +52,7 @@ goto :eof
 :# Main routine
 :main
 set "ELEVATE="
-set "EXEC="
+set "EXEC=start"
 set "NOTEPAD=%windir%\System32\notepad.exe"
 set "HOSTS=%windir%\System32\Drivers\etc\hosts"
 
