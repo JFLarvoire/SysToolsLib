@@ -4171,12 +4171,19 @@ set "VAR=AFTER"
 goto :eof
 
 :#----------------------------------------------------------------------------#
+:# Test relative performances of various ways to return
+:# (And the conclusion is that they're all pretty equivalent)
+
+:gotoeof
+goto :eof
 
 :exit
 exit /b
 
 :exit/b
 exit /b %1
+
+:# Test relative performances of various macros
 
 :test_true
 %TRUE.EXE%
