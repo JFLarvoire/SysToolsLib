@@ -8,7 +8,9 @@
 *		    else it'd think this is a C++ source, and generate an     *
 *		    error "undefined reference to '__gxx_personality_v0'".    *
 *		    Alternative, use the -lstdc++ option to link-in C++ entry.*
-*									      *
+*		    							      *
+*		    There's a Linux tool called xxd that does almost the same.*
+*		    							      *
 *   History								      *
 *    1995-12-19 JFL jf.larvoire@hp.com created this program.		      *
 *    2004-04-05 JFL Dump the standard input if no file is specified.	      *
