@@ -31,13 +31,14 @@
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2017-12-05 JFL Added options -h and -r, for HTML and RTF. Version 1.4.   *
 *    2018-01-08 JFL Remove the UTF8 BOM when writing RTF. Version 1.4.1.      *
+*    2018-08-31 JFL Added the -d debug option. Version 1.4.2.		      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4.1"
-#define PROGRAM_DATE    "2018-01-08"
+#define PROGRAM_VERSION "1.4.2"
+#define PROGRAM_DATE    "2018-08-31"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -45,6 +46,7 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+#include "debugm.h"	/* SysToolsLib debug macros */
 
 #define COMPLAIN(s) fprintf(stderr, "Error %d: %s", GetLastError(), s)
 
@@ -66,6 +68,10 @@
 /* Local definitions */
 
 #define CP_NULL ((UINT)-1) /* No code page. Can't use 0 as CP_ACP is 0 */
+
+/* Global variables */
+
+DEBUG_GLOBALS
 
 /* Function prototypes */
 
@@ -121,6 +127,12 @@ int main(int argc, char *argv[]) {
 	codepage = CP_ACP;
 	continue;
       }
+      DEBUG_CODE(
+      if (streq(arg+1, "d")) {		/* -d: Debug */
+	iDebug = 1;
+	continue;
+      }
+      )
       if (streq(arg+1, "h")) {		/* Register the input as HTML */
 	type = RegisterClipboardFormat("HTML Format");
 	isHTML = TRUE;
@@ -154,6 +166,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* Go for it */
+  DEBUG_PRINTF(("The selected code page is %d\n", codepage));
 
   /* Force stdin to untranslated */
   _setmode( _fileno( stdin ), _O_BINARY );
@@ -265,7 +278,12 @@ Usage:\n\
 \n\
 Switches:\n\
   -?        Display this help screen\n\
-  -A        Assume input is ANSI text (Code page %u)\n\
+  -A        Assume input is ANSI text (Code page %u)\n"
+#ifdef _DEBUG
+"\
+  -d        Output debug information.\n"
+#endif
+"\
   -h        Register input as HTML\n\
   -O        Assume input is OEM text (Code page %u)\n\
   -r        Register input as RTF\n\
