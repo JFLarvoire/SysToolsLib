@@ -14,12 +14,15 @@
 :#   2013-09-10 JFL jf.larvoire@hpe.com created this script.                  #
 :#   2018-06-28 JFL Use elevate.exe if it is available, else do without.      #
 :#		    Added option -X to test what command is executed.         #
+:#   2018-07-23 JFL Exit from the script without waiting for notepad to exit. #
+:#   2018-08-27 JFL Added -V option to display the script version.            #
 :#		                                                              #
 :#      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
+set "VERSION=2018-08-27"
 goto :main
 
 :# runas /user:Administrator "%windir%\System32\notepad.exe" "%windir%\System32\Drivers\etc\hosts"
@@ -56,7 +59,8 @@ set "EXEC=start"
 set "NOTEPAD=%windir%\System32\notepad.exe"
 set "HOSTS=%windir%\System32\Drivers\etc\hosts"
 
-if [%1]==[-X] set "EXEC=call :echo"	&:# Display the command, but don't run it
+if [%1]==[-V] (echo %VERSION%) & exit /b &:# Display the script version and exit
+if [%1]==[-X] set "EXEC=call :echo"	 &:# Display the command, but don't run it
 
 :# Check if we're running as administrator already
 call :IsAdmin
