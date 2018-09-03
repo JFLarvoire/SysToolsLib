@@ -102,13 +102,17 @@
 *		    Use the 2017-02-11 workaround only when writing to a disk.*
 *    2017-08-03 JFL Cosmetic change: Align byte sizes with other XB sizes.    *
 *		    Version 4.0.					      *
+*    2018-07-12 JFL Do not dump when explicitly setting output to "-".        *
+*		    Added option -D to force dumping output to "-".           *
+*		    Write error messages to stderr.                           *
+*		    Version 4.1.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2017-08-03"
+#define PROGRAM_VERSION "4.1"
+#define PROGRAM_DATE    "2018-07-12"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -158,6 +162,9 @@ typedef int BOOL;
 
 #ifdef _MSDOS
 #define OS_NAME "MS-DOS"
+#endif
+#if defined(_WIN32) && defined(_MSC_VER)
+#pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 #endif
 #if defined(_WIN32) && !defined(_WIN64)
 #define OS_NAME "WIN32"
@@ -236,7 +243,7 @@ int _cdecl main(int argc, char *argv[]) {
   int iErr = 0;
   int iDump = FALSE;		// If TRUE, dump the sector
   int iPart = FALSE;		// If TRUE, dump a partition table
-  int iPipe = FALSE;
+  int iPipe = FALSE;		// If TRUE, write the output to stdout
   int iSPT = FALSE;		// If TRUE, update partition table
   long lPTParms[11];		// PartN, Type, Cyl0, Hd0, Sec0, Cyl1, Hd1, Sec1
   int iGeometry = FALSE;	// If TRUE, display the drive geometry
@@ -278,10 +285,6 @@ int _cdecl main(int argc, char *argv[]) {
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
-    if (streq(arg, "-")) {	// - is the standard place-holder for outputing data to stdout
-      iPipe = TRUE;
-      continue;
-    }
     if (IsSwitch(argv[i])) {	/* It's a switch */
       char *opt = arg+1;
       if (   streq(opt, "help")
@@ -306,6 +309,11 @@ int _cdecl main(int argc, char *argv[]) {
 	  continue;
 	}
       )
+      if (streq(opt, "D")) {
+	iDump = TRUE;
+	iQuiet = TRUE; // We don't want any progress message in dump mode
+	continue;
+      }
       if (streq(opt, "fbs")) {
 	iFindBS = TRUE;
 	iAll = TRUE;
@@ -479,8 +487,10 @@ int _cdecl main(int argc, char *argv[]) {
       pszFrom = argv[i];
       continue;
     }
-    if (streq(argv[i], ":")) {	// This was the old place-holder for outputing data to stdout
+    if ((streq(arg, "-")) ||	// - is the standard place-holder for outputing data to stdout
+        (streq(arg, ":"))) {	// This was the old place-holder for outputing data to stdout
       iPipe = TRUE;
+      iQuiet = TRUE; // We don't want any progress message while piping to stdout
       continue;
     }
     if ((!pszTo) && (!iPipe)) {	// This must be after the comparison with ":" or "-"
@@ -639,7 +649,7 @@ int _cdecl main(int argc, char *argv[]) {
   if (pszFrom) {
     hFrom = BlockOpen(pszFrom, "rb");
     if (!hFrom) {
-      printf("Error: Can't open %s\n", pszFrom);
+      fprintf(stderr, "Error: Can't open %s\n", pszFrom);
       exit(1);
     }
     if ((iSSize != -1) && (qwFromSect != QWMAX)) {
@@ -649,14 +659,14 @@ int _cdecl main(int argc, char *argv[]) {
   if (pszTo) {
     hTo = BlockOpen(pszTo, iReadOnly ? "rb" : "r+b");
     if (!hTo) {
-      printf("Error: Can't open %s\n", pszTo);
+      fprintf(stderr, "Error: Can't open %s\n", pszTo);
       BlockClose(hFrom);
       exit(1);
     }
     if ((iSSize != -1) && (qwToSect != QWMAX)) {
       qwToSect *= iSSize / BlockSize(hTo);
     }
-  } else {
+  } else if (!iPipe) {
     iDump = TRUE;	// Default: Dump if no target is specified
   }
 
@@ -862,7 +872,11 @@ geometry_failure:
   // Go for it!!!
   qwSect0 = qwFromSect;
   nFrom = iBSize / BlockSize(hFrom);
-  if (hTo) nTo = iBSize / BlockSize(hTo);
+  if (hTo) {
+    nTo = iBSize / BlockSize(hTo);
+  } else if (iPipe) {
+    nTo = iBSize;
+  }
   dwKB0 = (DWORD)(qwNBytes >> 10); // Only used for floppys. Floppy sizes < 50000KB. Won't overflow.
   if (!dwKB0) dwKB0 = 1; // Avoid dividing by 0 in progress report
   dwMB0 = (DWORD)(qwNBytes >> 20); // Will overflow for disk sizes > 4PB. Largest is 16TB in 2017.
@@ -913,7 +927,11 @@ geometry_failure:
     if (qwNBytes < (DWORD)iBSize) {
       iBSize = (int)qwNBytes;
       nFrom = iBSize / BlockSize(hFrom);
-      if (hTo) nTo = iBSize / BlockSize(hTo);
+      if (hTo) {
+      	nTo = iBSize / BlockSize(hTo);
+      } else if (iPipe) {
+      	nTo = iBSize;
+      }
     }
     // ~~jfl 2002-11-05 Added possibility to cancel long operations.
     if (_kbhit() && (_getch() == '\x1B')) interrupted = TRUE;
@@ -967,7 +985,11 @@ geometry_failure:
     }
 
     if (iErr) {
-      if (!iAppendZeros) oprintf("\nError 0x{%02X} reading {%s} {%I64{%c}}.\n", iErr, BlockIndexName(hFrom), cBase, qwFromSect);
+      if (!iAppendZeros) {
+	char buf[300];
+	osnprintf(buf, sizeof(buf), "\nError 0x{%02X} reading {%s} {%I64{%c}}.\n", iErr, BlockIndexName(hFrom), cBase, qwFromSect);
+	fputs(buf, stderr);
+      }
       for (i=0; i<iBSize; i++) pBuf[i] = '\0';
       if (!iAppendZeros) continue;
     }
@@ -1106,7 +1128,7 @@ geometry_failure:
       }
     }
 
-    if (hTo) {
+    if (hTo || (iPipe && !iDump)) {
       // iErr = BlockWrite(hTo, qwToSect+uSect, nTo, pBuf);
       // Problem: The Block API is limited to 0xFFFF blocks at a time.
       // This is fine for disks, but not for files ==> Split in small I/Os
@@ -1116,9 +1138,19 @@ geometry_failure:
       iErr = 0;
       for ( ; uLeft; uLeft-=wTo, uDone+=wTo) {
 	if (uLeft < wTo) wTo = (WORD)uLeft; // Last batch
-	if ((iErr = BlockWrite(hTo, qwToSect+uDone, wTo, pBuf+(uDone*BlockSize(hTo)))) != 0) {
-	  oprintf("\nError: Can't write {%s} {%s} {%I64{%c}}\n", pszTo, BlockIndexName(hTo), cBase, qwToSect+uDone);
-	  break;
+	if (hTo) {
+	  iErr = BlockWrite(hTo, qwToSect+uDone, wTo, pBuf+(uDone*BlockSize(hTo)));
+	  if (iErr != 0) {
+	    char buf[300];
+	    osnprintf(buf, sizeof(buf), "\nError: Can't write {%s} {%s} {%I64{%c}}\n", pszTo, BlockIndexName(hTo), cBase, qwToSect+uDone);
+	    fputs(buf, stderr);
+	    break;
+	  }
+	} else { // Piping to stdout
+	  if (write(1, pBuf+uDone, wTo) < 0) {
+	    fprintf(stderr, "\nError: Can't write to stdout\n");
+	    break;
+	  }
 	}
       }
       if (iErr) break;
@@ -1194,7 +1226,8 @@ With...\n\
   hdN: = Hard Disk number N. Example: \"hd0:\" for HD 0\n\
   filename = Any valid file pathname.\n\
 [destination] = Where to write to. Same format as {source}.\n\
-  Default or \"-\": Dump the data read on to the standard output.\n\
+  Default: Dump the data read as hexadecimal on the standard output.\n\
+  \"-\": Write the binary data read to the standard output.\n\
 [number] = The number of sectors to read, Default: 1\n\
 [origin] = Linear Block Address of the first sector. Default: Sector 0.\n\
            Note: For disks, the unit is 512 bytes; For files, it's 1 byte.\n\
@@ -1210,6 +1243,7 @@ Switches:\n\
 "
 #endif
 "\
+  -D    Dump the output as hexadecimal. (Default when no destination is set)\n\
   -fbs  Find boot sectors.\n\
   -g    Display the source or destination drives geometry.\n\
   -H    Display disk sizes in MB, GB, etc. (default)\n\
