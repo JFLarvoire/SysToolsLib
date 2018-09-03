@@ -17,13 +17,17 @@
 :#   2018-07-02 JFL Updated the debugging library to its latest version.      #
 :#                  Fixed an issue with arguments containing a '!'.           #
 :#   2018-08-22 JFL Don't display the command in verbose mode.                #
+:#   2018-09-03 JFL Undid the 08-22 change, and changed option -t to display  #
+:#                  the start and end times. (Which was the 08-22 intent.)    #
+:#                  Removed the SetTime routine, which was useless.           #
+:#                                                                            #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2018-08-22"
+set "VERSION=2018-09-03"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0"				&:# Script path
 set "SPATH=%SPATH:~0,-1%"			&:# Script path, without the trailing \
@@ -1231,7 +1235,7 @@ endlocal & set "DC=%DC%" & set "DH=%DH%" & set "DM=%DM%" & set "DS=%DS%" & set "
 
 :Help
 echo.
-echo %SCRIPT% version %VERSION% - Time the execution of a program
+echo %SCRIPT% version %VERSION% - Time the eXecution of a program
 echo.
 echo Usage: %SCRIPT% [OPTIONS] [PROGRAM [ARGUMENTS]]
 echo.
@@ -1239,12 +1243,14 @@ echo Options:
 echo   -?       Display this help
 echo   --       End of options
 echo   -2       Output the result to stderr
-echo   -n N     Run the commands N times and display the start and end times
-echo   -t       Get the current time, with seconds resolution
+echo   -n N     Run the command N times. Implies -t. Default: 1 time
+echo   -t       Display the start and end times
 echo   -v       Verbose mode. Display commands executed
 echo   -V       Display the script version and exit
 echo   -X       Display commands to execute, but don't execute them
 echo.
+echo Default if no program is set: Display the current time as HH:MM:SS
+echo With option -v, display it as HH:MM:SS.MMM (ie. with milli-seconds)
 exit /b
 
 :#----------------------------------------------------------------------------#
@@ -1252,19 +1258,20 @@ exit /b
 
 :Main
 set "NLOOPS=1"
+set "SHOWTIME=0"
 
 :next_arg
 %POPARG%
-if .!ARG!.==.. goto :SetTime
+if .!ARG!.==.. goto :ShowTime
 if .!ARG!.==.--. goto :Start
 if .!ARG!.==.-?. goto :Help
 if .!ARG!.==./?. goto :Help
 if .!ARG!.==.-2. set ">DEBUGOUT=>&2" & goto next_arg
 if .!ARG!.==.-d. call :Debug.On & goto next_arg
 if .!ARG!.==.-n. %POPARG% & set "NLOOPS=!ARG!" & goto next_arg
-if .!ARG!.==.-t. goto :GetTime
-if .!ARG!.==./t. goto :GetTime
-if .!ARG!.==./T. goto :GetTime
+if .!ARG!.==.-t. set "SHOWTIME=1" & goto next_arg
+if .!ARG!.==./t. goto :ShowTime &:# Emulate 'time /t'
+if .!ARG!.==./T. goto :ShowTime &:# Emulate 'time /t'
 if .!ARG!.==.-v. call :Verbose.On & goto next_arg
 if .!ARG!.==.-V. (echo.%VERSION%) & exit /b
 if .!ARG!.==.-X. call :Exec.Off & goto next_arg
@@ -1275,33 +1282,36 @@ if "!ARG:~0,1!"=="-" (
 set "ARGS=!ARG! !ARGS!"
 goto Start
 
-:GetTime
+:#----------------------------------------------------------------------------#
+:# Display the current time
+
+:ShowTime
 call :Now
 set "NOW=!HOUR!:!MINUTE!:!SECOND!"
 %IF_VERBOSE% set "NOW=!NOW!.!MS!"
-echo !NOW!
-exit /b
-
-:SetTime
-time
+%>DEBUGOUT% %ECHO% !NOW!
 exit /b
 
 :#----------------------------------------------------------------------------#
-:# Start the real work
+:# Start the timing work
 
 :Start
+if not %NLOOPS%==1 set "SHOWTIME=1"
+set "ECHO.TIME=%ECHO.V%"
+if %SHOWTIME%==1 set "ECHO.TIME=%ECHO%"
+
 call :Now
 set STARTED=%HOUR%:%MINUTE%:%SECOND%.%MS%
-%>DEBUGOUT% %ECHO.V% Starting at %STARTED%
+%>DEBUGOUT% %ECHO.TIME% Started at %STARTED%
 
 setlocal DisableDelayedExpansion &:# Else the ! characters do not make it through (Even if we use !ARGS!)
 for /l %%n in (1,1,%NLOOPS%) do (
-  %EXEC% -V %ARGS%
+  %EXEC% %ARGS%
 )
 
 call :Now
 set ENDED=%HOUR%:%MINUTE%:%SECOND%.%MS%
-%>DEBUGOUT% %ECHO.V% Ended at %ENDED%
+%>DEBUGOUT% %ECHO.TIME% Ended at %ENDED%
 
 call :Time.Delta %STARTED% %ENDED% -f
 %>DEBUGOUT% %ECHO% Duration: %DH%:%DM%:%DS%.%DMS%
