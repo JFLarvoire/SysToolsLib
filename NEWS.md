@@ -4,6 +4,21 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-09-11
+### Changed
+- C/SRC/sector.cpp: Do not dump when explicitly setting output to "-".
+  Added option -D to force dumping output to "-".
+  Write error messages to stderr.
+- Batch/hosts.bat: Use start, so that the script doesn't wait for elevate.exe completion.
+  Added option -V to display the script version
+- Batch/TimeX.bat: Changed option -t to display the start and end times
+  Removed the SetTime routine, which was useless.
+- Tcl/FlipMails.tcl: Changed the source encoding to utf-8.
+  Make sure the I/O encodings match the console code page.
+  Recognize several new Unicode bullet types.
+- Batch/12.bat: Use codepage 65001 = UTF-8, to handle all Unicode characters in the pipe. This is possible now that
+  FlipMails.tcl correctly handles code pages, like my C tools did.
+
 ## [Unreleased] 2018-07-02
 ### Changed
 - Batch/hosts.bat: Removed the dependancy on elevate.exe, using it only if it is available.
