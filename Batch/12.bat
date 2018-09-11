@@ -18,17 +18,22 @@
 :#                  follow cmd.exe's own convention of using the console code #
 :#		    page for pipes. So to be compatible with both...          #
 :#                  Temporarily change to the system's default ANSI codepage. #
+:#   2018-09-11 JFL Use codepage 65001 = UTF-8, to handle all Unicode chars   #
+:#                  in the pipe. This is possible now that flipmails.tcl      #
+:#                  correctly handles code pages, like my C tools did.        #
 :#                                                                            #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-05-11"
+set "VERSION=2018-09-11"
 
 :# Get the current console code page
 for /f "tokens=2 delims=:" %%n in ('chcp') do for %%p in (%%n) do set OLDCP=%%p
 :# Get the default system code page
-set "KEY=HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage"
-for /f "tokens=3" %%p in ('reg query "%KEY%" /v "ACP" ^| findstr REG_SZ') do set "NEWCP=%%p"
+:# set "KEY=HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage"
+:# for /f "tokens=3" %%p in ('reg query "%KEY%" /v "ACP" ^| findstr REG_SZ') do set "NEWCP=%%p"
+:# Actually use UTF-8 in all cases now
+set "NEWCP=65001"
 :# Change to the default system code page if needed
 if not "%OLDCP%"=="%NEWCP%" chcp %NEWCP% >NUL
 
