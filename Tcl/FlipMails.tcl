@@ -1,4 +1,5 @@
 #!/usr/bin/tclsh
+# -*- coding: utf-8 -*-
 #-----------------------------------------------------------------------------#
 #                                                                             #
 #   Script name     FlipMails.tcl                                             #
@@ -19,7 +20,7 @@
 #    2013-08-07 JFL Convert the ellipsis character to ...                     #
 #    2013-08-26 JFL Convert the wide arrow character to =>                    #
 #    2013-09-06 JFL Convert another kind of wide arrow character to ->        #
-#    2014-09-15 JFL Added "Expéditeur" as another king of mail separator.     #
+#    2014-09-15 JFL Added "ExpÃ©diteur" as another kind of mail separator.     #
 #    2014-10-07 JFL Restructured to be language-independant.		      #
 #                   Merge mail header lines, like long distribution lists.    #
 #    2014-10-15 JFL Added a routine to remove > thread quoting.               #
@@ -28,13 +29,61 @@
 #		    next one. Leave an empty line instead.		      #
 #    2016-02-25 JFL Added support for Asian mail headers with Unicode chars.  #
 #    2016-04-17 JFL Improved French headers recognition.                      #
+#    2018-09-11 JFL Changed the source encoding to utf-8.                     #
+#                   Make sure the I/O encodings match the console code page.  #
+#		    Recognize several new Unicode bullet types.		      #
 #                                                                             #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2016-02-25"
+set version "2018-09-11"
+
+# Force running the script as UTF-8, if executed in a system with a different encoding.
+# This is necessary because we have Unicode strings in this script encoded as UTF-8.
+# And Tcl assumes the script is encoded using the default system encoding.
+# This is generally true for Linux, which uses UTF-8 for everything;
+# But in Windows the system encoding varies by localization. Ex: ANSI = CP1252 for USA.
+if {([encoding system] != "utf-8") && (![info exists running_as_utf8])} {
+  # puts "System encoding is [encoding system]; Retrying as utf-8"
+  set running_as_utf8 1
+  source -encoding "utf-8" $argv0
+  return
+}
+
+# Correct the input and output encodings in Windows.
+# This is necessary because Tcl uses the unicode encoding for I/Os to the console,
+# and the system encoding for any redirected I/Os on stdin or stdout.
+# But Windows uses the current console code page for pipes, and that console code page
+# is usually different from the system code page. Ex: CP437 and CP1252 resp. for USA.  
+if {$tcl_platform(platform) == "windows"} {
+  if [catch {	# First try getting the CP using twapi. This is faster.
+    package require twapi
+    set icp [twapi::get_console_input_codepage]
+  } msg] {	# Can't find twapi. Try running chcp.exe to get the info. (Slower)
+    if ![regexp {\d+} [exec chcp] icp] { # If chcp fails also
+      set icp 65001 ;# Then assume input is UTF-8
+    }
+  }
+  switch $icp {
+    65000 {
+      set cp "utf-7"
+    }
+    65001 {
+      set cp "utf-8"
+    }
+    default {
+      set cp "cp$icp"
+    }
+  }
+  # Correct the input and output encodings in Windows.
+  foreach handle [list stdin stdout] {
+    if {"[fconfigure $handle -encoding]" != "unicode"} { # If redirected
+      fconfigure $handle -encoding $cp ;# Change the encoding
+    }
+  }
+}
 
 ###############################################################################
 #                 Output, logging and debug library routines                  #
@@ -1307,25 +1356,29 @@ proc Realign {text {merge 1}} {
         # Assume it's a special character, not in the special cases below
         set type($iType,rx) $bullet
         set type($iType,repl) $bullet
-        # Check special bullet types
+        # Check special bullet types, and convert them to ASCII art.
         # Note: Numeric and alphabetic types are often followed by a dot. Ex: 1.
         #       Other punctuation characters are also used occasionally. Ex: 1)
-        # TO DO: Add support for Unicode characters. They're now converted to ASCII "?".
-        # \xF0D8 -> > (Right pointing arrow head)
-        # \xF0A7 -> x (Black square)
-        foreach {rx repl} [list   \
-          {•}  "*"                \
-          {\*} "*"                \
-          {\?} "-"                \
-          {\+} "+"                \
-          {[""]} "+"              \
-          {¢} ">"                 \
-          {ó} ">"                 \
-          {è} "=>"                \
-          {Ò} "->"                \
-          {\d+[-.()<>_/\\:]?} {\1}           \
-          {[a-z]+[-.()<>_/\\:]?} {\1}        \
-          {[A-Z]+[-.()<>_/\\:]?} {\1}        \
+        # Note: When executed within an 8-bit code page, the Unicode characters are
+        #       converted to characters in that code page. Ex: ïƒ° becomes Ã¨
+        #       Many Unicode characters are converted to ASCII '?'.
+        foreach {rx repl} [list		  \
+          {â€¢}  "*"			  \
+          {\*} "*"			  \
+          {ïƒ¼} "-"			  \
+          {\?} "-"			  \
+          {\+} "+"			  \
+          {[""]} "+"			  \
+          {Â¢} ">"			  \
+          {Ã³} ">"			  \
+          {ïƒ°} "=>"			  \
+          {Ã¨} "=>"			  \
+          {Ã’} "->"			  \
+          {ïƒ˜} ">"			  \
+          {ï‚§} "x"			  \
+          {\d+[-.()<>_/\\:]?} {\1}	  \
+          {[a-z]+[-.()<>_/\\:]?} {\1}	  \
+          {[A-Z]+[-.()<>_/\\:]?} {\1}	  \
         ] {
           DebugVars rx repl
           if [regexp "^$rx$" $bullet -] {
@@ -1351,7 +1404,7 @@ proc Realign {text {merge 1}} {
     # Remove common smileys
     # regsub -all "\uF04A" $line ":-)" line
     # Remove ellipsis characters, which cause ill-looking results in case there were 4 dots or more.
-    regsub -all {…} $line "..." line
+    regsub -all {â€¦} $line "..." line
     # Output the modified line
     DebugVars merge endSpace
     if {!$merge} { # The simple case: Output one line for every input line
@@ -1416,7 +1469,7 @@ proc DeQuote {input} {
   set rxQuotedLines "(?:$rxQuotedLine)(?:\r?\n$rxQuotedLine)*"
   # The quoted thread is normally preceded by a quoting line like:
   # On Feb 11, 2014, at 10:42 AM, "Mickey" <mickey.mouse@disney.com> wrote:
-  # Le 12 novembre 2014 15:37, Axel Curt <curtaxel@yahoo.fr> a écrit :
+  # Le 12 novembre 2014 15:37, Axel Curt <curtaxel@yahoo.fr> a Ã©crit :
   set rxQuote {[^>\n][^\n]+\d:\d\d[^\n]+:[[:blank:]]*}
   set rxQuoteAndQuotedLines "\r?\n$rxQuote\r?\n$blank*?\r?\n?$rxQuotedLines"
   # Quoting already quoted text sometimes causes further line splitting
@@ -1576,9 +1629,9 @@ set rxSeparator "$rxSeparator1|$rxSeparator2|$rxSeparator3|\r?\n"
 
 # Regognize mail header lines
 # A header line begins with a tag, followed by a colon, then an optional value. Ex: "From: Your boss"
-# The tag is usually a capitalized word. Ex: From, To, De, À, Von, An, ...
-# But there are cases when the tab contains 2 words. Ex: "Signed By: A cautious person" or "Envoyé le: Di, 17 Avr 2016 11:05"
-# Some translations add a space before the colon. Ex: "Envoyé : mercredi 17 septembre 2014 11:25"
+# The tag is usually a capitalized word. Ex: From, To, De, Ã€, Von, An, ...
+# But there are cases when the tab contains 2 words. Ex: "Signed By: A cautious person" or "EnvoyÃ© le: Di, 17 Avr 2016 11:05"
+# Some translations add a space before the colon. Ex: "EnvoyÃ© : mercredi 17 septembre 2014 11:25"
 # Some versions insert a special space \xA0 before the colon. This matches [[:space:]], but not [[:blank:]].
 # Asian languages use ideograms that end up as ? in the code page 1252.
 set rxHeaderLine1 {[[:blank:]]*[?[:upper:]][?[:lower:]]*(?: [?[:upper:][:lower:]][?[:lower:]]*)?[[:blank:]\xA0]?:[[:print:]\t]*}
@@ -1597,16 +1650,16 @@ set rxHeader "(?:(?:$rxSeparator)(?:$blank*\r?\n)+)(?:$rxHeaderLines)"
 # The drawback was that this list was necessarily incomplete, as different mail readers use different wordings.
 # Also it had to be localized in every language.
 set rxSeparators [list \
-  "---+ ?Mail Original ?---+"  \
+  {---+ ?Mail [Oo]riginal ?---+}  \
   "---+ ?Mail d'origine ?---+" \
-  "---+ ?Mail Transféré ?---+" \
+  {---+ ?Mail [Tt]ransfÃ©rÃ© ?---+} \
   "---+ ?Message d'origine ?---+" \
-  "---+ ?Message Transféré ?---+" \
+  {---+ ?Message [Tt]ransfÃ©rÃ© ?---+} \
   "---+ ?Original Message ?---+" \
   "---+ ?Original Appointment ?---+" \
   "---+ ?Original.Nachricht ?---+" \
 ]
-set rxTags [join "^From\\\\s*: ^De\\\\s*: ^Expéditeur\\\\s*: ^Von\\\\s*: $rxSeparators" |]
+set rxTags [join "^From\\\\s*: ^De\\\\s*: ^ExpÃ©diteur\\\\s*: ^Von\\\\s*: $rxSeparators" |]
 
 # Search for all the mail headers in the text.
 set rx "$rxHeader"
