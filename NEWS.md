@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-09-18
+### New
+- PowerShell/ShadowCopy.ps1: Added options -Mount and -Dismount.
+
 ## [Unreleased] 2018-09-11
 ### Changed
 - C/SRC/sector.cpp: Do not dump when explicitly setting output to "-".
