@@ -23,7 +23,7 @@
 #                   Possible improvements to do:                              #
 #                   * Allow inputing WMI Win32_ShadowCopy objects.            #
 #                   * Output a new type, instead of a generic PSObject.       #
-#                   * Add -Mount, -Dismount, -Restore commands.               #
+#                   * Add -PreviousVersions, -Restore commands.               #
 #                   * Change Days,Weeks,...,Years to ScriptProperties,        #
 #                     dynamically recomputed?                                 #
 #                                                                             #
@@ -42,6 +42,7 @@
 #    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
 #    2016-06-20 JFL Increase that to a 4th week, to get a more regular scale. #
 #    2017-01-04 JFL Removed alias eval, changed back to Invoke-Expression.    #
+#    2018-09-16 JFL Added options -Mount and -Dismount.                       #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -77,14 +78,14 @@
   .PARAMETER Get
   Command switch: Output a list of ShadowCopy description objects,
   specified by the InputObject list: IDs, DateTimes, or Drives.
-  If no InputObject is specified, outputs the list of all shadow copies. 
+  If no InputObject is specified, outputs the list of all shadow copies.
   Default command if no other command switch is specified.
   Alias: -List
 
   .PARAMETER Remove
   Command switch: Remove shadow copies, specified by the InputParameters:
   ShadowCopies, IDs, DateTimes, or Drives.
-  If no InputObject is specified, removes nothing. 
+  If no InputObject is specified, removes nothing.
   Warning: There is no way to recover deleted shadow copies. It is recommended
   to check what the command would do with the -X (alias -WhatIf) parameter first.
   Alias: -Delete
@@ -106,6 +107,19 @@
   Command switch: Create a new shadow copy on a given drive.
   Alias: -Add
 
+  .PARAMETER Mount
+  Command switch: Mount shadow copies at a given MountPoint.
+  This allows accessing a read-only versions of the old files in the shadow copy.
+  Multiple shadow copies can be mounted in a single command. In that case, the
+  individual mount points will be generated within the specified directory.
+  This must be done as an administrator, with the right to create symbolic links.
+  Requires the -MountPoint argument.
+
+  .PARAMETER Dismount
+  Command switch: Unmount shadow copies from given mount points.
+  The mount points can be piped into the command.
+  Alias: -Unmount
+
   .PARAMETER InputObject
   A list of objects identifying which shadow copies to manage.
   These identifying objects can be:
@@ -115,12 +129,24 @@
     If the time is 00:00:00, target all shadow copies that day.
     Else target only the single shadow copy at that exact date/time.
   - A Drive name, specifying the shadow copy volume.
+  - A pathname from which to unmount a shadow copy.
 
   .PARAMETER Drive
   The name of the drive on which to create a shadow copy.
 
   .PARAMETER Force
   Force deletions without prompting for confirmation. (Dangerous!)
+
+  .PARAMETER MountPoint
+  Where to mount a shadow copy.
+  First possibility, when mounting a single shadow copy:
+  A non existent pathname where to mount it. The parent directory must exist.
+  Ex: C:\Temp\MountPoint where C:\Temp exists, but MountPoint does not.
+  Second possibility, when mounting multiple shadow copies, or just one:
+  The pathname of an existing directory. In that case, the actual mount points
+  will be auto-generated _within_ that directory. They will be named based on
+  the shadow copy original drive and date/time. Ex: C_2018-09-15_18h54m09
+  In all cases, the mount points are SYMLINKDs that point to the shadow copy data. 
 
   .PARAMETER D
   Switch enabling the debug mode.
@@ -143,14 +169,15 @@
   .EXAMPLE
   ./ShadowCopy | ft -a
 
-  Display a list of all shadow copies.
+  Display a table listing all shadow copies on all drives.
 
   .EXAMPLE
   ./ShadowCopy F: | ft -a
 
-  Display a list of all shadow copies of drive F:.
+  Display a table listing all shadow copies of drive F:.
 
   .EXAMPLE
+  # List shadow copies to be removed for a given date, then do it 
   ./ShadowCopy 2016-04-01 -Remove -X
   ./ShadowCopy 2016-04-01 -Remove
 
@@ -162,10 +189,26 @@
   Remove all shadow copies older than 6 months on drive F:.
 
   .EXAMPLE
+  # List old shadow copies that can be recycled, then remove them 
   ./ShadowCopy -Prune -X
   ./ShadowCopy -Prune
 
   Remove all shadow copies falling out of our cyclic preservation policy.
+
+  .EXAMPLE
+  # Mount a set of shadow copies; Access them; then dismount them
+  md C:\Mnt
+  # Create mount points for all shadow copies for drive C:
+  ./ShadowCopy C: | /ShadowCopy -Mount -MountPoint C:\Mnt
+  # The same thing can be done with this shorter command:
+  ./ShadowCopy -Mount C: C:\Mnt
+  # Look at the shadow copies contents
+  dir C:\Mnt
+  ...
+  # Unmount all shadow copies from that place
+  dir C:\Mnt | ./ShadowCopy -Unmount
+  # It's now empty again and can be deleted
+  rd C:\Mnt
 #>
 
 [CmdletBinding(DefaultParameterSetName='Get', SupportsShouldProcess=$true, ConfirmImpact="High")]
@@ -182,10 +225,21 @@ Param (
   [Parameter(ParameterSetName='New', Mandatory=$true)]
   [Switch][alias("Add")]$New,		# If true, Create a new shadow copy of a volume
 
+  [Parameter(ParameterSetName='Mount', Mandatory=$true)]
+  [Switch]$Mount,			# If true, Mount a shadow copy
+
+  [Parameter(ParameterSetName='Dismount', Mandatory=$true)]
+  [Switch][alias("Unmount")]$Dismount,	# If true, Unmount a shadow copy
+
   [Parameter(ParameterSetName='Remove', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
+  [Parameter(ParameterSetName='Mount', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
+  [Parameter(ParameterSetName='Dismount', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
   [Parameter(ParameterSetName='Get', Mandatory=$false, ValueFromPipeline=$true, Position=0)]
   [AllowEmptyCollection()]
   [Object[]]$InputObject = @(),		# Objects to work on, or criteria for selecting them
+
+  [Parameter(ParameterSetName='Mount', Mandatory=$true, Position=1)]
+  [String]$MountPoint,			# Where the shadow copy is to be mounted
 
   [Parameter(ParameterSetName='Prune', Mandatory=$true, Position=0)]
   [Parameter(ParameterSetName='New', Mandatory=$true, Position=0)]
@@ -199,17 +253,23 @@ Param (
   [Parameter(ParameterSetName='Remove', Mandatory=$false)]
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Parameter(ParameterSetName='New', Mandatory=$false)]
+  [Parameter(ParameterSetName='Mount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
   [Switch]$D,				# If true, display debug information
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
   [Parameter(ParameterSetName='Remove', Mandatory=$false)]
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Parameter(ParameterSetName='New', Mandatory=$false)]
+  [Parameter(ParameterSetName='Mount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
   [Switch]$V,				# If true, display verbose information
 
   [Parameter(ParameterSetName='Remove', Mandatory=$false)]
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Parameter(ParameterSetName='New', Mandatory=$false)]
+  [Parameter(ParameterSetName='Mount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
   [Switch]$X,				# If true, display commands, but don't execute them
 
   [Parameter(ParameterSetName='Version', Mandatory=$true)]
@@ -219,7 +279,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2017-01-04"
+$scriptVersion = "2018-09-16"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -1287,6 +1347,120 @@ function Test-Administrator ($user=$null) {
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
+#   Function        New-SymbolicLink                                          #
+#                                                                             #
+#   Description     Create a new symbolic link				      #
+#                                                                             #
+#   Notes 	    Automatically sets the link type if the target exists.    #
+#                                                                             #
+#   History                                                                   #
+#    2018-09-16 JFL Created this routine                                      #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function New-SymbolicLink {
+  [cmdletbinding(DefaultParameterSetName='Auto')]
+  Param (
+    [parameter(Position=0, ParameterSetName='Auto', Mandatory=$True)]
+    [parameter(Position=0, ParameterSetName='Directory', Mandatory=$True)]
+    [parameter(Position=0, ParameterSetName='File', Mandatory=$True)]
+    [string]$Link,
+    [parameter(Position=1, ParameterSetName='Auto', Mandatory=$True)]
+    [parameter(Position=1, ParameterSetName='Directory', Mandatory=$True)]
+    [parameter(Position=1, ParameterSetName='File', Mandatory=$True)]
+    [string]$Target,
+    [parameter(Position=2, ParameterSetName='Directory', Mandatory=$True)]
+    [switch]$Directory,
+    [parameter(Position=2, ParameterSetName='File', Mandatory=$True)]
+    [switch]$File
+  )
+  Begin {
+    Write-DebugVars Link Target Directory File
+    Try {
+      $null = [Win32.SymLink]
+    } Catch {
+      Add-Type @"
+      using System;
+      using System.Runtime.InteropServices;
+
+      namespace Win32 {
+	public class SymLink {
+	  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	  public static extern bool CreateSymbolicLink(string lpSymlinkFileName, string lpTargetFileName, int dwFlags);
+	  [DllImport("kernel32.dll")]
+	  public static extern uint GetLastError();
+	  
+	  public static uint Create(string lpSymlinkFileName, string lpTargetFileName, int dwFlags) {
+	    bool done = CreateSymbolicLink(lpSymlinkFileName, lpTargetFileName, dwFlags);
+	    if (done) {
+	      return 0;
+	    } else {
+	      return GetLastError();
+	    }
+	  }
+	}
+      }
+"@
+    }
+  }
+  Process {
+    Write-DebugVars InputObject Link Target Directory File _
+    # Get the absolute path of the future SymLink. (Else the creation fails)
+    # Can't just call Resolve-Path, because it'll fail on non-existing paths
+    $Link = Join-Path (Resolve-Path "$Link\..") (Split-Path -leaf $Link)
+    # Set the symlink type
+    if ($Directory) {
+      $Flag = 1
+    } elseif ($File) {
+      $Flag = 0
+    } else {	    # Auto-detect the type
+      if (Test-Path -LiteralPath "$Target" -PathType Container) {
+	$Flag = 1   # It's a Directory [PS v2 bug: DO NOT put a tab between the 1 and the #]
+      } elseif (Test-Path -LiteralPath "$Target" -PathType Leaf) {
+	$Flag = 0   # It's a File [PS v2 bug: DO NOT put a tab between the 0 and the #]
+      } else {
+	throw "Target '$Target' does not exist. Must specify -File or -Directory"
+      }
+    }
+    if ($Flag) {
+      $Type = "Directory"
+      Write-Debug "mklink /D $Link $Target"
+    } else {
+      $Type = "File"
+      Write-Debug "mklink $Link $Target"
+    }
+    # Get the win32 error on the same line, to make sure it's the right one that's reported below
+    $error = [Win32.SymLink]::Create($Link, $Target, $Flag)
+    if ($error) {
+      throw [ComponentModel.Win32Exception][int]$error
+    }
+    New-Object PSObject -Property @{
+      SymLink = $Link
+      Target = $Target
+      Type = $Type
+    }
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Is-ShadowCopy                                             #
+#                                                                             #
+#   Description     Check if the argument is a ShadowCopy.ps1 object          #
+#                                                                             #
+#   Notes 	                                                              #
+#                                                                             #
+#   History                                                                   #
+#    2018-09-16 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Is-ShadowCopy([object]$obj) {
+  return (($obj.WmiShadowCopy -is [System.Management.ManagementObject]) -and ($obj.WmiShadowCopy.__CLASS -eq "Win32_ShadowCopy"))
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
 #   Function        Get-ShadowCopy                                            #
 #                                                                             #
 #   Description     Get a list of existing shadow copies                      #
@@ -1295,11 +1469,13 @@ function Test-Administrator ($user=$null) {
 #                                                                             #
 #   History                                                                   #
 #    2016-04-18 JFL Created this routine.                                     #
+#    2018-09-16 JFL Added the Path and Index fields.                          #
+#		    Allow passing in GUIDs or dates as a string.	      #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
 # Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
-$DefaultFieldsToDisplay = 'Date','Drive','ID'
+$DefaultFieldsToDisplay = 'Date','Drive','ID','Index'
 $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
   'DefaultDisplayPropertySet',[string[]]$DefaultFieldsToDisplay
 )
@@ -1312,16 +1488,37 @@ Function Get-ShadowCopy() {
     [Parameter(Mandatory=$false, Position=1)][AllowNull()]
     [DateTime]$Date,		# Date. Ex: "2016-04-01 01:00:00"
     [Parameter(Mandatory=$false, Position=2)][AllowNull()]
-    [Guid]$ID			# Shadow copy ID. Ex: "{CAB94C4A-C36F-4D6C-ABC1-991C7EEE989F}"
+    [Guid]$ID,			# Shadow copy ID. Ex: "{CAB94C4A-C36F-4D6C-ABC1-991C7EEE989F}"
+    [Parameter(Mandatory=$false, Position=3)]
+    [int]$Index = 0		# Shadow copy index. Ex: 1 for '\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1'
   )
-  Write-DebugVars Drive date ID
+  Write-Debug("Get-ShadowCopy()")
+  Write-DebugVars Drive Date ID Index
   $Volumes = @{} # List of known volumes, indexed by unique volume name
+  if ($Drive -ne $null) { # Check if it's really a drive, or the string representation of a GUID
+    if ($Drive -match "[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+") {
+      Write-Debug 1
+      $ID = [Guid]$Drive
+      $Drive = $null
+    } elseif ($Drive -match '^\d+$') {
+      Write-Debug 2
+      $Index = [int]$Drive
+      $Drive = $null
+    } elseif (Invoke-Expression 'try {$ID = [guid]$Drive; $true} catch {$false}') {
+      Write-Debug 3
+      $Drive = $null
+    } elseif (Invoke-Expression 'try {$Date = [DateTime]$Drive; $true} catch {$false}') {
+      Write-Debug 4
+      $Drive = $null
+    }
+    if ($Drive -eq $null) {Write-DebugVars Drive Date ID Index}
+  }
   if (($Drive -ne $null) -and ($Drive -ne "")) { # If we got a request for a particular drive
     $DriveLetter = $Drive[0]
     $Volume = Get-Volume $DriveLetter -ea SilentlyContinue # Identify the corresponding volume object
     if (!$Volume) { # Undefined drive letter
-      # Do not throw an error: This allows running -Prune on both nodes of a cluster, 
-      # only one of which having access to the target volume. 
+      # Do not throw an error: This allows running -Prune on both nodes of a cluster,
+      # only one of which having access to the target volume.
       Write-Verbose "No volume ${DriveLetter}: found on this system"
       return # Just return nothing.
     }
@@ -1329,8 +1526,8 @@ Function Get-ShadowCopy() {
     $Volumes[$VolumeName] = $Volume
     # The \ characters in the VolumeName cause problems with WQL.
     # Extract the UUID part of the VolumeName.
-    if ($VolumeName -match "{.*}") {
-      $VolumeUuid = $Matches[0]
+    if ($VolumeName -match "Volume({.*})") {
+      $VolumeUuid = $Matches[1]
     } else {
       throw "Unexpected volume syntax: $VolumeName. Expected '\\?\Volume{`$UUID}'."
     }
@@ -1341,6 +1538,9 @@ Function Get-ShadowCopy() {
   } elseif (($ID -ne $null) -and ($ID -ne "")) { # If we got a request for a particular shadow ID
     Write-Debug "Get-WmiObject Win32_Shadowcopy -filter `"ID LIKE '%$ID%'`""
     $WmiShadowCopies = @(Get-WmiObject Win32_Shadowcopy -filter "ID LIKE '%$ID%'")
+  } elseif ($Index -ne 0) { # If we got a request for a particular shadow Index
+    Write-Debug "Get-WmiObject Win32_Shadowcopy -filter `"DeviceObject LIKE '%HarddiskVolumeShadowCopy$Index'`""
+    $WmiShadowCopies = @(Get-WmiObject Win32_Shadowcopy -filter "DeviceObject LIKE '%HarddiskVolumeShadowCopy$Index'")
   } else { # Get all Shadow Copies
     Write-Debug "Get-WmiObject Win32_Shadowcopy"
     $WmiShadowCopies = @(Get-WmiObject Win32_Shadowcopy)
@@ -1353,6 +1553,8 @@ Function Get-ShadowCopy() {
     }
     $Drive = $Volumes[$Volume].DriveLetter
     $ShadowDate = [management.managementDateTimeConverter]::ToDateTime($WmiShadowCopy.InstallDate)
+    $Path = $WmiShadowCopy.DeviceObject
+    $Index = [int]($Path -replace ".*?(\d+)$",'$1')
     # Filter by date if specified
     if ($date) {
       if ($date.Year  -ne $ShadowDate.Year ) { continue }
@@ -1371,6 +1573,8 @@ Function Get-ShadowCopy() {
       Volume = $Volume
       Date = $ShadowDate
       WmiShadowCopy = $WmiShadowCopy
+      Path = $Path
+      Index = $Index
       Fate = $null
       # Add age marks
       Days = ($tomorrow - $ShadowDate).Days
@@ -1652,7 +1856,7 @@ Function New-ShadowCopy {
     # Create a new shadow copy
     $WmiShadowCopyResult = $WmiShadowCopyClass.create("${Drive}:\", "ClientAccessible")
 
-    # Output the result 
+    # Output the result
     $ReturnValue = $WmiShadowCopyResult.ReturnValue
     if ($ReturnValue -eq 0) {	# Success. Output the ShadowCopy object.
       $ID = $WmiShadowCopyResult.ShadowID
@@ -1673,6 +1877,124 @@ Function New-ShadowCopy {
     }
   } else {
     Write-Host "What if: Would create a shadow copy on drive ${Drive}:"
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Mount-ShadowCopy                                          #
+#                                                                             #
+#   Description     Mount a shadow copy of a volume at a given mount point    #
+#                                                                             #
+#   Notes 	                                                              #
+#                                                                             #
+#   History                                                                   #
+#    2018-09-16 JFL Created this routine                                      #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Mount-ShadowCopy {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+    [Object[]]$ShadowCopies = $(),
+    [String]$MountPoint
+  )
+  Begin {
+    Write-Debug "Mount-ShadowCopy.Begin()"
+    Write-DebugVars InputObject ShadowCopies MountPoint _
+  }
+  Process {
+    Write-Debug "Mount-ShadowCopy.Process()"
+    Write-DebugVars InputObject ShadowCopies MountPoint _
+    $ShadowCopies | % {
+      if (!(Is-ShadowCopy($_))) { # Ex: It's an ID. Ex: "{CAB94C4A-C36F-4D6C-ABC1-991C7EEE989F}"
+	$_ = Get-ShadowCopy($_)
+      }
+      Write-DebugVars  _
+
+      $Path = $_.Path
+      if (!$Path.EndsWith("\")) {
+	$Path = "$Path\"
+      }
+
+      if (Test-Path -LiteralPath $MountPoint -PathType Container) {
+	$MountPoint = Join-Path $MountPoint (
+	  "$($_.Drive)_$($_.Date -replace " (\d+):(\d+):(\d+)", '_$1h$2m$3')"
+	)
+      }
+
+      if ($NoExec) {
+      	Write-Host "WhatIf: Would mount '$Path' at '$MountPoint'"
+      } else {
+	Write-Verbose "Mounting '$Path' at '$MountPoint'"
+	try {
+	  $Null = New-SymbolicLink $MountPoint $Path -Directory
+	} catch {
+	  Write-Error "Failed to mount ${Path}: $($_.Exception.Message)"
+	}
+	# Output the absolute mount point name generated
+	"$(Resolve-Path $MountPoint)"
+      }
+    }
+  }
+  End {
+    Write-Debug "Mount-ShadowCopy.End()"
+  }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Dismount-ShadowCopy                                       #
+#                                                                             #
+#   Description     Dismount a shadow copy from a given mount point	      #
+#                                                                             #
+#   Notes 	                                                              #
+#                                                                             #
+#   History                                                                   #
+#    2018-09-16 JFL Created this routine                                      #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Dismount-ShadowCopy {
+  [CmdletBinding()] # Don't need to use heavy -WhatIf confirmation: This is easily reversible.
+  Param(
+    [Parameter(Mandatory=$True,ValueFromPipeline=$True,ValueFromPipelineByPropertyName=$True)]
+    [Alias("FullName")]
+    [string[]]$Paths
+  )
+  Begin {
+    Write-Debug "Dismount-ShadowCopy.Begin()"
+    Write-DebugVars InputObject Paths _
+  }
+  Process {
+    Write-Debug "Dismount-ShadowCopy.Process()"
+    Write-DebugVars InputObject Paths _
+    $Paths | ForEach-Object -Process {
+      $Path = $_
+      if (Test-Path -LiteralPath $Path -PathType Container) {
+	if ((Get-Item -Path $Path).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+	  if ($NoExec) {
+	    Write-Host "WhatIf: Would dismount '$Path'"
+	  } else {
+	    Write-Verbose "Deleting '$Path'"
+	    try {
+	      $Path = Resolve-Path $Path
+	      [System.IO.Directory]::Delete($Path, $false) | Out-Null
+	    } catch {
+	      Write-Warning "Failed to dismount ${Path}: $($_.Exception.Message)"
+	    }
+	  }
+	} else {
+	  Write-Warning "The path $Path isn't a ReparsePoint"
+	}
+      } else {
+	Write-Warning "The path $Path isn't a directory"
+      }
+    }
+  }
+  End {
+    Write-Debug "Dismount-ShadowCopy.End()"
   }
 }
 
@@ -1714,10 +2036,18 @@ Function New-ShadowCopy {
 
   if ($Remove) {
     # Create a steppable pipeline, to make sure the confirm all or none responses
-    # work correctly, even if there are multiple InputObjects. 
+    # work correctly, even if there are multiple InputObjects.
     $RemoveCodeBlock = { Remove-ShadowCopy }
     $RemoveSteppablePipeline = $RemoveCodeBlock.GetSteppablePipeline()
     $RemoveSteppablePipeline.Begin($true) # Expect data in the pipeline input
+  }
+
+  if ($Dismount) {
+    # Create a steppable pipeline, to make sure the confirm all or none responses
+    # work correctly, even if there are multiple InputObjects.
+    $DismountCodeBlock = { Dismount-ShadowCopy }
+    $DismountSteppablePipeline = $DismountCodeBlock.GetSteppablePipeline()
+    $DismountSteppablePipeline.Begin($true) # Expect data in the pipeline input
   }
 
   # The New & Remove commands write to the event log, but we need to make sure the ShadowCopy source is defined.
@@ -1731,17 +2061,20 @@ Process {
   $InputObject | % {
     $nInputObjects += 1
     Write-DebugVars _
+    
+    # Unmount a Shadow Copy. Must be done before converting $_ to a list of ShadowCopy objects
+    if ($Dismount) {
+      $DismountSteppablePipeline.Process($_) # Dismount-ShadowCopy $_
+      return
+    }
+
     # Identify the argument type, and build the dynamic argument list to pass down to Get-ShadowCopy
     $GetArgs = @{}
     $ShadowCopies = @()
-    if (($_.WmiShadowCopy -is [System.Management.ManagementObject]) -and ($_.WmiShadowCopy.__CLASS -eq "Win32_ShadowCopy")) {
+    if (Is-ShadowCopy($_)) {
       $ShadowCopies = @($_) # This already is a Shadow Copy object made by this script
-    } elseif (Invoke-Expression 'try {$ID = [guid]$_; $true} catch {$false}') {
-      $ShadowCopies = Get-ShadowCopy -ID $ID
-    } elseif (Invoke-Expression 'try {$Date = [DateTime]$_; $true} catch {$false}') {
-      $ShadowCopies = Get-ShadowCopy -Date $Date
     } else {
-      $ShadowCopies = Get-ShadowCopy -Drive $_
+      $ShadowCopies = Get-ShadowCopy $_
     }
 
     # Enumerate Shadow Copies
@@ -1753,6 +2086,13 @@ Process {
     if ($Remove) {
       $ShadowCopies | % { # Remove the shadow copy using the pipeline
 	$RemoveSteppablePipeline.Process($_) # Remove-ShadowCopy $_
+      }
+    }
+    
+    # Mount a Shadow Copy
+    if ($Mount) {
+      $ShadowCopies | % { 
+      	$_ | Mount-ShadowCopy -MountPoint $MountPoint
       }
     }
   }
@@ -1769,6 +2109,10 @@ End {
     if ($Remove) {
       $RemoveSteppablePipeline.End()
     }
+    if ($Dismount) {
+      $DismountSteppablePipeline.End()
+    }
+
 
     # Remove all Shadow Copies falling out of our cyclic preservation policy
     if ($Prune) {
