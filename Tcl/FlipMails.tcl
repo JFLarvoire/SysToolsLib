@@ -32,13 +32,15 @@
 #    2018-09-11 JFL Changed the source encoding to utf-8.                     #
 #                   Make sure the I/O encodings match the console code page.  #
 #		    Recognize several new Unicode bullet types.		      #
+#    2018-09-18 JFL If the mail has double interline, halve interlines.       #
+#    2018-10-09 JFL Decode many common Unicode emoticons to ASCII art.        #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2018-09-11"
+set version "2018-10-09"
 
 # Force running the script as UTF-8, if executed in a system with a different encoding.
 # This is necessary because we have Unicode strings in this script encoded as UTF-8.
@@ -1401,10 +1403,54 @@ proc Realign {text {merge 1}} {
     if {$gotText && $gotEmpty} { # We had a normal paragraph of text
       set nTypes 0 ; # Reset the bullet counter. Future bullets may be indented differently.
     }
-    # Remove common smileys
-    # regsub -all "\uF04A" $line ":-)" line
+    # Remove common smileys.
+    # See list in https://en.wikipedia.org/wiki/List_of_emoticons#Western
+    # Tcl regular expressions do not handle Unicode chars beyond \uFFFF:
+    # They're handled as two 16-bits characters
+    # => We can't use [☺🙂😊] ranges, as the leading word would be replaced in all chars in the same Unicode page. 
+    # =>          Use |☺|🙂|😊 instead.
+    regsub -all {|☺|🙂|😊} $line ":-)" line	;# Smiley, happy face
+    regsub -all {😋} $line ":-)" line		;# Licking lips
+    regsub -all {😀|😁} $line ":-\]" line	;# Very happy, showing teeth
+    regsub -all {😃|😄} $line ":-D" line		;# Laughing
+    regsub -all {😆} $line "X-D" line		;# Laughing with eyes crossed
+    regsub -all {😍} $line "8-)" line		;# Loving smile
+    regsub -all {|☹|🙁|😠} $line ":-("	 line	;# Frown
+    regsub -all {😞|😟} $line ":-\[" line	;# Angry
+    regsub -all {😡|😣|😖} $line ":-<" line	;# Pouting
+    regsub -all {😢|😭} $line ":'-(" line	;# Crying
+    regsub -all {😂} $line ":'-)" line		;# Tears of happiness
+    regsub -all {😨|😧|😦|😱|😩} $line "8-(" line	;# Horror, sadness, dismay
+    regsub -all {😫} $line "X-(" line		;# Disgust
+    regsub -all {😮|😯|😲} $line ":-O" line	;# Surprise, shock
+    regsub -all {😗|😙|😚|😘} $line ":-*" line	;# Kiss
+    regsub -all {😉|😜|😘} $line ";-)" line	;# Wink
+    regsub -all {😛|😝|😜|🤑} $line ":-P" line	;# Tongue sticking out
+    regsub -all {🤔|😕|😟|🤨} $line ":-/" line	;# Skeptical
+    regsub -all {|😐|😑} $line ":-|" line	;# Straight face
+    regsub -all {😳|😞|😖} $line ":-$" line	;# Embarrassed
+    regsub -all {🤐|😶} $line ":-X" line		;# Sealed lips
+    regsub -all {😇|👼} $line "O:-)" line	;# Angel, innocent
+    regsub -all {😈} $line "\}-)" line		;# Devilish
+    regsub -all {😎} $line "B-)" line		;# Cool
+    regsub -all {😪} $line "|-@" line		;# Yawn
+    regsub -all {😏|😒} $line ":-J" line		;# Tongue-in-cheek
+    regsub -all {😵|😕|🤕} $line "%-S" line	;# Drunk, confused
+    regsub -all {🤒|😷|🤢} $line ":-#" line	;# Sick
+    # Remove a non-marking space that the Console and Notepad display as garbage
+    regsub -all {‎} $line ""	  line
+    # Change fancy quotes to ASCII quotes
+    regsub -all {[‘’‚‛′‵]} $line "'"	  line
+    regsub -all {[“”„‟″‴‶‷]‎} $line "\""  line
+    regsub -all {‐|‑|‒|–|—|―} $line "-"	  line
     # Remove ellipsis characters, which cause ill-looking results in case there were 4 dots or more.
-    regsub -all {…} $line "..." line
+    regsub -all {…} $line "..."  line
+    # Remove other microsoft-specific symbols
+    regsub -all {|} $line "<-" line
+    regsub -all {|} $line "->" line
+    regsub -all {|} $line "<=" line
+    regsub -all {|} $line "=>" line
+    regsub -all {} $line "<=>" line
     # Output the modified line
     DebugVars merge endSpace
     if {!$merge} { # The simple case: Output one line for every input line
@@ -1690,6 +1736,14 @@ foreach pair $ixs {
       regsub {^\s*\n} $mail "" mail ; # Make sure there are no empty lines ahead
       regsub "$headerMarker" $header2 "" header2 ;# Remove the special marker added by DeQuote().
       DebugVars header2
+      # Check if the mail has double interline
+      set nSingle [regexp -all {[^\n]\r?\n[^\r\n]} $mail -]
+      set nDouble [regexp -all {[^\n]\r?\n\r?\n[^\r\n]} $mail -]
+      set nQuad   [regexp -all {[^\n]\r?\n\r?\n\r?\n\r?\n[^\r\n]} $mail -]
+      if {$nQuad > $nDouble} { # Yes it does. Halve interline!
+      	regsub -all {(\r?\n)\r?\n} $mail {\1} mail
+      	regsub {(\r?\n)$} $mail {\1\1} mail ; # But restore the trailing double interline
+      }
       lappend mails "$header2\n$mail"
     } else { # If the text begins by with unstructured block of text, process it too.
       set text [string range $input 0 [expr $ix2 - 1]]
