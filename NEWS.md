@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-10-16
+### Changed
+- PowerShell/ShadowCopy.ps1: Added command -Previous, and arguments -Pathname and -Restore, to get and restore previous
+  versions of files.
+- Tcl/FilpMails.tcl: If the mail has double interline, halve interlines.  
+  Decode many common Unicode emoticons to ASCII art. 
+
+## [Unreleased] 2018-09-18
+### Changed
+- C/include/debugm.h: * DEBUG_FREEUTF8() now clears the buffer pointer, to allow calling DEBUG_FREEUTF8() multiple times.
+### Fixed
+- C/MsvcLibX/src/symlink.c: Dynamically allocate path buffers in all routines, to avoid stack overflows.
+  This prevents update.exe from crashing when updating junctions.
+
 ## [Unreleased] 2018-09-18
 ### New
 - PowerShell/ShadowCopy.ps1: Added options -Mount and -Dismount.
