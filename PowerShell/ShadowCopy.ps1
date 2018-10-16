@@ -23,26 +23,27 @@
 #                   Possible improvements to do:                              #
 #                   * Allow inputing WMI Win32_ShadowCopy objects.            #
 #                   * Output a new type, instead of a generic PSObject.       #
-#                   * Add -PreviousVersions, -Restore commands.               #
 #                   * Change Days,Weeks,...,Years to ScriptProperties,        #
 #                     dynamically recomputed?                                 #
 #                                                                             #
 #   History                                                                   #
 #    2016-04-18 JFL Created this script.                                      #
-#    2016-04-19 JFL Added the -Prune option for cyclicly deleting copies.     #
+#    2016-04-19 JFL Added the -Prune command for cyclicly deleting copies.    #
 #    2016-04-20 JFL Added Confirmations and true WhatIf mode for deletions.   #
-#    2016-04-21 JFL Added the -New option to create new shadow copies.        #
+#    2016-04-21 JFL Added the -New command to create new shadow copies.       #
 #                   Merged all input specification args into one InputObject. #
 #		    Added steppable pipelining abilities for deletions.       #
 #    2016-04-22 JFL Do not complain when enumerating from an inexistent drive.#
-#                   Fixed the -Version option, broken by the step. pipeline.  #
+#                   Fixed the -Version command, broken by the step. pipeline. #
 #                   Make sure that we're running as administrator.            #
 #                   Fixed $NextTrim calculation.                              #
 #    2016-05-11 JFL Fixed the number of trimesters calculation.               #
 #    2016-05-26 JFL Added 2-day preservation periods for the 2nd & 3rd week.  #
 #    2016-06-20 JFL Increase that to a 4th week, to get a more regular scale. #
 #    2017-01-04 JFL Removed alias eval, changed back to Invoke-Expression.    #
-#    2018-09-16 JFL Added options -Mount and -Dismount.                       #
+#    2018-09-16 JFL Added commands -Mount and -Dismount.                      #
+#    2018-10-15 JFL Added command -Previous.		                      #
+#    2018-10-16 JFL Added arguments -Pathname and -Restore.                   #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -51,7 +52,7 @@
 
 <#
   .SYNOPSIS
-  Manage volume shadow copies
+  Manage volume shadow copies, and previous versions of files therein
 
   .DESCRIPTION
   Volume Shadow Copies record the previous versions of files at past dates,
@@ -120,16 +121,28 @@
   The mount points can be piped into the command.
   Alias: -Unmount
 
+  .PARAMETER Previous
+  Command switch: Manage previous versions of the file set with -Pathname.
+  If no shadow copy is passed as InputObject, list all unique previous file
+  versions.
+  If one or more shadow copies are passed as InputObject, list all unique 
+  previous file versions in that set. 
+  If the -Restore argument is set, instead of listing previous versions, restore
+  the most recent one available.
+
+  .PARAMETER Pathname
+  The pathname of a file for which to manage previous versions.
+
   .PARAMETER InputObject
   A list of objects identifying which shadow copies to manage.
   These identifying objects can be:
-  - A ShadowCopy object created by the -Get option of this script.
+  - A ShadowCopy object created by the -Get command of this script.
   - A GUID specifying the unique shadow copy ID.
   - A DateTime specifying the shadow copies date.
     If the time is 00:00:00, target all shadow copies that day.
     Else target only the single shadow copy at that exact date/time.
   - A Drive name, specifying the shadow copy volume.
-  - A pathname from which to unmount a shadow copy.
+  - A pathname of a directory, from which to unmount a shadow copy.
 
   .PARAMETER Drive
   The name of the drive on which to create a shadow copy.
@@ -147,6 +160,13 @@
   will be auto-generated _within_ that directory. They will be named based on
   the shadow copy original drive and date/time. Ex: C_2018-09-15_18h54m09
   In all cases, the mount points are SYMLINKDs that point to the shadow copy data. 
+
+  .PARAMETER Restore
+  The pathname of a file or directory, where to restore the previous version
+  of a file.
+  If no shadow copy is passed as InputObject, restore the newest available.
+  If one or more shadow copies are passed as InputObject, restore the newest 
+  available in that set. 
 
   .PARAMETER D
   Switch enabling the debug mode.
@@ -167,48 +187,56 @@
   Display this script version and exit.
 
   .EXAMPLE
-  ./ShadowCopy | ft -a
+  .\ShadowCopy | ft -a
 
-  Display a table listing all shadow copies on all drives.
+  Displays a table listing all shadow copies on all drives.
 
   .EXAMPLE
-  ./ShadowCopy F: | ft -a
+  .\ShadowCopy F: | ft -a
 
-  Display a table listing all shadow copies of drive F:.
+  Displays a table listing all shadow copies of drive F:.
 
   .EXAMPLE
   # List shadow copies to be removed for a given date, then do it 
-  ./ShadowCopy 2016-04-01 -Remove -X
-  ./ShadowCopy 2016-04-01 -Remove
+  .\ShadowCopy 2016-04-01 -Remove -X
+  .\ShadowCopy 2016-04-01 -Remove
 
-  Remove all shadow copies created on April fool's day.
+  Removes all shadow copies created on April fool's day.
 
   .EXAMPLE
-  ./ShadowCopy F: | where {$_.Months -gt 6} | ./ShadowCopy -Remove
+  .\ShadowCopy F: | where {$_.Months -gt 6} | .\ShadowCopy -Remove
 
-  Remove all shadow copies older than 6 months on drive F:.
+  Removes all shadow copies older than 6 months on drive F:.
 
   .EXAMPLE
   # List old shadow copies that can be recycled, then remove them 
-  ./ShadowCopy -Prune -X
-  ./ShadowCopy -Prune
+  .\ShadowCopy -Prune -X
+  .\ShadowCopy -Prune
 
-  Remove all shadow copies falling out of our cyclic preservation policy.
+  Removes all shadow copies falling out of our cyclic preservation policy.
 
   .EXAMPLE
   # Mount a set of shadow copies; Access them; then dismount them
   md C:\Mnt
   # Create mount points for all shadow copies for drive C:
-  ./ShadowCopy C: | /ShadowCopy -Mount -MountPoint C:\Mnt
+  .\ShadowCopy C: | .\ShadowCopy -Mount -MountPoint C:\Mnt
   # The same thing can be done with this shorter command:
-  ./ShadowCopy -Mount C: C:\Mnt
+  .\ShadowCopy -Mount C: C:\Mnt
   # Look at the shadow copies contents
   dir C:\Mnt
   ...
   # Unmount all shadow copies from that place
-  dir C:\Mnt | ./ShadowCopy -Unmount
+  dir C:\Mnt | .\ShadowCopy -Unmount
   # It's now empty again and can be deleted
   rd C:\Mnt
+
+  .EXAMPLE
+  # List previous versions of a file, then restore on particular one
+  # List previous versions of a file
+  .\ShadowCopy -Previous MyPlans.doc
+  # Select one particular Shadow Copy (Ex: Index 2345),
+  # and restore that file version under a different name
+  .\ShadowCopy -Previous MyPlans.doc 2345 -Restore MyOldPlans.doc
 #>
 
 [CmdletBinding(DefaultParameterSetName='Get', SupportsShouldProcess=$true, ConfirmImpact="High")]
@@ -231,10 +259,17 @@ Param (
   [Parameter(ParameterSetName='Dismount', Mandatory=$true)]
   [Switch][alias("Unmount")]$Dismount,	# If true, Unmount a shadow copy
 
+  [Parameter(ParameterSetName='Previous', Mandatory=$true)]
+  [Switch]$Previous,			# If true, list previous versions of a file
+
+  [Parameter(ParameterSetName='Previous', Mandatory=$true, Position=0)]
+  [String]$Pathname,			# Which file we want to seek previous versions of
+
   [Parameter(ParameterSetName='Remove', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
   [Parameter(ParameterSetName='Mount', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
   [Parameter(ParameterSetName='Dismount', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
   [Parameter(ParameterSetName='Get', Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+  [Parameter(ParameterSetName='Previous', Mandatory=$false, ValueFromPipeline=$true, Position=1)]
   [AllowEmptyCollection()]
   [Object[]]$InputObject = @(),		# Objects to work on, or criteria for selecting them
 
@@ -249,12 +284,16 @@ Param (
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Switch]$Force,			# If true, do not display the confirmation prompts
 
+  [Parameter(ParameterSetName='Previous', Mandatory=$false, Position=2)]
+  [String]$Restore,			# Where to restore the previous version of a file
+
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
   [Parameter(ParameterSetName='Remove', Mandatory=$false)]
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Parameter(ParameterSetName='New', Mandatory=$false)]
   [Parameter(ParameterSetName='Mount', Mandatory=$false)]
   [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Previous', Mandatory=$false)]
   [Switch]$D,				# If true, display debug information
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
@@ -263,6 +302,7 @@ Param (
   [Parameter(ParameterSetName='New', Mandatory=$false)]
   [Parameter(ParameterSetName='Mount', Mandatory=$false)]
   [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Previous', Mandatory=$false)]
   [Switch]$V,				# If true, display verbose information
 
   [Parameter(ParameterSetName='Remove', Mandatory=$false)]
@@ -270,6 +310,7 @@ Param (
   [Parameter(ParameterSetName='New', Mandatory=$false)]
   [Parameter(ParameterSetName='Mount', Mandatory=$false)]
   [Parameter(ParameterSetName='Dismount', Mandatory=$false)]
+  [Parameter(ParameterSetName='Previous', Mandatory=$false)]
   [Switch]$X,				# If true, display commands, but don't execute them
 
   [Parameter(ParameterSetName='Version', Mandatory=$true)]
@@ -279,7 +320,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2018-09-16"
+$scriptVersion = "2018-10-16"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -1073,10 +1114,10 @@ Function Write-Vars () {
   foreach ($name in $args) {
     try {
       $var = Get-Variable $name -Scope 1 -ea stop
-	} catch {
-	  Write-Host "# `$$name undefined"
-	  continue
-	}
+    } catch {
+      Write-Host "# `$$name undefined"
+      continue
+    }
     Write-Host "`$$name = $(Quote $var.Value -Force)"
   }
 }
@@ -1440,6 +1481,32 @@ Function New-SymbolicLink {
       Type = $Type
     }
   }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        New-TemporaryDirectory                                    #
+#                                                                             #
+#   Description     Create a new temporary directory		              #
+#                                                                             #
+#   Notes 	    https://stackoverflow.com/questions/34559553/create-a-temporary-directory-in-powershell
+#                                                                             #
+#   History                                                                   #
+#    2016-01-01 MK  Created this routine.                                     #
+#    2018-10-16 JFL Added the -Force switch.                                  #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function New-TemporaryDirectory {
+  Param (
+    [Switch]$Force	# If true, do the operation, even if $NoExec is set
+  )
+  if ($Force) {
+    $NoExec = $false
+  }
+  $parent = [System.IO.Path]::GetTempPath()
+  [string] $name = [System.Guid]::NewGuid()
+  New-Item -ItemType Directory -Path (Join-Path $parent $name) -WhatIf:$NoExec
 }
 
 #-----------------------------------------------------------------------------#
@@ -1898,11 +1965,15 @@ Function Mount-ShadowCopy {
   Param(
     [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
     [Object[]]$ShadowCopies = $(),
-    [String]$MountPoint
+    [String]$MountPoint,
+    [Switch]$Force	# If true, do the operation, even if $NoExec is set
   )
   Begin {
     Write-Debug "Mount-ShadowCopy.Begin()"
     Write-DebugVars InputObject ShadowCopies MountPoint _
+    if ($Force) {
+      $NoExec = $false
+    }
   }
   Process {
     Write-Debug "Mount-ShadowCopy.Process()"
@@ -1961,11 +2032,15 @@ Function Dismount-ShadowCopy {
   Param(
     [Parameter(Mandatory=$True,ValueFromPipeline=$True,ValueFromPipelineByPropertyName=$True)]
     [Alias("FullName")]
-    [string[]]$Paths
+    [string[]]$Paths,
+    [Switch]$Force	# If true, do the operation, even if $NoExec is set
   )
   Begin {
     Write-Debug "Dismount-ShadowCopy.Begin()"
     Write-DebugVars InputObject Paths _
+    if ($Force) {
+      $NoExec = $false
+    }
   }
   Process {
     Write-Debug "Dismount-ShadowCopy.Process()"
@@ -1996,6 +2071,121 @@ Function Dismount-ShadowCopy {
   End {
     Write-Debug "Dismount-ShadowCopy.End()"
   }
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Get-PreviousVersions                                      #
+#                                                                             #
+#   Description     List the previous versions of a file available            #
+#                                                                             #
+#   Arguments                                                                 #
+#                                                                             #
+#   Notes 	                                                              #
+#                                                                             #
+#   History                                                                   #
+#    2018-10-15 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+# Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
+$PVDefaultFieldsToDisplay = 'SCIndex','SCDate','FileDate','Length'
+$PVDefaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
+  'DefaultDisplayPropertySet',[string[]]$PVDefaultFieldsToDisplay
+)
+$PVPSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($PVDefaultDisplayPropertySet)
+
+Function Get-PreviousVersions {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [String]$FileName,
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=1)]
+    [Object[]]$ShadowCopies = $(),
+    [Parameter(Mandatory=$false, Position=2)][AllowNull()]
+    [String]$Restore
+  )
+  Write-Debug "Get-PreviousVersions `"$FileName`" list[$($ShadowCopies.Count)] `"$Restore`""
+  $File = Get-Item $FileName
+  # TO DO: Support wildcards, and loop over multiple files
+  if ($File.count -gt 1) {throw "Multiple files aren't supported yet"}
+  # TO DO: Get the previous versions of a file that does not exist anymore
+  if ($File.count -eq 0) {throw "Deleted files aren't supported yet"}
+  $Drive = $File.PSDrive.ToString()
+  if (($Drive.length -ne 1) -or ($Drive -lt "A") -or ($Drive -gt "Z")) {
+    throw "Unsupported drive: ${drive}"
+  }
+  $LastDate = $File.LastWriteTime
+  $LastLength = $File.Length
+  $RelPath = $File.FullName.Substring(3)
+  # Select all shadow copies for that drive
+  if (!$ShadowCopies.Count) {	# If we didn't receive any, get all possible ones
+    $ShadowCopies = Get-ShadowCopy $Drive
+  } else {			# Validate the shadow copies we got
+    $ShadowCopies = $ShadowCopies | % {
+      if (Is-ShadowCopy $_) {
+      	$ShadowCopy = $_
+      } else {
+      	$ShadowCopy = Get-ShadowCopy $_
+      }
+      if ($ShadowCopy -and ($ShadowCopy.Drive -eq $Drive)) {
+      	$ShadowCopy		# Keep only those that match the file drive
+      }
+    }
+  }
+  if ($ShadowCopies.Count -eq 0) {
+    Write-Verbose "There is no shadow copy for drive ${drive}"
+    return
+  }
+  # Mount all shadow copies for that drive
+  $TempDir = New-TemporaryDirectory -Force # Do it even in NoExec mode 
+  Write-Debug "Mounting shadow copies at ${TempDir}"
+  $MountPoints = @()
+  foreach ($ShadowCopy in ($ShadowCopies | sort Date -Descending)) {
+    $MountPoint = Mount-ShadowCopy $ShadowCopy -MountPoint $TempDir -Force # Do it even in NoExec mode
+    $MountPoints += $MountPoint
+    $FullPath = Join-Path $MountPoint $RelPath
+    if (Test-Path $FullPath) {
+      $ShadowFile = Get-Item $FullPath
+      $Date = $ShadowFile.LastWriteTime
+      $Length = $ShadowFile.Length
+      if (($Date -ne $LastDate) -and ($Length -ne $LastLength)) { # This is a different previous version
+	# Create an object with information about that previous version
+	$object = New-Object PSObject -Property @{
+	  SCIndex = $ShadowCopy.Index
+	  SCDate = $ShadowCopy.Date
+	  SCID = $ShadowCopy.ID
+	  FileDate = $Date
+	  Length = $Length
+	  FullName = $ShadowFile.FullName.Replace($MountPoint, "${Drive}:")
+	  Name = $ShadowFile.Name
+	}
+	# Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
+	$object | Add-Member MemberSet PSStandardMembers $PVPSStandardMembers
+	# If we're restore that file, but in NoExec mode, display a message
+	if ($Restore -and $NoExec) {
+	  Write-Host "What if: Would copy to ${Restore}:"
+	}
+	# Output the previous version object
+	$object
+	# If we're to restore that file, do it now and exit from the loop
+	if ($Restore) {
+	  if (!$NoExec) {
+	    Copy-Item $FullPath $Restore
+	  }
+	  break
+	}
+	# Prepare search for the next different version
+	$LastDate = $Date
+	$LastLength = $Length
+      }
+    }
+  }
+  Write-Debug "Unmounting shadow copies from ${TempDir}"
+  $MountPoints | % {
+    Dismount-ShadowCopy $_ -Force # Do it even in NoExec mode
+  }
+  Remove-Item $TempDir -WhatIf:$false # Do it even in NoExec mode
 }
 
 #-----------------------------------------------------------------------------#
@@ -2068,6 +2258,12 @@ Process {
       return
     }
 
+    # List previous versions. Must be done before converting $_ to a list of ShadowCopy objects
+    if ($Previous) {
+      Get-PreviousVersions $Pathname $_ $Restore
+      return
+    }
+
     # Identify the argument type, and build the dynamic argument list to pass down to Get-ShadowCopy
     $GetArgs = @{}
     $ShadowCopies = @()
@@ -2102,8 +2298,11 @@ End {
   Write-Debug "ShadowCopy.End()"
   Write-DebugVars nObjects
   if (!$nInputObjects) { # If no object or object specifier was passed in
-    if ($Get) {
-      Get-ShadowCopy	# By default, list ALL shadow copies
+    if ($Get) {			# By default, list ALL shadow copies
+      Get-ShadowCopy
+    }
+    if ($Previous) {		# By default, list ALL previous versions, or restore the latest
+      Get-PreviousVersions $Pathname -Restore $Restore
     }
 
     if ($Remove) {
@@ -2112,7 +2311,6 @@ End {
     if ($Dismount) {
       $DismountSteppablePipeline.End()
     }
-
 
     # Remove all Shadow Copies falling out of our cyclic preservation policy
     if ($Prune) {
