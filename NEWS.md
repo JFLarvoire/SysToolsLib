@@ -4,11 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-11-16
+### New
+- Tcl/camel.tcl: New filter script, for use in pipes, to convert strings to camel case.  
+- Tcl/lower.tcl: New filter script, for use in pipes, to convert strings to lower case.  
+- Tcl/upper.tcl: New filter script, for use in pipes, to convert strings to upper case.  
+
 ## [Unreleased] 2018-10-16
 ### Changed
 - PowerShell/ShadowCopy.ps1: Added command -Previous, and arguments -Pathname and -Restore, to get and restore previous
   versions of files.
-- Tcl/FilpMails.tcl: If the mail has double interline, halve interlines.  
+- Tcl/FlipMails.tcl: If the mail has double interline, halve interlines.  
   Decode many common Unicode emoticons to ASCII art. 
 
 ## [Unreleased] 2018-09-18
