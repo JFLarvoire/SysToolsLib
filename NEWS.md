@@ -6,9 +6,17 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2018-11-16
 ### New
-- Tcl/camel.tcl: New filter script, for use in pipes, to convert strings to camel case.  
-- Tcl/lower.tcl: New filter script, for use in pipes, to convert strings to lower case.  
-- Tcl/upper.tcl: New filter script, for use in pipes, to convert strings to upper case.  
+- Tcl/camel.tcl: New filter script, for use in pipes, to convert strings to camel case.
+- Tcl/lower.tcl: New filter script, for use in pipes, to convert strings to lower case.
+- Tcl/upper.tcl: New filter script, for use in pipes, to convert strings to upper case.
+- Batch/12.bat: Added options -? for help, -A for ANSI character mode, -U for Unicode character mode,
+  -V for the script version, -X for no-eXecute mode.
+- Batch/hosts.bat: Added the ability to search entries in the hosts file.  
+  Added a help screen.
+### Changed
+- Tcl/FlipMails: Change other common Unicode symbols to ASCII marks.
+### Fixed
+- C/SRC/2note.c: Fixed a memory allocation failure when converting Unix line endings to Windows endings. 
 
 ## [Unreleased] 2018-10-16
 ### Changed
