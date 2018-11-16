@@ -40,7 +40,7 @@
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2018-10-09"
+set version "2018-11-07"
 
 # Force running the script as UTF-8, if executed in a system with a different encoding.
 # This is necessary because we have Unicode strings in this script encoded as UTF-8.
