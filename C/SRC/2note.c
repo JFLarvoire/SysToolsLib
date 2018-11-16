@@ -10,14 +10,16 @@
 *    2018-02-08 JFL Adapted from 2clip.c.				      *
 *    2018-02-13 JFL Use MsvcLibX for UTF-8 I/O, and debugm.h for OS macros.   *
 *		    Convert Unix \n line endings to Windows \r\n. Version 1.0.*
+*    2018-11-02 JFL Fixed a memory reallocation failure when converting \n.   *
+*		    Improved ReportWin32Error().			      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.0"
-#define PROGRAM_DATE    "2018-02-13"
+#define PROGRAM_VERSION "1.0.1"
+#define PROGRAM_DATE    "2018-11-02"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -29,7 +31,15 @@
 #include <windows.h>
 #include "debugm.h"	/* SysToolsLib debug macros */
 
-#define COMPLAIN(s) fprintf(stderr, "Error %d: %s", GetLastError(), s)
+// Report an error.
+void COMPLAIN(char *s) {
+  DWORD e = GetLastError();
+  if (e) {
+    fprintf(stderr, "Error %uld: %s", e, s);
+  } else {
+    fprintf(stderr, "Error: %s", s);
+  }
+}
 
 // My favorite string comparison routines.
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
@@ -259,18 +269,24 @@ int IsSwitch(char *pszArg) {
 *                                                                             *
 |   Function:	    ReportWin32Error					      |
 |                                                                             |
-|   Description:    Display a message box with the last error.		      |
-|                                                                             |
-|   Parameters:     char *pszExplanation    Why we think this occured	      |
-|                                                                             |
+|   Description:    Display a message with the last error.		      |
+|                   							      |
+|   Parameters:     char *pszExplanation    Why we think this occured, or NULL|
+|                   ...			    Optional arguments to format      |
+|                   							      |
 |   Returns:	    The number of characters written.        		      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
+|                   							      |
+|   Notes:	    Danger: Known issue: We use a fixed 4KB buffer for the    |
+|		    error message, and do not check for overflows. This is    |
+|		    more than enough for all actual error message, but be     |
+|		    cautious anyway when using optional formatted arguments.  |
+|                   							      |
 |   History:								      |
 |    1998-11-19 jfl Created this routine.				      |
 |    2005-06-10 JFL Added the message description, as formatted by the OS.    |
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
+|    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
+|                   Make sure WIN32 msg and explanation are on the same line. |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
@@ -291,17 +307,23 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
       (LPTSTR) &lpMsgBuf,
       0,
       NULL )) { // Display both the error code and the description string.
-    n = wsprintf(szErrorMsg, "Error %ld, %s", dwErr, lpMsgBuf);
-    LocalFree( lpMsgBuf ); // Free the buffer.
+    n = wsprintf(szErrorMsg, "Error %uld: %s", dwErr, lpMsgBuf);
+    LocalFree(lpMsgBuf); // Free the buffer.
+    // Remove the trailing new line
+    if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
+    if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
   } else { // Error, we did not find a description string for this error code.
-    n = wsprintf(szErrorMsg, "Error %ld: ", dwErr);
+    n = wsprintf(szErrorMsg, "Error %ld.", dwErr);
   }
 
-  va_start(pArgs, pszExplanation);
-  n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
-  va_end(pArgs);
+  if (pszExplanation) {
+    szErrorMsg[n++] = ' '; // Add a blank separator
+    va_start(pArgs, pszExplanation);
+    n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
+    va_end(pArgs);
+  }
 
-  return fprintf(stderr, "%s", szErrorMsg);
+  return fprintf(stderr, "%s\n", szErrorMsg);
 }
 
 /*---------------------------------------------------------------------------*\
@@ -352,16 +374,18 @@ HWND FindMainWindow(unsigned long process_id) {
 |   Function:	    ToNotepadW						      |
 |									      |
 |   Description:    Copy a buffer of Unicode text to the clipboard	      |
-|									      |
+|		    							      |
 |   Parameters:     const WCHAR *pwBuffer	The data buffer to copy	      |
 |		    size_t nWChars		The number of WCHARs to copy  |
-|									      |
+|		    							      |
 |   Returns:	    TRUE if success, or FALSE if FAILURE.		      |
-|									      |
+|		    							      |
 |   History:								      |
 |    2014-03-31 JFL Created this routine, based on the ANSI ToClip().         |
 |    2014-11-14 JFL Change NUL characters to spaces, to avoid truncating the  |
 |		    clipboard data at the first NUL in the input stream.      |
+|    2018-11-02 JFL Fix the reallocation failure, by directly allocating the  |
+|		    right size.						      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -370,26 +394,21 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
   PROCESS_INFORMATION pi = {0};
   HWND hMainWnd = 0;
   HWND hWnd;
-  WCHAR* pGlobalBuf = (WCHAR *)GlobalAlloc(GMEM_FIXED, (nWChars+1)*sizeof(WCHAR));
+  WCHAR* pGlobalBuf;
   size_t n, m, nLF;
   int iResult = FALSE; /* Assume failure */
 
-  /* Copy the buffer, making sure it'll appear correctly in Notepad. */
-  if (!pGlobalBuf) {
-    ReportWin32Error("");
-    return FALSE;
-  }
   /* Check if the input contains Unix LF line endings */
   for (n=nLF=0; n<nWChars; n++) {
     if ((pwBuffer[n] != L'\r') && (pwBuffer[n+1] == L'\n')) nLF += 1;
   }
-  if (nLF) { /* Then realloc the buffer to allow converting all \n to \r\n */
-    pGlobalBuf = (WCHAR *)GlobalReAlloc(pGlobalBuf, (nWChars+nLF+1)*sizeof(WCHAR), 0);
-    if (!pGlobalBuf) {
-      ReportWin32Error("");
-      return FALSE;
-    }
+  /* Allocate a global buffer with extra space to allow converting all \n to \r\n */
+  pGlobalBuf = (WCHAR *)GlobalAlloc(GMEM_FIXED, (nWChars+nLF+1)*sizeof(WCHAR));
+  if (!pGlobalBuf) {
+    ReportWin32Error("Can't allocate a global buffer.");
+    return FALSE;
   }
+  /* Copy the buffer, making sure everything's appears correctly in Notepad */
   for (n=m=0; n<nWChars; n++, m++) { /* Copy text, changing NUL to ' ', and \n to \r\n */
     WCHAR wc = pwBuffer[n];
     if (!wc) wc = L' ';
@@ -410,7 +429,7 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
 		     &si,     		// Pointer to STARTUPINFO structure
 		     &pi )    		// Pointer to PROCESS_INFORMATION structure
      ) {
-    ReportWin32Error("CreateProcess failed. ");
+    ReportWin32Error("CreateProcess failed.");
     goto cleanup;
   }
 
