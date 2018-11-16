@@ -37,13 +37,14 @@
 *                   Bugfix: Debug printf("Printing ...") could cause a hang.  *
 *                   Use MsvcLibX for output to the console. Version 2.0.      *
 *                   This fixes the v1.3 issues with large output in CP 65001. *
+*    2018-11-02 JFL Improved ReportWin32Error().			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2018-01-23"
+#define PROGRAM_VERSION "2.0.1"
+#define PROGRAM_DATE    "2018-10-02"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -327,18 +328,24 @@ int IsSwitch(char *pszArg) {
 *                                                                             *
 |   Function:	    ReportWin32Error					      |
 |                                                                             |
-|   Description:    Display a message box with the last error.		      |
-|                                                                             |
-|   Parameters:     char *pszExplanation    Why we think this occured	      |
-|                                                                             |
+|   Description:    Display a message with the last error.		      |
+|                   							      |
+|   Parameters:     char *pszExplanation    Why we think this occured, or NULL|
+|                   ...			    Optional arguments to format      |
+|                   							      |
 |   Returns:	    The number of characters written.        		      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
+|                   							      |
+|   Notes:	    Danger: Known issue: We use a fixed 4KB buffer for the    |
+|		    error message, and do not check for overflows. This is    |
+|		    more than enough for all actual error message, but be     |
+|		    cautious anyway when using optional formatted arguments.  |
+|                   							      |
 |   History:								      |
 |    1998-11-19 jfl Created this routine.				      |
 |    2005-06-10 JFL Added the message description, as formatted by the OS.    |
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
+|    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
+|                   Make sure WIN32 msg and explanation are on the same line. |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
@@ -359,17 +366,23 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
       (LPTSTR) &lpMsgBuf,
       0,
       NULL )) { // Display both the error code and the description string.
-    n = wsprintf(szErrorMsg, "Error %ld, %s", dwErr, lpMsgBuf);
-    LocalFree( lpMsgBuf ); // Free the buffer.
+    n = wsprintf(szErrorMsg, "Error %uld: %s", dwErr, lpMsgBuf);
+    LocalFree(lpMsgBuf); // Free the buffer.
+    // Remove the trailing new line
+    if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
+    if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
   } else { // Error, we did not find a description string for this error code.
-    n = wsprintf(szErrorMsg, "Error %ld: ", dwErr);
+    n = wsprintf(szErrorMsg, "Error %ld.", dwErr);
   }
 
-  va_start(pArgs, pszExplanation);
-  n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
-  va_end(pArgs);
+  if (pszExplanation) {
+    szErrorMsg[n++] = ' '; // Add a blank separator
+    va_start(pArgs, pszExplanation);
+    n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
+    va_end(pArgs);
+  }
 
-  return fprintf(stderr, "%s", szErrorMsg);
+  return fprintf(stderr, "%s\n", szErrorMsg);
 }
 
 /*---------------------------------------------------------------------------*\
