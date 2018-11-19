@@ -30,6 +30,7 @@ Batch\regx.bat
 Batch\rhs.bat
 Batch\-rhs.bat
 Batch\subcmd.bat
+Batch\TclSetup.bat
 Batch\tclsh.bat
 Batch\TimeX.bat
 Batch\touch.bat
