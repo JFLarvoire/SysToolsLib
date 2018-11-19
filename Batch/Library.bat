@@ -217,7 +217,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' %*& exit /b
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-03-01"
+set "VERSION=2018-11-19"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -2135,6 +2135,28 @@ call :trimright "%~1" "%~2"
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        TrimRightSlash                                            #
+:#                                                                            #
+:#  Description     Remove the trailing \ of a pathname, if any               #
+:#                                                                            #
+:#  Note                                                                      #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-06-23 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:TrimRightSlash     %1=VARNAME
+%FUNCTION% EnableDelayedExpansion
+set "VARNAME=%~1"
+%UPVAR% %VARNAME%
+set "%VARNAME%=!%VARNAME%!::" &:# Note that :: cannot appear in a pathname
+set "%VARNAME%=!%VARNAME%:\::=::!"
+set "%VARNAME%=!%VARNAME%:::=!"
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        ReplaceXxxx						      #
 :#                                                                            #
 :#  Description     Replace tricky characters                                 #
@@ -2342,11 +2364,12 @@ exit /b
 :#		    Added support for empty pathnames.                        #
 :#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#   2018-11-19 JFL Improved routine condquote2.                              #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:# Quote file pathnames that require it. %1=Input variable. %2=Opt. output variable.
-:condquote
+:# Quote file pathnames that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "RETVAR=%~2"
 if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
@@ -2365,12 +2388,12 @@ if not errorlevel 1 set P="!P!"
 set "%RETVAR%=!P!"
 %RETURN%
 
-:condquote2
-%FUNCTION%
-setlocal enableextensions enabledelayedexpansion
-set RETVAR=%~2
-if "%RETVAR%"=="" set RETVAR=%~1
-set "P=!%~1!"
+:# Simpler version not using the %FUNCTION%/%RETURN% macros
+:condquote2	 %1=Input variable. %2=Opt. output variable.
+setlocal EnableExtensions Disabledelayedexpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+call set "P=%%%~1%%"
 :# If the value is empty, don't go any further.
 if not defined P set "P=""" & goto :condquote_ret
 :# Remove double quotes inside P. (Fails if P is empty)
@@ -2378,7 +2401,9 @@ set "P=%P:"=%"
 :# If the value is empty, don't go any further.
 if not defined P set "P=""" & goto :condquote_ret
 :# Look for any special character that needs quoting
-echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"@" /C:"," /C:";" /C:"[" /C:"]" /C:"{" /C:"}" /C:"=" /C:"'" /C:"+" /C:"`" /C:"~" >NUL
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
 if not errorlevel 1 set P="%P%"
 :condquote_ret
 :# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
