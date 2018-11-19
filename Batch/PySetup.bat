@@ -19,6 +19,10 @@
 :#                  Always display test results, even in setup mode.	      #
 :#   2017-04-14 JFL Added a check of Explorer File Extensions User Choice.    #
 :#   2018-04-13 JFL Also search %HOMEDRIVE% if it's not C:.                   #
+:#   2018-11-19 JFL Accept start commands with quotes, or without if valid.   #
+:#                  Accept start commands using copies of the default command.#
+:#                  Added a verification that there's no additional command   #
+:#		    associated with the class.				      #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -26,7 +30,7 @@
 
 :init_batch
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-04-13"
+set "VERSION=2018-11-19"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -58,6 +62,7 @@ call :Macro.Init		&:# Inline macros generation
 call :Debug.Init		&:# Debug routines
 call :Exec.Init			&:# Conditional execution routines
 call :Echo.Color.Init
+set "ECHO-N=call :Echo-n"
 
 :# FOREACHLINE macro. (Changes the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
@@ -1219,6 +1224,98 @@ goto :eof
 :Echo.Color.End
 
 :#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        condquote                                                 #
+:#                                                                            #
+:#  Description     Add quotes around the content of a pathname if needed     #
+:#                                                                            #
+:#  Arguments       %1	    Source variable name                              #
+:#                  %2	    Destination variable name (optional)              #
+:#                                                                            #
+:#  Notes 	    Quotes are necessary if the pathname contains special     #
+:#                  characters, like spaces, &, |, etc.                       #
+:#                                                                            #
+:#                  See "cmd /?" for information about characters needing to  #
+:#                  be quoted.                                                #
+:#                  I've added "@" that needs quoting if first char in cmd.   #
+:#                                                                            #
+:#                  Although this is not the objective of this function,      #
+:#                  some effort is made to also produce a usable string if    #
+:#                  the input contains characters that are invalid in file    #
+:#                  names. Inner '"' are removed. "|&<>" are quoted.	      #
+:#                                                                            #
+:#  History                                                                   #
+:#   2010-12-19 JFL Created this routine                                      #
+:#   2011-12-12 JFL Rewrote using findstr. (Executes much faster.)	      #
+:#		    Added support for empty pathnames.                        #
+:#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
+:#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Quote file pathnames that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+%UPVAR% %RETVAR%
+set "P=!%~1!"
+:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
+if defined P set ^"P=!P:"=!"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs "quoting". See list from (cmd /?).
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="!P!"
+:condquote_ret
+set "%RETVAR%=!P!"
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        Echo-n                                                    #
+:#                                                                            #
+:#  Description     Output a string with no newline                           #
+:#                                                                            #
+:#  Macros          %ECHO-N%    Output a string with no newline.              #
+:#                                                                            #
+:#  Arguments       %1          String to output.                             #
+:#                                                                            #
+:#  Notes           Quotes around the string, if any, will be removed.        #
+:#                  Leading spaces will NOT be output. (Limitation of set /P) #
+:#                                                                            #
+:#  History                                                                   #
+:#   2010-05-19 JFL Created this routine.                                     #
+:#   2012-07-09 JFL Send the output to the log file too.                      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+set "ECHO-N=call :Echo-n"
+goto :Echo-n.End
+
+:Echo-n
+setlocal
+if defined LOGFILE %>>LOGFILE% <NUL set /P =%~1
+                               <NUL set /P =%~1
+endlocal
+goto :eof
+
+:Echo-n.End
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        TrimRightSlash                                            #
+:#                                                                            #
+:#  Description     Remove the trailing \ of a pathname, if any               #
+:#                                                                            #
+:#  Note                                                                      #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-06-23 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
 
 :TrimRightSlash %1=VARNAME
 %FUNCTION% EnableDelayedExpansion
@@ -1287,10 +1384,8 @@ if defined RETVAR set "%RETVAR%=%EXE%"
 :#  Note                                                                      #
 :#                                                                            #
 :#  History                                                                   #
-:#   2010-05-31 JFL Created this routine.                                     #
-:#   2011-09-06 JFL Setup now associates .py->python and .tk->wish.           #
-:#                  Added a test mode distinct from the setup mode.           #
-:#   2012-04-23 JFL Setup now updates environment variable PATHEXT if needed. #
+:#   2010-05-31 JFL Created this routine for Tcl.                             #
+:#   2017-01-13 JFL Adapted to Python, with an optional version.              #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -1325,8 +1420,8 @@ if not errorlevel 1 (
 :# Common routine for test and setup.
 :DoSetup %1=setup|test %2=Optional Python version
 %FUNCTION% EnableExtensions EnableDelayedExpansion
-set MODE=%~1
-set VER=%~2
+set "MODE=%~1"
+set "VER=%~2"
 
 :# Locate the latest Python shell
 call :FindPython "%VER%" PYTHON
@@ -1348,7 +1443,7 @@ call :TrimRightSlash PYTHONBIN &:# Remove the trailing \ in that path
 :# First configure the Python text mode interpreter
 %ECHO%
 set PYTHONCMD="%PYTHON%" "%%1" %%*
-call :Test1Setup py PYTHON PYTHONCMD Python.File
+call :Do1Setup py PYTHON PYTHONCMD Python.File
 
 :# Make sure the local PATH includes the Python's bin directory.
 :# (It is set globally by ActivePython's setup, but not locally in each open cmd window.)
@@ -1415,7 +1510,8 @@ if "%PATH1%"=="%PATH2%" ( :# If the python dir is not in the path
 
 :# ----------------------------------------------------------------------------
 
-:Test1Setup	%1=Extension %2=.exe variable %3=Script startup command variable %4=Class
+:# Common routine for testing or setting up one interpreter
+:Do1Setup	%1=Extension %2=.exe variable %3=Script startup command variable %4=Class
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set EXT=%1
 set SH=!%2!
@@ -1423,15 +1519,31 @@ set CMD=!%3!
 set DEFCLASS=%4
 set NEEDSETUP=0
 
+:# The open command may of may not be quoted
+set ARGS=!CMD!
+%POPARG%
+set "EXE=!ARG!"				   &:# Full pathname of the interpretor
+for %%e in ("!EXE!") do set "NXEXE=%%~nxe" &:# File name of the interpretor
+call :condquote EXE QEXE
+if !QEXE!==!EXE! ( :# If no quote needed
+  set CMD=!EXE! !ARGS!
+  set ALTCMD="!EXE!" !ARGS!
+) else ( :# Else the quotes are absolutely necessary
+  set CMD=!QEXE! !ARGS!
+  set ALTCMD=
+)
+%ECHOVARS.D% CMD ALTCMD
+
+:# Declare output variables
 %UPVAR% PATHEXT
 %UPVAR% NEEDSETUP
 
-:# Check the class associated with the .%EXT% extension
+:# Check the class globally associated with the .%EXT% extension
 set CLASS=
 for /f "delims== tokens=2" %%c in ('%XEXEC% -f assoc .%EXT%') do set CLASS=%%c
 :# In case of error, assoc displays: "File association not found for extension .%EXT%"
 if defined CLASS (
-  %ECHO% The .%EXT% extension is associated with class: "%CLASS%"
+  %ECHO% The .%EXT% extension is globally associated with class: %CLASS%
   if "%CLASS%"=="%DEFCLASS%" (
     set "MSG="
     %IF_VERBOSE% set "MSG=The class is defined"
@@ -1454,14 +1566,70 @@ if defined CLASS (
   )
 )
 
-:# Check the open command associated with the class.
+:# Check the user-specific class associated with the .%EXT% extension. (Which overrides the above if present)
+:# Note that as we're running this as Administator, HKCU refers to the Administrator, NOT to the current user.
+set "HKU[%USERNAME%]=HKCU"
+set "USERS=%USERNAME%"
+:# Repeat for the logged in user, if it's not the administrator
+for /f "tokens=2" %%u in ('%XEXEC% -f query session ^| findstr /R "^>"') do set "USER=%%u"
+if not "!USER!"=="%USERNAME%" (
+  set "SID="
+  for /f "tokens=1,2 skip=1" %%r in ('%XEXEC% -f wmic useraccount get name^,sid ^| findstr "S"') do if "%%r"=="!USER!" set "SID=%%s"
+  if defined SID (
+    set "HKU[!USER!]=HKU\!SID!"
+    set "USERS=!USERS! !USER!"
+  ) else (
+    >&2 echo Error: Can't find the SID for user !USER!
+  )
+)
+for %%u in (!USERS!) do (
+  set "CLASS2="
+  set "KEY=!HKU[%%u]!\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.%EXT%\UserChoice"
+  set "USER=%%u"
+  for /f "tokens=2,*" %%p in ('%XEXEC% -f reg query "!KEY!" /v Progid 2">"NUL ^| findstr REG_SZ') do set "CLASS2=%%q"
+  if defined CLASS2 (
+    %ECHO% The .%EXT% extension is associated for user !USER! with class: !CLASS2!
+    if /I "!CLASS2!" equ "!CLASS!" goto :UserChoiceIsCorrect
+    :# if %MODE%==test (
+      call :Echo.Wrong " "
+      %ECHO% It should be set to "!CLASS!" or deleted
+      set "NEEDSETUP=1"
+    :# )
+    if %MODE%==setup (
+      %ECHO% :# Removing the .%EXT% extension class association for user !USER!
+      :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
+      %EXEC% reg delete "!KEY!" /f
+    )
+  ) else (
+    %ECHO% The .%EXT% Extension is not associated for user !USER! with any specific class
+:UserChoiceIsCorrect
+    set "MSG="
+    %IF_VERBOSE% set "MSG=This is fine"
+    call :Echo.OK " "
+    %ECHO% !MSG!
+  )
+)
+
+:# Check the open command associated with the class
 :# (Stored in HKEY_CLASSES_ROOT\%CLASS%\shell\open\command)
 set CMD2=""
-for /f "delims== tokens=2" %%c in ('%XEXEC% -f ftype %CLASS%') do set CMD2=%%c
 if defined CLASS (
+  for /f "delims== tokens=2" %%c in ('%XEXEC% -f ftype %CLASS%') do set CMD2=%%c
   %ECHO% The open command for class %CLASS% is: !CMD2:%%=%%%%!
-  :# Note: Replace " with '' to make it a single string for the if command parser.
-  if /I "%CMD2:"=''%" NEQ "%CMD:"=''%" (
+  set "FIRED=no"
+  if /I "!CMD2!" NEQ "!CMD!" if /I "!CMD2!" NEQ "!ALTCMD!" (
+    :# But the comparisons may also fail because of multiple copies of the same file. Ex: tclsh.exe and tclsh86.exe
+    set "ARGS=!CMD2!"
+    %POPARG%
+    set "EXE2=!ARG!"
+    fc /b "%EXE%" "!EXE2!" >NUL 2>NUL
+    if not errorlevel 1 (
+      set "MSG="
+      %IF_VERBOSE% for %%f in ("!EXE2!") do set "MSG=%%~nxf is a copy of %NXEXE%"
+      goto :The_open_command_is_correct
+    )
+    :# OK, the command is really not the one we want
+    set "FIRED=yes"
     :# if %MODE%==test (
       call :Echo.Wrong " "
       %ECHO% It should be: !CMD:%%=%%%%!
@@ -1478,9 +1646,48 @@ if defined CLASS (
         call :CheckError !ERRORLEVEL!
       )
     )
-  ) else (
+  )
+  if !FIRED!==no ( :# Else one of the commands matches
     set "MSG="
     %IF_VERBOSE% set "MSG=The command is correct"
+:The_open_command_is_correct
+    call :Echo.OK " "
+    %ECHO% !MSG!
+  )
+)
+
+:# Check that there's no additional command associated with the class
+:# (Stored in HKEY_CLASSES_ROOT\%CLASS%\shell\open\command\command)
+:# If present, this additional command prevents the default one from starting up.
+set "VAR=There's an additional command for class %CLASS%: "
+set KEY=HKEY_CLASSES_ROOT\%CLASS%\shell\open\command
+if defined CLASS (
+  :# Temporarily disable expansion to preserve ! in the input string
+  setlocal DisableDelayedExpansion
+  set "command:="
+  for /f "skip=2 tokens=2,*" %%A in ('%XEXEC% -f reg query %KEY% /v command 2">"NUL') do set "command:=%%B"
+  if defined command: (
+    :# if %MODE%==test (
+      :# I've seen cases where that command was so corrupt that it even contained ">" or "|" characters.
+      :# So don't use %ECHO% to display it, as this might crash the script.
+      :# The following 2 lines display "There's an additional class command:=the command and its arguments"
+      :# It's the safest I've found. The only minor issue is the extra = sign after the :.
+      %ECHO-N% "There's an additional class "
+      set command: | findstr /C:"command:="
+      endlocal
+      call :Echo.Wrong " "
+      %ECHO% It should be deleted
+      set "NEEDSETUP=1"
+    :# ) else ( endlocal )
+    if %MODE%==setup (
+      %ECHO% :# Deleting it
+      %EXEC% reg delete !KEY! /v command /f
+    )
+  ) else (
+    endlocal
+    %ECHO% There's no additional command for class %CLASS%
+    set "MSG="
+    %IF_VERBOSE% set "MSG=This is correct"
     call :Echo.OK " "
     %ECHO% !MSG!
   )
@@ -1488,7 +1695,7 @@ if defined CLASS (
 
 :# Check the open command associated with the application
 :# (Stored in HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command)
-for %%P in (%SH%) do set EXE=%%~nxP
+for %%P in ("%SH%") do set EXE=%%~nxP
 set KEY="HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command"
 set CMD3=
 for /f "skip=2 tokens=2,*" %%A in ('%XEXEC% -f reg query %KEY% 2">"NUL') do set CMD3=%%B
@@ -1512,7 +1719,7 @@ if defined CMD3 (
     :# )
     if %MODE%==setup (
       %ECHO% :# Setting it to: !CMD:%%=%%%%!
-      :# Note: Using delayed expansion to avoid issues with PYTHONCMD paths containing parentheses.  
+      :# Note: Using delayed expansion to avoid issues with CMD paths containing parentheses.  
       :# Note: Don't use %EXEC% because it expands %1 and %*
       set CHGCMD=reg add %KEY% /f /t REG_SZ /d "!CMD:"=\"!"
       %ECHO.XVD% !CHGCMD:%%=%%%%!
@@ -1585,50 +1792,6 @@ if not "%PythonPath%"=="%PythonPath2%" (
   )
 )
 
-:# Check Explorer .py File Extension User Choice. (Which overrides the above if present)
-:# Note that as we're running this as Administator, HKCU refers to the Administrator, NOT to the current user.
-set "HKU[%USERNAME%]=HKCU"
-set "USERS=%USERNAME%"
-:# Repeat for the logged in user, if it's not the administrator
-for /f "tokens=2" %%u in ('%XEXEC% -f query session ^| findstr /R "^>"') do set "USER=%%u"
-if not "!USER!"=="%USERNAME%" (
-  set "SID="
-  for /f "tokens=1,2 skip=1" %%r in ('%XEXEC% -f wmic useraccount get name^,sid ^| findstr "S"') do if "%%r"=="!USER!" set "SID=%%s"
-  if defined SID (
-    set "HKU[!USER!]=HKU\!SID!"
-    set "USERS=!USERS! !USER!"
-  ) else (
-    >&2 echo Error: Can't find the SID for user !USER!
-  )
-)
-for %%u in (!USERS!) do (
-  set "Progid="
-  set "KEY=!HKU[%%u]!\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.py\UserChoice"
-  set "USER=%%u"
-  for /f "tokens=2,*" %%p in ('%XEXEC% -f reg query "!KEY!" /v Progid 2">"NUL ^| findstr REG_SZ') do set "Progid=%%q"
-  if defined Progid (
-    %ECHO% The Windows Explorer .py File Extension !USER! User Choice is: "!Progid!"
-    if /I "!Progid!" equ "!CLASS!" goto :UserChoiceIsCorrect
-    :# if %MODE%==test (
-      call :Echo.Wrong " "
-      %ECHO% It should be set to "!CLASS!" or deleted
-      set "NEEDSETUP=1"
-    :# )
-    if %MODE%==setup (
-      %ECHO% :# Removing Windows Explorer .py File Extension !USER! User Choice
-      :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
-      %EXEC% reg delete "!KEY!" /f
-    )
-  ) else (
-    %ECHO% The Windows Explorer .py File Extension !USER! User Choice is undefined
-:UserChoiceIsCorrect
-    set "MSG="
-    %IF_VERBOSE% set "MSG=The Windows Explorer .py File Extension !USER! User Choice is correct"
-    call :Echo.OK " "
-    %ECHO% !MSG!
-  )
-)
-
 :# Check the PATHEXT variable
 :# 1) The global variable in the registry
 set "KEY=HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
@@ -1653,7 +1816,7 @@ if %PEXTOK%==0 (
   )
 ) else (
   set "MSG="
-  %IF_VERBOSE% set "MSG=The global PATHEXT is correct"
+  %IF_VERBOSE% set "MSG=The global PATHEXT contains .%EXT%"
   call :Echo.OK " "
   %ECHO% !MSG!
 )
@@ -1674,7 +1837,7 @@ if %PEXTOK%==0 (
   )
 ) else (
   set "MSG="
-  %IF_VERBOSE% set "MSG=The local PATHEXT is correct"
+  %IF_VERBOSE% set "MSG=The local PATHEXT contains .%EXT%"
   call :Echo.OK " "
   %ECHO% !MSG!
 )
@@ -1710,6 +1873,7 @@ exit /b %1
 :#----------------------------------------------------------------------------#
 
 :Help
+echo %SCRIPT% - Configure Windows for running Python command-line scripts
 echo.
 echo Usage: %SCRIPT% [options] [N]
 echo.
@@ -1744,7 +1908,7 @@ if "!ARG!"=="-?" goto Help
 if "!ARG!"=="/?" goto Help
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto nextarg
 if "!ARG!"=="-l" set "ACTION=FindPython" & goto nextarg
-if "!ARG!"=="-r" set "ACTION=RunPython" & goto nextarg
+if "!ARG!"=="-r" set "ACTION=RunPython" & goto :RunPython
 if "!ARG!"=="-s" set "ACTION=Setup" & goto nextarg
 if "!ARG!"=="-t" set "ACTION=TestSetup" & goto nextarg
 if "!ARG!"=="-tb" set "ACTION=TestBroadcast" & goto nextarg
@@ -1752,9 +1916,9 @@ if "!ARG!"=="-tc" set "ACTION=TestColors" & goto nextarg
 if "!ARG!"=="-v" call :Verbose.On & goto nextarg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.Off & goto nextarg
-if "!ARG:0,1!"=="-" >&2 echo Error: Unrecognized switch: %1 & goto nextarg
+if "!ARG:~0,1!"=="-" >&2 echo Error: Unrecognized switch: !ARG! & goto nextarg
 if not defined PYTHONVER set "PYTHONVER=%~1" & goto nextarg
->&2 echo Error: Unrecognized argument: %1
+>&2 echo Error: Unrecognized argument: !"ARG"!
 goto nextarg
 
 :# Execute the selected action
@@ -1771,12 +1935,12 @@ set ">NUL=>NUL"
 %IF_DEBUG% set ">NUL="
 call :FindPython "%~1" PYTHON %>NUL%
 if not defined PYTHON (
-  echo>&2 Failed. No python interpreter found.
+  >&2 echo Failed. No python interpreter found.
   exit /b 1
 )
 :# Start it
-"%PYTHON%" %*
-goto :eof
+"%PYTHON%" !ARGS!
+exit /b
 
 :# Test color messages
 :TestColors
@@ -1786,7 +1950,7 @@ call :Echo.Warning " "
 %ECHO% Be careful
 call :Echo.Wrong " "
 %ECHO% This is bad
-exit /b
+exit /b 0
 
 :# Test the WM_SETTINGCHANGE broadcast
 :TestBroadcast
