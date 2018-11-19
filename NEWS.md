@@ -12,6 +12,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - Batch/PySetup.bat: Accept start commands with quotes, or without if valid.   
   Accept start commands using copies of the default command.
   Added a verification that there's no additional command associated with the class.				      
+- Batch/tclsh.bat: Use the improved FindTclsh routine from TclSetup.bat. Removed options -s and -t.
 - Batch/Library.bat: Added routine TrimRightSlash; Improved routine condquote2.
 
 ## [Unreleased] 2018-11-16
