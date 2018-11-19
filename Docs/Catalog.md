@@ -6,8 +6,8 @@ The OS column lists the operating systems supported. D=DOS, W=Windows, L=Linux.
 
 ## Manage directories
 
-The Windows versions of these tools support Unicode pathnames, long paths > 260 characters, symlinks and junctions. 
-The output is correct in any code page.
+The Windows versions of these tools support Unicode pathnames, long paths > 260 characters, symlinks and junctions.  
+The output is correct in any code page.  
 As far as I know, no other Windows port of Unix tools can do all that, if any.
 
 Name		| OS   	| Description										| Example
@@ -65,17 +65,20 @@ Name		| OS   	| Description										| Example
 a2u.bat		| -W-	| Convert ANSI text to 16-bits Unicode text.						|
 b64dec.tcl	| -WL	| Decode base64-encoded data.								| `12 b64dec`
 b64enc.tcl	| -WL	| Encode data in base64.								| `12 b64enc`
+camel.tcl	| -WL	| Convert text to Camel Case. (i.e. capitalize each word.)				| `12 camel`
 codepage.exe	| -W-	| Get information about the current and usable console code pages.			| `codepage 850` &:# Display a table of code page 850 characters.
 conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.txt | conv w .`
 deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
 dump.exe	| DWL	| Hexadecimal dump.									| `1clip | dump`
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
+lower.tcl	| -WL	| Convert text to lower case.								| `12 lower`
 regsub.tcl	|  WL	| Replace a regular expression at the file level.					| `regsub "(\d\d)/(\d\d)/(\d\d)" "19\1-\2-\3" *.c` &:# Change old dates to the ISO format
 remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip | remplace "; " \r\n | sort` &:# Sort an email distribution list alphabetically
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
-u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `12 u2w`
-w2u.bat		| -W-	| Convert Windows End-Of-Lines (CR LF) to Unix End-Of-Lines (LF).			|
+u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `u2w UnixProg.c`
+upper.tcl	| -WL	| Convert text to UPPER CASE.								| `12 upper`
+w2u.bat		| -W-	| Convert Windows End-Of-Lines (CR LF) to Unix End-Of-Lines (LF).			| `w2u WindowsProg.c`
 
 ## Manage the Windows system
 
@@ -90,6 +93,7 @@ driver.exe			| -W-	| Manage Windows 9X and 2000+ drivers.							|
 Enable-IPv6Components.ps1	| -W-	| Enables Windows IPv6 component. Useful for diagnosing networking issues.		|
 font.exe                 	| -W-	| Display information about available fonts.                              		| `font -f` &:# Enumerate fixed-width fonts usable in the console
 Get-ProductKey.ps1		| -W-	| Display the product key used for activating Windows.					|
+history.bat			| -W-	| Display the list of all previous commands entered at the cmd prompt.			| `history`
 hosts.bat			| -W-	| Edit the hosts file with notepad							| `hosts` &:# Must be run as administrator, else the hosts file can't be saved
 IESec.ps1			| -W-	| Display Internet Explorer security mode settings.					|
 IPcfg.bat			| -W-	| Front end to ipconfig.exe, filtering its output to make it more readable. Numerous options to select the information needed.	| `ipcfg` &:# Display just Ethernet and Wifi interfaces
@@ -104,8 +108,8 @@ Window.ps1			| -W-	| Move and resize windows.								| `Window "Server Manager" 
 
 ## Manipulate structured trees
 
-XML is good for programs, but hard to read for humans.
-JSON is easier to read, but not as powerful as XML.
+XML is good for programs, but hard to read for humans.  
+JSON is easier to read, but not as powerful as XML.  
 SML is XML made readable.
 
 Name		| OS   	| Description											 | Example
@@ -131,13 +135,14 @@ mountw.bat      | -W-   | Mount a .wim Windows disk Image using a Unix-like comm
 msgbox.exe      | -W-   | Display various types of message boxes, and return answers to the batch.		| `msgbox -x -c "About to erase your disk"`
 nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
 PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
-PySetup.bat	| -W-	| Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts. | `pysetup -t` &:# Test if Python is correctly configured
+PySetup.bat	| -W-	| Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts. | `pysetup` &:# Test if Python is correctly configured
 subcmd.bat      | -W-   | Start a sub cmd shell, changing the prompt to show the shell depth level and modes.	| `subcmd /V:on` &:# Enable delayed expansion in the sub shell
-tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH. Configure Windows to run *.tcl files as command-line scripts.	 | `tclsh.bat -t` &:# Test if Tcl is correctly configured
+TclSetup.bat	| -W-	| Configure Windows to run *.tcl files as command-line scripts, and *.tk as windowed scripts. | `tclsetup` &:# Test if Tcl is correctly configured
+tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH.					| `tclsh.bat -t` &:# Test if Tcl is correctly configured
 tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
-TimeX.bat	| -W-	| Time the execution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
+TimeX.bat	| -W-	| Time the eXecution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
 touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
-unixtime.tcl    | -WL   | Convert a Unix Epoch time (# of seconds since Jan 1970) to a readable time, and back. | `unixtime "Thu Jan 4 03:00:09 PST 2018"`
+unixtime.tcl    | -WL   | Convert a Unix Epoch time (# of seconds since Jan 1970) to an ISO 8601 date/time.	| `unixtime 1515063609`
 umountw.bat     | -W-   | Unmount a .wim Windows disk Image using a Unix-like command.                          | `umountw` &:# Unmounts the image at the default C:\mnt\wim
 vcvars.bat      | -W-   | Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
 whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
@@ -170,9 +175,9 @@ n.bat		| -W-	| Start Notepad										| `n readme.md`
 
 ## Notes
 
-* All Tcl scripts require installing a Tcl interpreter.
-This interpreter is standard in Linux, but absent in Windows.
-See the [README](../Tcl/README.md) file in SysToolsLib's Tcl directory for instructions on how to install a Tcl interpreter in Windows.
+* All Tcl scripts require installing a Tcl interpreter.  
+  This interpreter is standard in Linux, but absent in Windows.  
+  See the [README](../Tcl/README.md) file in SysToolsLib's Tcl directory for instructions on how to install a Tcl interpreter in Windows.
 
 * All tools (both scripts and C programs) support the -? option for help, and most share a few other common options:
 
