@@ -25,6 +25,8 @@
 :#   2014-05-13 JFL Fixed the setting of variable PATHEXT.		      #
 :#   2014-06-23 JFL Make sure the local path includes the Tcl's bin directory.#
 :#                  Bug fix: Avoid adding trailing spaces to variable PATHEXT.#
+:#   2018-11-19 JFL Use the improved FindTclsh routine from TclSetup.bat.     #
+:#                  Removed options -s and -t.                                #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -32,7 +34,7 @@
 
 :init_batch
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2014-06-23"
+set "VERSION=2018-11-19"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 
@@ -42,8 +44,7 @@ set NOEXEC=0
 
 set ARG0=%0
 set RUN=call :Run
-set RUNX=%COMSPEC% /c %ARG0% %VERBOSE% --call Run
-set RETURN=goto :eof
+set RETURN=exit /b
 
 :# FOREACHLINE macro. (Change delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims=" 
@@ -132,264 +133,68 @@ exit /b 0
 :#                                                                            #
 :#  Function        FindTclsh                                                 #
 :#                                                                            #
-:#  Description     Find the latest tclsh.exe                                 #
+:#  Description     Find the latest tclsh.exe in %SEARCHDRIVES%               #
 :#                                                                            #
 :#  Note                                                                      #
 :#                                                                            #
 :#  History                                                                   #
 :#   2010-05-31 JFL Created this routine.                                     #
+:#   2018-10-02 JFL Search in the PATH first.                                 #
+:#                  Then search in both Tcl and ActiveTcl subdirectories.     #
+:#                  And skip threaded versions, like tclsh86t.exe             #
+:#                  Return errorlevel 0 in case of success, else errorlevel 1.#
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:FindTclsh
+:FindTclsh  %1=VARNAME. Default=Display all
+setlocal EnableExtensions EnableDelayedExpansion
 
-:# Check prerequisites
-call :EnableExpansion
-if errorlevel 1 exit /b 1
+set "RETVAR=%~1"		&:# Variable where to store the result
+set "RETVAL=0"			&:# Assume success
+set "TCLEXE="
 
+:# First search it in the PATH
+if "%DEBUG%"=="1" echo :# Searching in %%PATH%%
+for %%p in (tclsh.exe) do set "TCLEXE=%%~$PATH:p"
+if defined TCLEXE goto :FindTclsh.Done
+
+:# If the PATH has not been set (which is optional), then scan likely places.
 :# Search in the list of drives, then in the possible \Tcl program directories.
-set TCLEXE=
 for %%d in (%SEARCHDRIVES%) do (
   for %%p in ("" "\Program Files" "\Program Files (x86)") do (
-    set TCLBIN=%%d:%%~p\Tcl\bin
-    if .%DEBUG%.==.1. echo Looking in !TCLBIN!
-    :# Assume that the alphabetic order will be the same as the version order.
-    :# So the last listed executable will be the most recent one.
-    %FOREACHLINE% %%L in ('cmd /c "dir /b /on "!TCLBIN!\tclsh*.exe" 2>NUL"') do set TCLEXE=!TCLBIN!\%%L
-    if not "!TCLEXE!"=="" (
-      echo !TCLEXE!
-      goto :EOF
-    )
-  )
-)
-
-%RETURN%
-
-:#----------------------------------------------------------------------------#
-:#                                                                            #
-:#  Function        Setup                                                     #
-:#                                                                            #
-:#  Description     Setup Windows for running *.tcl with the latest tclsh.exe #
-:#                                                                            #
-:#  Note                                                                      #
-:#                                                                            #
-:#  History                                                                   #
-:#   2010-05-31 JFL Created this routine.                                     #
-:#   2011-09-06 JFL Setup now associates .tcl->tclsh and .tk->wish.           #
-:#                  Added a test mode distinct from the setup mode.           #
-:#   2012-04-23 JFL Setup now updates environment variable PATHEXT if needed. #
-:#                                                                            #
-:#----------------------------------------------------------------------------#
-
-:Setup
-:# First check administrator rights
-ren %SystemRoot%\win.ini win.ini >NUL 2>&1
-if errorlevel 1 (
-  >&2 echo Error: This must be run as Administrator.
-  exit /b 1
-)
-call :DoSetup setup
-endlocal & set "PATHEXT=%PATHEXT%" & set "PATH=%PATH%"
-:# echo set "PATHEXT=%PATHEXT%"
-%RETURN%
-
-:TestSetup
-call :DoSetup test
-echo.
-if .%NEEDSETUP%.==.0. (
-  echo The setup is good.
-) else (
-  echo The setup must be updated.
-)
-%RETURN%
-
-:# Common routine for test and setup. %1=test or %1=setup
-:DoSetup
-setlocal
-set MODE=%1
-
-:# Locate the latest Tcl shell
-set TCLSH=""
-for /f "delims=" %%p in ('call %ARG0% -f') do set TCLSH="%%p"
-echo.
-if %TCLSH%=="" (
-  echo>&2 Failure. No Tcl shell found.
-  exit /b 1
-)
-echo The Tcl shell is: %TCLSH%
-
-:# First configure the Tcl text mode interpreter
-echo.
-set TCLCMD=%TCLSH% "%%1" %%*
-call :Test1Setup tcl TCLSH TCLCMD TclScript
-set NEEDSETUP1=%NEEDSETUP%
-
-:# Repeat operation for the Tcl/Tk graphical mode interpreter
-echo.
-set WISH=%TCLSH:tclsh=wish%
-set WISHCMD=%WISH% "%%1" %%*
-call :Test1Setup tk WISH WISHCMD TclTkScript
-set NEEDSETUP2=%NEEDSETUP%
-
-:# Make sure the local PATH includes the Tcl's bin directory.
-:# (It is set globally by ActiveTcl's setup, but not locally in each open cmd window.)
-set NEEDSETUP=0
-for %%B in (%TCLSH%) do set "TCLBIN=%%~dpB" &:# Deduce the Tcl bin path
-:# Remove the trailing \ in that path
-set "TCLBIN=%TCLBIN%::" &:# Note that :: cannot appear in a pathname
-set "TCLBIN=%TCLBIN:\::=::%"
-set "TCLBIN=%TCLBIN:::=%"
-:# Now check if that path is present in the local PATH
-set "PATH1=;%PATH%;"
-set "PATH2=!PATH1:;%TCLBIN%;=;!"
-if "%PATH1%"=="%PATH2%" (
-  echo.
-  if %MODE%==test (
-    echo Error: The directory "%TCLBIN%" is missing in the local PATH.
-    set NEEDSETUP=1
-  )
-  if %MODE%==setup (
-    echo Adding "%TCLBIN%" to the local PATH
-    set "PATH=%TCLBIN%;%PATH%"
-  )
-)
-set NEEDSETUP3=%NEEDSETUP%
-
-set /A NEEDSETUP=%NEEDSETUP1% ^| %NEEDSETUP2% ^| %NEEDSETUP3%
-endlocal & set "NEEDSETUP=%NEEDSETUP%" & set "PATHEXT=%PATHEXT%" & set "PATH=%PATH%"
-%RETURN%
-
-:Test1Setup
-setlocal
-set EXT=%1
-call set SH=%%%2%%
-call set CMD=%%%3%%
-set DEFCLASS=%4
-set NEEDSETUP=0
-
-echo Expecting .%EXT% script startup command: %CMD%
-
-:# Check the class associated with the .%EXT% extension
-set CLASS=
-for /f "delims== tokens=2" %%c in ('%RUNX% assoc .%EXT%') do set CLASS=%%c
-:# In case of error, displays: "File association not found for extension .%EXT%"
-:# Create one if needed
-if %MODE%==setup if .%CLASS%.==.. (
-  set CLASS=%DEFCLASS%
-  echo Associating it with: !CLASS!
-  %RUN% assoc .%EXT%=!CLASS!
-)
-
-:# Check the open command associated with the class.
-:# (Stored in HKEY_CLASSES_ROOT\%CLASS%\shell\open\command)
-set CMD2=""
-for /f "delims== tokens=2" %%c in ('%RUNX% ftype %CLASS% 2^>NUL') do set CMD2=%%c
-if not .%CLASS%.==.. (
-  echo The .%EXT% extension is associated with class: "%CLASS%"
-  echo The open command for class %CLASS% is: %CMD2%
-  :# Note: Replace " with '' to make it a single string for the if command parser.
-  if not "%CMD2:"=''%"=="%CMD:"=''%" (
-    if %MODE%==test (
-      echo Error: Command mismatch.
-      set NEEDSETUP=1
-    )
-    if %MODE%==setup (
-      echo Setting it to the expected command.
-      :# Note: Using delayed expansion to avoid issues with CMD paths containing parentheses.
-      :# Note: Don't use %RUN% because it expands %1 and %*
-      set CHGCMD=ftype %CLASS%=!CMD!
-      if "%VERBOSE%"=="-v" echo !CHGCMD!
-      if "%NOEXEC%"=="0" (
-      	!CHGCMD!
-        call :CheckError %ERRORLEVEL%
+    for %%s in ("ActiveTcl" "Tcl") do (
+      set TCLBIN=%%d:%%~p\%%~s\bin
+      if "%DEBUG%"=="1" echo :# Searching in !TCLBIN!
+      if exist "!TCLBIN!" (
+	if exist "!TCLBIN!\tclsh.exe" (
+	  set TCLEXE=!TCLBIN!\tclsh.exe
+	  goto :FindTclsh.Done
+	)
+	:# In some cases, there are several tclsh.exe versions side-by-side.
+	:# Assume that the alphabetic order will be the same as the version order.
+	:# So the last listed executable will be the most recent one.
+	:# Skip threaded versions, like tclsh86t.exe.
+	%FOREACHLINE% %%L in ('cmd /c "dir /b /on "!TCLBIN!\tclsh*.exe" 2^>NUL ^| findstr /V t.exe"') do set TCLEXE=!TCLBIN!\%%L
+	if defined TCLEXE goto :FindTclsh.Done
       )
     )
   )
-) else (
-  :# This can only happen in test mode.
-  echo Error: No class associated with this extension.
-  set NEEDSETUP=1
 )
 
-:# Check the open command associated with the application
-:# (Stored in HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command)
-for %%P in (%SH%) do set EXE=%%~nxP
-set KEY="HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command"
-set CMD3=""
-for /f "skip=2 tokens=2,*" %%A in ('%RUNX% reg query %KEY% 2^>NUL') do set CMD3=%%B
-call :CheckError %ERRORLEVEL%
-echo The open command for application %EXE% is: %CMD3%
-:# Note: Replace " with '' to make it a single string for the if command parser.
-set EMPTY=""
-if "%CMD3:"=''%"=="%EMPTY:"=''%" (
-  echo Undefined, which is OK as this definition is optional.
-) else if not "%CMD3:"=''%"=="%CMD:"=''%" (
-  if %MODE%==test (
-    echo Error: Command mismatch.
-    set NEEDSETUP=1
-  )
-  if %MODE%==setup (
-    echo Setting it to the expected command.
-    :# Note: Using delayed expansion to avoid issues with TCLCMD paths containing parentheses.  
-    :# Note: Don't use %RUN% because it expands %1 and %*
-    set CHGCMD=reg add %KEY% /f /t REG_SZ /d "!CMD:"=\"!"
-    if "%VERBOSE%"=="-v" echo !CHGCMD!
-    if "%NOEXEC%"=="0" (
-      !CHGCMD!
-      call :CheckError %ERRORLEVEL%
-    )
-  )
-)
+:# Failed to find tclsh.exe
+%RETURN% 1
 
-:# Check the PATHEXT variable
-:# 1) The global variable in the registry
-set "KEY=HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
-for /f "tokens=3" %%p in ('reg query "%KEY%" /v PATHEXT ^| findstr REG_SZ') do @set PE=%%p
-echo The global environment variable PATHEXT is: %PE%
-set "PEXTOK=0"
-for %%e in (%PE:;= %) do @if /i %%e==.%EXT% set "PEXTOK=1"
-if %PEXTOK%==0 (
-  if %MODE%==test (
-    echo Error: The .%EXT% extension is missing in the global PATHEXT.
-    set NEEDSETUP=1
-  )
-  if %MODE%==setup (
-    echo Updating global environment variable PATHEXT to: %PE%;.%EXT%
-    %RUN% reg add "%KEY%" /v PATHEXT /d "%PE%;.%EXT%" /f
-    :# Notify all windows of the environment block change
-    findstr -rbv @echo "%ARG0%" 2>NUL | powershell -c -
-  )
-)
-:# 2) The local variable in the command shell
-echo The local environment variable PATHEXT is: %PATHEXT%
-set "PEXTOK=0"
-for %%e in (%PATHEXT:;= %) do @if /i %%e==.%EXT% set "PEXTOK=1"
-if %PEXTOK%==0 (
-  if %MODE%==test (
-    echo Error: The .%EXT% extension is missing in the local PATHEXT.
-    set NEEDSETUP=1
-  )
-  if %MODE%==setup (
-    echo Updating local environment variable PATHEXT to: %PATHEXT%;.%EXT%
-    set "PATHEXT=%PATHEXT%;.%EXT%"
-  )
-)
-
-endlocal & set "NEEDSETUP=%NEEDSETUP%" & set "PATHEXT=%PATHEXT%"
-%RETURN%
-
-:CheckError
-setlocal
-set ERR=%1
-if "%VERBOSE%"=="-v" if "%NOEXEC%"=="0" (
-  if .%ERR%.==.0. (
-    echo OK
+:FindTclsh.Done
+if defined TCLEXE (
+  if defined RETVAR (
+    if "%DEBUG%"=="1" echo set "%RETVAR%=%TCLEXE%"
+    endlocal & set "%RETVAR%=%TCLEXE%"
   ) else (
-    echo ERR=%ERR%
+    echo !TCLEXE!
+    endlocal
   )
 )
-endlocal
-%RETURN%
+%RETURN% 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -411,8 +216,6 @@ echo.
 echo Options:
 echo   -?        Display this help
 echo   -f        Find the latest tclsh*.exe, and display its pathname
-echo   -s        Setup Windows for running .tcl scripts with the latest tclsh
-echo   -t        Test the current setup. Tells if it's useful to use -s.
 goto :EOF
 
 :Main
@@ -427,18 +230,13 @@ if .%1.==.-?. goto Help
 if .%1.==./?. goto Help
 if %1==--call goto Call
 if %1==-d set "DEBUG=1" & goto nextarg
-if %1==-f goto FindTclsh
-if %1==-t goto TestSetup
-if %1==-s goto CallSetup
-if %1==-v set "VERBOSE=-v" & set RUNX=%COMSPEC% /c %ARG0% %VERBOSE% --call Run & goto nextarg
+if %1==-f call :FindTclsh & exit /b
+if %1==-t echo Please use TclSetup.bat instead & exit /b 1
+if %1==-s echo Please use TclSetup.bat instead & exit /b 1
+if %1==-v set "VERBOSE=-v" & goto nextarg
 if %1==-V (echo %VERSION%) & goto :eof
 if %1==-X set "NOEXEC=1" & goto nextarg
 goto start
-
-:# Call the setup routine. May update the parent cmd.exe PATHEXT variable.
-:CallSetup
-call :Setup
-endlocal & set "PATHEXT=%PATHEXT%" & set "PATH=%PATH%" & exit /b 0
 
 :# Mechanism for calling a subroutine from the command line
 :Call
@@ -450,17 +248,15 @@ call :%PROC% %1 %2 %3 %4 %5 %6 %7 %8 %9
 
 :# Locate and start the Tcl interpreter
 :Start
-set TCLSH=""
-for /f "delims=" %%p in ('%ARG0% %VERBOSE% -f') do set TCLSH="%%p"
-:# Note: The set command above fails without the quotes around %%p. Why?!?
-:#       (Is it linked to the parenthesis in the "C:\Program Files (x64)" path?)
-if .%TCLSH%.==."". (
-  echo>&2 Failure. No tclsh interpreter found.
+set "TCLSH="
+call :FindTclsh TCLSH
+if not defined TCLSH (
+  >&2 echo Failed. No tclsh interpreter found.
   exit /b 1
 )
 :# Start it
-%TCLSH% %*
-goto :eof
+"%TCLSH%" %*
+exit /b
 :# End of the PowerShell comment section protecting the batch section.
 #>
 
