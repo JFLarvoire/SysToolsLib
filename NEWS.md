@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.14] 2018-11-19
+### New
+- Batch/TclSetup.bat: Configure Tcl for running .tcl scripts.
+  Setup code split off of tclsh.bat, and improved to match features in PySetup.bat.
+### Changed
+- Batch/PySetup.bat: Accept start commands with quotes, or without if valid.   
+  Accept start commands using copies of the default command.
+  Added a verification that there's no additional command associated with the class.				      
+- Batch/Library.bat: Added routine TrimRightSlash; Improved routine condquote2.
+
 ## [Unreleased] 2018-11-16
 ### New
 - Tcl/camel.tcl: New filter script, for use in pipes, to convert strings to camel case.
