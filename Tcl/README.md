@@ -28,8 +28,8 @@ Most of these scripts work both in Windows and in Linux.
           Be sure to download the x86 version, even on AMD64/x86_64 machines, because we use Expect,
           and it's only available in the x86 version.
         - Install it on your system. Accept defaults for all options, unless you know what you're doing.
-        - Copy [tclsh.bat](../Batch) into your path. Ex: into C:\Windows
-        - Run `tclsh.bat -s`  
+        - Copy [tclsh.bat](../Batch) and [TclSetup.bat](../Batch) into your path. Ex: into C:\Windows
+        - Run `TclSetup.bat -s`  
           (This sets up Windows to run .tcl files as command-line scripts, and .tk files as windowed scripts.)
         - In Windows XP or 2003, close the command prompt and restart it. Not necessary in more recent versions of Windows.
 
@@ -40,6 +40,7 @@ Most of these scripts work both in Windows and in Linux.
         ```
         teacup install --http-proxy web-proxy:8080 Expect
         teacup install --http-proxy web-proxy:8080 dns
+        teacup install --http-proxy web-proxy:8080 twapi
         ```  
 
         Note that many scripts are able to automatically download the packages they need.  
