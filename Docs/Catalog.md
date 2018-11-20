@@ -12,7 +12,7 @@ As far as I know, no other Windows port of Unix tools can do all that, if any.
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
-ag.exe		| -WL   | A port for Windows of 'The Silver Searcher', a _very fast_ file searcher.             | `ag --cc myvariable` &:# Find all references to myvariable in C sources in the current directory tree.
+ag.exe		| -WL	| A port for Windows of 'The Silver Searcher', a _very fast_ file searcher.		| `ag --cc myvariable` &:# Find all references to myvariable in C sources in the current directory tree.
 backnum.exe	| DWL	| Make a backup copy of a file, appending a unique number to its name.	 		| `backnum myprogram.c` &:# Back it up before making a risky change
 cfdt.tcl	| -WL	| Change files dates and times. Option for using a Jpeg picture internal time.		| `cfdt --i2m *.jpg` &:# Change the files time to image time.
 dirc.exe	| DWL	| Compares directories side by side.							| `dirc oldDir newDir` &:# Compare directories based on the files time and size.
@@ -38,9 +38,9 @@ Easily add, remove, or search entries in your PATH variables.
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
-addpath.bat	| -W-	| Manage the local and global path easily.						| `addpath | sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
+addpath.bat	| -W-	| Manage the local and global path easily.						| `addpath \| sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
 AddPaths.bat	| -W-	| Configure the system path to include my tool boxes					| `addpaths`
-which.exe	| -W-	| Check which program will execute by the given name. Supports any executable type, including tcl and ps1. (Contrary to most WIN32 ports of which, which ignore Windows' %PATHEXT% variable, and don't know the different precedence rules of cmd and powershell shells.) | `which which`
+which.exe	| -W-	| Check which program will execute by the given name. Supports any executable type, including tcl and ps1. (Contrary to most WIN32 ports of which, which ignore Windows' %PATHEXT% variable, and don't know the different precedence rules of cmd and powershell shells.)	| `which which`
 
 ## Pipes and the Windows Clipboard
 
@@ -49,10 +49,10 @@ Brings the power of the command line to all Windows GUI applications.
 Name		| OS   	| Description																							| Example
 ----------------|-------|-------------------------------------------------------------------------------------------------------|-------------
 12.bat		| -W-	| Pipe Windows clipboard contents into a program, then that program output back into the clipboard.	| `12 sort`
-1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip | sort`
-2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir | 2clip`
-2note.exe	| -W-	| Pipe a program output into Windows Notepad.								| `dir | 2note`
-Get-Console.ps1	| -W-	| Capture the console window as HTML or RTF or plain Text, and send it to the clipboard.                | `Get-Console`
+1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip \| sort`
+2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir \| 2clip`
+2note.exe	| -W-	| Pipe a program output into Windows Notepad.								| `dir \| 2note`
+Get-Console.ps1	| -W-	| Capture the console window as HTML or RTF or plain Text, and send it to the clipboard.		| `Get-Console`
 
 ## Convert data
 
@@ -61,20 +61,20 @@ There tools are useful on their own, and even more so when combined in a command
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 72w.bat		| -W-	| Convert UTF-7 text to Windows ANSI characters.					|
-82w.bat		| -W-	| Convert UTF-8 text to Windows ANSI. Useful to decode scrambled emails. Uses conv.exe. | `12 82w`	
+82w.bat		| -W-	| Convert UTF-8 text to Windows ANSI. Useful to decode scrambled emails. Uses conv.exe.	| `12 82w`	
 a2u.bat		| -W-	| Convert ANSI text to 16-bits Unicode text.						|
 b64dec.tcl	| -WL	| Decode base64-encoded data.								| `12 b64dec`
 b64enc.tcl	| -WL	| Encode data in base64.								| `12 b64enc`
 camel.tcl	| -WL	| Convert text to Camel Case. (i.e. capitalize each word.)				| `12 camel`
 codepage.exe	| -W-	| Get information about the current and usable console code pages.			| `codepage 850` &:# Display a table of code page 850 characters.
-conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.txt | conv w .`
+conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.txt \| conv w .`
 deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
-dump.exe	| DWL	| Hexadecimal dump.									| `1clip | dump`
+dump.exe	| DWL	| Hexadecimal dump.									| `1clip \| dump`
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
 lower.tcl	| -WL	| Convert text to lower case.								| `12 lower`
 regsub.tcl	|  WL	| Replace a regular expression at the file level.					| `regsub "(\d\d)/(\d\d)/(\d\d)" "19\1-\2-\3" *.c` &:# Change old dates to the ISO format
-remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip | remplace "; " \r\n | sort` &:# Sort an email distribution list alphabetically
+remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip \| remplace "; " \r\n \| sort` &:# Sort an email distribution list alphabetically
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
 u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `u2w UnixProg.c`
 upper.tcl	| -WL	| Convert text to UPPER CASE.								| `12 upper`
@@ -102,7 +102,7 @@ Out-ByHost.ps1			| -W-	| Execute PowerShell commands on remote machines in paral
 Reconnect.bat			| -W-	| Reconnect network drives. Useful after moving a laptop, or when opening an elevated window.	| `Reconnect S:`
 Reconnect.ps1			| -W-	| Reconnect network drives. Useful after moving a laptop, or when opening an elevated window.	| `Reconnect S:`
 regx.bat			| -W-	| Manage the registry as if it were a file system. Output formatted as SML.		| `regx dir HKLM\SOFTWARE\Microsoft\Windows`
-ShadowCopy.ps1                  | -W-   | Manage volume shadow copies. Includes an option for recyling them like a pool of backup tapes. | `help ShadowCopy.ps1 -detailed`
+ShadowCopy.ps1			| -W-	| Manage volume shadow copies. Includes an option for recyling them like a pool of backup tapes.	| `help ShadowCopy.ps1 -detailed`
 Test-IPv6Components.ps1		| -W-	| Test if Windows IPv6 component are enabled or disabled. Useful for diagnosing networking issues.	|
 Window.ps1			| -W-	| Move and resize windows.								| `Window "Server Manager" -MoveTo 150,150 -Resize 1000,750 -OnTop`
 
@@ -112,51 +112,51 @@ XML is good for programs, but hard to read for humans.
 JSON is easier to read, but not as powerful as XML.  
 SML is XML made readable.
 
-Name		| OS   	| Description											 | Example
-----------------|-------|------------------------------------------------------------------------------------------------|-------------
-sml.tcl		| -WL	| Convert XML files to a much simpler structured text format, and back.				 | `type config.xml | sml`
-sml2.exe	| -WL	| A rewrite of sml.tcl in C, based on libxml2. Options to reformat and indent the output.	 | `type config.xml | sml2 -f`
-show.tcl	| -WL	| Display files contents, or whole directory trees contents, in a simple structured text format. | `show /proc/fs`
-xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.							 | `xpath --dir config.xml /root/display`
+Name		| OS   	| Description												| Example
+----------------|-------|-------------------------------------------------------------------------------------------------------|-------------
+sml.tcl		| -WL	| Convert XML files to a much simpler structured text format, and back.					| `type config.xml \| sml`
+sml2.exe	| -WL	| A rewrite of sml.tcl in C, based on libxml2. Options to reformat and indent the output.		| `type config.xml \| sml2 -f`
+show.tcl	| -WL	| Display files contents, or whole directory trees contents, in a simple structured text format.	| `show /proc/fs`
+xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.								| `xpath --dir config.xml /root/display`
 
 ## Programmer toolbox
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 chars.exe	| DWL	| Display a table of ASCII and all 8-bit characters.		 			|
-CheckEOL.bat    | -W-   | Check the line ending type for a set of files.					| `CheckEOL *.c`
+CheckEOL.bat	| -W-	| Check the line ending type for a set of files.					| `CheckEOL *.c`
 codepage.exe	| -W-	| Get information about the current code pages, or the characters in other ones.	| `codepage 1253` &:# Show characters in code page #1253
 echoargs.bat	| DW-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	| `echoargs.bat how" many args "here?`
 EchoArgs.ps1	| -W-	| Display echoargs arguments. Useful to diagnose command-line processing issues.	|
 errorlev.bat	| D--	| Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)		|
 inicomp.exe	| DWL	| Compare .ini or .reg files. Useful to detect changes in the Windows registry.		| `inicomp server1.reg server2.reg`
 MakeZip.bat	| -W-	| Create a zip file, based on a list of files in an input file. Uses 7-zip.		| `makezip tools.lst` &:# Builds tools.zip.
-mountw.bat      | -W-   | Mount a .wim Windows disk Image using a Unix-like command.                            | `mountw boot.wim` &:# Mounts the image at the default C:\mnt\wim
-msgbox.exe      | -W-   | Display various types of message boxes, and return answers to the batch.		| `msgbox -x -c "About to erase your disk"`
-nlines.tcl      | -WL   | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
-PSService.ps1   | -W-   | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
-PySetup.bat	| -W-	| Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts. | `pysetup` &:# Test if Python is correctly configured
-subcmd.bat      | -W-   | Start a sub cmd shell, changing the prompt to show the shell depth level and modes.	| `subcmd /V:on` &:# Enable delayed expansion in the sub shell
-TclSetup.bat	| -W-	| Configure Windows to run *.tcl files as command-line scripts, and *.tk as windowed scripts. | `tclsetup` &:# Test if Tcl is correctly configured
+mountw.bat	| -W-	| Mount a .wim Windows disk Image using a Unix-like command.				| `mountw boot.wim` &:# Mounts the image at the default C:\mnt\wim
+msgbox.exe	| -W-	| Display various types of message boxes, and return answers to the batch.		| `msgbox -x -c "About to erase your disk"`
+nlines.tcl	| -WL	| Count lines, and non-commented source lines, in a set of files.			| `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
+PSService.ps1	| -W-	| Sample Windows Service entirely in a PowerShell script.				| `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
+PySetup.bat	| -W-	| Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts.	| `pysetup` &:# Test if Python is correctly configured
+subcmd.bat	| -W-	| Start a sub cmd shell, changing the prompt to show the shell depth level and modes.	| `subcmd /V:on` &:# Enable delayed expansion in the sub shell
+TclSetup.bat	| -W-	| Configure Windows to run *.tcl files as command-line scripts, and *.tk as windowed scripts.	| `tclsetup` &:# Test if Tcl is correctly configured
 tclsh.bat	| -W-	| Find the Tcl shell even if it's not in the PATH.					| `tclsh.bat -t` &:# Test if Tcl is correctly configured
-tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir | tee -a work.log`
+tee.exe 	| DW-	| Duplicate the input from stdin to multiple parallel outputs.				| `dir \| tee -a work.log`
 TimeX.bat	| -W-	| Time the eXecution of a command. Similar in spirit to Unix' time command.		| `timex ping -n 1 myserver.mysite.org`
-touch.bat       | -W-   | Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
-unixtime.tcl    | -WL   | Convert a Unix Epoch time (# of seconds since Jan 1970) to an ISO 8601 date/time.	| `unixtime 1515063609`
-umountw.bat     | -W-   | Unmount a .wim Windows disk Image using a Unix-like command.                          | `umountw` &:# Unmounts the image at the default C:\mnt\wim
-vcvars.bat      | -W-   | Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
-whichinc.exe    | DW-   | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
-wm.bat          | -W-   | Invoke WinMerge, even if it's not in the PATH.					| `wm old_version new_version`
+touch.bat	| -W-	| Uses touch.exe if available, else does it in pure batch (slower!).			| `touch myprog.c`
+unixtime.tcl	| -WL	| Convert a Unix Epoch time (# of seconds since Jan 1970) to an ISO 8601 date/time.	| `unixtime 1515063609`
+umountw.bat	| -W-	| Unmount a .wim Windows disk Image using a Unix-like command.				| `umountw` &:# Unmounts the image at the default C:\mnt\wim
+vcvars.bat	| -W-	| Run vcvarsall.bat for the latest Visual C++ installed.				| `subcmd`   `vcvars`
+whichinc.exe	| DW-	| Enumerate all include files that a C/C++ source potentially includes.			| `set INCLUDE=... & whichinc myprog.c`
+wm.bat		| -W-	| Invoke WinMerge, even if it's not in the PATH.					| `wm old_version new_version`
 
 ## Harware and BIOS management
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
 cpuid.exe	| DW-	| Identify the processor, and display its various capabilities.				| `cpuid -v`
-gpt.exe         | DW-   | Manage GUID Partition Tables.                                                         | `gpt` &:# Dump the legacy and GUID partition tables
-sector.exe      | DW-   | Manage disk sectors. Options for dumping them, or copying them to & from files.       | `sector hd0:` &:# Dump the hard disk 0 boot sector
-smbios.exe      | DW-   | Manage the System Management BIOS.                                                    | `smbios -t 0:` &:# Dump SMBIOS table 0
-uuid.exe        | DW-   | Manage UUIDs.                                                                         | `uuid -s` &:# Display the system UUID
+gpt.exe		| DW-	| Manage GUID Partition Tables.								| `gpt` &:# Dump the legacy and GUID partition tables
+sector.exe	| DW-	| Manage disk sectors. Options for dumping them, or copying them to & from files.	| `sector hd0:` &:# Dump the hard disk 0 boot sector
+smbios.exe	| DW-	| Manage the System Management BIOS.							| `smbios -t 0:` &:# Dump SMBIOS table 0
+uuid.exe	| DW-	| Manage UUIDs.										| `uuid -s` &:# Display the system UUID
 
 ## Misc
 
