@@ -36,6 +36,7 @@
 #    2018-01-23 JFL Added a 'make source-release' rule.			      #
 #    2018-01-25 JFL Add 32-bits *.exe from WIN32, if not available in WIN95.  #
 #    2018-03-17 JFL Generalized the release of extra tools like Ag.           #
+#    2018-11-20 JFL 'make release' adds the LICENSE file.                     #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -249,6 +250,10 @@ release:
 	if errorlevel 1 exit /b
 	7z.exe rn "%ZIP%" Catalog.md README.md
 	if errorlevel 1 exit /b
+	popd
+	%MSG% Adding LICENSE
+	pushd ..
+	7z.exe a "%ZIP%" LICENSE.*
 	popd
 	
 	:# Conclusion
