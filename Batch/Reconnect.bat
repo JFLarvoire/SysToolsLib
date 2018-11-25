@@ -20,13 +20,14 @@
 :#                  Allow specifying drives either as u, U, u:, U:            #
 :#   2015-11-12 JFL Get the drive list from the registry.                     #
 :#                  Removed all JFL-specific drive definitions.               #
+:#   2018-11-25 JFL Fixed the help when no drive is currently disconnected.   #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2015-11-12"
+set "VERSION=2018-11-25"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -128,14 +129,14 @@ for /f %%k in ('reg query "HKEY_CURRENT_USER\Network"') do (
     set "!DRIVE!=!ADDRESS!"
   )
 )
-set "DRIVES=!DRIVES:~1!" &:# Remove the initial space inserted above
+if defined DRIVES set "DRIVES=!DRIVES:~1!" &:# Remove the initial space inserted above
 %IF_DEBUG% echo Found DRIVES=!DRIVES!
 goto :eof
 
 :Help
 call :FindDrives
 echo.
-echo %SCRIPT% version %VERSION% - Reconnect network drives
+echo %SCRIPT% version %VERSION% - Reconnect disconnected network drives
 echo.
 echo Usage: %SCRIPT% [OPTIONS] [DRIVES]
 echo.
@@ -143,8 +144,8 @@ echo Options:
 echo   -?       Display this help
 echo   -V       Display the script version and exit
 echo.
-echo Drives:    (The : after the drive letter is optional)
-for %%d in (%DRIVES%) do echo   %%d       Reconnect to !%%d!
+echo Drives:    The drives to reconnect to. (The : is optional.) Ex: X: Y:
+echo            Default on this system: %DRIVES%
 echo.
 goto :eof
 
