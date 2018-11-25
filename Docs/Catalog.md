@@ -4,33 +4,40 @@ List of tools released on https://github.com/JFLarvoire/SysToolsLib, grouped by 
 
 The OS column lists the operating systems supported. D=DOS, W=Windows, L=Linux.
 
+Windows executables usually are available in a WIN32 and WIN64 version.  
+The WIN32 version runs in all versions of Windows from Windows 95 to Windows 10.  
+The WIN64 version runs in XP/64 an later versions of 64-bits Windows.
+
+The Linux version of scripts and executables have no extension.
+
+The Windows versions of these tools support Unicode pathnames, long paths > 260 characters, symlinks and junctions. (When the OS supports it.)  
+The output to the console is Unicode. (It's correct in any code page, provided the console font supports the Unicode characters used.)  
+The output piped to other apps is correct in any code page. (When the code page supports the Unicode characters used.)  
+As far as I know, no other Windows port of Unix tools can do all of that, and most can't do any.
+
 ## Manage directories
 
-The Windows versions of these tools support Unicode pathnames, long paths > 260 characters, symlinks and junctions.  
-The output is correct in any code page.  
-As far as I know, no other Windows port of Unix tools can do all that, if any.
-
-Name		| OS   	| Description										| Example
-----------------|-------|---------------------------------------------------------------------------------------|-------------
-ag.exe		| -WL	| A port for Windows of 'The Silver Searcher', a _very fast_ file searcher.		| `ag --cc myvariable` &:# Find all references to myvariable in C sources in the current directory tree.
-backnum.exe	| DWL	| Make a backup copy of a file, appending a unique number to its name.	 		| `backnum myprogram.c` &:# Back it up before making a risky change
-cfdt.tcl	| -WL	| Change files dates and times. Option for using a Jpeg picture internal time.		| `cfdt --i2m *.jpg` &:# Change the files time to image time.
-dirc.exe	| DWL	| Compares directories side by side.							| `dirc oldDir newDir` &:# Compare directories based on the files time and size.
-dircc.bat	| DW-	| Front end to dirc.exe. Compare file trees recursively, listing only different files.	| `dircc oldDir newDir`
-dirdir.bat	| DW-	| List subdirectories. (Non trivial for DOS in the absence of a dir /ad option.)	| `dirdir`
-dirsize.exe	| DWL	| Compute the total size used by a directory ot tree.					| `dirsize -s -t` &:# Find which subdirectory uses up all that space.
-mcd.bat 	| DW-	| Create a directory, and go there, in a single command.				| `mcd TempDir`
-md.exe	 	| DWL	| Create a directory, all its parents, and don't complain if any exists.		| `"md.exe" -v a\b\c` &:# Displays a\ then a\b\ then a\b\c\ the first time; Displays nothing if repeated. 
-rd.exe	 	| DWL	| Remove a directory. Force mode to remove all contents. Don't complain if absent.	| `"rd.exe" -v a` &:# Displays a\b\c\ then a\b\ then a\ the first time; Displays nothing if repeated.
-redo.exe	| DWL	| Execute a command recursively in a whole directory tree.				| `redo dirsize -t` &:# Same end result as the above dirsize example.
-rhs.bat 	| DW-	| Set all RHS flags for a file. Conversely, -rhs.bat removes them all.			| `-rhs msdos.sys` &:# Often needed in the 1980s.
-rxrename.tcl	| -WL	| Rename a series of files, based on a regular expression.		 		| 
-trouve.bat	| DWL	| Find files containing a string. Uses WIN32 ports of Unix find and grep tools.		| `trouve "Error 1234"` &:# Did I record this error before?
-truename.exe	| DW-	| Display the true name of a file or directory, like old DOS' truename internal command. Resolves links, junctions, etc.							| `truename "C:\Documents and Settings"`
-update.exe	| DWL	| Copy files only if newer.								| `update -X *.c X:\backup` &:# Display files which need updating, but don't do it.
-zap.bat 	| -W-	| Delete files and directories, displaying the exact list of files deleted.		| `zap *.obj *.lst`
-zap.exe	 	| DWL	| Delete files and directories, displaying the exact list of files deleted.		| `zap *.obj *.lst` &:# Supersedes zap.bat, and zapbaks.bat with the zap -b option
-zapbaks.bat	| -W-	| Delete all kinds of backup files (*.bak, *~, #*#), optionally recursively.	 	| `zapbaks -r`
+Name		 | OS  	| Description										| Example
+-----------------|------|---------------------------------------------------------------------------------------|-------------
+ag.exe		 | -WL	| A port for Windows of 'The Silver Searcher', a _very fast_ file searcher, with full regexp support.	| `ag --cc myvariable` &:# Find all references to myvariable in C sources in the current directory tree.
+backnum.exe	 | DWL	| Make a backup copy of a file, appending a unique number to its name.	 		| `backnum myprogram.c` &:# Back it up before making a risky change
+cfdt.tcl	 | -WL	| Change files dates and times. Option for using a JPEG picture internal time.		| `cfdt --i2m *.jpg` &:# Change the files time to image time.
+dirc.exe	 | DWL	| Compares directories side by side.							| `dirc oldDir newDir` &:# Compare directories based on the files time and size.
+dircc.bat	 | DW-	| Front end to dirc.exe. Compare file trees recursively, listing only different files.	| `dircc oldDir newDir`
+dirdir.bat	 | DW-	| List subdirectories. (Non trivial for DOS in the absence of a dir /ad option.)	| `dirdir`
+dirsize.exe	 | DWL	| Compute the total size used by a directory or a directory tree.			| `dirsize -s -t` &:# Find which subdirectory uses up all that space.
+mcd.bat 	 | DW-	| Create a directory, and go there, in a single command.				| `mcd TempDir`
+md.exe	 	 | DWL	| Create a directory, all its parents, and don't complain if any exists.		| `"md.exe" -v a\b\c` &:# Displays a\ then a\b\ then a\b\c\ the first time; Displays nothing if repeated. 
+rd.exe	 	 | DWL	| Remove a directory. Force mode to remove all contents. Don't complain if absent.	| `"rd.exe" -v a` &:# Displays a\b\c\ then a\b\ then a\ the first time; Displays nothing if repeated.
+redo.exe	 | DWL	| Execute a command recursively in a whole directory tree.				| `redo dirsize -t` &:# Same end result as the above dirsize example.
+rhs.bat		 | DW-	| Set all RHS flags for a file. Conversely, -rhs.bat removes them all.			| `-rhs msdos.sys` &:# Often needed in the 1980s.
+rxrename.tcl	 | -WL	| Rename a series of files, based on a regular expression.		 		| 
+trouve.bat	 | DWL	| Find files containing a string. Uses WIN32 ports of Unix find and grep tools.		| `trouve "Error 1234"` &:# Did I record this error before?
+truename.exe	 | DW-	| Display the true name of a file or directory, like old DOS' truename internal command. Resolves links, junctions, etc. | `truename "C:\Documents and Settings"`
+update.exe	 | DWL	| Copy files only if newer.								| `update -X *.c X:\backup` &:# Display files which need updating, but don't do it.
+zap.bat 	 | -W-	| Delete files and directories, displaying the exact list of files deleted.		| `zap *.obj *.lst`
+zap.exe	 	 | DWL	| Delete files and directories, displaying the exact list of files deleted.		| `zap *.obj *.lst` &:# Supersedes zap.bat, and zapbaks.bat with the zap -b option
+zapbaks.bat	 | -W-	| Delete all kinds of backup files (*.bak, *~, #*#), optionally recursively.	 	| `zapbaks -r`
 
 ## Manage the PATH
 
@@ -51,8 +58,8 @@ Name		| OS   	| Description																							| Example
 12.bat		| -W-	| Pipe Windows clipboard contents into a program, then that program output back into the clipboard.	| `12 sort`
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip \| sort`
 2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir \| 2clip`
-2note.exe	| -W-	| Pipe a program output into Windows Notepad.								| `dir \| 2note`
-Get-Console.ps1	| -W-	| Capture the console window as HTML or RTF or plain Text, and send it to the clipboard.		| `Get-Console`
+2note.exe	| -W-	| Pipe a program output into a new instance of Windows Notepad.						| `dir \| 2note`
+Get-Console.ps1	| -W-	| Capture the console window as HTML (or optionally RTF or plain Text), and send it to the clipboard.	| `Get-Console`
 
 ## Convert data
 
@@ -64,7 +71,7 @@ Name		| OS   	| Description										| Example
 82w.bat		| -W-	| Convert UTF-8 text to Windows ANSI. Useful to decode scrambled emails. Uses conv.exe.	| `12 82w`	
 a2u.bat		| -W-	| Convert ANSI text to 16-bits Unicode text.						|
 b64dec.tcl	| -WL	| Decode base64-encoded data.								| `12 b64dec`
-b64enc.tcl	| -WL	| Encode data in base64.								| `12 b64enc`
+b64enc.tcl	| -WL	| Encode data into base64 text.								| `12 b64enc`
 camel.tcl	| -WL	| Convert text to Camel Case. (i.e. capitalize each word.)				| `12 camel`
 codepage.exe	| -W-	| Get information about the current and usable console code pages.			| `codepage 850` &:# Display a table of code page 850 characters.
 conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.txt \| conv w .`
@@ -99,10 +106,10 @@ IESec.ps1			| -W-	| Display Internet Explorer security mode settings.					|
 IPcfg.bat			| -W-	| Front end to ipconfig.exe, filtering its output to make it more readable. Numerous options to select the information needed.	| `ipcfg` &:# Display just Ethernet and Wifi interfaces
 Is-WindowsActivated.ps1		| -W-	| Test if Windows is activated.								|
 Out-ByHost.ps1			| -W-	| Execute PowerShell commands on remote machines in parallel, displaying results like Unix pdsh: That is as pure text lines, prefixed by the remote machine name. Requires installing Out-ByHost.ps1 and Reconnect.ps1 on every target system.		| `Out-ByHost (atlas 1..4) {update S:\tools C:\tools}`
-Reconnect.bat			| -W-	| Reconnect network drives. Useful after moving a laptop, or when opening an elevated window.	| `Reconnect S:`
-Reconnect.ps1			| -W-	| Reconnect network drives. Useful after moving a laptop, or when opening an elevated window.	| `Reconnect S:`
-regx.bat			| -W-	| Manage the registry as if it were a file system. Output formatted as SML.		| `regx dir HKLM\SOFTWARE\Microsoft\Windows`
-ShadowCopy.ps1			| -W-	| Manage volume shadow copies. Includes an option for recyling them like a pool of backup tapes.	| `help ShadowCopy.ps1 -detailed`
+Reconnect.bat			| -W-	| Reconnect disconnected network drives. Useful after moving a laptop, or when opening an elevated window.	| `Reconnect S:`
+Reconnect.ps1			| -W-	| Reconnect disconnected network drives. Useful in remote PS sessions, which have drives disconnected by default.	| `Reconnect S:`
+regx.bat			| -W-	| Manage the registry as if it were a file system, with keys=dirs & values=files. Output formatted as SML.	| `regx dir HKLM\SOFTWARE\Microsoft\Windows`
+ShadowCopy.ps1			| -W-	| Manage volume shadow copies. Options for listing previous versions of files. Option for recyling shadow copies like a pool of backup tapes.	| `help ShadowCopy.ps1 -detailed`
 Test-IPv6Components.ps1		| -W-	| Test if Windows IPv6 component are enabled or disabled. Useful for diagnosing networking issues.	|
 Window.ps1			| -W-	| Move and resize windows.								| `Window "Server Manager" -MoveTo 150,150 -Resize 1000,750 -OnTop`
 
@@ -110,14 +117,14 @@ Window.ps1			| -W-	| Move and resize windows.								| `Window "Server Manager" 
 
 XML is good for programs, but hard to read for humans.  
 JSON is easier to read, but not as powerful as XML.  
-SML is XML made readable.
+SML is XML made readable. It looks like C. It's strictly equivalent to XML: Any XML file can be converted to SML and back with no loss.
 
 Name		| OS   	| Description												| Example
 ----------------|-------|-------------------------------------------------------------------------------------------------------|-------------
 sml.tcl		| -WL	| Convert XML files to a much simpler structured text format, and back.					| `type config.xml \| sml`
 sml2.exe	| -WL	| A rewrite of sml.tcl in C, based on libxml2. Options to reformat and indent the output.		| `type config.xml \| sml2 -f`
 show.tcl	| -WL	| Display files contents, or whole directory trees contents, in a simple structured text format.	| `show /proc/fs`
-xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.								| `xpath --dir config.xml /root/display`
+xpath.tcl	| -WL	| Use XPATH to extract data from an XML file.								| `xpath -i config.xml dir /root/display`
 
 ## Programmer toolbox
 
