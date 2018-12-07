@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.14.1] 2018-12-07
+### New
+- C/Font.c: Font.exe has been significantly improved, adding the ability to save and restore the console font.
+
 ## [1.14] 2018-11-19
 ### New
 - Batch/TclSetup.bat: Configure Tcl for running .tcl scripts.
