@@ -6,7 +6,9 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2018-12-18
 ### Changed
-C/SRC/update.c: Added option -P to show the file copy progress.
+- C/SRC/update.c:
+  * Added option -P to show the file copy progress.
+  * Added option -- to force ending switches.
 
 ## [1.14.1] 2018-12-07
 ### New
