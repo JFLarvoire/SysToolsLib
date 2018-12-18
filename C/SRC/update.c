@@ -144,6 +144,7 @@
 *		     path contained a trailing [back]slash.		      *
 *		    Version 3.6.    					      *
 *    2018-12-18 JFL Added option -P to show the file copy progress.           *
+*		    Added option -- to force ending switches.                 *
 *		    Version 3.7.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -406,219 +407,205 @@ void do_exit(int n) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int main(int argc, char *argv[])
-    {
-    int argn;			/* Argument index */
-    char *arg;
+int main(int argc, char *argv[]) {
+  int iArg;			/* Argument index */
+  char *arg;
 #if defined(_MSDOS) || defined(_WIN32)
-    size_t len;
+  size_t len;
 #endif
-    char *target;
-    int nErrors = 0;
-    int iExit = 0;
+  char *target;
+  int nErrors = 0;
+  int iExit = 0;
 
-    /* Extract the program names from argv[0] */
-    GetProgramNames(argv[0]);
+  /* Extract the program names from argv[0] */
+  GetProgramNames(argv[0]);
 
-    for (argn = 1; ((argn<argc) && IsSwitch(argv[argn])); argn += 1)
-        {
-        arg = argv[argn];
-	DEBUG_PRINTF(("Arg = %s\n", arg));
-#ifndef __unix__
-        arg[0] = '-';
-#endif
-	if (   streq(arg, "-h")	    /* Display usage */
-	    || streq(arg, "-help")	/* The historical name of that switch */
-	    || streq(arg, "--help")
-	    || streq(arg, "-?"))
-	    {
-	    usage();
-            }
-#ifdef _WIN32
-	if (   streq(arg, "-A")
-	    || streq(arg, "--ansi")) {	/* Force encoding output with the ANSI code page */
-	    cp = CP_ACP;
-	    continue;
-	}
-#endif
-	DEBUG_CODE(
-	if (   streq(arg, "-d")	    /* Debug mode on */
-	    || streq(arg, "-debug")	/* The historical name of that switch */
-	    || streq(arg, "--debug"))
-            {
-	    DEBUG_MORE();
-	    iVerbose = TRUE;
-	    if (iVerbose) printf("Debug mode on.\n");
-	    continue;
-            }
-        )
-	if (   streq(arg, "-e")     /* Erase mode on */
-	    || streq(arg, "--erase"))
-            {
-	    iErase = TRUE;
-	    if (iVerbose) printf("Erase mode on.\n");
-	    continue;
-            }
-	if (   streq(arg, "-E")     /* NoEmpty mode on */
-	    || streq(arg, "-noempty")  /* The historical name of that switch */
-	    || streq(arg, "--noempty"))
-            {
-	    copyempty = FALSE;
-	    if (iVerbose) printf("NoEmpty mode on.\n");
-	    continue;
-            }
-	if (   streq(arg, "-f")	    /* Freshen mode on */
-	    || streq(arg, "--freshen"))
-            {
-            fresh = 1;
-	    if (iVerbose) printf("Freshen mode on.\n");
-	    continue;
-            }
-	if (   streq(arg, "-F")	    /* Force mode on */
-	    || streq(arg, "--force"))
-            {
-            force = 1;
-	    if (iVerbose) printf("Force mode on.\n");
-	    continue;
-            }
-	if (   streq(arg, "-i")	    /* Case-insensitive pattern matching */
-	    || streq(arg, "--ignorecase"))
-            {
-            iFnmFlag |= FNM_CASEFOLD;
-	    if (iVerbose) printf("Case-insensitive pattern matching.\n");
-	    continue;
-            }
-	if (   streq(arg, "-k")	    /* Case-sensitive pattern matching */
-	    || streq(arg, "--casesensitive"))
-            {
-            iFnmFlag &= ~FNM_CASEFOLD;
-	    if (iVerbose) printf("Case-sensitive pattern matching.\n");
-	    continue;
-            }
-#ifdef _WIN32
-	if (   streq(arg, "-O")
-	    || streq(arg, "--oem")) {	/* Force encoding output with the OEM code page */
-	    cp = CP_OEMCP;
-	    continue;
-	}
-#endif
-	if (   streq(arg, "-p")	    /* Final Pause on */
-	    || streq(arg, "--pause"))
-            {
-            iPause = 1;
-	    if (iVerbose) printf("Final Pause on.\n");
-	    continue;
-            }
-	if (   streq(arg, "-P")	    /* Show file copy progress */
-	    || streq(arg, "--progress"))
-            {
-	    if (isConsole(fileno(stdout))) { /* Only do it when outputing to the console */
-	      iProgress = 1;
-	      if (iVerbose) printf("Show file copy progress.\n");
-	    }
-	    continue;
-            }
-	if (   streq(arg, "-q")	    /* Quiet/Nologo mode on */
-	    || streq(arg, "--quiet")
-	    || streq(arg, "-nologo"))	/* The historical name of that switch */
-            {
-	    iVerbose = FALSE;
-	    continue;
-            }
-	if (   streq(arg, "-r")	    /* Recursive update */
-	    || streq(arg, "--recurse"))
-            {
-            iRecur = 1;
-	    if (iVerbose) printf("Recursive update.\n");
-	    continue;
-            }
-	if (   streq(arg, "-S")     /* Show dest instead of source */
-	    || streq(arg, "--showdest"))
-            {
-            show = 1;
-	    if (iVerbose) printf("Show destination files names.\n");
-	    continue;
-            }
-#ifdef _WIN32
-	if (   streq(arg, "-U")
-	    || streq(arg, "--utf8")) {	/* Force encoding output with the UTF-8 code page */
-	    cp = CP_UTF8;
-	    continue;
-	}
-#endif
-	if (   streq(arg, "-v")	    /* Verbose mode on */
-	    || streq(arg, "--verbose"))
-            {
-	    iVerbose = TRUE;
-	    continue;
-            }
-	if (   streq(arg, "-V")     /* -V: Display the version */
-	    || streq(arg, "--version"))
-	    {
-	    printf("%s\n", version(1));
-	    exit(0);
-	    }
-	if (   streq(arg, "-X")	    /* NoExec/Test mode on */
-	    || streq(arg, "--noexec")
-	    || streq(arg, "-t"))	/* The historical name of that switch */
-            {
-	    test = 1;
-	    if (iVerbose) printf("NoExec mode on.\n");
-	    continue;
-            }
-	printf("Unrecognized switch %s. Ignored.\n", arg);
-	}
-
-    if ( (argc - argn) < 1 ) usage();
-
-    buffer = malloc(BUFFERSIZE);	/* Allocate memory for copying */
-    if (!buffer)
-        {
-	printf("\nNot enough memory.\n");
-        do_exit(1);
-        }
-
-    DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
-    DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
-
-    target = argv[--argc];	/* The last argument is the target */
-    DEBUG_PRINTF(("Target = %s\n", target));
-#if defined(_MSDOS) || defined(_WIN32)
-    /* Workaround for a command.com or cmd.exe bug */
-    len = strlen(target);
-    if (len && (target[len-1] == '"'))
-	{
-	target[len-1] = DIRSEPARATOR_CHAR;
-	DEBUG_PRINTF(("Changing the trailing quote to a backslash: %s\n", target));
-	}
-    /* Avoid multiple errors when writing to an inexistant or disconnected drive */
-    if (target[0] && (target[1] == ':')) {
-      struct stat s;
-      char szDrive[4];
-      int iErr;
-      sprintf(szDrive, "%c:\\", target[0]);
-      iErr = stat(szDrive, &s);
-      if (iErr) {
-	printError("Error: Cannot access drive %c: %s", target[0], strerror(errno));
-	do_exit(1);
+  for (iArg = 1; iArg<argc; iArg += 1) {
+    arg = argv[iArg];
+    if (IsSwitch(arg)) {
+      char *opt = arg + 1;
+      DEBUG_PRINTF(("Switch = %s\n", arg));
+      if (streq(arg, "--")) {	    /* Force end of switches */
+	iArg += 1;
+	break;
       }
+      if (   streq(opt, "h")	    /* Display usage */
+	  || streq(opt, "help")	    /* The historical name of that switch */
+	  || streq(opt, "-help")
+	  || streq(opt, "?")) {
+	usage();
+      }
+  #ifdef _WIN32
+      if (   streq(opt, "A")
+	  || streq(opt, "-ansi")) {   /* Force encoding output with the ANSI code page */
+	cp = CP_ACP;
+	continue;
+      }
+  #endif
+      DEBUG_CODE(
+      if (   streq(opt, "d")	    /* Debug mode on */
+	  || streq(opt, "debug")	    /* The historical name of that switch */
+	  || streq(opt, "-debug")) {
+	DEBUG_MORE();
+	iVerbose = TRUE;
+	if (iVerbose) printf("Debug mode on.\n");
+	continue;
+      }
+      )
+      if (   streq(opt, "e")	    /* Erase mode on */
+	  || streq(opt, "-erase")) {
+	iErase = TRUE;
+	if (iVerbose) printf("Erase mode on.\n");
+	continue;
+      }
+      if (   streq(opt, "E")	    /* NoEmpty mode on */
+	  || streq(opt, "noempty")    /* The historical name of that switch */
+	  || streq(opt, "-noempty")) {
+	copyempty = FALSE;
+	if (iVerbose) printf("NoEmpty mode on.\n");
+	continue;
+      }
+      if (   streq(opt, "f")	    /* Freshen mode on */
+	  || streq(opt, "-freshen")) {
+	fresh = 1;
+	if (iVerbose) printf("Freshen mode on.\n");
+	continue;
+      }
+      if (   streq(opt, "F")	    /* Force mode on */
+	  || streq(opt, "-force")) {
+	force = 1;
+	if (iVerbose) printf("Force mode on.\n");
+	continue;
+      }
+      if (   streq(opt, "i")	    /* Case-insensitive pattern matching */
+	  || streq(opt, "-ignorecase")) {
+	iFnmFlag |= FNM_CASEFOLD;
+	if (iVerbose) printf("Case-insensitive pattern matching.\n");
+	continue;
+      }
+      if (   streq(opt, "k")	    /* Case-sensitive pattern matching */
+	  || streq(opt, "-casesensitive")) {
+	iFnmFlag &= ~FNM_CASEFOLD;
+	if (iVerbose) printf("Case-sensitive pattern matching.\n");
+	continue;
+      }
+  #ifdef _WIN32
+      if (   streq(opt, "O")
+	  || streq(opt, "-oem")) {    /* Force encoding output with the OEM code page */
+	cp = CP_OEMCP;
+	continue;
+      }
+  #endif
+      if (   streq(opt, "p")	    /* Final Pause on */
+	  || streq(opt, "-pause")) {
+	iPause = 1;
+	if (iVerbose) printf("Final Pause on.\n");
+	continue;
+      }
+      if (   streq(opt, "P")	    /* Show file copy progress */
+	  || streq(opt, "-progress")) {
+	if (isConsole(fileno(stdout))) { /* Only do it when outputing to the console */
+	  iProgress = 1;
+	  if (iVerbose) printf("Show file copy progress.\n");
+	}
+	continue;
+      }
+      if (   streq(opt, "q")	    /* Quiet/Nologo mode on */
+	  || streq(opt, "-quiet")
+	  || streq(opt, "nologo")) {  /* The historical name of that switch */
+	iVerbose = FALSE;
+	continue;
+      }
+      if (   streq(opt, "r")	    /* Recursive update */
+	  || streq(opt, "-recurse")) {
+	iRecur = 1;
+	if (iVerbose) printf("Recursive update.\n");
+	continue;
+      }
+      if (   streq(opt, "S")     /* Show dest instead of source */
+	  || streq(opt, "-showdest")) {
+	show = 1;
+	if (iVerbose) printf("Show destination files names.\n");
+	continue;
+      }
+  #ifdef _WIN32
+      if (   streq(opt, "U")
+	  || streq(opt, "-utf8")) {   /* Force encoding output with the UTF-8 code page */
+	cp = CP_UTF8;
+	continue;
+      }
+  #endif
+      if (   streq(opt, "v")	    /* Verbose mode on */
+	  || streq(opt, "-verbose")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (   streq(opt, "V")	    /* -V: Display the version */
+	  || streq(opt, "-version")) {
+	printf("%s\n", version(1));
+	exit(0);
+      }
+      if (   streq(opt, "X")	    /* NoExec/Test mode on */
+	  || streq(opt, "-noexec")
+	  || streq(opt, "t")) {	    /* The historical name of that switch */
+	test = 1;
+	if (iVerbose) printf("NoExec mode on.\n");
+	continue;
+      }
+      fprintf(stderr, "Warning: Unrecognized switch %s ignored.\n", arg);
     }
+  }
+
+  if ( (argc - iArg) < 1 ) {
+    fprintf(stderr, "Error: Not enough arguments.\n");
+    do_exit(1);
+  }
+
+  buffer = malloc(BUFFERSIZE);	/* Allocate memory for copying */
+  if (!buffer) {
+    fprintf(stderr, "Error: Not enough memory.\n");
+    do_exit(1);
+  }
+
+  DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
+  DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
+
+  target = argv[--argc];	/* The last argument is the target */
+  DEBUG_PRINTF(("Target = %s\n", target));
+#if defined(_MSDOS) || defined(_WIN32)
+  /* Workaround for a command.com or cmd.exe bug */
+  len = strlen(target);
+  if (len && (target[len-1] == '"')) {
+    target[len-1] = DIRSEPARATOR_CHAR;
+    DEBUG_PRINTF(("Changing the trailing quote to a backslash: %s\n", target));
+  }
+  /* Avoid multiple errors when writing to an inexistant or disconnected drive */
+  if (target[0] && (target[1] == ':')) {
+    struct stat s;
+    char szDrive[4];
+    int iErr;
+    sprintf(szDrive, "%c:\\", target[0]);
+    iErr = stat(szDrive, &s);
+    if (iErr) {
+      printError("Error: Cannot access drive %c: %s", target[0], strerror(errno));
+      do_exit(1);
+    }
+  }
 #endif
 
-    for ( ; argn < argc; argn++) 	/* For every source file before that */
-        {
-        arg = argv[argn];
-	nErrors += updateall(arg, target);
-        }
+  for ( ; iArg < argc; iArg++) { /* For every source file before that */
+    arg = argv[iArg];
+    nErrors += updateall(arg, target);
+  }
 
-    if (nErrors) { /* Display a final summary, as the errors may have scrolled up beyond view */
-      printError("Error: %d file(s) failed to be updated", nErrors);
-      iExit = 1;
-    }
+  if (nErrors) { /* Display a final summary, as the errors may have scrolled up beyond view */
+    printError("Error: %d file(s) failed to be updated", nErrors);
+    iExit = 1;
+  }
 
-    do_exit(iExit);
-    return iExit;
-    }
+  do_exit(iExit);
+  return iExit;
+}
 
 /* Get the program version string, optionally with libraries versions */
 char *version(int iLibsVer) {
@@ -653,7 +640,8 @@ Usage: update [SWITCHES] FILES DIRECTORY\n\
 Files:          FILE1 [FILE2 ...]\n\
                 Wildcards are allowed in source files pathnames.\n\
 \n\
-Switches:\n"
+Switches:\n\
+  --            End of switches\n"
 #ifdef _WIN32
 "\
   -A|--ansi     Force encoding the output using the ANSI character set.\n"
