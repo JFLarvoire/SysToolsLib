@@ -5,7 +5,8 @@
 *   Description     Get information about fonts on this system		      *
 *		    							      *
 *   Notes	    Windows font and text functions:                          *
-*    https://msdn.microsoft.com/en-us/library/windows/desktop/dd144821(v=vs.85).aspx
+*    https://docs.microsoft.com/en-us/windows/desktop/gdi/font-and-text-functions
+*    https://docs.microsoft.com/en-us/windows/console/console-reference       *
 *		    							      *
 *   History								      *
 *    2018-01-24 JFL Created this program.				      *
