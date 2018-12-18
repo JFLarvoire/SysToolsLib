@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2018-12-18
+### Changed
+C/SRC/update.c: Added option -P to show the file copy progress.
+
 ## [1.14.1] 2018-12-07
 ### New
 - C/Font.c: Font.exe has been significantly improved, adding the ability to save and restore the console font.
