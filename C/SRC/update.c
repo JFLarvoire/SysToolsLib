@@ -143,13 +143,15 @@
 *                   Bug fix: mkdirp() worked, but returned an error, if the   *
 *		     path contained a trailing [back]slash.		      *
 *		    Version 3.6.    					      *
+*    2018-12-18 JFL Added option -P to show the file copy progress.           *
+*		    Version 3.7.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.6"
-#define PROGRAM_DATE    "2018-05-31"
+#define PROGRAM_VERSION "3.7"
+#define PROGRAM_DATE    "2018-12-18"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -303,6 +305,8 @@ typedef unsigned long DWORD;
 #endif
 char *buffer;       /* Pointer on the intermediate copy buffer */
 
+#define isConsole(iFile) isatty(iFile)
+
 static int test = 0;			/* Flag indicating Test mode */
 static int show = 0;			/* 0=Show source; 1=Show dest */
 static int fresh = 0;			/* Flag indicating freshen mode */
@@ -310,6 +314,7 @@ static int force = 0;			/* Flag indicating force mode */
 static int iVerbose = FALSE;		/* Flag for displaying verbose information */
 static int copyempty = TRUE;		/* Flag for copying empty file */
 static int iPause = 0;			/* Flag for stop before exit */
+static int iProgress = 0;		/* Flag for showing a progress bar */
 #ifdef __unix__
 static int iFnmFlag = 0;		/* Case-sensitive pattern matching */
 #else
@@ -504,6 +509,15 @@ int main(int argc, char *argv[])
 	    if (iVerbose) printf("Final Pause on.\n");
 	    continue;
             }
+	if (   streq(arg, "-P")	    /* Show file copy progress */
+	    || streq(arg, "--progress"))
+            {
+	    if (isConsole(fileno(stdout))) { /* Only do it when outputing to the console */
+	      iProgress = 1;
+	      if (iVerbose) printf("Show file copy progress.\n");
+	    }
+	    continue;
+            }
 	if (   streq(arg, "-q")	    /* Quiet/Nologo mode on */
 	    || streq(arg, "--quiet")
 	    || streq(arg, "-nologo"))	/* The historical name of that switch */
@@ -665,6 +679,7 @@ Switches:\n"
 #endif
 "\
   -p|--pause    Pause before exit.\n\
+  -P|--progress Display the file copy progress. Useful with very large files.\n\
   -q|--nologo   Quiet mode. Don't display anything.\n\
   -r|--recurse  Recursively update all subdirectories.\n\
   -S|--showdest Show the destination files names. Default: The sources names.\n"
@@ -809,10 +824,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     }
 
     if (iVerbose) {
-      DEBUG_CODE_IF_ON(
-      	DEBUG_PRINT_INDENT(); /* If debug is on, print the debug indent */
-      	printf("// "); /* Then a comment marker without a linefeed */
-      )
+      DEBUG_PRINTF(("// ")); /* If debug is on, print the debug indent, then a comment marker without a linefeed */
       printf("Update %s from %s to %s\n", pattern, path0, p2);
     }
 
@@ -1261,10 +1273,14 @@ int copyf(char *name1,		    /* Source file to copy from */
     {
     FILE *pfs, *pfd;	    /* Source & destination file pointers */
     int hsource;	    /* Source handle */
-    off_t lon;		    /* File length */
+    off_t filelen;	    /* File length */
     size_t tocopy;	    /* Number of bytes to copy in one pass */
     int iShowCopying = FALSE;
     int nAttempt = 1;	    /* Force mode allows retrying a second time */
+    off_t offset;
+    int iWidth = 0;	    /* Number of characters in the iProgress output */
+    char *pszUnit = "B";    /* Unit used for iProgress output */
+    long lUnit = 1;	    /* Number of bytes for 1 iProgress unit */
 
     DEBUG_ENTER(("copyf(\"%s\", \"%s\");\n", name1, name2));
     if (iVerbose
@@ -1283,10 +1299,10 @@ int copyf(char *name1,		    /* Source file to copy from */
     }
     hsource = fileno(pfs);
 
-    lon = _filelength(hsource);
+    filelen = _filelength(hsource);
     /* Read 1 byte to test access rights. This avoids destroying the target
        if we don't have the right to read the source. */
-    if (lon && !fread(buffer, 1, 1, pfs)) {
+    if (filelen && !fread(buffer, 1, 1, pfs)) {
       if (iShowCopying) printf("\n");
       RETURN_INT_COMMENT(1, ("Can't read the input file\n"));
     }
@@ -1312,26 +1328,44 @@ retry_open_targetfile:
     }
     /* hdest = fileno(pfd); */
 
-    if (iShowCopying) printf(" : %"PRIdPTR" bytes\n", lon);
+    if (iShowCopying) printf(" : %"PRIdPTR" bytes\n", filelen);
 
-    while (lon) {
-      tocopy = (size_t)min(BUFFERSIZE, lon);
+    if (iProgress) {
+      if (filelen > (100*1024L*1024L)) {
+      	lUnit = 1024L*1024L;
+      	pszUnit = "MB";
+      } else if (filelen > (100*1024L)) {
+      	lUnit = 1024L;
+      	pszUnit = "KB";
+      }
+    }
+
+    for (offset = 0; offset < filelen; offset += tocopy) {
+      off_t remainder = filelen - offset;
+      tocopy = (size_t)min(BUFFERSIZE, remainder);
+      
+      if (iProgress) {
+      	int pc = (int)((offset * 100) / filelen);
+      	iWidth = printf("%3d%% (%"PRIdPTR"%s/%"PRIdPTR"%s)\r", pc, (offset/lUnit), pszUnit, (filelen/lUnit), pszUnit);
+      }
       
       XDEBUG_PRINTF(("fread(%p, %"PRIuPTR", 1, %p);\n", buffer, tocopy, pfs));
       if (!fread(buffer, tocopy, 1, pfs)) {
+	if (iProgress && iWidth) printf("\n");
 	fclose(pfs);
 	fclose(pfd);
 	unlink(name2); /* Avoid leaving an incomplete file on the target */
         RETURN_INT_COMMENT(1, ("Can't read the input file. Deleted the partial copy.\n"));
       }
       if (!fwrite(buffer, tocopy, 1, pfd)) {
+	if (iProgress && iWidth) printf("\n");
 	fclose(pfs);
 	fclose(pfd);
 	unlink(name2); /* Avoid leaving an incomplete file on the target */
         RETURN_INT_COMMENT(2, ("Can't write the output file. Deleted the partial copy.\n"));
       }
-      lon -= tocopy;
     }
+    if (iProgress && iWidth) printf("%*s\r", iWidth, "");
 
     fclose(pfs);
     fclose(pfd);
