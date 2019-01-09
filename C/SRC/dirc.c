@@ -215,13 +215,14 @@
 *    2018-04-30 JFL Check errors for all calls to chdir() and getcwd().	      *
 *		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.1.    					      *
+*    2019-01-09 JFL Corrected assignments in conditional expressions.	      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2018-04-30"
+#define PROGRAM_DATE    "2019-01-09"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -1145,9 +1146,6 @@ int IsSwitch(char *pszArg) {
 *                                                                             *
 ******************************************************************************/
 
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
 int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	    time_t datemin, time_t datemax) {
 #if HAS_DRIVES
@@ -1270,7 +1268,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
   /* start looking for all files */
   pDir = opendir(path);
   if (pDir) {
-    while ((pDirent = readdir(pDir))) {
+    while ((pDirent = readdir(pDir)) != NULL) {
       struct stat st;
       DEBUG_CODE(
 	char *reason;
@@ -1317,18 +1315,18 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	    (unsigned long)(st.st_mtime)));
       DEBUG_CODE(reason = "it's .";)
       if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
-	      DEBUG_CODE(&& (reason = "it's .."))
+	      DEBUG_CODE(&& ((reason = "it's ..") != NULL))
 	   && !streq(pDirent->d_name, "..")
-	      DEBUG_CODE(&& (reason = "it's not a directory"))
+	      DEBUG_CODE(&& ((reason = "it's not a directory") != NULL))
 	   && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
 		|| (pDirent->d_type == DT_DIR))
-	      DEBUG_CODE(&& (reason = "it's a directory"))
+	      DEBUG_CODE(&& ((reason = "it's a directory") != NULL))
 	   && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
 		|| (pDirent->d_type != DT_DIR))
-	      DEBUG_CODE(&& (reason = "the date is out of range"))
+	      DEBUG_CODE(&& ((reason = "the date is out of range") != NULL))
 	   && (st.st_mtime >= datemin) /* Skip files outside date range */
 	   && (st.st_mtime <= datemax)
-	      DEBUG_CODE(&& (reason = "the pattern does not match"))
+	      DEBUG_CODE(&& ((reason = "the pattern does not match") != NULL))
 	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
 	 ) {
 	fif *pfif;
@@ -1395,10 +1393,6 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
   FREE_PATHNAME_BUF(pathname);
   RETURN_INT(nfif);
 }
-
-#ifdef _MSC_VER
-#pragma warning(default:4706)
-#endif
 
 /******************************************************************************
 *                                                                             *
@@ -1923,10 +1917,6 @@ int CompareToNext(fif **ppfif) { /* Compare file date with next entry in fiflist
 #define FBUFSIZE (4096 * 1024)
 #endif
 
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
 int filecompare(char *name1, char *name2) { /* Compare two files */
   static char *pbuf1 = NULL;
   static char *pbuf2 = NULL;
@@ -1993,7 +1983,7 @@ int filecompare(char *name1, char *name2) { /* Compare two files */
   }
 
   dif = 0;
-  while ((l1 = fread(pbuf1, 1, FBUFSIZE, f1))) {
+  while ((l1 = fread(pbuf1, 1, FBUFSIZE, f1)) != 0) {
     l2 = fread(pbuf2, 1, FBUFSIZE, f2);
     if (l1 > l2) {dif = 1; break;}
     if (l1 < l2) {dif = -1; break;}
@@ -2009,9 +1999,6 @@ int filecompare(char *name1, char *name2) { /* Compare two files */
 
   RETURN_INT_COMMENT(dif, ("Files are %s\n", dif ? "different" : "identical"));
 }
-#ifdef _MSC_VER
-#pragma warning(default:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
 
 /******************************************************************************
 *                                                                             *
@@ -2670,8 +2657,6 @@ uint16_t GetPsp(void) {
 #define FARWORD(seg, off) (*(uint16_t far *)FARPTR(seg, off))
 #define WORD1(dw) (*((uint16_t *)(&(dw))+1))
 
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-
 int SetMasterEnv(char *pszName, char *pszValue) {
   uint16_t wPsp;		// PSP segment
   uint16_t wParentPsp;	// Parent process PSP segment
@@ -2736,7 +2721,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
     for (lpc=lpName; *lpc; lpc++) ;
     lpNextName = lpc + 1;
     while (*lpNextName) {
-      for ((lpc=lpNextName); c=*lpc; lpc++) *(lpName++) = c;
+      for (lpc=lpNextName; (c=*lpc) != '\0'; lpc++) *(lpName++) = c;
       *(lpName++) = '\0';
       lpNextName = lpc+1;
     }
@@ -2752,10 +2737,10 @@ int SetMasterEnv(char *pszName, char *pszValue) {
 #endif
     return 1;	   // Out of environment space
   }
-  while ((*(lpName++)=*(pszName++)));	// Copy the name and trailing NUL
-  *(lpName-1) = '=';			// Overwrite the previous NUL
-  while ((*(lpName++)=*(pszValue++)));	// Copy the value and trailing NUL
-  *(lpName++) = '\0'; 			// Append the final NUL
+  while ((*(lpName++)=*(pszName++)) != '\0');	// Copy the name and trailing NUL
+  *(lpName-1) = '=';				// Overwrite the previous NUL
+  while ((*(lpName++)=*(pszValue++)) != '\0');	// Copy the value and trailing NUL
+  *(lpName++) = '\0'; 				// Append the final NUL
 
 #if NEEDED
   if (iVerbose) printf("String \"%s=%s\" added.\n", pszName, pszValue);
@@ -2763,8 +2748,6 @@ int SetMasterEnv(char *pszName, char *pszValue) {
 
   return 0;
 }
-
-#pragma warning(default:4706)
 
 #endif
 
@@ -2806,10 +2789,6 @@ int SetMasterEnv(char *pszName, char *pszValue) {
 \*---------------------------------------------------------------------------*/
 
 #ifndef __unix__
-
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
@@ -2867,7 +2846,7 @@ int FixNameCase(char *pszPathname) {
     if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
     RETURN_BOOL_COMMENT(FALSE, ("Cannot open directory \"%s\"\n", pszPath));
   }
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdir(pDir)) != NULL) {
     if (_stricmp(pszName, pDE->d_name)) continue; /* Names differ */
     if (strcmp(pszName, pDE->d_name)) { /* If the names match, but the case differs */
       strcpy(pszName, pDE->d_name);	/* Correct the name */
@@ -2880,10 +2859,6 @@ int FixNameCase(char *pszPathname) {
   if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
-
-#ifdef _MSC_VER
-#pragma warning(default:4706)
-#endif
 
 #endif // !defined(__unix__)
 
