@@ -218,13 +218,14 @@
 *    2019-01-09 JFL Corrected assignments in conditional expressions.	      *
 *		    Replaced all global configuration variables by one bit    *
 *		    field passed recursively to all subroutines.	      *
-*    2019-01-10 JFL Removed variable iVerbose.				      *
+*    2019-01-10 JFL Added option -ct to report equal files with != times.     *
+*		    Version 3.2.    					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.1"
+#define PROGRAM_VERSION "3.2"
 #define PROGRAM_DATE    "2019-01-10"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -450,6 +451,7 @@ typedef enum {
 #define SIGN3(x) ( ((x) == 0) ? 0 : SIGN(x) )
 
 #define MISMATCH (-32767)
+#define DATE_MISMATCH (-32766)
 
 #define RETCODE_SUCCESS 0	    /* Return codes processed by finis() */
 #define RETCODE_NO_FILE 1	    // Note: Value 1 required by HP Preload -env option
@@ -492,6 +494,7 @@ typedef struct {
   int notime:1;		/* Ignore file date and time altogether */
   int upper:1;		/* Display names in upper case */
   int cont:1;		/* Continue after errors */
+  int dtime:1;		/* Report equal files with != times */
   /* Caution: If more than 16 flags are defined, t_opts becomes a long in MS-DOS
               This would force to change DEBUG_ENTER() format strings for MS-DOS! */
 } t_opts;
@@ -638,6 +641,11 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "c")) {
 	opts.compare = 1;
+	continue;
+      }
+      if (streq(opt, "ct")) {
+	opts.compare = 1;
+	opts.dtime = 1;
 	continue;
       }
       if (streq(opt, "d")) {
@@ -977,7 +985,8 @@ Switches:\n\
   -b          Display only the files present in both directories.\n\
   -d          Display only files which are different.\n\
   -bd         Both.\n\
-  -c          Compare the actual data of the files. May take a long time!\n"
+  -c          Compare the actual data of the files. May take a long time!\n\
+  -ct         Compare data, and flag with a ~ equal files with different time.\n"
 #ifdef _DEBUG
 "\
   -D          Output debug information.\n"
@@ -1539,14 +1548,8 @@ int affiche(fif **ppfif, int nfif, int ndirs, t_opts opts) {
 	case -1:
 	  printf(" < ");
 	  break;
-	case 2:
-	  printf(" } ");
-	  break;
-	case -2:
-	  printf(" { ");
-	  break;
-	case 3:
-	  printf(" # ");
+	case DATE_MISMATCH:
+	  printf(" ~ ");
 	  break;
 	case MISMATCH:
 	  nfiles += 1;
@@ -1841,7 +1844,12 @@ int CompareToNext(fif **ppfif, t_opts opts) { /* Compare file date with next ent
     dif = filecompare(name1, name2);
     FREE_PATHNAME_BUF(name1);
     FREE_PATHNAME_BUF(name2);
-    if (!dif) DEBUG_RETURN_INT(0, "Contents are identical"); /* They are actually identical */
+    if (!dif) {
+      if (deltatime && opts.dtime) {
+	DEBUG_RETURN_INT(DATE_MISMATCH, "Contents are identical but dates differ");
+      }
+      DEBUG_RETURN_INT(0, "Contents are identical"); /* They are actually identical */
+    }
     if (deltatime) DEBUG_RETURN_INT(SIGN(deltatime), "Timestamps and contents differ");
     DEBUG_RETURN_INT(SIGN(dif), "Contents differ");
   }
