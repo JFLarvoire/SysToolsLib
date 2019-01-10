@@ -216,15 +216,16 @@
 *		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.1.    					      *
 *    2019-01-09 JFL Corrected assignments in conditional expressions.	      *
-*		    Replaced all global configuration variables by one iFlags *
-*		    variable passed recursively to all subroutines.	      *
+*		    Replaced all global configuration variables by one bit    *
+*		    field passed recursively to all subroutines.	      *
+*    2019-01-10 JFL Removed variable iVerbose.				      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2019-01-09"
+#define PROGRAM_DATE    "2019-01-10"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -479,19 +480,21 @@ typedef struct fif {	    /* OS-independant FInd File structure */
 
 /* Configuration flags recursively passed to all local subroutines */
 
-#define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
-#define FLAG_NOEXEC	0x0002		/* Do not actually execute */
-#define FLAG_RECURSE	0x0004		/* Recursive operation */
-#define FLAG_NOCASE	0x0008		/* Ignore case */
-#define FLAG_FORCE	0x0010		/* Force operation on read-only files */
-#define FLAG_BOTH	0x0020		/* List only files present in both paths */
-#define FLAG_DIFF	0x0040		/* List only files that don't match */
-#define FLAG_COMPARE	0x0080		/* Compare files contents to verify equality */
-#define FLAG_ZERO	0x0100		/* Don't display anything if no file */
-#define FLAG_NOTZ	0x0200		/* Ignore time zone differences */
-#define FLAG_NOTIME	0x0400		/* Ignore file date and time altogether */
-#define FLAG_UPPER	0x0800		/* Display names in upper case */
-#define FLAG_CONTINUE	0x1000		/* Continue after errors */
+typedef struct {
+  int verbose:1;	/* Display the pathname operated on */
+  int recurse:1;	/* Recursive operation */
+  int nocase:1;		/* Ignore case */
+  int both:1;		/* List only files present in both paths */
+  int diff:1;		/* List only files that don't match */
+  int compare:1;	/* Compare files contents to verify equality */
+  int zero:1;		/* Don't display anything if no file */
+  int notz:1;		/* Ignore time zone differences */
+  int notime:1;		/* Ignore file date and time altogether */
+  int upper:1;		/* Display names in upper case */
+  int cont:1;		/* Continue after errors */
+  /* Caution: If more than 16 flags are defined, t_opts becomes a long in MS-DOS
+              This would force to change DEBUG_ENTER() format strings for MS-DOS! */
+} t_opts;
 
 /* Global variables */
 
@@ -510,7 +513,6 @@ long lEFileFound = 0;		    /* Total number of equal files found */
 uintmax_t llLTotalSize = 0;	    /* Total size of left files found */
 uintmax_t llRTotalSize = 0;	    /* Total size of right files found */
 uintmax_t llETotalSize = 0;	    /* Total size of equal files found */
-int iVerbose = FALSE;		    /* If TRUE, display verbose information */
 int iRows = 0;                      /* Number of rows of the display */
 int iCols = 0;                      /* Number of columns of the display */
 int iYearWidth = 2;		    /* Width of the year field displayed */
@@ -530,22 +532,22 @@ void usage(void);                   /* Display a brief help and exit */
 void finis(int retcode, ...);       /* Return to the initial drive & exit */
 int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
 
-int lis(char *, char *, int, int, int, time_t, time_t, int); /* Scan a directory */
+int lis(char *, char *, int, int, int, time_t, time_t, t_opts); /* Scan a directory */
 int CDECL cmpfif(const fif **fif1, const fif **fif2, int ignorecase);
-void trie(fif **ppfif, int nfif, int iFlags);
-int affiche(fif **, int, int, int iFlags); /* Display sorted list on two columns */
+void trie(fif **ppfif, int nfif, t_opts);
+int affiche(fif **, int, int, t_opts); /* Display sorted list on two columns */
 void affichePaths(void);
-int affiche1(fif *pfif, int col, int iFlags);
+int affiche1(fif *pfif, int col, t_opts);
 int descend(char *from, char *to,
             char *pattern, int attrib,
-            int iFlags,
+            t_opts opts,
 	    time_t datemin, time_t datemax);
 fif **AllocFifArray(size_t nfif);   /* Allocate an array of fif pointers */
 void FreeFifArray(fif **fiflist);
 
 int makepathname(char *, char *, char *);
 int filecompare(char *, char *);    /* Compare two files */
-int CompareToNext(fif **, int);	    /* Compare dates w. next entry in fiflist */
+int CompareToNext(fif **, t_opts);  /* Compare dates w. next entry in fiflist */
 
 int GetScreenRows(void);	    /* Get the number of rows of a text screen */
 int GetScreenColumns(void);	    /* Get the number of columns of a text screen */
@@ -580,11 +582,7 @@ int main(int argc, char *argv[]) {
   char *from = NULL;          /* What directory to list */
   char *to = NULL;            /* What directory to compare it to */
   char *pattern = NULL;       /* Wildcards pattern */
-  int iFlags = FLAG_CONTINUE
-#if IGNORECASE			/* If TRUE, ignore case in file names */
-	| FLAG_NOCASE
-#endif
-  ;
+  t_opts opts = {0};	      /* User-defined options */
   NEW_PATHNAME_BUF(path);     /* Temporary pathname */
   int i;
   int nfif = 0;
@@ -608,6 +606,12 @@ int main(int argc, char *argv[]) {
 #endif
   int iBudget;
 
+  /* Set the default options */
+  opts.cont = 1;		/* Continue in case of error */
+#if IGNORECASE			/* If TRUE, ignore case in file names */
+  opts.nocase = 1;
+#endif
+
 #if HAS_DRIVES
   init_drive = (char)_getdrive();
 #endif
@@ -617,10 +621,6 @@ int main(int argc, char *argv[]) {
     char *arg = argv[i];
     if (IsSwitch(arg)) {	/* It's a switch */
       char *opt = arg+1;
-				    /* Don't forget to add switches to...
-					... the Recurse list below,
-					... the Usage display further down.
-				    */
 #ifdef _WIN32
       if (streq(opt, "A")) {	/* Force encoding output with the ANSI code page */
 	cp = CP_ACP;
@@ -628,20 +628,20 @@ int main(int argc, char *argv[]) {
       }
 #endif
       if (streq(opt, "b")) {
-	iFlags |= FLAG_BOTH;
+	opts.both = 1;
 	continue;
       }
       if (streq(opt, "bd")) {
-	iFlags |= FLAG_BOTH;
-	iFlags |= FLAG_DIFF;
+	opts.both = 1;
+	opts.diff = 1;
 	continue;
       }
       if (streq(opt, "c")) {
-	iFlags |= FLAG_COMPARE;
+	opts.compare = 1;
 	continue;
       }
       if (streq(opt, "d")) {
-	iFlags |= FLAG_DIFF;
+	opts.diff = 1;
 	continue;
       }
       DEBUG_CODE(
@@ -651,11 +651,11 @@ int main(int argc, char *argv[]) {
 	}
       )
       if (streq(opt, "e")) {
-	iFlags &= ~FLAG_CONTINUE;
+	opts.cont = 0;
 	continue;
       }
       if (streq(opt, "E")) {
-	iFlags |= FLAG_CONTINUE;
+	opts.cont = 1;
 	continue;
       }
 #ifdef _MSDOS
@@ -692,19 +692,19 @@ int main(int argc, char *argv[]) {
 	usage();
       }
       if (streq(opt, "i")) {
-	iFlags |= FLAG_NOTZ;        /* Ignore time zone differences */
+	opts.notz = 1;		/* Ignore time zone differences */
 	continue;
       }
       if (streq(opt, "j")) {
-	iFlags |= FLAG_NOTIME;	/* Ignore file date and time completely */
+	opts.notime = 1;	/* Ignore file date and time completely */
 	continue;
       }
       if (streq(opt, "K")) {
-	iFlags |= FLAG_NOCASE;	/* Ignore case completely in file names */
+	opts.nocase = 1;	/* Ignore case completely in file names */
 	continue;
       }
       if (streq(opt, "k")) {
-	iFlags &= ~FLAG_NOCASE;	/* Consider case meaninful in file names */
+	opts.nocase = 0;	/* Consider case meaninful in file names */
 	continue;
       }
       if (streq(opt, "L")) {
@@ -725,14 +725,14 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "r")) {	/* Alias for -d -f -s -z */
-	iFlags |= FLAG_DIFF;
+	opts.diff = 1;
 	attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
-	iFlags |= FLAG_RECURSE;
-	iFlags |= FLAG_ZERO;
+	opts.recurse = 1;
+	opts.zero = 1;
 	continue;
       }
       if (streq(opt, "s")) {	/* Recursive search */
-	iFlags |= FLAG_RECURSE;
+	opts.recurse = 1;
 	continue;
       }
       if (streq(opt, "t")) {	/* Display statistics */
@@ -750,7 +750,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "u")) {	/* Display names in upper case */
-	iFlags |= FLAG_UPPER;
+	opts.upper = 1;
 	continue;
       }
 #ifdef _WIN32
@@ -760,8 +760,7 @@ int main(int argc, char *argv[]) {
       }
 #endif
       if (streq(opt, "v")) {	/* Verbose mode */
-	iFlags |= FLAG_VERBOSE;
-	iVerbose = TRUE;
+	opts.verbose = 1;
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
@@ -781,7 +780,7 @@ int main(int argc, char *argv[]) {
       }
 #endif
       if (streq(opt, "z")) {
-	iFlags |= FLAG_ZERO;
+	opts.zero = 1;
 	continue;
       }
       printf("Unrecognized switch %s. Ignored.", arg);
@@ -856,17 +855,17 @@ int main(int argc, char *argv[]) {
   if (to) FixNameCase(to);
 #endif // !defined(__unix__)
 
-  nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax, iFlags);
-  if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax, iFlags);
+  nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax, opts);
+  if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax, opts);
   DEBUG_PRINTF(("nfif = %d;\n", nfif));
 
   fiflist = AllocFifArray(nfif);
-  trie(fiflist, nfif, iFlags);
-  affiche(fiflist, nfif, ndir, iFlags);
+  trie(fiflist, nfif, opts);
+  affiche(fiflist, nfif, ndir, opts);
   FreeFifArray(fiflist);
 
-  if (iFlags & FLAG_RECURSE) {
-    descend(from, to, pattern, attrib, iFlags, datemin, datemax);
+  if (opts.recurse) {
+    descend(from, to, pattern, attrib, opts, datemin, datemax);
     if (lNFileFound) { /* Only list the total if it's not null */
       printflf();
       printf("Total: %ld files or directories listed.", lNFileFound);
@@ -1122,6 +1121,7 @@ int IsSwitch(char *pszArg) {
 *                       	Bits 7-0: File/directory attribute.           *
 *         time_t datemin	Minimal date, or 0 if no minimum.             *
 *         time_t datemax	Maximal date, or 0 if no maximum.             *
+*         t_opts opts		User-defined options.                         *
 *                                                                             *
 *       Return value:   Total number of files/directories in fif array.       *
 *                                                                             *
@@ -1132,7 +1132,7 @@ int IsSwitch(char *pszArg) {
 ******************************************************************************/
 
 int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
-	    time_t datemin, time_t datemax, int iFlags) {
+	    time_t datemin, time_t datemax, t_opts opts) {
 #if HAS_DRIVES
   char initdrive;                 /* Initial drive. Restored when done. */
 #endif
@@ -1147,7 +1147,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
   char *pcd;
 
   DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, %d, 0x%X, 0x%lX, 0x%lX, 0x%X);\n", startdir, pattern,
-	       nfif, col, attrib, (unsigned long)datemin, (unsigned long)datemax, iFlags));
+	       nfif, col, attrib, (unsigned long)datemin, (unsigned long)datemax, opts));
 
 #if PATHNAME_BUFS_IN_HEAP
   if ((!initdir) || (!path)) {
@@ -1228,10 +1228,10 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
     }
 
     if (!pc || err) {
-      if ((iFlags & FLAG_VERBOSE) || !(iFlags & FLAG_CONTINUE)) {
+      if (opts.verbose || !opts.cont) {
 	fprintf(stderr, "dirc: Error: Cannot access directory %s.\n", path);
       }
-      if (iFlags & FLAG_CONTINUE) {
+      if (opts.cont) {
 	FREE_PATHNAME_BUF(initdir);
 	FREE_PATHNAME_BUF(path);
 	FREE_PATHNAME_BUF(pathname);
@@ -1439,8 +1439,8 @@ int CDECL cmpfifNoCase(const fif **fif1, const fif **fif2) {
 
 typedef int (* CDECL CMPFUNC)(const void *p1, const void *p2); // Strict type for C++
 
-void trie(fif **ppfif, int nfif, int iFlags) {
-  if (iFlags & FLAG_NOCASE) {
+void trie(fif **ppfif, int nfif, t_opts opts) {
+  if (opts.nocase) {
     qsort(ppfif, nfif, sizeof(fif *), (CMPFUNC)cmpfifNoCase);
   } else {
     qsort(ppfif, nfif, sizeof(fif *), (CMPFUNC)cmpfifCase);
@@ -1458,9 +1458,7 @@ void trie(fif **ppfif, int nfif, int iFlags) {
 *         fif **ppfif   Sorted array of file info structure pointers          *
 *         int nfif      Number of files found (Total of both sides)           *
 *         int ndirs     Number of directories  1 or 2                         *
-*         BOOL both     If TRUE, display only files if present in both columns*
-*         BOOL diff     If TRUE, don't display equal files.                   *
-*         BOOL zero     If TRUE, don't display anything if no file is listed  *
+*         t_opts opts	User-defined options		                      *
 *                                                                             *
 *       Return value:   0=Success; !0=Failure                                 *
 *                                                                             *
@@ -1470,7 +1468,7 @@ void trie(fif **ppfif, int nfif, int iFlags) {
 *                                                                             *
 ******************************************************************************/
 
-int affiche(fif **ppfif, int nfif, int ndirs, int iFlags) {
+int affiche(fif **ppfif, int nfif, int ndirs, t_opts opts) {
   int i;
   int col = 1;                      /* Current column */
   int difference;
@@ -1480,14 +1478,14 @@ int affiche(fif **ppfif, int nfif, int ndirs, int iFlags) {
   DEBUG_ENTER(("affiche(...);\n"));
 
   for (i=0; i<nfif; i++) {
-    difference = CompareToNext(ppfif+i, iFlags); /* Compare ith file date with (i+1)th */
+    difference = CompareToNext(ppfif+i, opts); /* Compare ith file date with (i+1)th */
 
-    if ((iFlags & FLAG_DIFF) && (difference == 0)) {
+    if (opts.diff && (difference == 0)) {
       i += 1;
       continue;                   /* skip both if files match */
     }
 
-    if ((iFlags & FLAG_BOTH) && (col == 1) && (difference == MISMATCH)) {
+    if (opts.both && (col == 1) && (difference == MISMATCH)) {
       continue;                    /* If both and no matching file, skip */
     }
 
@@ -1499,13 +1497,13 @@ int affiche(fif **ppfif, int nfif, int ndirs, int iFlags) {
     }
 
     if ((col == 1) && (ppfif[i]->column == 2)) {
-      if (iFlags & FLAG_BOTH) continue; /* If both and no matching file, skip */
-      affiche1(NULL, 1, iFlags);
+      if (opts.both) continue; /* If both and no matching file, skip */
+      affiche1(NULL, 1, opts);
       printf(" < ");
       col = 2;
     }
 
-    affiche1(ppfif[i], col, iFlags); /* Display file characteristics */
+    affiche1(ppfif[i], col, opts); /* Display file characteristics */
 
     /* Compute statistics about files displayed */
 
@@ -1575,7 +1573,7 @@ int affiche(fif **ppfif, int nfif, int ndirs, int iFlags) {
     printflf();
   }
 
-  if ((iFlags & FLAG_ZERO) && !nfiles) RETURN_CONST(0);
+  if (opts.zero && !nfiles) RETURN_CONST(0);
 
   if (!paths_done) affichePaths();
   printflf();
@@ -1618,7 +1616,7 @@ void affichePaths(void) {
   printflf();
 }
 
-int affiche1(fif *pfif, int col, int iFlags) {
+int affiche1(fif *pfif, int col, t_opts opts) {
   int seconde;
   int minute;
   int heure;
@@ -1635,7 +1633,7 @@ int affiche1(fif *pfif, int col, int iFlags) {
   int nSize = 0;        /* Size of the szSize string */
   struct tm *pTime;
 
-  DEBUG_ENTER(("affiche1(%p, %d, 0x%X);\n", pfif, col, iFlags));
+  DEBUG_ENTER(("affiche1(%p, %d, 0x%X);\n", pfif, col, opts));
 
   if (!pfif) {    /* Display spaces occupying same length as normal output */
     printf("%*s", iColumnSize, "");
@@ -1655,7 +1653,7 @@ int affiche1(fif *pfif, int col, int iFlags) {
 #ifdef _MSDOS
   strlwr(pNicename);                   /* More readable in lower case */
 #endif
-  if (iFlags & FLAG_UPPER) strupr(pNicename);	/* Do just the opposite if requested */
+  if (opts.upper) strupr(pNicename);	/* Do just the opposite if requested */
 
   /* Output the name */
   if (S_ISDIR(pfif->st.st_mode)) {
@@ -1786,8 +1784,8 @@ int affiche1(fif *pfif, int col, int iFlags) {
 *       Description:    Compare a file date and time with the next entry      *
 *                                                                             *
 *       Arguments:                                                            *
-*                                                                             *
 *         fif **ppfif   Sorted array of file info structure pointers          *
+*         t_opts opts	User-defined options		                      *
 *                                                                             *
 *       Return value:   0=Same file; <0 Older than next; >0 Newer than next.  *
 *                                                                             *
@@ -1797,7 +1795,7 @@ int affiche1(fif *pfif, int col, int iFlags) {
 *                                                                             *
 ******************************************************************************/
 
-int CompareToNext(fif **ppfif, int iFlags) { /* Compare file date with next entry in fiflist */
+int CompareToNext(fif **ppfif, t_opts opts) { /* Compare file date with next entry in fiflist */
   long deltatime;                 /* Date and Time difference, in seconds */
   int deltasize;                  /* Sign of the difference, or 0 if equal */
   fif *pfif1;
@@ -1806,7 +1804,7 @@ int CompareToNext(fif **ppfif, int iFlags) { /* Compare file date with next entr
 
   pfif1 = ppfif[0];
   pfif2 = ppfif[1];
-  DEBUG_ENTER(("CompareToNext(%p, 0x%X); // \"%s\" / \"%s\"\n", ppfif, iFlags, pfif1->name, pfif2?pfif2->name:""));
+  DEBUG_ENTER(("CompareToNext(%p, 0x%X); // \"%s\" / \"%s\"\n", ppfif, opts, pfif1->name, pfif2?pfif2->name:""));
   if (!pfif2) DEBUG_RETURN_INT(MISMATCH, "No next entry");	/* No next entry */
 
   /* ~~jfl 95/06/12 Can't compare a file to a directory */
@@ -1815,7 +1813,7 @@ int CompareToNext(fif **ppfif, int iFlags) { /* Compare file date with next entr
   if (dif) DEBUG_RETURN_INT(MISMATCH, "Types differ");
 
   /* Compare names, with or without case depending on command */
-  if (iFlags & FLAG_NOCASE) {
+  if (opts.nocase) {
     dif = stricmp(pfif1->name, pfif2->name);
   } else {
     dif = strcmp(pfif1->name, pfif2->name);
@@ -1834,7 +1832,7 @@ int CompareToNext(fif **ppfif, int iFlags) { /* Compare file date with next entr
   }
 
   /* If in filecomp mode, check if same data files with different dates */
-  if ((iFlags & FLAG_COMPARE) && !deltasize && !S_ISDIR(pfif1->st.st_mode)) { /* Let the actual data decide */
+  if (opts.compare && !deltasize && !S_ISDIR(pfif1->st.st_mode)) { /* Let the actual data decide */
     NEW_PATHNAME_BUF(name1);
     NEW_PATHNAME_BUF(name2);
 
@@ -1849,12 +1847,12 @@ int CompareToNext(fif **ppfif, int iFlags) { /* Compare file date with next entr
   }
 
   /* If same file name, compare date and time */
-  if (!(iFlags & FLAG_NOTIME) && deltatime) {     /* If comparison expected, and there is a difference */
+  if (!opts.notime && deltatime) {     /* If comparison expected, and there is a difference */
     int sign;               /* Sign of deltatime */
 
     sign = (deltatime > 0) ? 1 : -1;        /* Sign of the difference */
 
-    if (iFlags & FLAG_NOTZ) {   /* Special case if we wish to ignore time-zone differences */
+    if (opts.notz) {   /* Special case if we wish to ignore time-zone differences */
       /* Ignore differences that are an integer number of hours  less than 24 hours */
       int deltaseconds;
 
@@ -2009,9 +2007,7 @@ int filecompare(char *name1, char *name2) { /* Compare two files */
 *         char *to		Second directory to list, or NULL.            *
 *         char *switches	Switch string to pass to next level.          *
 *         int attrib		Search attribute                              *
-*         BOOL both		Command line switch /b                        *
-*         BOOL diff		Command line switch /d                        *
-*         BOOL zero		Command line switch /z                        *
+*         t_opts opts		User-defined options	                      *
 *	  time_t datemin	First date to consider			      *
 *	  time_t datemax	Last date to consider			      *
 *                                                                             *
@@ -2026,7 +2022,7 @@ int filecompare(char *name1, char *name2) { /* Compare two files */
 ******************************************************************************/
 
 int descend(char *from, char *to, char *pattern,
-                int attrib, int iFlags,
+                int attrib, t_opts opts,
 		time_t datemin, time_t datemax) {
   int nfif;
   int i;
@@ -2037,7 +2033,7 @@ int descend(char *from, char *to, char *pattern,
   NEW_PATHNAME_BUF(name2);
 
   DEBUG_ENTER(("descend(\"%s\", \"%s\", \"%s\", 0x%X, 0x%X, 0x%lX, 0x%lX);\n", from, to, pattern,
-	       attrib, iFlags, (unsigned long)datemin, (unsigned long)datemax));
+	       attrib, opts, (unsigned long)datemin, (unsigned long)datemax));
 
 #if PATHNAME_BUFS_IN_HEAP
   if ((!name1) || (!name2)) {
@@ -2049,10 +2045,10 @@ int descend(char *from, char *to, char *pattern,
 
   /* Get all subdirectories */
   nfif = 0;
-  if (from) nfif = lis(from, PATTERN_ALL, nfif, 1, wFlags, 0, TIME_T_MAX, iFlags);
-  if (to) nfif = lis(to, PATTERN_ALL, nfif, 2, wFlags, 0, TIME_T_MAX, iFlags);
+  if (from) nfif = lis(from, PATTERN_ALL, nfif, 1, wFlags, 0, TIME_T_MAX, opts);
+  if (to) nfif = lis(to, PATTERN_ALL, nfif, 2, wFlags, 0, TIME_T_MAX, opts);
   directories = AllocFifArray(nfif);
-  trie(directories, nfif, iFlags);
+  trie(directories, nfif, opts);
 
   for (i=0; i<nfif; i++) {
     char *pname1;
@@ -2079,35 +2075,35 @@ int descend(char *from, char *to, char *pattern,
     }
     if (   to
 	 && ((i+1) < nfif)
-	 && ((iFlags & FLAG_NOCASE) ?
+	 && (opts.nocase ?
 		!stricmp(directories[i]->name, directories[i+1]->name)
 	      : streq(directories[i]->name, directories[i+1]->name)  ) ) {
       /* Both subdirectories match */
       i += 1;
-      nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax, iFlags);
-      if (to) nfif2 = lis(name2, pattern, nfif2, 2, attrib, datemin, datemax, iFlags);
+      nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax, opts);
+      if (to) nfif2 = lis(name2, pattern, nfif2, 2, attrib, datemin, datemax, opts);
       ppfif = AllocFifArray(nfif2);
-      trie(ppfif, nfif2, iFlags);
-      affiche(ppfif, nfif2, ndir, iFlags);
+      trie(ppfif, nfif2, opts);
+      affiche(ppfif, nfif2, ndir, opts);
       FreeFifArray(ppfif);
 
-      descend(pname1, pname2, pattern, attrib, iFlags, datemin, datemax);
-    } else if (!(iFlags & FLAG_BOTH)) {
+      descend(pname1, pname2, pattern, attrib, opts, datemin, datemax);
+    } else if (!opts.both) {
       DEBUG_PRINTF(("// There is no directory %s",
 		 (directories[i]->column == 1) ? name2 : name1));
       if (directories[i]->column == 1) {
 	pname2 = NULL;
-	nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax, iFlags);
+	nfif2 = lis(name1, pattern, 0, 1, attrib, datemin, datemax, opts);
       } else {
 	pname1 = NULL;
-	nfif2 = lis(name2, pattern, 0, 2, attrib, datemin, datemax, iFlags);
+	nfif2 = lis(name2, pattern, 0, 2, attrib, datemin, datemax, opts);
       }
       ppfif = AllocFifArray(nfif2);
-      trie(ppfif, nfif2, iFlags);
-      affiche(ppfif, nfif2, ndir, iFlags);
+      trie(ppfif, nfif2, opts);
+      affiche(ppfif, nfif2, ndir, opts);
       FreeFifArray(ppfif);
 
-      descend(pname1, pname2, pattern, attrib, iFlags, datemin, datemax);
+      descend(pname1, pname2, pattern, attrib, opts, datemin, datemax);
     }
   } /* End for */
 
@@ -2666,9 +2662,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
   for (wPsp = GetPsp();	// The Program Segment Prefix for this program
        wPsp != (wParentPsp = FARWORD(wPsp, 0x16));
        wPsp = wParentPsp) {	// Walk up our parent process' PSP
-#if NEEDED
-       if (iVerbose) printf("PSP=%04X, Parent at %04X\n", wPsp, wParentPsp);
-#endif
+       DEBUG_PRINTF(("PSP=%04X, Parent at %04X\n", wPsp, wParentPsp));
      }
 
   // Get command.com environment
@@ -2676,9 +2670,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
   lpEnv = (char far *)FARPTR(wEnv, 0);
   // ~~jfl 1999-06-29. Convert paras to bytes.
   wEnvSize = FARWORD(WORD1(lpEnv)-1, 3) << 4;
-#if NEEDED
-  if (iVerbose) printf("Environment at %lp, size 0x%X\n", lpEnv, wEnvSize);
-#endif
+  DEBUG_PRINTF(("Environment at %lp, size 0x%X\n", lpEnv, wEnvSize));
   // Scan the environment for our variable
   for (lpName=lpEnv; *lpName; ) {
     char *pcn;
@@ -2695,8 +2687,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
     while (*lpName) lpName++;   // Skip that environment string
     lpName++;		    // Skip the trailing NUL
   }
-#if NEEDED
-  if (iVerbose {
+  DEBUG_CODE_IF_ON(
     char string[100];
     _fstrncpy(string, lpName, sizeof(string));
     if (string[0]) {
@@ -2704,8 +2695,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
     } else {
       printf("%s not found.\n", pszName);
     }
-  }
-#endif
+  )
 
   // Move up the rest of the environment
   if (*lpName) {
@@ -2724,9 +2714,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
   // Append our string
   wEnvSize -= (uint16_t)(lpName-lpEnv);
   if (wEnvSize < (uint16_t)(strlen(pszName)+strlen(pszValue)+3)) {
-#if NEEDED
-    if (iVerbose) printf("Out of environment space\n");
-#endif
+    DEBUG_PRINTF(("Out of environment space\n"));
     return 1;	   // Out of environment space
   }
   while ((*(lpName++)=*(pszName++)) != '\0');	// Copy the name and trailing NUL
@@ -2734,9 +2722,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
   while ((*(lpName++)=*(pszValue++)) != '\0');	// Copy the value and trailing NUL
   *(lpName++) = '\0'; 				// Append the final NUL
 
-#if NEEDED
-  if (iVerbose) printf("String \"%s=%s\" added.\n", pszName, pszValue);
-#endif
+  DEBUG_PRINTF(("String \"%s=%s\" added.\n", pszName, pszValue));
 
   return 0;
 }
