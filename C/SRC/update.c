@@ -146,13 +146,16 @@
 *    2018-12-18 JFL Added option -P to show the file copy progress.           *
 *		    Added option -- to force ending switches.                 *
 *		    Version 3.7.    					      *
+*    2019-01-10 JFL Added option -T to reset the time of identical files.     *
+*		    Fixed 2018-12-18 bug causing Error: Not enough arguments  *
+*		    Version 3.8.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.7"
-#define PROGRAM_DATE    "2018-12-18"
+#define PROGRAM_VERSION "3.8"
+#define PROGRAM_DATE    "2019-01-10"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -327,6 +330,7 @@ static int iRecur = 0;			/* Recursive update */
 #define cp codePage			/* Initial console code page in iconv.c */
 #endif
 static int iErase = 0;			/* Flag indicating Erase mode */
+static int iResetTime = 0;		/* Reset time of identical files */
 
 /* Forward references */
 
@@ -350,6 +354,7 @@ int is_directory(char *);		/* Is name a directory? -> TRUE/FALSE */
 int older(char *, char *);		/* Is file 1 older than file 2? */
 time_t getmodified(char *);		/* Get time of file modification */
 int copydate(char *to, char *from);	/* Copy the file date & time */
+int filecompare(char *, char *);	/* Compare two files */
 
 char *strgfn(const char *);		/* Get file name position */
 void stcgfn(char *, const char *);	/* Get file name */
@@ -435,13 +440,13 @@ int main(int argc, char *argv[]) {
 	  || streq(opt, "?")) {
 	usage();
       }
-  #ifdef _WIN32
+#ifdef _WIN32
       if (   streq(opt, "A")
 	  || streq(opt, "-ansi")) {   /* Force encoding output with the ANSI code page */
 	cp = CP_ACP;
 	continue;
       }
-  #endif
+#endif
       DEBUG_CODE(
       if (   streq(opt, "d")	    /* Debug mode on */
 	  || streq(opt, "debug")	    /* The historical name of that switch */
@@ -489,13 +494,13 @@ int main(int argc, char *argv[]) {
 	if (iVerbose) printf("Case-sensitive pattern matching.\n");
 	continue;
       }
-  #ifdef _WIN32
+#ifdef _WIN32
       if (   streq(opt, "O")
 	  || streq(opt, "-oem")) {    /* Force encoding output with the OEM code page */
 	cp = CP_OEMCP;
 	continue;
       }
-  #endif
+#endif
       if (   streq(opt, "p")	    /* Final Pause on */
 	  || streq(opt, "-pause")) {
 	iPause = 1;
@@ -528,13 +533,20 @@ int main(int argc, char *argv[]) {
 	if (iVerbose) printf("Show destination files names.\n");
 	continue;
       }
-  #ifdef _WIN32
+      /* Note:     opt  "t"  is already used, as a synonym for -X */
+      if (   streq(opt, "T")	    /* Reset time of identical files */
+	  || streq(opt, "-resettime")) {
+	iResetTime = 1;
+	if (iVerbose) printf("Reset time of equal files.\n");
+	continue;
+      }
+#ifdef _WIN32
       if (   streq(opt, "U")
 	  || streq(opt, "-utf8")) {   /* Force encoding output with the UTF-8 code page */
 	cp = CP_UTF8;
 	continue;
       }
-  #endif
+#endif
       if (   streq(opt, "v")	    /* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
@@ -553,6 +565,9 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       fprintf(stderr, "Warning: Unrecognized switch %s ignored.\n", arg);
+    }
+    else { /* It's not a switch */
+      break;
     }
   }
 
@@ -670,7 +685,9 @@ Switches:\n\
   -P|--progress Display the file copy progress. Useful with very large files.\n\
   -q|--nologo   Quiet mode. Don't display anything.\n\
   -r|--recurse  Recursively update all subdirectories.\n\
-  -S|--showdest Show the destination files names. Default: The sources names.\n"
+  -S|--showdest Show the destination files names. Default: The sources names.\n\
+  -T|--resettime Reset time of identical files.\n"
+
 #ifdef _WIN32
 "\
   -U|--utf8     Force encoding the output using the UTF-8 character encoding.\n"
@@ -1028,7 +1045,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     {
     int e;
     char name[PATHNAME_SIZE];
-    struct stat sP2stat;
+    struct stat sP2stat = {0};
     char *p;
 
     DEBUG_ENTER(("update(\"%s\", \"%s\");\n", p1, p2));
@@ -1064,6 +1081,39 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
       	printError("Failed to remove \"%s\"", p2);
       	RETURN_INT(e);
       }
+    }
+
+    /* In ResetTime mode, check if the files are identical, but dates have changed */
+    if (iResetTime) {
+      struct stat sP1stat = {0};
+      e = lstat(p1, &sP1stat); /* Use lstat to avoid following links */
+      if ((e == 0) && (sP1stat.st_size == sP2stat.st_size) && (sP1stat.st_mtime < sP2stat.st_mtime)) {
+      	if (!filecompare(p1, p2)) {
+	  int seconde, minute, heure, jour, mois, an;
+	  struct tm *pTime = LocalFileTime(&(sP1stat.st_mtime)); // Time of last data modification
+	  seconde = pTime->tm_sec;
+	  minute = pTime->tm_min;
+	  heure = pTime->tm_hour;
+	  jour = pTime->tm_mday;
+	  mois = pTime->tm_mon + 1;
+	  an = pTime->tm_year + 1900;
+	  if (test && iVerbose) {
+	    DEBUG_PRINTF(("// "));
+	    printf("Would copy date ");
+	  }
+	  printf("%04d-%02d-%02d %02d:%02d:%02d", an, mois, jour, heure, minute, seconde);
+	  printf(" -> %s\n", p2);
+	  if (test) {
+	    RETURN_CONST(0);
+	  }
+	  e = copydate(p2, p1);
+	  if (e) {
+	    printError("Failed to set time for \"%s\"", p2);
+	    RETURN_INT(e);
+	  }
+      	}
+      }
+      RETURN_CONST(0);
     }
 
     /* In any mode, don't copy if the destination is newer than the source. */
@@ -2194,4 +2244,119 @@ int zapDir(const char *path, zapOpts *pzo) {
 #pragma warning(default:4706)
 #pragma warning(default:4459)
 #endif
+
+/******************************************************************************
+*                                                                             *
+*       Function:       filecompare                                           *
+*                                                                             *
+*       Description:    Compare the contents of two files                     *
+*                                                                             *
+*       Arguments:                                                            *
+*                                                                             *
+*         char *name1   Pathname of first file                                *
+*         char *name2   Pathname of second file                               *
+*                                                                             *
+*       Return value:   0=Same contents                                       *
+*                       1/-1=Length difference                                *
+*                       2/-2=Data difference                                  *
+*                       3/-3=One of the files is missing                      *
+*                                                                             *
+*       Notes:                                                                *
+*                                                                             *
+*       Updates:                                                              *
+*        1995-06-12 JFL Made this routine generic (Independant of DIRC)       *
+*        2014-01-21 JFL Use a much larger buffer for 32-bits apps, to improve *
+*                       performance.                                          *
+*                                                                             *
+******************************************************************************/
+
+#ifdef _MSDOS		/* If it's a 16-bits app, use a 4K buffer. */
+#define FBUFSIZE 4096
+#else			/* Else for 32-bits or 64-bits apps, use a 4M buffer */
+#define FBUFSIZE (4096 * 1024)
+#endif
+
+int filecompare(char *name1, char *name2) { /* Compare two files */
+  static char *pbuf1 = NULL;
+  static char *pbuf2 = NULL;
+  FILE *f1;
+  FILE *f2;
+  size_t l1, l2;
+  int dif;
+
+  DEBUG_ENTER(("filecompare(\"%s\", \"%s\");\n", name1, name2));
+
+  if (!pbuf1) {
+    pbuf1 = (char *)malloc(FBUFSIZE);
+    pbuf2 = (char *)malloc(FBUFSIZE);
+    if ((!pbuf1) || (!pbuf2)) {
+      fprintf(stderr, "Error: Not enough memory.\n");
+      do_exit(1);
+    }
+  }
+
+  /* For links, compare the link targets */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
+  {
+    int err1, err2;
+    struct stat st1;
+    struct stat st2;
+    err1 = lstat(name1, &st1);
+    err2 = lstat(name2, &st2);
+    if ((!err1) && S_ISLNK(st1.st_mode) && (!err2) && S_ISLNK(st2.st_mode)) {
+#if defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
+      if ((st1.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) && (st2.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY))
+#else
+      err1 = stat(name1, &st1);
+      err2 = stat(name2, &st2);
+      if (err1 && err2) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
+      if (err1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
+      if (err2) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
+      if (S_ISDIR(st1.st_mode) && S_ISDIR(st2.st_mode))
+#endif
+	{
+	int n1 = (int)readlink(name1, pbuf1, FBUFSIZE);
+	int n2 = (int)readlink(name2, pbuf2, FBUFSIZE);
+	if ((n1 == -1) && (n2 == -1)) RETURN_INT_COMMENT(0, ("Both dead links. Ignore.\n"));
+	if (n1 == -1) RETURN_INT_COMMENT(-3, ("The first link is dead.\n"));
+	if (n2 == -1) RETURN_INT_COMMENT( 3, ("The second link is dead.\n"));
+	pbuf1[n1] = '\0';
+	pbuf2[n2] = '\0';
+	dif = strcmp(pbuf1, pbuf2);
+	RETURN_INT_COMMENT(dif, ("Link targets are %s\n", dif ? "different" : "identical"));
+      }
+    }
+  }
+#endif // OS supporting links
+
+  /* For files or links to files, compare the data itself */
+  f1 = fopen(name1, "rb");
+  f2 = fopen(name2, "rb");
+  if ((!f1) && (!f2)) RETURN_INT_COMMENT(0, ("Neither file exists.\n"));
+  if (!f1) {
+    fclose(f2);
+    RETURN_INT_COMMENT(-3, ("The first file does not exist.\n"));
+  }
+  if (!f2) {
+    fclose(f1);
+    RETURN_INT_COMMENT( 3, ("The second file does not exist.\n"));
+  }
+
+  dif = 0;
+  while ((l1 = fread(pbuf1, 1, FBUFSIZE, f1)) != 0) {
+    l2 = fread(pbuf2, 1, FBUFSIZE, f2);
+    if (l1 > l2) {dif = 1; break;}
+    if (l1 < l2) {dif = -1; break;}
+    dif = memcmp(pbuf1, pbuf2, l1);
+    if (dif) {
+      dif = (dif > 0) ? 2 : -2;
+      break;   /* If different data found, return immediately */
+    }
+  }
+
+  fclose(f1);
+  fclose(f2);
+
+  RETURN_INT_COMMENT(dif, ("Files are %s\n", dif ? "different" : "identical"));
+}
 
