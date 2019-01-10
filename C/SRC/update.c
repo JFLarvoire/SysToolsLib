@@ -148,6 +148,7 @@
 *		    Version 3.7.    					      *
 *    2019-01-10 JFL Added option -T to reset the time of identical files.     *
 *		    Fixed 2018-12-18 bug causing Error: Not enough arguments  *
+*		    Corrected assignments in conditional expressions.	      *
 *		    Version 3.8.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -754,9 +755,6 @@ int IsSwitch(char *pszArg)
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
 int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	      char *p2)
     {
@@ -857,7 +855,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       nErrors += 1;
       goto cleanup_and_return;
     }
-    while ((pDE = readdir(pDir))) {
+    while ((pDE = readdir(pDir)) != NULL) {
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
       if (   (pDE->d_type != DT_REG)
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
@@ -892,7 +890,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       fullpath(path2, p2, PATHNAME_SIZE); /* Build absolute pathname of source */
       pDir = opendir(p2);
       if (pDir) {
-	while ((pDE = readdir(pDir))) {
+	while ((pDE = readdir(pDir)) != NULL) {
 	  struct stat sStat;
 	  if (streq(pDE->d_name, ".")) continue;    /* Skip the . directory */
 	  if (streq(pDE->d_name, "..")) continue;   /* Skip the .. directory */
@@ -947,7 +945,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       	nErrors += 1;
         goto cleanup_and_return;
       }
-      while ((pDE = readdir(pDir))) {
+      while ((pDE = readdir(pDir)) != NULL) {
       	int p2_exists, p2_is_dir;
 
 	DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
@@ -1017,9 +1015,6 @@ cleanup_and_return:
 #endif
     RETURN_INT(nErrors);
     }
-#ifdef _MSC_VER
-#pragma warning(default:4706)
-#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -2095,7 +2090,6 @@ char *NewPathName(const char *path, const char *name) {
 \*---------------------------------------------------------------------------*/
 
 #ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #pragma warning(disable:4459) /* Ignore the "declaration of 'VARIABLE' hides global declaration" warning */
 #endif
 
@@ -2167,7 +2161,7 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
 
   pDir = opendir(path);
   if (!pDir) RETURN_INT(1);
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdir(pDir)) != NULL) {
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
     pPath = NewPathName(path, pDE->d_name);
     pszSuffix = "";
@@ -2241,7 +2235,6 @@ int zapDir(const char *path, zapOpts *pzo) {
 }
 
 #ifdef _MSC_VER
-#pragma warning(default:4706)
 #pragma warning(default:4459)
 #endif
 
