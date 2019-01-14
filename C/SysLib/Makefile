@@ -262,7 +262,7 @@ $(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
 	$(info Creating directory $@)
 	mkdir -p $@
 
-# Place holder for build results selt test
+# Place holder for build results self test
 .PHONY: check
 check:
 	true
