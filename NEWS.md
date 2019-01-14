@@ -4,6 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-01-14
+### Changed
+- C/SRC/dirc.c:
+  * Added option -ct to report equal files with != times.
+- C/SRC/update.c:
+  * Added option -T to reset the time of identical files.
+  * Fixed 2018-12-18 bug causing Error: Not enough arguments
+- C/SRC/chars.c:
+  * Added option -u to display Unicode characters or ranges.
+  * Improved error reporting when switching code pages.
+  * Added option -v to display verbose information.
+
 ## [Unreleased] 2018-12-18
 ### Changed
 - C/SRC/update.c:
