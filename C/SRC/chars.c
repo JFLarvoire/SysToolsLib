@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *									      *
 *  File name:	    chars.c						      *
 *									      *
@@ -14,15 +14,17 @@
 *    2017-03-06 JFL Added an optional code page argument for Windows.         *
 *		    Version 1.2.					      *
 *    2017-11-17 JFL Fixed the output of the NUL character.		      *
-*		    Added option -a.					      *
-*		    Version 1.3.					      *
+*    2019-01-14 JFL Added option -u to display Unicode characters or ranges.  *
+*		    Improved error reporting when switching code pages.	      *
+*		    Added option -v to display verbose information.	      *
+*		    Version 1.4.					      *
 *		    							      *
-*       � Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
+*       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2017-11-17"
+#define PROGRAM_VERSION "1.4"
+#define PROGRAM_DATE    "2019-01-14"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -51,6 +53,8 @@
 
 #define EOL "\r\n"
 
+#define SUPPORTS_UTF8 TRUE
+
 #endif /* _WIN32 */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -64,6 +68,8 @@
 
 #define EOL "\r\n"
 
+#define SUPPORTS_UTF8 FALSE
+
 #endif /* _MSDOS */
 
 /************************* OS/2-specific definitions *************************/
@@ -73,6 +79,8 @@
 #define OS_NAME "OS/2"
 
 #define EOL "\r\n"
+
+#define SUPPORTS_UTF8 FALSE
 
 #endif /* _OS2 */
 
@@ -92,6 +100,8 @@
 
 #define EOL "\n"
 
+#define SUPPORTS_UTF8 TRUE
+
 #endif /* __unix__ */
 
 /********************** End of OS-specific definitions ***********************/
@@ -101,143 +111,215 @@
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 
+char spaces[] = "            ";
+
 void usage(void);
+#if SUPPORTS_UTF8
+int ToUtf8(unsigned int c, char *b);
+#endif /* SUPPORTS_UTF8 */
 
-int main(int argc, char *argv[])
-    {
-    int i, j;
+int main(int argc, char *argv[]) {
+  int i, j;
 #ifdef _WIN32
-    int iCP = 0;
-    DWORD dwCP0 = GetConsoleOutputCP();
+  unsigned uCP = 0;
+  unsigned uCP0 = GetConsoleOutputCP();
 #endif
-    int iAll = FALSE;
+  int iAll = FALSE;
+  int iFirst = 0;
+  int iLast = 0xFF;
+  int iVerbose = FALSE;
+  int iBase;
+  int nBlock = 0;
+#if SUPPORTS_UTF8
+  int isUTF8 = FALSE;
+#endif /* SUPPORTS_UTF8 */
 #ifdef __unix__
-    int isUTF8 = FALSE;
-    char *pszLang = getenv("LANG");
+  char *pszLang = getenv("LANG");
 
-    if (pszLang && strstr(pszLang, "UTF-8")) isUTF8 = TRUE;
+  if (pszLang && strstr(pszLang, "UTF-8")) isUTF8 = TRUE;
 #endif
 
-    for (i=1; i<argc; i++) {
-      char *arg = argv[i];
-      if (   (arg[0]=='-')
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if (   (arg[0]=='-')
 #ifndef __unix__
-          || (arg[0]=='/')
+	|| (arg[0]=='/')
 #endif
-        ) {
-        arg[0] = '-';
-	if (   streq(arg, "-a")     /* -a: Display all characters */
-	    || streq(arg, "--all"))
-	    {
-	    iAll = TRUE;
-	    continue;
-	    }
-	if (   streq(arg, "-h")	    /* Display usage */
-	    || streq(arg, "-help")	/* The historical name of that switch */
-	    || streq(arg, "--help")
-	    || streq(arg, "-?"))
-	    {
-	    usage();
-            }
-	if (   streq(arg, "-V")     /* -V: Display the version */
-	    || streq(arg, "--version"))
-	    {
-	    printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
-	    exit(0);
-	    }
-	fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
+      ) {
+      char *opt = arg+1;
+      if (   streq(opt, "a")     /* -a: Display all characters */
+	  || streq(opt, "-all")) {
+	iAll = TRUE;
 	continue;
-	}
+      }
+      if (   streq(opt, "h")	    /* Display usage */
+	  || streq(opt, "help")	/* The historical name of that switch */
+	  || streq(opt, "-help")
+	  || streq(opt, "?")) {
+	usage();
+      }
+#if SUPPORTS_UTF8
+      if (   streq(opt, "u")     /* -u: Display unicode characters */
+	  || streq(opt, "-unicode")) {
+	int nc;
+	if (((i+1)<argc) && sscanf(argv[++i], "%x%n", &iFirst, &nc)) {
 #ifdef _WIN32
-    if (!iCP) {
-      iCP = atoi(arg);
+	  isUTF8 = TRUE;
+	  uCP = 65001;
+#endif /* defined(_WIN32) */
+	  iLast = iFirst;
+	  if (iVerbose) printf("Code point 0x%X", iFirst);
+	} else {
+	  fprintf(stderr, "No or bad unicode code point.\n");
+	  return 1;
+	}
+	arg = argv[i];
+	if ((arg[nc] == '-') && sscanf(arg+nc+1, "%x", &iLast)) {
+	  if (iLast < iFirst) iLast = iFirst;
+	  if (iVerbose) printf(" until 0x%X", iLast);
+	}
+	if (iVerbose) printf("\n");
+	continue;
+      }
+#endif /* SUPPORTS_UTF8 */
+      if (   streq(opt, "v")     /* -a: Display all characters */
+	  || streq(opt, "-verbose")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (   streq(opt, "V")     /* -V: Display the version */
+	  || streq(opt, "-version")) {
+	printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+	exit(0);
+      }
+      fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
       continue;
     }
-#endif
-    fprintf(stderr, "Unrecognized argument %s. Ignored.\n", arg);
+#ifdef _WIN32
+    if (!uCP) {
+      uCP = atoi(arg);
+      if ((uCP <= 0) || (uCP > 65535)) {
+	fprintf(stderr, "Invalid code page: %s\n", arg);
+	return 1;
+      }
+      continue;
     }
+#endif /* defined(_WIN32) */
+    fprintf(stderr, "Unrecognized argument %s. Ignored.\n", arg);
+  }
 
 #ifdef _WIN32
-    if (iCP) SetConsoleOutputCP(iCP);
-#endif
+  if (uCP && (uCP != uCP0)) {
+    if (iVerbose) printf("Switching to code page %d.\n", uCP);
+    if (!SetConsoleOutputCP(uCP)) {
+      fprintf(stderr, "Failed to switch to code page %d.\n", uCP);
+      return 1;
+    }
+  } else if (iVerbose) printf("Active code page: %d\n", uCP0);
+#endif /* defined(_WIN32) */
 
 #if defined(_MSDOS) || defined(_WIN32)
   fflush(stdout); /* Make sure any previous output is done in text mode */
   _setmode( _fileno( stdout ), _O_BINARY );
 #endif
 
-    for (j=0; j<16; j++)
-	{
-	for (i=0; i<8; i++)
-	    {
-	    int k, l;
-
-	    if (!(i&3)) printf("  ");
-
-	    l = k = (16*i)+j;
-	    switch (k)
-		{
-#ifndef __unix__
-		case 0x07:
-		case 0x08:
-		case 0x09:
-		case 0x0A:
-		case 0x0D:
-		case 0x1A:
-		    if (!iAll) l = ' ';
-		    break;
-#endif
-		default:
-#ifdef __unix__
-		    if (k < 0x20) {
-		      if (!iAll) l = ' ';
-		      break;
-		    }
-#endif
-		    break;
-		}
-
-	    printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
-	    fwrite(&l, 1, 1, stdout);
-	    }
-	printf(EOL);
-	}
-
-    printf(EOL);
-
-    for (j=0; j<16; j++)
-	{
-	for (i=8; i<16; i++)
-	    {
-	    int k;
-
-	    if (!(i&3)) printf("  ");
-
-	    k = (16*i)+j;
-
-#ifdef __unix__
-            if (isUTF8) {
-              int c1,c2;
-              c1 = 0xC0 + ((k >> 6) & 0x03);
-              c2 = 0x80 + (k & 0x3F);
-	      printf("  %02X %c%c", k, c1, c2);
-            } else
-#endif
-	    printf("  %02X %c", k, k);
-	    }
-	printf(EOL);
-	}
-
-#ifdef _WIN32
-    if (iCP) SetConsoleOutputCP(dwCP0);
-#endif
-
-    return 0;
+#if SUPPORTS_UTF8
+  if (iFirst == iLast) {
+    char buf[5];
+    int n = ToUtf8(iFirst, buf);
+    buf[n] = '\0';
+    if (!n) {
+      fprintf(stderr, "Invalid code point: 0x%X.\n", iFirst);
+      return 1;
     }
+    if (iVerbose) {
+      printf("UTF-8 ");
+      for (i=0; i<n; i++) printf("\\x%02X ", buf[i]&0xFF);
+      printf("\n");
+    }
+    printf("%s\n", buf);
+    goto cleanup;
+  }
+#endif /* SUPPORTS_UTF8 */
 
-void usage(void)
-    {
-    printf("chars version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
+  for (iBase = (iFirst & -0x80); iBase < ((iLast + 0x7F) & -0x80); iBase += 0x80) {
+    int iDigits = 2;
+    for (i=0x100; i; i<<=4) if (iBase >= i) iDigits += 1;
+    if (nBlock) printf(EOL);
+    if (iVerbose || (iFirst != 0) || (iLast != 0xFF)) printf("[0x%X-0x%X]\n", iBase, iBase + 0x7F);
+    for (j=0; j<16; j++) {
+      for (i=0; i<8; i++) {
+	int k, l;
+
+	if (!(i&3)) printf("  ");
+
+	l = k = (iBase + 16*i)+j;
+	if ((k < iFirst) || (k > iLast)) {
+	  printf("%.*s", iDigits+4, spaces);
+	  continue;
+	}
+	switch (k) {
+#ifndef __unix__
+	  case 0x07:
+	  case 0x08:
+	  case 0x09:
+	  case 0x0A:
+	  case 0x0D:
+	  case 0x1A:
+	    if (!iAll) l = ' ';
+	    break;
+#endif
+	  default:
+#ifdef __unix__
+	    if (k < 0x20) {
+	      if (!iAll) l = ' ';
+	      break;
+	    }
+#endif
+	    break;
+	}
+
+#if SUPPORTS_UTF8
+	if ((k > 0x7F) && isUTF8) {
+	  char buf[5];
+	  int n = ToUtf8(k, buf);
+	  buf[n] = '\0';
+	  printf("  %02X %s", k, buf);
+	} else
+#endif /* SUPPORTS_UTF8 */
+	{
+	  printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
+	  fwrite(&l, 1, 1, stdout);
+	}
+      }
+      printf(EOL);
+      nBlock += 1;
+    }
+  }
+
+#if SUPPORTS_UTF8
+cleanup:
+#endif /* SUPPORTS_UTF8 */
+#ifdef _WIN32
+  if (uCP && (uCP != uCP0)) {
+    if (iVerbose) printf("Switching back to code page %d.\n", uCP0);
+    if (!SetConsoleOutputCP(uCP0)) {
+      fprintf(stderr, "Failed to switch to code page %d.\n", uCP0);
+      return 1;
+    }
+  }
+#endif
+
+  return 0;
+}
+
+void usage(void) {
+#if SUPPORTS_UTF8 && _WIN32
+  unsigned uCP0 = GetConsoleOutputCP();;
+  if (uCP0 != 65001) SetConsoleOutputCP(65001);
+#endif
+
+  printf("chars version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
 \n"
 #ifdef _WIN32
 "Usage: chars [SWITCHES] [CODEPAGE]\n"
@@ -246,12 +328,44 @@ void usage(void)
 #endif
 "\n\
 Switches:\n\
-  -a|--all      Output all characters, even the control chars like CR LF etc...\n\
-  -h|--help|-?  Display this help screen.\n\
-  -V|--version  Display this program version and exit.\n\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+  -a|--all            Output all characters, even control chars like CR LF, etc\n\
+  -h|--help|-?        Display this help screen\n"
+#if SUPPORTS_UTF8
+"\
+  -u|--unicode X[-Y]  Display a Unicode character, or a range of characters\n"
+#endif
+"\
+  -v|--verbose        Display verbose information\n\
+  -V|--version        Display this program version and exit\n\
+\n"
+#if SUPPORTS_UTF8
+"Author: Jean-François Larvoire"
+#else
+"Author: Jean-Francois Larvoire"
+#endif
+" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+#ifdef __unix__
+"\n"
+#endif
 );
 
-    exit(0);
-    }
+#if SUPPORTS_UTF8 && _WIN32
+  if (uCP0 != 65001) SetConsoleOutputCP(uCP0);
+#endif
+
+  exit(0);
+}
+
+#if SUPPORTS_UTF8
+#define B(c) ((char)(c))
+int ToUtf8(unsigned int c, char *b) {
+  char *b0 = b;
+  if (c<0x80) *b++=B(c);
+  else if (c<0x800) *b++=B(192+c/64), *b++=B(128+c%64);
+  else if (c-0xd800u<0x800) return 0;
+  else if (c<0x10000) *b++=B(224+c/4096), *b++=B(128+c/64%64), *b++=B(128+c%64);
+  else if (c<0x110000) *b++=B(240+c/262144), *b++=B(128+c/4096%64), *b++=B(128+c/64%64), *b++=B(128+c%64);
+  else return 0;
+  return (int)(b-b0);
+}
+#endif /* SUPPORTS_UTF8 */
