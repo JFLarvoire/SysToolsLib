@@ -18,13 +18,15 @@
 *		    Improved error reporting when switching code pages.	      *
 *		    Added option -v to display verbose information.	      *
 *		    Version 1.4.					      *
+*    2019-01-16 JFL Avoid outputing bytes \x80-\xFF by default for UTF-8 CPs. *
+*		    Version 1.4.1.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4"
-#define PROGRAM_DATE    "2019-01-14"
+#define PROGRAM_VERSION "1.4.1"
+#define PROGRAM_DATE    "2019-01-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -135,9 +137,21 @@ int main(int argc, char *argv[]) {
 #endif /* SUPPORTS_UTF8 */
 #ifdef __unix__
   char *pszLang = getenv("LANG");
-
-  if (pszLang && strstr(pszLang, "UTF-8")) isUTF8 = TRUE;
 #endif
+
+#if SUPPORTS_UTF8
+#ifdef _WIN32
+  if (uCP0 == 65001) isUTF8 = TRUE;
+#endif
+#ifdef __unix__
+  if (pszLang && strstr(pszLang, "UTF-8")) isUTF8 = TRUE;
+  /* Note that Unix XTerm considers bytes \x80-\x9F as control sequences
+     equivalent to ESC @, ESC A, ESC B, ..., ESC _ . 
+     Do not output them, else there may be unpredictable effects on the console,
+     depending on what follows. */
+#endif
+  if (isUTF8) iLast = 0x7F;
+#endif /* SUPPORTS_UTF8 */
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
@@ -246,7 +260,9 @@ int main(int argc, char *argv[]) {
     int iDigits = 2;
     for (i=0x100; i; i<<=4) if (iBase >= i) iDigits += 1;
     if (nBlock) printf(EOL);
-    if (iVerbose || (iFirst != 0) || (iLast != 0xFF)) printf("[0x%X-0x%X]\n", iBase, iBase + 0x7F);
+    if (iVerbose || (iFirst != 0) || ((iLast != 0x7F) && (iLast != 0xFF))) {
+      printf("[0x%X-0x%X]\n", iBase, iBase + 0x7F);
+    }
     for (j=0; j<16; j++) {
       for (i=0; i<8; i++) {
 	int k, l;
