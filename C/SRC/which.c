@@ -77,13 +77,15 @@
 *		    to display comments about programs excluded.	      *
 *		    Fixed an error message when run in WIN32 LXSS bash.exe.   *
 *		    Version 1.10.					      *
+*    2019-01-16 JFL Added option -- to stop processing switches.              *
+*		    Version 1.11.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.10"
-#define PROGRAM_DATE    "2018-03-22"
+#define PROGRAM_VERSION "1.11"
+#define PROGRAM_DATE    "2019-01-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -231,6 +233,7 @@ shell_t shell = DEFAULT_SHELL;
 
 char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);
+int IsSwitch(char *pszArg);
 int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iSearchFlags);
 int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iSearchFlags);
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
@@ -286,15 +289,16 @@ int main(int argc, char *argv[]) {
   int iVerbose = FALSE;
   int iInternal = -1;
   int iSearchInCD = SEARCH_IN_CD;   /* TRUE = Search in the current directory first */
+  int iProcessSwitches = TRUE;
 
   for (iArg=1; iArg<argc; iArg++) { /* Process all command line arguments */
     arg = argv[iArg];
-    if (   (*arg == '-')	    /* Process switches first */
-#if defined(_MSDOS) || defined(_WIN32)
-	|| (*arg == '/')
-#endif
-      ) {
+    if (iProcessSwitches && IsSwitch(arg)) {
       char *opt = arg+1;
+      if (   streq(opt, "-")) {		/* Stop processing switches */
+	iProcessSwitches = FALSE;
+	continue;
+      }
       if (   streq(opt, "?")		/* Display a help screen */
 	  || streq(opt, "h")
 	  || streq(opt, "-help")) {
@@ -520,6 +524,7 @@ Which version %s - Find which program will be executed\n\
 Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 \n\
 Options:\n\
+  --    Stop processing switches.\n\
   -?    Display this help message and exit.\n\
   -a    Display all matches. Default: Display only the first one.\n\
   -i    Search for the shell internal commands first. (Default for cmd.exe)\n\
@@ -549,6 +554,36 @@ Notes:\n\
 , version(0));
 
   exit(0);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
 }
 
 /*---------------------------------------------------------------------------*\
