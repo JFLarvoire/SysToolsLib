@@ -150,13 +150,15 @@
 *		    Fixed 2018-12-18 bug causing Error: Not enough arguments  *
 *		    Corrected assignments in conditional expressions.	      *
 *		    Version 3.8.    					      *
+*    2019-01-16 JFL Fixed the processing of option --. Really.                *
+*		    Version 3.8.1.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.8"
-#define PROGRAM_DATE    "2019-01-10"
+#define PROGRAM_VERSION "3.8.1"
+#define PROGRAM_DATE    "2019-01-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -422,17 +424,18 @@ int main(int argc, char *argv[]) {
   char *target;
   int nErrors = 0;
   int iExit = 0;
+  int iProcessSwitches = TRUE;
 
   /* Extract the program names from argv[0] */
   GetProgramNames(argv[0]);
 
   for (iArg = 1; iArg<argc; iArg += 1) {
     arg = argv[iArg];
-    if (IsSwitch(arg)) {
+    if (iProcessSwitches && IsSwitch(arg)) {
       char *opt = arg + 1;
       DEBUG_PRINTF(("Switch = %s\n", arg));
-      if (streq(arg, "--")) {	    /* Force end of switches */
-	iArg += 1;
+      if (   streq(opt, "-")) {	    /* Force end of switches */
+	iProcessSwitches = FALSE;
 	break;
       }
       if (   streq(opt, "h")	    /* Display usage */
@@ -566,10 +569,10 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       fprintf(stderr, "Warning: Unrecognized switch %s ignored.\n", arg);
+      continue;
     }
-    else { /* It's not a switch */
-      break;
-    }
+    /* This is an argument, not a switch */
+    break;	/* All arguments are processed below, outside of this loop */
   }
 
   if ( (argc - iArg) < 1 ) {
@@ -714,28 +717,33 @@ Switches:\n\
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    return (   (*pszArg == '-')
-#ifndef __unix__
-            || (*pszArg == '/')
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
 #endif
-           ); /* It's a switch */
-    }
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
