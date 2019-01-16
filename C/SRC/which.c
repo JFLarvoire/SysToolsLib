@@ -345,10 +345,10 @@ int main(int argc, char *argv[]) {
 	exit(0);
       }
       printf("Error: Invalid switch ignored: %s\n", arg);
-      usage();
-    } else {			    /* This is not a switch */
-      break;
+      continue;
     }
+    /* This is an argument, not a switch */
+    break;	/* All arguments are processed below, outside of this loop */
   }
 
   /* Find in which shell we're running. PowerShell and cmd search programs differently. */ 
