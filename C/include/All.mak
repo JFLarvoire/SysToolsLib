@@ -137,6 +137,9 @@
 #    2017-10-22 JFL Changed OUTDIR default to the bin subdirectory.           #
 #    2017-10-30 JFL Corrected a typo in the help message.                     #
 #    2017-11-13 JFL Added inference rules to build a DLL.		      #
+#    2018-12-28 JFL Added macros defining standard extensions for Windows.    #
+#		    (Useful for Files.mak that work for Unix too.)	      #
+#		    Exclude *.bak, *~, *# from the source file distribution.  #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -314,6 +317,10 @@ MAKEFLAGS_=/NOLOGO $(MAKEFLAGS_)
 !ENDIF
 !UNDEF MAKEFLAGS__
 SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to this make file
+
+# Standard file extensions for Windows. Useful for Files.mak that work for Unix too
+_EXE = .exe
+_OBJ = .obj
 
 ###############################################################################
 #									      #
@@ -593,7 +600,7 @@ $(ZIPFILE): $(ZIPSOURCES)
     $(MSG) Building $@ ...
     if exist $@ del $@
     set PATH=$(PATH);C:\Program Files\7-zip
-    7z.exe a $@ $**
+    7z.exe a -xr!*.bak -xr!*~ -xr!*# $@ $**
     $(MSG) ... done
 
 dist zip: $(ZIPFILE)
