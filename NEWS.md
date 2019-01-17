@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-01-16
+### Changed
+- C/SRC/which.c: Added option -- to stop processing switches.
+- C/SRC/chars.c: Avoid outputing bytes \x80-\xFF by default for UTF-8 CPs.
+- C/Include/All.mak:
+  * Added macros defining standard extensions for Windows. Useful for OS-independent Files.mak that work for Unix too.
+  * Exclude *.bak, *~, *# from the source file distribution.
+
 ## [Unreleased] 2019-01-14
 ### Changed
 - C/SRC/dirc.c:
