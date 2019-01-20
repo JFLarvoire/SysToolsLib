@@ -140,6 +140,9 @@
 #    2018-12-28 JFL Added macros defining standard extensions for Windows.    #
 #		    (Useful for Files.mak that work for Unix too.)	      #
 #		    Exclude *.bak, *~, *# from the source file distribution.  #
+#    2019-01-18 JFL The .exe extension is now optional for PROGRAMS list items.
+#		    Added the BUILDING_$(PROGRAM) mechanism for conditionally #
+#		    specifying SOURCES in the NMakefile calling this All.mak. #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -179,6 +182,12 @@ MAKEDEFS=$(MAKEDEFS) "WINVER=$(WINVER)"
 !ENDIF
 !IF DEFINED(MEM)	# Memory model for DOS compilation. T|S|C|D|L|H. Default=S.
 MAKEDEFS=$(MAKEDEFS) "MEM=$(MEM)"
+!ENDIF
+!IF DEFINED(PROGRAM)	# Specify a program name
+MAKEDEFS=$(MAKEDEFS) "PROGRAM=$(PROGRAM)"
+!ENDIF
+!IF DEFINED(SOURCES)	# Specify a list of sources
+MAKEDEFS=$(MAKEDEFS) "SOURCES=$(SOURCES)"
 !ENDIF
 
 MAKEPATH=.
@@ -530,10 +539,16 @@ module_name:
     @echo $(MODULE)
 !ENDIF
 
+all_case1:
+    @echo Applying All.mak all rule first case: DEFINED(ALL) or DEFINED(DIRS)
+
+all_case2:
+    @echo Applying All.mak all rule second case: Try using PROGRAMS
+
 !IF DEFINED(ALL) || DEFINED(DIRS)
-all: $(REQS) $(DIRS) $(ALL)
+all: all_case1 $(REQS) $(DIRS) $(ALL)
 !ELSE # Another scheme for defining all goals, using $(PROGRAMS)
-all: $(REQS) # Having a batch file is necessary for dynamically updating the *FAILED variables.
+all: all_case2 $(REQS) # Having a batch file is necessary for dynamically updating the *FAILED variables.
     cmd /c <<"$(TMP)\build_all.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
         @echo off
         setlocal EnableExtensions EnableDelayedExpansion
@@ -548,13 +563,17 @@ all: $(REQS) # Having a batch file is necessary for dynamically updating the *FA
 	)
         set "NFAILED=0"
         set "WHAT_FAILED="
-        for %%f in (!PROGRAMS!) do (
-	    $(HEADLINE) Building %%~f
-	    $(SUBMAKE) "OS=$(OS)" "%%~f" "Debug\%%~f"
+        for %%p in (!PROGRAMS!) do (
+	    $(HEADLINE) Building %%~p
+	    :# Make the .exe extension optional in PROGRAMS elements
+	    set "P=%%~p"
+	    if "%%~p"=="%%~np" set "P=!P!.exe"
+	    echo $(SUBMAKE) "OS=$(OS)" "BUILDING_%%~np=1" "!P!" "Debug\!P!"
+		 $(SUBMAKE) "OS=$(OS)" "BUILDING_%%~np=1" "!P!" "Debug\!P!"
 	    if errorlevel 1 (
 		set /A "NFAILED+=1"
-		set "WHAT_FAILED=!WHAT_FAILED! %%~f"
-		echo All.mak: %%~f build failed
+		set "WHAT_FAILED=!WHAT_FAILED! %%~p"
+		echo All.mak: %%~p build failed
 	    )
         )
         if defined WHAT_FAILED set "WHAT_FAILED=%WHAT_FAILED:~1%"
@@ -607,8 +626,23 @@ dist zip: $(ZIPFILE)
 
 # List PROGRAMS defined in Files.mak
 list_programs:
-    @set PROGRAMS=$(PROGRAMS)
-    @if defined PROGRAMS echo $(PROGRAMS)
+    cmd /c <<"$(TMP)\list_programs.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
+        @echo off
+        setlocal EnableExtensions EnableDelayedExpansion
+	set "PROGRAMS=$(PROGRAMS)"
+	if defined PROGRAMS (
+	    set "PROGRAMS="
+	    for %%p in ($(PROGRAMS)) do (
+	        :# Add a .exe extension for those that don't have one.
+		set "P=%%~p"
+		if "%%~p"=="%%~np" set "P=!P!.exe"
+		set "PROGRAMS=!PROGRAMS! !P!"
+	    )
+	    :# Remove the extra space added in the first loop
+	    echo !PROGRAMS:~1!
+	)
+	exit /b
+<<
 
 # Erase all output files
 clean mostlyclean distclean:
