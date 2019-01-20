@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-01-20
+### Changed
+- C/include/*:
+  * Added a mechanism to declare multiple PROGRAMS sources in Files.mak.
+  * Automate the installation of configure.bat and make.bat proxies in all build directories.
+
 ## [Unreleased] 2019-01-16
 ### Changed
 - C/SRC/which.c: Added option -- to stop processing switches.
