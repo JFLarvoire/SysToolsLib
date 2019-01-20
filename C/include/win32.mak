@@ -634,12 +634,17 @@ $(OBJECTS:+=)
 # $(PROGRAM).mak and/or Files.mak may define macros SOURCES, OBJECTS, LIBRARIES, and PROGRAM.
 # These make files are intended to be OS-independant, and be used in both Windows and Unix build environments. 
 # These macros in turn allow the following rules to work, and build more complex programs with more than one source.
+TMPMAK=$(TMP)\$(T)_vars.$(PID).mak # Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak")
 !  MESSAGE Getting specific rules from $(PROGRAM).mak.
 !  INCLUDE $(PROGRAM).mak
 !ELSE IF EXIST("Files.mak")
 !  MESSAGE Getting specific rules from Files.mak.
 !  INCLUDE Files.mak
+!  IF DEFINED(PROGRAM) && ![$(STINCLUDE)\GetDefs.bat Files.mak $(PROGRAM) >"$(TMPMAK)" 2>NUL]
+!    MESSAGE Getting specific definitions for $(PROGRAM) from Files.mak.
+!    INCLUDE $(TMPMAK)
+!  ENDIF
 !ELSE
 !  MESSAGE There are no specific rules.
 EXENAME=_-_-_-_.exe	# An unlikely name, to prevent the $(EXENAME) dependency rule below from firing.
