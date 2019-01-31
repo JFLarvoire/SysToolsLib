@@ -4223,6 +4223,24 @@ exit /b
 exit /b
 
 :#----------------------------------------------------------------------------#
+
+:test_pipe0
+cmd /c "exit /b"
+exit /b
+
+:test_pipe1
+cmd /c "cmd /c break 1>&4 4>&6 | cmd /c break 0>&3 3>&6"
+exit /b
+
+:test_pipe2
+cmd /c "doskey 1>&4 4>&6 | doskey 0>&3 3>&6"
+exit /b
+
+:test_pipe3
+cmd /c "rundll32 1>&4 4>&6 | rundll32 0>&3 3>&6"
+exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        Main                                                      #
 :#                                                                            #
