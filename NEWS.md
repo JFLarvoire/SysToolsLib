@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-01-31
+### Fixed
+- Batch/regx.bat: Fixed the dir command when the pathname contains spaces.
+
 ## [Unreleased] 2019-01-20
 ### Changed
 - C/include/*:
