@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-02-05
+### New
+- Batch/AutoRun.cmd: Manage multiple cmd.exe AutoRun scripts.
+- Batch/DumpLink.bat: Display the contents of Windows Explorer *.lnk shortcuts.
+
+### Changed
+- Batch/AutoRun.cmd.d/history.bat: Does not run 'doskey /history' directly, but instead create a doskey macro that does.
+
 ## [Unreleased] 2019-01-31
 ### Fixed
 - Batch/regx.bat: Fixed the dir command when the pathname contains spaces.
