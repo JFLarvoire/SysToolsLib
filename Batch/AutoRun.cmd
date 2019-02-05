@@ -47,6 +47,9 @@
 :#   2019-02-03 JFL Created this script.                                      #
 :#   2019-02-04 JFL Added options -a and -c.                                  #
 :#		    Make sure bindir* directories are in the PATH.            #
+:#   2019-02-05 JFL Fixed a problem with %CMDCMDLINE%, that caused errors.    #
+:#		    Enforce the fact that AutoRun scripts must be output      #
+:#		    anything, nor change directory.                           #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -255,18 +258,25 @@ exit /b 1
 :#----------------------------------------------------------------------------#
 :# Initialize cmd.exe every time a new instance starts
 :start
-:# if not defined bindir.noarch goto :init_now &:# It's never been done, so it's needed
+:# if not defined bindir_x86 goto :init_now &:# It's never been done, so it's needed
 :# Caution: The AutoRun script is also invoked when running: for /f %%l in ('some command') do ...
 :#          We do not want to run the initializations in that case, as this can have
 :#	    unexpected side effects on the parent script variables.
+:#	    Also this severly affects the performance of scripts that heavily sue that kind of for /f.
 :# TO DO: The actual command for running a new cmd instance is available in the "Command Prompt.lnk" shortcut.
 :#        It would be nice to extract it from there, and compare it to %CMDCMDLINE%.
 :#        This is feasible using JScript WshShell.Createshortcut().
 :#        But the performance penalty each time a cmd.exe starts would not be acceptable,
 :#        unless we do it only once at install time.
 :# Workaround for now: Check that a full quoted COMSPEC was used, _not_ using /c.
-call :SplitArgs %CMDCMDLINE%
-if not "!ARG0!"==^""%COMSPEC%"^" (
+:# Important: Do not use %CMDCMDLINE%, as is may contain unprotected | & > < characters. Use !CMDCMDLINE! instead.
+set "CMD=!CMDCMDLINE!"
+set "CMD=!CMD:|=\x7C!"
+set "CMD=!CMD:>=\x3E!"
+set "CMD=!CMD:<=\x3C!"
+set "CMD=!CMD:&=\x36!"
+call :SplitArgs !CMD!
+if "!ARG0!"=="%COMSPEC%" ( :# for /f invokes %COMSPEC% without quotes, whereas new shells' ARG0 have quotes.
   %DEBUG.LOG% :# This is not a new top cmd.exe instance
   exit /b 0
 )
@@ -277,6 +287,12 @@ if /i "!ARG1!"=="/c" (
 :init_now
 %DEBUG.LOG% :# This is a new top cmd.exe instance. Initialize it.
 
+if exist "%TEMP%\AutoRun.log" (
+  set "CAPTURE_OUTPUT=>>"%TEMP%\AutoRun.log" 2>&1"
+) else (
+  set "CAPTURE_OUTPUT=>NUL 2>&1"
+)
+
 :# Now on, every variable will be created in the parent cmd.exe instance
 endlocal & (
   :# Create common PATH variables
@@ -285,7 +301,8 @@ endlocal & (
   :# Call all extension scripts in AutoRun.cmd.d directories
   for %%p in ("%AUTORUN.D[HKLM]%" "%AUTORUN.D[HKCU]%") do if exist "%%~p" (
     for %%b in ("%%~p\*.bat" "%%~p\*.cmd") do (
-      call "%%~b"
+      call "%%~b" %CAPTURE_OUTPUT%
+      cd /d "%CD%" &rem Make sure the current directory is not changed
     )
   )
 )
