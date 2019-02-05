@@ -11,6 +11,11 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ### Changed
 - Batch/AutoRun.cmd.d/history.bat: Does not run 'doskey /history' directly, but instead create a doskey macro that does.
+- Batch/AddPath.bat: Added option -q for a quiet mode.
+- Batch/AddPaths.bat: Only add WIN64 paths when running on an AMD64 processor.  
+  Conversely add DOS path when running on an x86 processor.  
+  Display the result path list just once in the end.  
+  Added option -r to remove all my personal paths.
 
 ## [Unreleased] 2019-01-31
 ### Fixed
