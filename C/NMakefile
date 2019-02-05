@@ -37,6 +37,7 @@
 #    2018-01-25 JFL Add 32-bits *.exe from WIN32, if not available in WIN95.  #
 #    2018-03-17 JFL Generalized the release of extra tools like Ag.           #
 #    2018-11-20 JFL 'make release' adds the LICENSE file.                     #
+#    2019-02-05 JFL 'make release' now support scripts in subdirectories.     #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -146,7 +147,8 @@ release:
 	  set "%%l=:" &:# The list must not be empty, else the search will fail in the second part.
 	  for /f "delims=" %%f in ('find /i "%%l\" ^<Scripts.lst') do (
 	    echo From Scripts.lst: %%f
-	    set %%l=!%%l! "%%~nxf"
+	    set "F=%%f"
+	    set %%l=!%%l! "!F:%%l\=!"
 	  )
 	  :# Also add the libraries from ScriptLibs.lst, but only if not already defined in Scripts.lst.
 	  for /f "delims=" %%f in ('find /i "%%l\" ^<ScriptLibs.lst') do (
