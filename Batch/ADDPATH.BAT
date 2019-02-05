@@ -32,13 +32,14 @@
 :#                  Renamed option -m as -s, and added option -m to move a p. #
 :#   2015-01-13 JFL Find setx.exe wherever it is in the PATH.                 #
 :#                  Bug fix: reg.exe option /f works only if it comes first.  #
+:#   2018-12-21 JFL Added option -q for a quiet mode.                         #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2015-01-13"
+set "VERSION=2018-12-21"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "ARG0=%~f0"
@@ -55,6 +56,7 @@ echo   -?         Display this help
 echo   -b PATH    Insert PATHS just before PATH. Default: Append to the end
 echo   -m PATH    Move PATH to the end of the path
 echo   -p         Get/Set the local cmd.exe path. (Default if no -m or -u)
+echo   -q         Quiet mode: Don't display the updated path list in the end
 echo   -r PATH    Remove PATH from the path
 echo   -s         Get/Set the system's default path. (Must run as administrator)
 echo   -u         Get/Set the user's default path.
@@ -74,6 +76,7 @@ goto :eof
 set "EXEC="
 set "NOEXEC=0"
 set "VERBOSE=0"
+set "QUIET=0"
 set "OBJECT=LocalPath"
 set "MENVKEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
 set "UENVKEY=HKCU\Environment"
@@ -93,6 +96,7 @@ if "%~1"=="-b" set "BEFORE=%~2" & shift & goto :next_arg
 if "%~1"=="-d" set "METHOD=Remove" & set "VALUE=%~2" & goto :next_2nd_arg
 if "%~1"=="-m" set "METHOD=Move" & set "VALUE=%~2" & goto :next_2nd_arg
 if "%~1"=="-p" set "OBJECT=LocalPath" & goto :next_arg
+if "%~1"=="-q" set "QUIET=1" & goto :next_arg
 if "%~1"=="-r" set "METHOD=Remove" & set "VALUE=%~2" & goto :next_2nd_arg
 :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
 if "%~1"=="-s" set "OBJECT=MasterPath" & set "SETXOPT=-M" & set "MKEY=%MENVKEY%" & set "OWNER=system" & goto :next_arg
@@ -140,7 +144,7 @@ if "!Path2!"=="!Path!" (
 )
 :LocalPath.Set
 :# endlocal is necessary for returning the modified value back to the caller
-endlocal & %EXEC% set "Path=%Path%" & if "%NOEXEC%"=="0" goto :LocalPath.Echo
+endlocal & %EXEC% set "Path=%Path%" & if "%NOEXEC%"=="0" if "%QUIET%"=="0" goto :LocalPath.Echo
 goto :eof
 
 :LocalPath.Remove1
@@ -222,7 +226,7 @@ if "%NOEXEC%"=="0" (	:# Normal execution mode
 ) else (		:# NoExec mode. Just echo the command to execute.
   echo %CMD%
 )
-if "%NOEXEC%"=="0" goto :MasterPath.Echo
+if "%NOEXEC%"=="0" if "%QUIET%"=="0" goto :MasterPath.Echo
 goto :eof
 
 :MasterPath.Remove1
