@@ -12,13 +12,17 @@
 :#                                                                            #
 :#  History                                                                   #
 :#   2013-07-24 JFL Created this script.			              #
+:#   2018-12-21 JFL Only add WIN64 paths when running on an AMD64 processor.  #
+:#                  Conversely add DOS path when running on an x86 processor. #
+:#                  Display the result path list just once in the end.        #
+:#                  Added option -r to remove all my personal paths.          #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2013-07-24"
+set "VERSION=2018-12-21"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "SDRV=%~d0"
@@ -33,6 +37,7 @@ echo Usage: %SCRIPT% [OPTIONS]
 echo.
 echo Options:
 echo   -?         Display this help
+echo   -r         Remove all paths added by this script
 echo   -V         Display the script version and exit
 echo   -X         Display the commands generated and exit
 echo.
@@ -53,29 +58,58 @@ shift
 if .%1.==.. goto :go
 if "%~1"=="/?" goto :Help
 if "%~1"=="-?" goto :Help
+if "%~1"=="-r" call :Remove & goto :addpath.exit
 if "%~1"=="-v" set "VERBOSE=1" & goto :next_arg
 if "%~1"=="-V" (echo.%VERSION%) & goto :eof
 if "%~1"=="-X" set "CALL=echo" & set "EXEC=rem" & goto :next_arg
 goto :next_arg
 
 :Add1Path.Init
-for %%I in (addpath.bat) do set "ADDPATH=%%~$PATH:I"
-if not "!ADDPATH!"=="" (	:# addpath is in the PATH. No need to specify its path.
-  set ADDPATH=addpath
-) else (			:# Else use the one in the same directory as AddPaths.bat
-  set "ADDPATH=%SPATH%\addpath"		&:# Assume there's no space in %SPATH%, so no need for quotes.
-  if not "!ADDPATH!"=="!ADDPATH: =!" set ADDPATH="%SPATH%\addpath"
-)
+:# Look for addpath.bat in the same directory as this script
+set "ADDPATH=%SPATH%\addpath.bat"
+:# Else look for addpath.bat in the PATH
+if not exist "%ADDPATH%" for %%I in (addpath.bat) do set "ADDPATH=%%~$PATH:I"
+:# If it's not there either, report the error
+if not defined ADDPATH >&2 echo Error: Can't find addpath.bat & exit /b 1
+:# Note: Even if addpath.bat is in the PATH, do not use its unqualified name,
+:# because this would break during paths removal.
 goto :eof
 
 :Add1Path
+set "RETCODE=0"
 if exist "%~1" (
-  %EXEC% echo.
-  %CALL% %ADDPATH%    "%~1"
-  %EXEC% echo.
-  %CALL% %ADDPATH% -s "%~1"
+  %CALL% %ADDPATH% -q    "%~1"
+  if errorlevel 1 set "RETCODE=1"
+  %CALL% %ADDPATH% -q -s "%~1"
+  if errorlevel 1 set "RETCODE=1"
 )
-goto :eof
+exit /b %RETCODE%
+
+:Remove
+call :Add1Path.Init
+if errorlevel 1 exit /b
+set "RETCODE=0"
+for %%p in (
+  "%SPATH%\Win64"
+  "%SPATH%\Win32"
+  "%SPATH%"
+  "%SPATH%\DOS"
+  "%SPATH%\ezWinPorts\Win64\bin"
+  "%SPATH%\ezWinPorts\Win32\bin"
+  "%SPATH%\UnxUtils\usr\local\wbin"
+  "%SPATH%\GnuWin32\bin"
+  "%SDRV%\Windows\SUA\common"
+  "%SDRV%\MinGW\msys\1.0\bin"
+  "%SPATH%\SysInternals"
+) do (
+  %CALL% %ADDPATH% -q    -r "%%~p"
+  if errorlevel 1 set "RETCODE=1"
+  %CALL% %ADDPATH% -q -s -r "%%~p"
+  if errorlevel 1 set "RETCODE=1"
+)
+:# Display the result path list in the end
+%CALL% %ADDPATH%
+exit /b %RETCODE%
 
 :go
 :# Check that the addpaths.bat directory contains the other basic tools we need.
@@ -84,18 +118,26 @@ if not exist "%SPATH%\addpath.bat" (
   exit /b 1
 )
 
+set "IF64=if [%PROCESSOR_ARCHITECTURE%]==[AMD64]"
+set "IF32=if [%PROCESSOR_ARCHITECTURE%]==[x86]"
+
 :# Add all JFL tools collection paths, with the hightest priority paths first
 call :Add1Path.Init
-call :Add1Path "%SPATH%\Win64"			&:# Windows 64-bits tools
-call :Add1Path "%SPATH%\Win32"			&:# Windows 32-bits tools
-call :Add1Path "%SPATH%"			&:# Other types of Windows programs and scripts
-call :Add1Path "%SPATH%\ezWinPorts\Win64\bin"	&:# Unix tools 64-bits ports from ezwinports.sourceforge.net
-call :Add1Path "%SPATH%\ezWinPorts\Win32\bin"	&:# Unix tools 32-bits ports from ezwinports.sourceforge.net
-call :Add1Path "%SPATH%\UnxUtils\usr\local\wbin"&:# Unix tools ports from unxutils.sourceforge.net
-call :Add1Path "%SPATH%\GnuWin32\bin"		&:# Unix tools ports from gnuwin32.sourceforge.net
-call :Add1Path "%SDRV%\Windows\SUA\common"	&:# Unix tools ports from Microsoft SUA (SubSystem for Unix Applications)
-call :Add1Path "%SDRV%\MinGW\msys\1.0\bin"	&:# Unix tools ports from mingw.sourceforge.net
-call :Add1Path "%SPATH%\SysInternals"		&:# Microsoft SysInternals tools
+if errorlevel 1 exit /b
+%IF64% call :Add1Path "%SPATH%\Win64"			&:# Windows 64-bits tools
+       call :Add1Path "%SPATH%\Win32"			&:# Windows 32-bits tools
+       call :Add1Path "%SPATH%"				&:# Other types of Windows programs and scripts
+%IF32% call :Add1Path "%SPATH%\DOS"			&:# DOS 16-bits tools. Must be AFTER "%SPATH%", as there's another addpath.bat there for DOS only.
+%IF64% call :Add1Path "%SPATH%\ezWinPorts\Win64\bin"	&:# Unix tools 64-bits ports from ezwinports.sourceforge.net
+       call :Add1Path "%SPATH%\ezWinPorts\Win32\bin"	&:# Unix tools 32-bits ports from ezwinports.sourceforge.net
+       call :Add1Path "%SPATH%\UnxUtils\usr\local\wbin"	&:# Unix tools ports from unxutils.sourceforge.net
+       call :Add1Path "%SPATH%\GnuWin32\bin"		&:# Unix tools ports from gnuwin32.sourceforge.net
+       call :Add1Path "%SDRV%\Windows\SUA\common"	&:# Unix tools ports from Microsoft SUA (SubSystem for Unix Applications)
+       call :Add1Path "%SDRV%\MinGW\msys\1.0\bin"	&:# Unix tools ports from mingw.sourceforge.net
+       call :Add1Path "%SPATH%\SysInternals"		&:# Microsoft SysInternals tools
+:# Display the result path list in the end
+%CALL% %ADDPATH%
 
 :# endlocal is necessary for returning the modified value back to the caller
+:addpath.exit
 endlocal & %EXEC% set "Path=%Path%"
