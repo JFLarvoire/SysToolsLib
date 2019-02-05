@@ -221,7 +221,7 @@ exit /b
 set "ECHO.COMMENT=echo"
 set "DEBUG.LOG=rem"
 set "DEBUG.LOG=if exist "%TEMP%\AutoRun.log" >>"%TEMP%\AutoRun.log" echo"
-%DEBUG.LOG% :#--------------------------------- %SCRIPT% --------------------------------#
+%DEBUG.LOG% :#------------------- %SCRIPT% - %DATE% %TIME% -------------------#
 %DEBUG.LOG% set "CMDCMDLINE=!CMDCMDLINE!"
 %DEBUG.LOG% set "%%0 %%*=%0 %*"
 set "FORCE=0"
