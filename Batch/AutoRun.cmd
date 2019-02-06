@@ -50,13 +50,14 @@
 :#   2019-02-05 JFL Fixed a problem with %CMDCMDLINE%, that caused errors.    #
 :#		    Enforce the fact that AutoRun scripts must be output      #
 :#		    anything, nor change directory.                           #
+:#   2019-02-06 JFL Fixed routine :query in Windows XP.                       #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-02-05"
+set "VERSION=2019-02-06"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -168,7 +169,7 @@ endlocal & exit /b
 :query %1=Hive %2=OutputVarName
 setlocal EnableExtensions EnableDelayedExpansion
 set "KEY=%1\Software\Microsoft\Command Processor"
-for /f "skip=2 tokens=2,3*" %%a in ('reg query "!KEY!" /v "AutoRun" 2^>NUL') do (
+for /f "tokens=2,3*" %%a in ('reg query "!KEY!" /v AutoRun 2^>NUL ^| findstr AutoRun') do (
   set "TYPE=%%a"
   set "VALUE=%%b"
   if "%~2"=="" echo !USER[%1]!: !VALUE!
@@ -224,7 +225,7 @@ exit /b
 set "ECHO.COMMENT=echo"
 set "DEBUG.LOG=rem"
 set "DEBUG.LOG=if exist "%TEMP%\AutoRun.log" >>"%TEMP%\AutoRun.log" echo"
-%DEBUG.LOG% :#------------------- %SCRIPT% - %DATE% %TIME% -------------------#
+%DEBUG.LOG% :#------------ %DATE% %TIME% - %SFULL% ------------#
 %DEBUG.LOG% set "CMDCMDLINE=!CMDCMDLINE!"
 %DEBUG.LOG% set "%%0 %%*=%0 %*"
 set "FORCE=0"
