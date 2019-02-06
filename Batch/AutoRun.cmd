@@ -351,3 +351,4 @@ if /i "%bindir_x86%" neq "%bindir%" call :PutInPath "%bindir_x86%"
 
 :# Done
 exit /b
+
