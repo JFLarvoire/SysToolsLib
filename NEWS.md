@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-02-06
+### New
+- Tcl/urldecode.tcl: An old script for decoding URLs encoded with %XX hexadecimal codes.
+- Batch/AutoRun.cmd.d/pid.bat: AutoRun script defining a %PID% Process ID variable in cmd.exe, like the $$ variable in bash.
+
 ## [Unreleased] 2019-02-05
 ### New
 - Batch/AutoRun.cmd: Manage multiple cmd.exe AutoRun scripts.

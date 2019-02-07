@@ -9,6 +9,7 @@ Batch\ADDPATH.BAT
 Batch\AddPaths.bat
 Batch\AutoRun.cmd
 Batch\AutoRun.cmd.d\history.bat
+Batch\AutoRun.cmd.d\pid.bat
 Batch\CheckEOL.bat
 Batch\DIRCC.BAT
 Batch\DIRDIR.BAT
@@ -75,4 +76,5 @@ Tcl\show.tcl
 Tcl\sml.tcl
 Tcl\unixtime.tcl
 Tcl\upper.tcl
+Tcl\urldecode.tcl
 Tcl\xpath.tcl

@@ -85,6 +85,7 @@ remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				|
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
 u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `u2w UnixProg.c`
 upper.tcl	| -WL	| Convert text to UPPER CASE.								| `12 upper`
+urldecode.tcl	| -WL	| Decode URLs encoded with %XX hexadecimal codes.					| `urldecode "http://dot.com/A%20cryptic%20name.htm"`
 w2u.bat		| -W-	| Convert Windows End-Of-Lines (CR LF) to Unix End-Of-Lines (LF).			| `w2u WindowsProg.c`
 
 ## Manage the Windows system
@@ -94,13 +95,15 @@ Name				| OS   	| Description										| Example
 25.bat				| DW-	| Switches the console to 25 lines x 80 columns. (CGA mode)				| `25`
 43.bat				| DW-	| Switches the console to 43 lines x 80 columns. (EGA mode)				| `43`
 50.bat				| DW-	| Switches the console to 50 lines x 80 columns. (VGA mode)				| `50`
+AutoRun.cmd			| -W-	| Manage multiple cmd.exe AutoRun scripts. See [AutoRun README](../Batch/AutoRun.cmd.d/README.md) | `AutoRun -i`
 cascade.tcl			| -W-	| Align a set of similar windows regularly. Uses Twapi.					| `cascade notepad`
 Disable-IPv6Components.ps1	| -W-	| Disables Windows IPv6 component. Useful for diagnosing networking issues.		|
 driver.exe			| -W-	| Manage Windows 9X and 2000+ drivers.							|
+DumpLink.bat			| -W-	| Display the contents of *.lnk shortcuts (current directory, and target program)	| `DumpLink "%APPDATA%\Microsoft\Windows\Start Menu\Programs\System Tools\Command Prompt.lnk"`
 Enable-IPv6Components.ps1	| -W-	| Enables Windows IPv6 component. Useful for diagnosing networking issues.		|
 font.exe                 	| -W-	| Display information about available fonts.                              		| `font -f` &:# Enumerate fixed-width fonts usable in the console
 Get-ProductKey.ps1		| -W-	| Display the product key used for activating Windows.					|
-history.bat			| -W-	| Display the list of all previous commands entered at the cmd prompt.			| `history`
+history				| -W-	| Display the list of all previous commands entered at the cmd prompt. (See [AutoRun macros](../Batch/AutoRun.cmd.d/)) | `history \| findstr /i make`
 hosts.bat			| -W-	| Edit the hosts file with notepad							| `hosts` &:# Must be run as administrator, else the hosts file can't be saved
 IESec.ps1			| -W-	| Display Internet Explorer security mode settings.					|
 IPcfg.bat			| -W-	| Front end to ipconfig.exe, filtering its output to make it more readable. Numerous options to select the information needed.	| `ipcfg` &:# Display just Ethernet and Wifi interfaces
