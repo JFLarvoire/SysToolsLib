@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-02-11
+### New
+- C/include/arm64.mak: New make file to build ARM64 executables.
+
+### Changed
+- C/include/configure.bat: Added support for Visual Studio 2017 and 2019 previews.
+  Fixed the detection of ARM, and added that of ARM64 tools.
+- C/.../\*mak\*: Fixed the support for ARM, and added support for ARM64 tools.
+
 ## [Unreleased] 2019-02-06
 ### New
 - Tcl/urldecode.tcl: An old script for decoding URLs encoded with %XX hexadecimal codes.

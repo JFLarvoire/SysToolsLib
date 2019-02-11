@@ -25,6 +25,7 @@
 #    2016-11-07 JFL Do not copy include files to OUTDIR anymore.	      #
 #    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
 #    2017-02-24 JFL Renamed the special "goal_name" as "module_name".	      #
+#    2019-02-08 JFL Added support for ARM and ARM64.			      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -74,6 +75,16 @@ REQS_WIN64=1
 !ELSE
 REQS_WIN64=0
 !ENDIF
+!IF DEFINED(ARM_CC) && EXIST("$(STINCLUDE)\ARM.mak") && DEFINED(ARM_WINSDK)
+REQS_ARM=1
+!ELSE
+REQS_ARM=0
+!ENDIF
+!IF DEFINED(ARM64_CC) && EXIST("$(STINCLUDE)\ARM64.mak") && DEFINED(ARM64_WINSDK)
+REQS_ARM64=1
+!ELSE
+REQS_ARM64=0
+!ENDIF
 
 !IF !DEFINED(OS) || "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
 OS=
@@ -94,6 +105,12 @@ OS=$(OS) IA64
 !ENDIF
 !IF $(REQS_WIN64)
 OS=$(OS) WIN64
+!ENDIF
+!IF $(REQS_ARM)
+OS=$(OS) ARM
+!ENDIF
+!IF $(REQS_ARM64)
+OS=$(OS) ARM64
 !ENDIF
 !ENDIF
 !IF DEFINED(MESSAGES)
@@ -171,6 +188,22 @@ ALL = \
      explain_win64_reqs \
 !ENDIF
 !ENDIF
+!IF [for %o in ($(OS)) do @if /i "%o"=="ARM" exit 1]
+!IF $(REQS_ARM)
+     check_arm_opts arm \
+     arm\debug \
+!ELSE # failed the static requirements test for ARM builds
+     explain_arm_reqs \
+!ENDIF
+!ENDIF
+!IF [for %o in ($(OS)) do @if /i "%o"=="ARM64" exit 1]
+!IF $(REQS_ARM64)
+     check_arm64_opts arm64 \
+     arm64\debug \
+!ELSE # failed the static requirements test for ARM64 builds
+     explain_arm64_reqs \
+!ENDIF
+!ENDIF
 
 syslib.lib: \
 !IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
@@ -213,6 +246,20 @@ syslib.lib: \
      check_win64_opts win64 \
 !ELSE # failed the static requirements test for Win64 builds
      explain_win64_reqs \
+!ENDIF
+!ENDIF
+!IF !("$(OS: ARM = )"=="$(OS)") # IF $(OS) contains ARM
+!IF $(REQS_ARM)
+     check_arm_opts arm \
+!ELSE # failed the static requirements test for ARM builds
+     explain_arm_reqs \
+!ENDIF
+!ENDIF
+!IF !("$(OS:ARM64=)"=="$(OS)") # IF $(OS) contains ARM64
+!IF $(REQS_ARM64)
+     check_arm64_opts arm64 \
+!ELSE # failed the static requirements test for ARM64 builds
+     explain_arm64_reqs \
 !ENDIF
 !ENDIF
 
@@ -259,6 +306,20 @@ debug\syslib.lib: \
      explain_win64_reqs \
 !ENDIF
 !ENDIF
+!IF !("$(OS: ARM = )"=="$(OS)") # IF $(OS) contains ARM
+!IF $(REQS_ARM)
+     check_arm_opts arm\debug \
+!ELSE # failed the static requirements test for ARM builds
+     explain_arm_reqs \
+!ENDIF
+!ENDIF
+!IF !("$(OS:ARM64=)"=="$(OS)") # IF $(OS) contains ARM64
+!IF $(REQS_ARM64)
+     check_arm64_opts arm64\debug \
+!ELSE # failed the static requirements test for ARM64 builds
+     explain_arm64_reqs \
+!ENDIF
+!ENDIF
 
 # Default log file name, etc
 module_name:
@@ -296,6 +357,10 @@ explain_arm_reqs:
     $(MSG) Skipping ARM builds as some requirements are not met:
     if not defined ARM_CC	$(MSG) $(CANT_FIND) Microsoft Visual C++ arm compiler (ARM_CC)
 
+explain_arm64_reqs:
+    $(MSG) Skipping ARM64 builds as some requirements are not met:
+    if not defined ARM64_CC	$(MSG) $(CANT_FIND) Microsoft Visual C++ arm64 compiler (ARM64_CC)
+
 check_bios_opts:
     @if not defined GNUEFI $(MSG) Warning: GNUEFI undefined. Dropping crc32 and gpt modules build.
 
@@ -316,6 +381,8 @@ check_win64_opts: check_win32_opts
 
 check_arm_opts: check_win32_opts
 
+check_arm64_opts: check_win32_opts
+
 # Rules for building specific versions of the SysLib library
 bios: lib\bios
 
@@ -331,6 +398,8 @@ win64: lib\win64
 
 arm: lib\arm
 
+arm64: lib\arm64
+
 bios\debug: lib\bios\debug
 
 dos\debug: lib\dos\debug
@@ -344,6 +413,8 @@ ia64\debug: lib\ia64\debug
 win64\debug: lib\win64\debug
 
 arm\debug: lib\arm\debug
+
+arm64\debug: lib\arm64\debug
 
 # Rules for building Centralized copies of the SysLib library
 $(LIBDIR):
@@ -434,6 +505,15 @@ $(OD)ARM\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
 
+lib\arm64: $(LIBDIR)\SysLiba64.lib
+
+$(LIBDIR)\SysLiba64.lib: $(OD)ARM64\SysLib.lib $(LIBDIR)
+    if exist %s echo F | xcopy /d /y %s $@
+
+$(OD)ARM64\SysLib.lib: NUL
+    $(HEADLINE) Building SysLib library ARM64 release version
+    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM64.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" dirs $@
+
 
 lib\bios\debug: $(LIBDIR)\SysLibbtd.lib
 
@@ -518,6 +598,15 @@ $(LIBDIR)\SysLiba32d.lib: $(OD)ARM\Debug\SysLib.lib $(LIBDIR)
 $(OD)ARM\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
+
+lib\arm64\debug: $(LIBDIR)\SysLiba64d.lib
+
+$(LIBDIR)\SysLiba64d.lib: $(OD)ARM64\Debug\SysLib.lib $(LIBDIR)
+    if exist %s echo F | xcopy /d /y %s $@
+
+$(OD)ARM64\Debug\SysLib.lib: NUL
+    $(HEADLINE) Building SysLib library ARM64 debug version
+    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM64.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" dirs $@
 
 # Dummy target, to build a source archive
 dist zip: SysLib.lib

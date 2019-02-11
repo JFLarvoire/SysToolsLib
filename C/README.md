@@ -43,12 +43,12 @@ Quick Guide for rebuilding everything in Windows
 
 Note:
 
-   - The configure.bat script needs to be run only once, the first time a build is done.  
-   - Before running make.bat, verify in the configure.bat output that it correctly detected the location of your
-     C compiler (CC) and Windows Software Development Kit (WINSDK).
-   - Configure.bat must only be run again if other versions of the build tools (C compiler, etc) are installed,
-     including the optional ones listed below, or if some of the build tools or libraries have been moved to another
-     directory.
+- The configure.bat script needs to be run only once, the first time a build is done.  
+- Before running make.bat, verify in the configure.bat output that it correctly detected the location of your
+  C compiler (CC) and Windows Software Development Kit (WINSDK).
+- Configure.bat must only be run again if other versions of the build tools (C compiler, etc) are installed,
+  including the optional ones listed below, or if some of the build tools or libraries have been moved to another
+  directory.
 
 ### Individual components can be built separately if desired
 
@@ -129,14 +129,18 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
   It is still available for MSDN subscribers in 2017.  
   It can be installed in parallel with more recent versions of Visual Studio.
 
-- If you're interested in building BIOS and MS-DOS tools, install Microsoft Visual C++ 1.52.  
+- If you're interested in building BIOS and MS-DOS tools, install Microsoft Visual C++ 1.52c.  
   It is still available for MSDN subscribers in 2017, as part of the Visual Studio 2005 DVD image, but not installed by default.  
-  Gotcha: The setup program is a WIN16 program, which requires extra steps for installing it in modern versions of Windows:
+  Gotcha: The VC++ 1.52 compiler is a WIN32 program that runs in all 32 and 64-bits versions of Windows. But
+  unfortunately the VC++ 1.52 setup.exe program is a WIN16 program, which only runs on old 32-bits versions of Windows.
+  This requires doing extra steps for successfully installing the compiler in modern 64-bits versions of Windows:
   
-   - Install a VM with Windows XP, that can run WIN16 programs. (This has to be an x86 VM, not an amd64 VM with XP/64)
+   - Install a 32-bits VM running Windows XP, that can run WIN16 programs out-of-the-box. (This has to be an x86 VM, not an amd64 VM with XP/64)  
+     Note: Newer 32-bits x86 versions of Windows can still run WIN16 programs, but this may require some tinkering.
+     If needed, look for instructions on the Internet.
    - Give that VM access to the host's file system.
-   - Run Visual C++ 1.52 setup, and install it in the VM's C:\MSVC. (Necessary so that the setup builds vcvars.bat correctly.)
-   - Once this is done, move the VM's C:\MSVC to the host's C:\MSVC. (vcvars.bat will thus refer to the host's C drive.)
+   - Run the VC++ 1.52 setup in the VM, and install it in the VM's C:\MSVC. (Necessary so that the setup builds vcvars.bat correctly.)
+   - Once this is done, copy the VM's C:\MSVC to the host's C:\MSVC. (vcvars.bat will thus refer to the host's C drive.)
 
 - The UUID and GPT management tools depend on the gnu-efi sources.  
   Install the include files from the [gnu-efi library](https://sourceforge.net/projects/gnu-efi/)  
@@ -150,6 +154,15 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
 - The DOS version of some tools requires the LAN Manager 2.1 Programmer's ToolKit.
   See explanations in the [SysLib/README.md](SysLib/README.md) file.  
   (Only necessary to rebuild support for NetBIOS and MAC address for DOS programs.)
+
+- The tools can be built for ARM and ARM64. This has been verified to work with Visual Studio 2019 Preview.
+  But the tools themselves have not been tested, for lack of a test system running an ARM or ARM64 version of Windows.  
+  To build for these targets, run for example:
+  
+        cd %WORKDIR%
+        configure
+        :# Assuming that configure found both the ARM and ARM64 compilers
+        make "OS=ARM ARM64"
 
 
 Procedure for generating a new release

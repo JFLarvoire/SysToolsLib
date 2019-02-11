@@ -143,6 +143,7 @@
 #    2019-01-18 JFL The .exe extension is now optional for PROGRAMS list items.
 #		    Added the BUILDING_$(PROGRAM) mechanism for conditionally #
 #		    specifying SOURCES in the NMakefile calling this All.mak. #
+#    2019-02-09 JFL Added support for ARM64 target OS.			      #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -243,6 +244,9 @@ OS=$(OS) WIN64
 !IF DEFINED(ARM_CC) && EXIST("$(MAKEPATH)\ARM.mak")
 OS=$(OS) ARM
 !ENDIF
+!IF DEFINED(ARM64_CC) && EXIST("$(MAKEPATH)\ARM64.mak")
+OS=$(OS) ARM64
+!ENDIF
 !ENDIF
 
 # Report start options
@@ -258,6 +262,7 @@ DOWIN32=0
 DOIA64=0
 DOWIN64=0
 DOARM=0
+DOARM64=0
 !IF [for %o in ($(OS)) do @if /i "%o"=="BIOS" exit 1]
 DOBIOS=1
 !ENDIF
@@ -279,6 +284,9 @@ DOWIN64=1
 !IF [for %o in ($(OS)) do @if /i "%o"=="ARM" exit 1]
 DOARM=1
 !ENDIF
+!IF [for %o in ($(OS)) do @if /i "%o"=="ARM64" exit 1]
+DOARM64=1
+!ENDIF
 # !MESSAGE DOBIOS=$(DOBIOS) DODOS=$(DODOS) DOWIN32=$(DOWIN32) DOWIN64=$(DOWIN64)
 # Generate guard macros for each OS
 IFBIOS=rem
@@ -288,6 +296,7 @@ IFWIN32=rem
 IFIA64=rem
 IFWIN64=rem
 IFARM=rem
+IFARM64=rem
 !IF $(DOBIOS)
 IFBIOS=
 !ENDIF
@@ -309,7 +318,10 @@ IFWIN64=
 !IF $(DOARM)
 IFARM=
 !ENDIF
-# !MESSAGE IFBIOS=$(IFBIOS) IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM)
+!IF $(DOARM64)
+IFARM64=
+!ENDIF
+# !MESSAGE IFBIOS=$(IFBIOS) IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM) IFARM64=$(IFARM64)
 
 MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
@@ -352,6 +364,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 .cpp.com:
     @echo Applying inference rule .cpp.com:
@@ -367,6 +380,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 .asm.exe:
     @echo Applying inference rule .asm.exe:
@@ -377,6 +391,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 # Inference rule to build a makefile-defined executable. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.exe:
@@ -388,6 +403,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.lib:
@@ -399,6 +415,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 # Inference rule to build a makefile-defined DLL. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.dll:
@@ -410,6 +427,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $@
 
 # Inference rule to build a simple program. Build BIOS, DOS, Win32, and Win64 debug versions.
 {.\}.c{Debug\}.com:
@@ -426,6 +444,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 {.\}.cpp{Debug\}.com:
     @echo Applying inference rule {.\}.cpp{Debug\}.com:
@@ -441,6 +460,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 {.\}.asm{Debug\}.exe:
     @echo Applying inference rule {.\}.asm{Debug\}.exe:
@@ -451,6 +471,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 # Inference rule to build a makefile-defined executable. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.exe:
@@ -462,6 +483,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 # Inference rule to build a makefile-defined library. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.lib:
@@ -473,6 +495,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 # Inference rule to build a makefile-defined DLL. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.dll:
@@ -484,6 +507,7 @@ _OBJ = .obj
     $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) $(OD)IA64\$@
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) $(OD)WIN64\$@
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) $(OD)ARM\$@
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) $(OD)ARM64\$@
 
 # Inference rules to build something for DOS, WIN32 and WIN64 respectively
 # Get them from their respective DOS.mak, WIN32.mak, WIN64.mak make files, etc.
@@ -656,6 +680,7 @@ clean mostlyclean distclean:
     if exist "$(MAKEPATH)\IA64.mak"  $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\IA64.mak" clean
     if exist "$(MAKEPATH)\WIN64.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\WIN64.mak" clean
     if exist "$(MAKEPATH)\ARM.mak"   $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\ARM.mak" clean
+    if exist "$(MAKEPATH)\ARM64.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\ARM64.mak" clean
 !IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
     -rd /S /Q $(OUTDIR)	>NUL 2>&1
 !ENDIF

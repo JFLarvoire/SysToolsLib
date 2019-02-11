@@ -173,13 +173,16 @@
 :#   2017-03-12 JFL Defining variable OS limits builds to that OS list.       *
 :#   2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           *
 :#   2018-03-09 JFL Find Windows SDK bin dir when in a %WINSDK_VER% subdir.   *
+:#   2019-02-08 JFL Added support for Visual Studio 2017 and 2019 previews.   *
+:#                  Fixed the detection of ARM & added that of ARM64 tools.   *
+:#   2019-02-10 JFL It's not worth searching the WINSDK if the CC is missing. *
 :#                                                                            *
-:#      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
+:#      © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-03-09"
+set "VERSION=2019-02-10"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1474,6 +1477,7 @@ C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.
 set "BIN[x86,x86]=bin"
 set "BIN[x86,amd64]=bin\x86_amd64"
 set "BIN[x86,arm]=bin\x86_arm"
+set "BIN[x86,arm64]=bin\x86_arm64"
 set "BIN[x86,mips]=bin\x86_mips"
 set "BIN[x86,sh]=bin\x86_sh"
 set "BIN[x86,ia64]=bin\x86_ia64"
@@ -1481,18 +1485,25 @@ set "BIN[x86,ia64]=bin\x86_ia64"
 set "BIN[amd64,x86]=bin\amd64_x86 bin"
 set "BIN[amd64,amd64]=bin\amd64 bin\x86_amd64"
 set "BIN[amd64,arm]=bin\amd64_arm bin\x86_arm"
+set "BIN[amd64,arm64]=bin\amd64_arm64 bin\x86_arm64"
 
 :# VS 15 era: More regular naming system, but much deeper
 set "BIN15[x86,x86]=bin\HostX86\x86"
 set "BIN15[x86,amd64]=bin\HostX86\x64"
+set "BIN15[x86,arm]=bin\HostX86\arm"
+set "BIN15[x86,arm64]=bin\HostX86\arm64"
 set "BIN15[amd64,x86]=bin\HostX64\x86"
 set "BIN15[amd64,amd64]=bin\HostX64\x64"
+set "BIN15[amd64,arm]=bin\HostX64\arm"
+set "BIN15[amd64,arm64]=bin\HostX64\arm64"
 
 :# Idem for native builds (There must be just one value here)
 set "BIN[x86]=bin"
 set "BIN[amd64]=bin\amd64"
+set "BIN[arm]=bin\arm"
 set "BIN15[x86]=bin\HostX86\x86"
 set "BIN15[amd64]=bin\HostX64\x64"
+set "BIN15[arm]=bin\HostArm\arm"
 
 :# Convert SysToolsLib's OS name to MSVC processor name
 set "PROC[WIN32]=x86"	&:# SysToolsLib name
@@ -1501,11 +1512,13 @@ set "PROC[WIN64]=amd64"	&:# SysToolsLib name
 set "PROC[amd64]=amd64"	&:# VC 6 to 14 name
 set "PROC[x64]=amd64"	&:# VC 15+ name
 set "PROC[ARM]=arm"	&:# SysToolsLib and VC 8+ name
+set "PROC[ARM64]=arm64"	&:# SysToolsLib and VC 8+ name
 set "PROC[SH]=sh"	&:# SysToolsLib and VC 8 name
 set "PROC[MIPS]=mips"	&:# SysToolsLib and VC 8 name
 set "PROC[IA64]=ia64"	&:# SysToolsLib and VC 8 name
 
-set "VC15S=Enterprise\VC Professional\VC Community\VC"
+:# Space-separated list of VC subdirectories to search
+set "VC15S=Enterprise\VC Professional\VC Community\VC Preview\VC"
 exit /b
 
 :# Find the latest Visual Studio version supporting the specified OS & architecture
@@ -1552,30 +1565,60 @@ set "BINSELF=!%~5[%ARCH%]!"
 :# set "BINSELF=!%~5[x86]!"
 :# %ECHOVARS.D% \* BINDIRS
 :# Scan the Program Files tree, looking for cl.exe instances
-for %%p in ("%PF32%") do ( :# All versions of VS up to VS15 are installed in PF32, even on 64-bits machines
+for %%p in ("%PF32%") do ( :# All versions of VS up to VS16 are installed in PF32, even on 64-bits machines
   %ECHO.D% :# Searching VS in "%%~p\%~3"
   for %%v in ("%~3") do (    :# Visual Studio directory
     if exist "%%~p\%%~v" for %%c in (%~4) do (    :# VC subdirectories
       %ECHO.D% :# Searching VC in "%%~p\%%~v\%%~c"
-      if exist "%%~p\%%~v\%%~c" for /d %%s in ("%%~p\%%~v\%%~c%\*%") do (
-	%ECHO.D% :# Searching BIN in "%%~s"
-	for %%b in (%BINDIRS%) do (
-	  %ECHO.D% :# Searching CL in "%%~s\%%b"
-	  if exist "%%~s\%%b\cl.exe" (
-	    for %%z in ("%%~p\%%~v\%%~c") do set "%VS%=%%~dpz" &rem :# Remove the VC* subdir name
-	    set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
-	    set "%VC%=%%~s" &:# Do not set to "%%~p\%%~v\%%~c", which is wrong for VS15+
-	    set "%VC%.BIN=%%~s\%%b"
-	    set "%VC%.BIN2=%%~s\!BINSELF!"
-	    set "%VC%.CC="%%~s\%%b\cl.exe""
-	    %ECHOVARS.D% %VS% %VC% %VC%.BIN %VC%.CC
-	    exit /b 0
+      if exist "%%~p\%%~v\%%~c" (
+      	set "VCDIRS="
+      	:# Infos from https://github.com/Microsoft/vswhere/wiki/Find-VC
+	if exist "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt" (
+	  %ECHO.D% :# Reading version in "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
+	  set /p VCVER=<"%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
+	  set "VCDIRS=%%~p\%%~v\%%~c\Tools\MSVC\!VCVER: =!"
+	)
+	if not defined VCDIRS if exist "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt" (
+	  :# Preview versions have a Microsoft.VCToolsVersion.v142.default.txt, that's not detected above.
+	  :# Try using the Microsoft.VCRedistVersion.default.txt, which seems to contain the same version.
+	  %ECHO.D% :# Reading version in "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
+	  set /p VCVER=<"%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
+	  set "VCDIRS=%%~p\%%~v\%%~c\Tools\MSVC\!VCVER: =!"
+	  if not exist "!VCDIRS!\%BINDIRS%\cl.exe" set "VCDIRS="
+	  set "VCVER="
+	)
+	if not defined VCDIRS if exist "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat" (
+	  setlocal
+	  %ECHO.D% :# Locating VC using "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat"
+	  set "VCToolsInstallDir="
+	  call "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat" >NUL 2>&1
+	  for %%z in ("!VCToolsInstallDir!") do endlocal & set "VCDIRS=%%~z"
+	  if defined VCDIRS set "VCDIRS=!VCDIRS:~0,-1!"
+	  set "VCVER="
+	)
+	if not defined VCDIRS set "VCDIRS=%%~p\%%~v\%%~c%\*%"
+	for /d %%s in ("!VCDIRS!") do (
+	  %ECHO.D% :# Searching BIN in "%%~s"
+	  for %%b in (%BINDIRS%) do (
+	    %ECHO.D% :# Searching CL in "%%~s\%%b"
+	    if exist "%%~s\%%b\cl.exe" (
+	      for %%z in ("%%~p\%%~v\%%~c") do set "%VS%=%%~dpz" &rem :# Remove the VC* subdir name
+	      set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
+	      set "%VC%=%%~s" &:# Do not set to "%%~p\%%~v\%%~c", which is wrong for VS15+
+	      set "%VC%.BIN=%%~s\%%b"
+	      set "%VC%.BIN2=%%~s\!BINSELF!"
+	      set "%VC%.CC="%%~s\%%b\cl.exe""
+	      %ECHOVARS.D% %VS% %VC% %VC%.BIN %VC%.CC
+	      set "VCDIRS="
+	      exit /b 0
+	    )
 	  )
 	)
       )
     )
   )
 )
+set "VCDIRS="
 exit /b 1
 
 :# SUBSYSTEM version limits can be tested by running:
@@ -1587,7 +1630,8 @@ pedump WIN32\winver.exe | findstr subsystem	&:# 4.00 if supported, else the defa
 ...
 												     :#        Link SUBSYSTEM (Not the same as windows.h WINVER, which is set in the WINSDK)
 :lastvs	&:#  VS Alias	VS Installation directory	     VC subdirs	  BIN database		      _MSC_VER	Min   Default	Notes
-%SEARCH_IN%  15/2017	"Microsoft Visual Studio\2017"		"%VC15S%" BIN15	&& goto :foundvs    &:# 2000	5.01	5.01	Surprisingly, the default is back to XP!
+%SEARCH_IN%  16/2019	"Microsoft Visual Studio\2019"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1920	5.01	6.00	Preview tested and known to work fine
+%SEARCH_IN%  15/2017	"Microsoft Visual Studio\2017"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1910	5.01	6.00	Tested and known to work fine
 %SEARCH_IN%  14/2015	"Microsoft Visual Studio 14.0"		VC	  BIN	&& goto :foundvs    &:# 1900	5.01	6.00	Tested and known to work fine
 :# %SEARCH_IN%  13/?	"Microsoft Visual Studio 13.0"		VC	  BIN	&& goto :foundvs    &:# 
 :lastvsXP                                               	                                        
@@ -1722,9 +1766,12 @@ if defined WINSDK_LIB for %%l in ("%WINSDK_LIB%") do (
   set "WINSDK=%~1"
   set "WINSDK_VER=%%~nxl"
   set "WINSDK_LIBDIR=%%~l\um\!WINSDKPROC!"
-  set "WINSDK_BIN=!WINSDK!\Bin\!WINSDKPROC!"
-  :# Some SDKs have their files in a bin subdir, with the SDK version. Ex: bin\10.0.16299.0
-  for /d %%d in ("!WINSDK!\Bin\!WINSDK_VER!\!WINSDKPROC!") do if exist "%%~d\rc.exe" set "WINSDK_BIN=%%~d"
+  :# WINSDK executables are host-specific, not target-specific.
+  set "SUBDIR=%PROCESSOR_ARCHITECTURE%" &:# So look for the host-specific subdirectory
+  if /i "!SUBDIR!"=="AMD64" set "SUBDIR=x64"
+  set "WINSDK_BIN=!WINSDK!\Bin\!SUBDIR!"
+  :# Some SDKs have their files in a bin subdir, with the SDK version. Ex: bin\10.0.16299.0\arm64
+  for /d %%d in ("!WINSDK!\Bin\!WINSDK_VER!\!SUBDIR!") do if exist "%%~d\rc.exe" set "WINSDK_BIN=%%~d"
   set "WINSDK_INCDIR="
   set "WINSDK_INCLUDE="
   for /d %%d in ("!WINSDK!\Include" "!WINSDK!\Include\!WINSDK_VER!") do ( :# Pre-release kits have an additional subdir level
@@ -1772,43 +1819,43 @@ goto :findvc32.common
 :find32
 %FUNCTION0%
 call :findvc32 WIN32 x86 VS32 VC32
-call :findsdk -Platform %PROC%
 if not defined VC32 %RETURN0%
+call :findsdk -Platform %PROC%
 goto :find32.common
 
 :find95
 %FUNCTION0%
 call :findvc95 WIN95 x86 VS95 VC95
-call :findsdk -Platform %PROC% -Max 7.1a
 if not defined VC95 %RETURN0%
+call :findsdk -Platform %PROC% -Max 7.1a
 goto :find32.common
 
 :findia64
 %FUNCTION0%
 call :findvc32 IA64 IA64 VSIA64 VCIA64
-call :findsdk -Platform %PROC%
 if not defined VCIA64 %RETURN0%
+call :findsdk -Platform %PROC%
 goto :find32.common
 
 :find64
 %FUNCTION0%
 call :findvc32 WIN64 amd64 VS64 VC64
-call :findsdk -Platform x64 &:# Unfortunately this one is named differently in VC and WinSDK
 if not defined VC64 %RETURN0%
+call :findsdk -Platform x64 &:# Unfortunately this one is named differently in VC and WinSDK
 goto :find32.common
 
 :findarm
 %FUNCTION0%
 call :findvc32 ARM arm VSARM VCARM
-call :findsdk -Platform %PROC%
 if not defined VCARM %RETURN0%
+call :findsdk -Platform %PROC%
 goto :find32.common
 
 :findarm64
 %FUNCTION0%
 call :findvc32 ARM64 arm64 VSARM64 VCARM64
-call :findsdk -Platform %PROC%
 if not defined VCARM64 %RETURN0%
+call :findsdk -Platform %PROC%
 goto :find32.common
 
 :FindUCRT
@@ -1839,7 +1886,7 @@ set %VC%.CC="!%VC%.BIN!\CL.EXE"
 set %VC%.LK="!%VC%.BIN!\LINK.EXE"
 set %VC%.LB="!%VC%.BIN!\LIB.EXE"
 set "%VC%.AS=" &:# The assembler name varies, depending on the processor
-for %%a in (ML ML64 ARMASM IA64ASM) do if not defined %VC%.AS (
+for %%a in (ML ML64 ARMASM ARMASM64 IA64ASM) do if not defined %VC%.AS (
   if exist "!%VC%.BIN!\%%a.EXE" set %VC%.AS="!%VC%.BIN!\%%a.EXE"
 )
 
@@ -1851,6 +1898,8 @@ SET "%VC%.LIBPATH=!%VC%!\lib\%PROC%"
 if /i %PROC%==x86 if not exist "!%VC%.LIBPATH!\libcmt.lib" SET "%VC%.LIBPATH=!%VC%!\lib"
 if /i %PROC%==x86 if not exist "!%VC%.LIBPATH!\libcmt.lib" SET "%VC%.LIBPATH=!%VC%!\lib\x86" &:# VC 15 changed to subdir x86
 if /i %PROC%==amd64 if not exist "!%VC%.LIBPATH!\libcmt.lib" SET "%VC%.LIBPATH=!%VC%!\lib\x64" &:# VC 15 changed from amd64 to x64
+if /i %PROC%==arm if not exist "!%VC%.LIBPATH!\libcmt.lib" SET "%VC%.LIBPATH=!%VC%!\lib\arm"
+if /i %PROC%==arm64 if not exist "!%VC%.LIBPATH!\libcmt.lib" SET "%VC%.LIBPATH=!%VC%!\lib\arm64"
 
 :# Windows SDK tools
 set TRYDIRS="!%VS%.IDE!" &:# Tools location for Visual Studio 6
@@ -1861,6 +1910,9 @@ if defined WINSDK (
   set "%VC%.LIBPATH=!%VC%.LIBPATH!;!WINSDK_LIB!"
   set TRYDIRS=!TRYDIRS! "%WINSDK_BIN%"
   if /i not %PROC%==x86 (
+    if /i not %PROC%==amd64 if /i %PROCESSOR_ARCHITECTURE%==amd64 (
+      for %%b in ("%WINSDK_BIN%") do set TRYDIRS=!TRYDIRS! "%%~dpbx64"
+    )
     for %%b in ("%WINSDK_BIN%") do set TRYDIRS=!TRYDIRS! "%%~dpbx86"
     set TRYDIRS=!TRYDIRS! "%WINSDK%\Bin%"
   )
@@ -2487,6 +2539,7 @@ if "%RECURSE%"=="1" (
   set CMD=call "%ARG0:configure.bat=make.bat%" list_dirs
   %ECHOVARS.D% CMD
   set ">DEBUGOUT=>&2"
+  set "DIRS=" &:# Make sure variable DIRS isn't defined, else the list_dirs goal fails
   %FOREACHLINE% %%d in ('%XCALL% :Do -V !CMD! 2^>NUL') do if exist "%%d" (
     %ECHO.V% :# Configuring %%d
     %_DO.XD% pushd "%%d"
