@@ -79,13 +79,14 @@
 *		    Version 1.10.					      *
 *    2019-01-16 JFL Added option -- to stop processing switches.              *
 *		    Version 1.11.					      *
+*    2019-02-17 JFL Avoid warnings about assignments in cond. expressions.    *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.11"
-#define PROGRAM_DATE    "2019-01-16"
+#define PROGRAM_DATE    "2019-02-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -677,10 +678,6 @@ void initExtList() {
 #define WORD0(var) (((WORD *)&(var))[0])
 #define WORD1(var) (((WORD *)&(var))[1])
 
-#if defined(_MSC_VER)
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
 char **GetInternalCommands() {
   char **ppszInternalCommands = NULL;
   int nCmd = 0;
@@ -756,10 +753,6 @@ cleanup_and_return:
   )
   return ppszInternalCommands;
 }
-
-#if defined(_MSC_VER)
-#pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
-#endif
 
 static char **ppszCmdInternals = NULL;
 
@@ -1168,10 +1161,6 @@ int GetProcessName(pid_t pid, char *name, size_t lname) {
 
 #if defined(_WIN32)
 
-#if defined(_MSC_VER)
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
   char *pszName;
@@ -1228,7 +1217,7 @@ int FixNameCase(char *pszPathname) {
     if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
     RETURN_BOOL_COMMENT(FALSE, ("Can't open directory \"%s\"\n", pszPath));
   }
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdir(pDir)) != NULL) {
     if (_stricmp(pszName, pDE->d_name)) continue; /* Names differ */
     if (strcmp(pszName, pDE->d_name)) { /* If the names match, but the case differs */
       strcpy(pszName, pDE->d_name);	/* Correct the name */
@@ -1241,10 +1230,6 @@ int FixNameCase(char *pszPathname) {
   if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
-
-#if defined(_MSC_VER)
-#pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
-#endif
 
 #endif
 
