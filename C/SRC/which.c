@@ -80,12 +80,15 @@
 *    2019-01-16 JFL Added option -- to stop processing switches.              *
 *		    Version 1.11.					      *
 *    2019-02-17 JFL Avoid warnings about assignments in cond. expressions.    *
+*		    Renamed options -i and -I as -s and -S.		      *
+*		    New options -i and -I search WIN32 doskey aliases.	      *
+*		    Version 1.12.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.11"
+#define PROGRAM_VERSION "1.12"
 #define PROGRAM_DATE    "2019-02-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1
@@ -102,6 +105,7 @@
 #include <dirent.h>		/* We use the DIR type and the dirent structure */
 #include <sys/stat.h>		/* To get the actual file time */
 #include <time.h>		/* To get the actual file time */
+#include <strings.h>		/* For strcasecmp() */
 
 /* MsvcLibX debugging macros */
 #include "debugm.h"
@@ -251,6 +255,7 @@ int SearchCommandInternal(char *pszCommand, int iSearchFlags);
 #if defined(_WIN32)
 char **GetInternalCommands(void);    /* Get a NULL-terminated list of internal shell commands */
 int SearchCmdInternal(char *pszCommand, int iSearchFlags);
+int SearchCmdAliases(char *pszCommand, int iSearchFlags);
 #endif
 #if defined(_WIN32) || defined(__unix__)
 int SearchPowerShellInternal(char *pszCommand, int iSearchFlags);
@@ -283,6 +288,7 @@ int main(int argc, char *argv[]) {
   int iFound = 0;
 #if defined(_WIN32)
   char szShellName[FILENAME_MAX+1];
+  int iAlias = 0;
 #endif
   char **pathList = malloc(0);
   int nPaths = 0;
@@ -319,19 +325,31 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       )
-      if (   streq(opt, "i")		/* Search the shell's internals */
+#if defined(WIN32)
+      if (   streq(opt, "i")		/* Read aliases from stdin */
+	  || streq(opt, "-read-alias")) {
+	iAlias = 1;
+	continue;
+      }
+      if (   streq(opt, "I")		/* Do NOT read aliases from stdin */
+	  || streq(opt, "-skip-alias")) {
+	iAlias = 1;
+	continue;
+      }
+#endif // defined(WIN32)
+      if (   streq(opt, "l")		/* Display the program time and link target */
+	  || streq(opt, "-long")) {
+	iFlags |= WHICH_LONG;
+	continue;
+      }
+      if (   streq(opt, "s")		/* Search the shell's internals */
 	  || streq(opt, "-internal")) {
 	iInternal = 1;
 	continue;
       }
-      if (   streq(opt, "I")		/* Do not search the shell's internals */
+      if (   streq(opt, "S")		/* Do not search the shell's internals */
 	  || streq(opt, "-no-internal")) {
 	iInternal = 0;
-	continue;
-      }
-      if (   streq(opt, "l")		/* Display the program time and link target */
-	  || streq(opt, "-long")) {
-	iFlags |= WHICH_LONG;
 	continue;
       }
       if (   streq(opt, "v")		/* Verbose mode on */
@@ -438,6 +456,19 @@ int main(int argc, char *argv[]) {
     pszCommand = argv[iArg];
 
     /* First search in internal commands */
+#if defined(_WIN32)
+    if (iAlias) {
+      switch (shell) {
+	case SHELL_CMD:
+	  iFound = SearchCmdAliases(pszCommand, iFlags);
+	  break;
+	default:
+	  iFound = FALSE;
+	  break;
+      }
+      if (iFound && !(iFlags & WHICH_ALL)) continue;
+    } else
+#endif
     if (iInternal) {
       switch (shell) {
 #if defined(_MSDOS) || defined(_WIN32)
@@ -527,20 +558,31 @@ Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 Options:\n\
   --    Stop processing switches.\n\
   -?    Display this help message and exit.\n\
-  -a    Display all matches. Default: Display only the first one.\n\
-  -i    Search for the shell internal commands first. (Default for cmd.exe)\n\
-  -I    Do not search for the shell internal commands. (Faster)\n\
+  -a    Display all matches. Default: Display only the first one.\n"
+#if defined(_WIN32)
+"\
+  -i    Read shell internal commands and aliases on stdin (1)\n\
+  -I    Do not read shell internal commands and aliases on stdin (Default)\n"
+#endif
+"\
   -l    Long mode. Also display programs time, and links target.\n\
+  -s    Search for the shell internal commands first. (Default for cmd.exe)\n\
+  -S    Do not search for the shell internal commands. (Faster)\n\
   -v    Verbose mode. Like -l, plus comments about non-eligible programs.\n\
   -V    Display this program version and exit.\n\
 \n"
 #if defined(_WIN32)
-"\n\
+"\
+(1) This requires defining a macro for which itself. Ex. for cmd.exe:\n\
+    doskey /macros which=^(help ^& doskey /macros^) ^| which.exe -i $*\n\
+\n\
 Notes:\n\
   Uses the PATHEXT variable to infer other possible names.\n\
   Supports specific rules for cmd and PowerShell.\n\
   Searches for internal commands. Ex in cmd: 'which md' outputs: cmd /c MD\n\
         Ex in PowerShell: 'which -i md' outputs: PowerShell -c md -> mkdir\n\
+  Searches for aliases. Ex in cmd: 'which which' outputs the example in (1),\n\
+        whereas 'which which.exe' outputs the full pathname to which.exe.\n\
 \n"
 #endif
 #ifdef _MSDOS
@@ -1233,3 +1275,118 @@ int FixNameCase(char *pszPathname) {
 
 #endif
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    SearchAliases					      |
+|									      |
+|   Description     Search internal commands and aliases from stdin	      |
+|									      |
+|   Returns:	    TRUE if found, false if not				      |
+|									      |
+|   Notes	    Read the list once, and cache it in global variables.     |
+|		    							      |
+|   History								      |
+|    2019-02-17 JFL Initial implementattion.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#if defined(_WIN32)
+
+/* static char **ppszCmdInternals = NULL;	// cmd.exe internal commands */
+static char **ppszCmdAliases = NULL;		// doskey.exe macros
+static int nInternalCommands = 0;
+static int nAliases = 0;
+static char *pszWindir = NULL;
+
+int SearchCmdAliases(char *pszCommand, int iSearchFlags) {
+  char szLine[512];
+  int i, l;
+  int iFound = FALSE;
+
+  if ((!ppszCmdInternals) && (!ppszCmdAliases)) {
+    ppszCmdInternals = malloc(sizeof(char *));
+    if (!ppszCmdInternals) goto cleanup_and_return;
+    ppszCmdInternals[0] = NULL;
+    ppszCmdAliases = malloc(sizeof(char *));
+    if (!ppszCmdAliases) goto cleanup_and_return;
+    ppszCmdAliases[0] = NULL;
+    pszWindir = getenv("windir");
+    while (fgets(szLine, sizeof(szLine), stdin) != NULL) {
+      int isInternal = FALSE;
+      int isMacro = FALSE;
+      szLine[sizeof(szLine) - 1] = '\0';
+      l = (int)strlen(szLine);
+      for (; l && ((szLine[l-1]=='\r') || (szLine[l-1]=='\n')); ) szLine[--l] = '\0'; /* Trim trailing CR/LF */
+      if (l) isInternal = TRUE;
+      /* Check if this is an internal command from HELP, or a dowkey macro, or none */
+      for (i=0; i<l; i++) {
+      	char c = szLine[i];
+      	if ((c == ' ') || (c == '\t')) {
+      	  if (i == 0) isInternal = FALSE;
+      	  break;
+      	}
+      	if (c == '=') {
+      	  isInternal = FALSE;
+      	  if (i > 0) isMacro = TRUE;
+      	  break;
+      	}
+      	if ((c < 'A') || ((c > 'Z') && (c < 'a')) || (c > 'z')) {
+      	  isInternal = FALSE;
+      	  isMacro = FALSE;
+      	  break;
+      	}
+      	if (c > 'Z') {
+      	  isInternal = FALSE;
+      	}
+      }
+      if (isInternal) {
+      	char buf[256];
+	szLine[i] = '\0';
+      	sprintf(buf, "%s\\System32\\%s.exe", pszWindir, szLine);
+      	// printf("%s\n", buf);
+      	// TODO: Known issue: bcdedit is not detected as external, yet bcdedit.exe is there!
+	if (access(buf, X_OK) == 0) continue; /* It's actually an external command */
+      	sprintf(buf, "%s\\System32\\%s.com", pszWindir, szLine);
+	if (access(buf, X_OK) != -1) continue; /* It's actually an external command */
+      	ppszCmdInternals = realloc(ppszCmdInternals, (nInternalCommands + 2) * sizeof(char *));
+	if (!ppszCmdInternals) goto cleanup_and_return;
+	ppszCmdInternals[nInternalCommands++] = strdup(szLine);
+	ppszCmdInternals[nInternalCommands] = NULL;
+      } else if (isMacro) {
+      	char *pszLine = strdup(szLine);
+	pszLine[i] = '\0';
+       	ppszCmdAliases = realloc(ppszCmdAliases, (nAliases + 2) * sizeof(char *));
+	if (!ppszCmdAliases) goto cleanup_and_return;
+	ppszCmdAliases[nAliases++] = pszLine;
+	ppszCmdAliases[nAliases] = NULL;
+      }
+    }
+  }
+  /* First check aliases */
+  for (i=0; i<nAliases; i++) {
+    if (!strcasecmp(ppszCmdAliases[i], pszCommand)) {
+      char *pszMacro = ppszCmdAliases[i];
+      char *pszDefinition = pszMacro + strlen(pszMacro) + 1;
+      printf("doskey /macros %s=%s\n", pszMacro, pszDefinition);
+      iFound = TRUE;
+      if (!(iSearchFlags & WHICH_ALL)) return iFound;
+      break;
+    }
+  }
+  /* Then check internal commands */
+  for (i=0; i<nInternalCommands; i++) {
+    if (!strcasecmp(ppszCmdInternals[i], pszCommand)) {
+      printf("cmd /c %s\n", ppszCmdInternals[i]);
+      iFound = TRUE;
+      if (!(iSearchFlags & WHICH_ALL)) return iFound;
+      break;
+    }
+  }
+  /* Keep searching */
+  return iFound;
+  
+cleanup_and_return:
+  return -1;
+}
+
+#endif // defined(_WIN32)
