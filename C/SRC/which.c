@@ -83,6 +83,7 @@
 *		    Renamed options -i and -I as -s and -S.		      *
 *		    New options -i and -I search WIN32 doskey aliases.	      *
 *    2019-02-22 JFL Added -i support for PowerShell.			      *
+*    2019-03-01 JFL Fixed option -I.                			      *
 *		    Version 1.12.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -90,7 +91,7 @@
 \*****************************************************************************/
 
 #define PROGRAM_VERSION "1.12"
-#define PROGRAM_DATE    "2019-02-22"
+#define PROGRAM_DATE    "2019-03-01"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -335,10 +336,10 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "I")		/* Do NOT read aliases from stdin */
 	  || streq(opt, "-skip-alias")) {
-	iAlias = 1;
+	iAlias = 0;
 	continue;
       }
-#endif // defined(WIN32)
+#endif /* defined(WIN32) */
       if (   streq(opt, "l")		/* Display the program time and link target */
 	  || streq(opt, "-long")) {
 	iFlags |= WHICH_LONG;
@@ -566,7 +567,7 @@ Options:\n\
   -a    Display all matches. Default: Display only the first one.\n"
 #if defined(_WIN32)
 "\
-  -i    Read shell internal commands and aliases on stdin (1)\n\
+  -i    Read shell internal commands, functions, and aliases on stdin (1)\n\
   -I    Do not read shell internal commands and aliases on stdin (Default)\n"
 #endif
 "\
@@ -580,21 +581,24 @@ Options:\n\
 "\
 (1) In cmd.exe, this requires defining a doskey macro for which itself:\n\
     doskey /macros which=^(help ^& doskey /macros^) ^| which.exe -i $*\n\
-    In PowerSehll, this requires defining a function for which itself:\n\
+    Use an AutoRun script to automate that definition everytime cmd.exe starts.\n\
+    In PowerShell, this requires defining a function for which itself:\n\
     Function which () {(dir function:)+(dir alias:) | which.exe -i @args}\n\
+    Define it in your $profile to automate that definition everytime PS starts.\n\
 \n\
 Notes:\n\
-  Uses the PATHEXT variable to infer other possible names.\n\
-  Supports specific rules for cmd and PowerShell.\n\
+  Supports specific cmd and PowerShell rules for search in the current dir.\n\
+  Uses the PATHEXT variable to infer other possible names, plus *.ps1 for PS.\n\
   When using the -i option (1), searches for internal commands and aliases:\n\
         Ex in cmd.exe:    'which md' outputs: cmd /c MD\n\
         Ex in PowerShell: 'which md' outputs: Alias md -> mkdir\n\
         Ex in both cases: 'which which' outputs the macro/function in (1)\n\
            whereas 'which which.exe' outputs the full pathname to which.exe.\n\
-  When not using the -i option, searches only for executables.\n\
+  When not using the -i option (default), searches only for programs & scripts.\n\
         Ex: 'which which' outputs the full pathname to which.exe.\n\
   Option -s uses a child shell to seach for internal commands. It is\n\
-  recommended to use option -i instead, as -i runs much faster.\n\
+  recommended to use option -i instead, as -i runs much faster, and it\n\
+  returns functions and aliases for the current shell, not the child's.\n\
 \n"
 #endif
 #ifdef _MSDOS
@@ -1305,7 +1309,7 @@ int FixNameCase(char *pszPathname) {
 #if defined(_WIN32)
 
 /* static char **ppszCmdInternals = NULL;	// cmd.exe internal commands */
-static char **ppszCmdAliases = NULL;		// doskey.exe macros
+static char **ppszCmdAliases = NULL;		/* doskey.exe macros */
 static int nInternalCommands = 0;
 static int nAliases = 0;
 static char *pszWindir = NULL;
@@ -1355,8 +1359,8 @@ int SearchCmdAliases(char *pszCommand, int iSearchFlags) {
       	char buf[256];
 	szLine[i] = '\0';
       	sprintf(buf, "%s\\System32\\%s.exe", pszWindir, szLine);
-      	// printf("%s\n", buf);
-      	// TODO: Known issue: bcdedit is not detected as external, yet bcdedit.exe is there!
+      	/* printf("%s\n", buf); */
+      	/* TODO: Known issue: bcdedit is not detected as external, yet bcdedit.exe is there! */
 	if (access(buf, X_OK) == 0) continue; /* It's actually an external command */
       	sprintf(buf, "%s\\System32\\%s.com", pszWindir, szLine);
 	if (access(buf, X_OK) != -1) continue; /* It's actually an external command */
@@ -1416,9 +1420,9 @@ cleanup_and_return:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-static char **ppszTypes = NULL;		// PowerShell object types
-static char **ppszNames = NULL;		// PowerShell object names
-static char **ppszValues = NULL;	// PowerShell object values
+static char **ppszTypes = NULL;		/* PowerShell object types */
+static char **ppszNames = NULL;		/* PowerShell object names */
+static char **ppszValues = NULL;	/* PowerShell object values */
 static int nObjects = 0;
 
 int SearchPowerShellAliases(char *pszCommand, int iSearchFlags) {
@@ -1447,19 +1451,19 @@ int SearchPowerShellAliases(char *pszCommand, int iSearchFlags) {
       l = (int)strlen(szLine);
       for (; l && ((szLine[l-1]=='\r') || (szLine[l-1]=='\n')); ) szLine[--l] = '\0'; /* Trim trailing CR/LF */
       /* Check the object type */
-      for (pc=szLine; (*pc == ' ') || (*pc == '\t'); pc++) ; // Skip head spaces
+      for (pc=szLine; (*pc == ' ') || (*pc == '\t'); pc++) ; /* Skip head spaces */
       pszType = pc;
-      for (; *pc && (*pc != ' ') && (*pc != '\t'); pc++) ; // Skip type chars
+      for (; *pc && (*pc != ' ') && (*pc != '\t'); pc++) ; /* Skip type chars */
       *(pc++) = '\0';
       if (!*pszType) continue;
       if (strcmp(pszType, "Function") && strcmp(pszType, "Alias")) continue;
       pszType = strdup(pszType);
       if (!pszType) goto cleanup_and_return;
-      for (; (*pc == ' ') || (*pc == '\t'); pc++) ; // Skip mid spaces
+      for (; (*pc == ' ') || (*pc == '\t'); pc++) ; /* Skip mid spaces */
       pszValue = pc;
       if (!pszValue) goto cleanup_and_return;
       for (; pc[0] && (   (         (pc[0] != ' ') && (pc[0] != '\t'))
-      	               || (pc[1] && (pc[1] != ' ') && (pc[1] != '\t'))); pc++) ; // Skip value chars
+      	               || (pc[1] && (pc[1] != ' ') && (pc[1] != '\t'))); pc++) ; /* Skip value chars */
       *(pc++) = '\0';
       if (!*pszValue) continue;
       pszValue = strdup(pszValue);
@@ -1468,7 +1472,7 @@ int SearchPowerShellAliases(char *pszCommand, int iSearchFlags) {
       pszName = strdup(pszValue);
       if (!pszName) goto cleanup_and_return;
       pszName = strtok(pszName, " \t");
-      // printf("pszType=\"%s\"; pszName=\"%s\"; pszValue=\"%s\"\n", pszType, pszName, pszValue);
+      /* printf("pszType=\"%s\"; pszName=\"%s\"; pszValue=\"%s\"\n", pszType, pszName, pszValue); */
 
       ppszTypes = realloc(ppszTypes, (nObjects + 2) * sizeof(char *));
       if (!ppszTypes) goto cleanup_and_return;
@@ -1504,4 +1508,4 @@ cleanup_and_return:
   return -1;
 }
 
-#endif // defined(_WIN32)
+#endif /* defined(_WIN32) */
