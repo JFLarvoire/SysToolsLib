@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-03-19
+### Fixed
+- C/include/win32.mak: Fixed the DOS stub location, based on OUTDIR.
+
+## [Unreleased] 2019-03-02
+### New
+- C/src/which.c: Rewrote the -i option to get the built-in list (cmd) and alias & function lists (PowerShell) from stdin.
+
+### Fixed
+- C/MsvcLibX/include/strings.h: Fixed this file, which did not work at all, as there's actually no MS equivalent to include.
+
 ## [Unreleased] 2019-02-11
 ### New
 - C/include/arm64.mak: New make file to build ARM64 executables.
