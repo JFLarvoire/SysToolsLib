@@ -129,6 +129,7 @@
 #    2018-03-01 JFL Always define OBJECTS before invoking lib2libs.mak.       #
 #    2018-03-02 JFL Added variable SKIP_THIS, to prevent building specific    #
 #		    versions.						      #
+#    2019-03-18 JFL Fixed the DOS stub location, based on OUTDIR.	      #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -565,8 +566,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) ... done.
 
 # Inference rule to link a program
-!IF $(USEDOSSTUB) && EXIST(DOS$(DS)/$(PROGRAM).EXE)
-STUB=/STUB:DOS$(DS)\$(PROGRAM).EXE
+!IF $(USEDOSSTUB) && EXIST($(OUTDIR)/DOS$(DS)/$(PROGRAM).EXE)
+STUB=/STUB:$(OUTDIR)\DOS$(DS)\$(PROGRAM).EXE
 !ELSE
 STUB=
 !ENDIF
