@@ -38,12 +38,13 @@
 #    2017-09-02 JFL Fixed error {can't read "mtime": no such variable.}       #
 #                   Improved the debug and error reporting.                   #
 #                   Added option -q|--quiet.                                  #
+#    2019-04-02 JFL Fixed bug in --i2n option moving files to the curr. dir.  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2017-09-02"
+set version "2019-04-02"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -557,6 +558,9 @@ set err [catch {
       set time [clock format $time -format "%Y-%m-%d_%Hh%Mm%Ss_"]
       set dir [file dirname $name]
       set name2 "$time[file tail $name]"
+      if {"$dir" != "."} {
+      	set name2 [file join $dir $name2]
+      }
       if {[Debug] || $noexec} {
 	puts "file rename [CondQuote $name] [CondQuote $name2]"
       } else { # Display the list of files processed, to allow monitoring progress
