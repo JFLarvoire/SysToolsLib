@@ -2,7 +2,7 @@
 *		    							      *
 *   Filename	    font.c						      *
 *		    							      *
-*   Description     Get information about fonts on this system		      *
+*   Description     Manage the console fonts				      *
 *		    							      *
 *   Notes	    Windows font and text functions:                          *
 *    https://docs.microsoft.com/en-us/windows/desktop/gdi/font-and-text-functions
@@ -18,13 +18,17 @@
 *		    Removed the hardcoded limit on the # of supported fonts.  *
 *    2018-12-07 JFL Renamed switches and changed arguments.		      *
 *		    Added option -s. Version 2.0.			      *
+*    2019-04-03 JFL Fixed the font setting, that did not work well with       *
+*                   TrueType fonts.					      *
+*		    Added an optional weight argument.			      *
+*		    Version 2.1.					      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2018-12-07"
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2019-04-03"
 
 #define _UTF8_SOURCE
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -91,7 +95,7 @@ int ListFonts(DWORD dwCriteria);
 int ShowConsoleFont(DWORD dwFlags);	// Display the current console font
 int ListConsoleFontSizes(void);		// List available sizes for the console font
 int SetConsoleFontSize(int iIndex);	// Select one of the available sizes ""
-int SetConsoleFontName(char *pszName, char *pszSize);
+int SetConsoleFontName(char *pszName, char *pszSize, char *pszWeight);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -114,6 +118,7 @@ int main(int argc, char *argv[]) {
   DWORD dwFlags = 0;
   char *pszName = NULL;
   char *pszSize = NULL;
+  char *pszWeight = NULL;
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
@@ -139,6 +144,7 @@ int main(int argc, char *argv[]) {
       DEBUG_CODE(
 	if (streq(opt, "d")) {
 	  DEBUG_MORE();
+	  iVerbose = TRUE;
 	  continue;
 	}
       )
@@ -168,8 +174,12 @@ int main(int argc, char *argv[]) {
       pszName = arg;
       continue;
     }
-    if (!pszSize) {
+    if ((!pszSize) && (strpbrk(arg, "xX ") || (atoi(arg) < 100))) {
       pszSize = arg;
+      continue;
+    }
+    if ((!pszWeight) && (strpbrk(arg, "wW") || (atoi(arg) >= 100))) {
+      pszWeight = arg;
       continue;
     }
     fprintf(stderr, "Unexpected argument %s. Ignored.\n", arg);
@@ -177,7 +187,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (pszName) {
-    return SetConsoleFontName(pszName, pszSize);
+    return SetConsoleFontName(pszName, pszSize, pszWeight);
   }
   
   if (dwFlags) {
@@ -227,7 +237,7 @@ void usage(void) {
   printf("\n\
 font.exe version %s - Manage the console fonts\n\
 \n\
-Usage: font [SWITCHES] [FONT_NAME [FONT_SIZE]]\n\
+Usage: font [SWITCHES] [FONT_NAME [FONT_SIZE] [FONT_WEIGHT]]\n\
 \n\
 Switches:\n\
   -?        Display this help message and exit\n\
@@ -244,9 +254,10 @@ Switches:\n\
   -v        Display verbose information\n\
   -V        Display this program version and exit\n\
 \n\
-Default: Display the current console font type, name, and size\n\
+Default: Display the current console font type, name, size, and weight\n\
 FONT_NAME: One of the font names listed by the -l switch\n\
-FONT_SIZE: The new font size. Ex: 8x14 or \"8 14\" or \"8 x 14\"\n\
+FONT_SIZE: The new font size. Ex: 14 or 8x14 or \"8 14\" or \"8 x 14\"\n\
+FONT_WEIGHT: The new font weight. Ex: 400 or \"W400\"\n\
 \n\
 Notes:\n\
 (1) The Win32 APIs we use give no info about alternate sizes in Windows 10.\n\
@@ -356,9 +367,14 @@ int ShowConsoleFont(DWORD dwFlags) {
     coord = GetConsoleFontSize(hConsole, cfix.nFont);
 
     if (dwFlags & 1) {	// Display font params in a reusable form
-      n = printf("\"%s\" %dx%d\n", szFaceName, coord.X, coord.Y);
+      n = printf("\"%s\" %dx%d", szFaceName, coord.X, coord.Y);
+      if (cfix.FontWeight != FW_NORMAL) n += printf(" W%u", cfix.FontWeight);
+      n += printf("\n");
     } else {		// Display font params in a user-friendly form
-      n = printf("[%s] %s (%d x %d)\n", pszType, szFaceName, coord.X, coord.Y);
+      n = printf("[%s] %s (%d x %d)", pszType, szFaceName, coord.X, coord.Y);
+      if (iVerbose) n += printf(" PF%02.2X", cfix.FontFamily);
+      if (iVerbose || (cfix.FontWeight != FW_NORMAL)) n += printf(" W%u", cfix.FontWeight);
+      n += printf("\n");
     }
   } else if (GetCurrentConsoleFont(hConsole, FALSE, &cfi)) { // This one works in XP
     COORD coord;
@@ -731,7 +747,9 @@ exit_SetConsoleFontSize:
 |                                                                             |
 |   Description:    Set the console font by name                              |
 |                                                                             |
-|   Parameters:                                                               |
+|   Parameters:     char *pszName       Required.                             |
+|		    char *pszSize       Optional. Ex: 8x16 or "8 x 16" ...    |
+|		    char *pszWeight     Optional. Default: FW_NORMAL = 400    |
 |                                                                             |
 |   Return value:   0 = Success, 1 = error                                    |
 |                                                                             |
@@ -742,13 +760,44 @@ exit_SetConsoleFontSize:
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int SetConsoleFontName(char *pszName, char *pszSize) {
-  CONSOLE_FONT_INFOEX cfix;
+typedef struct {
+  char *pszName;	// The font name, for which to query information
+  UINT uFontFamily;	// The only information we're interested in so far
+} sFontParams;
+
+#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+// LOGFONT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/dd145037(v=vs.85).aspx
+// TEXTMETRIC struct: https://msdn.microsoft.com/en-us/library/windows/desktop/dd145132(v=vs.85).aspx
+int CALLBACK FontParamsCB(const LOGFONT *lplf, const TEXTMETRIC *lptm, DWORD dwType, LPARAM lpData) {
+  sFontParams *pFontParams = (sFontParams *)lpData;
+
+  if (lstrcmpi(lplf->lfFaceName, pFontParams->pszName)) return 1; // Not the required font. Continue
+  
+  // *_FONTTYPE defined in winddi.h
+  pFontParams->uFontFamily = FF_DONTCARE;		// Bits 7:4
+  // The constants names and values below are slightly inconsistent
+  // if (dwType & RASTER_FONTTYPE) {
+  //   pFontParams->uFontFamily |= TMPF_FIXED_PITCH;
+  // } else if (dwType & DEVICE_FONTTYPE) {
+  //   pFontParams->uFontFamily |= TMPF_DEVICE;
+  // } else if (dwType & TRUETYPE_FONTTYPE) {
+  //   pFontParams->uFontFamily |= TMPF_TRUETYPE;
+  // }
+  // But according to the MS docs, the families are the same in both structures.
+  pFontParams->uFontFamily |= dwType & 0x0F;	// Bits 3:0
+  return 0;
+}
+#pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
+
+int SetConsoleFontName(char *pszName, char *pszSize, char *pszWeight) {
+  CONSOLE_FONT_INFOEX cfix = {0};
   HMODULE hKernel32 = GetModuleHandle("kernel32.dll");
   PGETCURRENTCONSOLEFONTEX pGetCurrentConsoleFontEx = (PGETCURRENTCONSOLEFONTEX)GetProcAddress(hKernel32, "GetCurrentConsoleFontEx");
   PSETCURRENTCONSOLEFONTEX pSetCurrentConsoleFontEx = (PSETCURRENTCONSOLEFONTEX)GetProcAddress(hKernel32, "SetCurrentConsoleFontEx");
   HANDLE hConsole;
   BOOL bDone;
+  sFontParams fontParams = {0};
+  HDC hDC;
 
   if ((!pGetCurrentConsoleFontEx) || (!pSetCurrentConsoleFontEx)) {
     fprintf(stderr, "Error: Can't get Get or SetCurrentConsoleFontEx() addresses\n");
@@ -778,7 +827,7 @@ int SetConsoleFontName(char *pszName, char *pszSize) {
 	if (p) sscanf(p, "%d", &iY);
       }
     }
-    if (iY) {		// We gor both X and Y
+    if (iY) {		// We got both X and Y
       cfix.dwFontSize.X = (SHORT)iX;
       cfix.dwFontSize.Y = (SHORT)iY;
     } else if (iX) {	// We got only 1 number
@@ -786,16 +835,44 @@ int SetConsoleFontName(char *pszName, char *pszSize) {
     }
   }
 
+  // Identify the new font pitch and family
+  hDC = GetWindowDC(GetConsoleWindow());
+  fontParams.pszName = pszName;
+  EnumFonts(hDC, NULL, FontParamsCB, (LPARAM)&fontParams);
+  if (fontParams.uFontFamily) {
+    DEBUG_PRINTF(("Found family = 0x%X\n", fontParams.uFontFamily));
+    cfix.FontFamily = fontParams.uFontFamily;
+  } else {
+    DEBUG_PRINTF(("Family not found\n"));
+    cfix.FontFamily = FF_DONTCARE;
+  }
+  
   // Change the font
   cfix.nFont = 0;
-  cfix.FontFamily = FF_DONTCARE;
-  cfix.FontWeight = FW_NORMAL;
+  // cfix.FontFamily = FF_DONTCARE;
+  // Note: Setting cfix.FontFamily = FF_DONTCARE; does not work correctly with
+  // font "Liberation Mono". The font is indeed set, but it does not look good.
+  // It's as if font smoothing were disabled. Tests with various values:
+  //   cfix.FontFamily = 0x36;	// Good (This is the family value returned in a window where the font still looks good)
+  //   cfix.FontFamily = 0x06;	// Good
+  //   cfix.FontFamily = 0x30;	// Bad
+  //   cfix.FontFamily = 0x34;	// Good. Bit 2 = TMPF_TRUETYPE
+  //   cfix.FontFamily = 0x32;	// Bad.  Bit 1 = TMPF_VECTOR
+  // Fixed by querying the font family above.
+  
+  if (pszWeight) {
+    if ((pszWeight[0] & '\xDF') == 'W') pszWeight++;
+    cfix.FontWeight = atoi(pszWeight);
+  } else {
+    cfix.FontWeight = FW_NORMAL;
+  }
+  
   MultiByteToWideChar(CP_UTF8, 0, pszName, (int)strlen(pszName)+1, cfix.FaceName, sizeof(cfix.FaceName));
-  if (iVerbose) printf("Setting font %s size %d x %d\n", pszName, cfix.dwFontSize.X, cfix.dwFontSize.Y);
+  if (iVerbose) printf("Setting font \"%s\" size (%d x %d) family 0x%X weigth %d\n", pszName, cfix.dwFontSize.X, cfix.dwFontSize.Y, cfix.FontFamily, cfix.FontWeight);
   bDone = pSetCurrentConsoleFontEx(hConsole, FALSE, &cfix);
-  if (iVerbose) printf("bDone = %d\n", bDone);
+  DEBUG_PRINTF(("bDone = %d\n", bDone));
   if (!bDone) {
-    fprintf(stderr, "Error: Failed to set font %s size %d x %d\n", pszName, cfix.dwFontSize.X, cfix.dwFontSize.Y);
+    fprintf(stderr, "Error: Failed to set font \"%s\" size (%d x %d) family 0x%X weigth %d\n", pszName, cfix.dwFontSize.X, cfix.dwFontSize.Y, cfix.FontFamily, cfix.FontWeight);
   }
 
   CloseHandle(hConsole);

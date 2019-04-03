@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-04-02
+### Fixed
+- C/SRC/font.c: Fixed the font setting, which did not work well with TrueType fonts.
+### New
+- C/SRC/font.c: Added an optional weight argument.
+
+## [Unreleased] 2019-04-02
+### Fixed
+- Tcl\cfdt.tcl: Fixed bug in the --i2n option, which moved files to the current directory.
+
 ## [Unreleased] 2019-03-19
 ### Fixed
 - C/include/win32.mak: Fixed the DOS stub location, based on OUTDIR.
