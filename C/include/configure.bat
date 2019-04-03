@@ -176,13 +176,14 @@
 :#   2019-02-08 JFL Added support for Visual Studio 2017 and 2019 previews.   *
 :#                  Fixed the detection of ARM & added that of ARM64 tools.   *
 :#   2019-02-10 JFL It's not worth searching the WINSDK if the CC is missing. *
+:#   2019-04-03 JFL Added the ability to disable MASM and MSVC search.        *
 :#                                                                            *
 :#      © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-02-10"
+set "VERSION=2019-04-03"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1382,12 +1383,15 @@ endlocal & set "%~2=%SHORT%" & goto :eof
 :find16
 %FUNCTION0%
 :# Microsoft assembler
+:# If disabled on the command line, then skip it.
+if "%MASM%" == "-" goto :find16.no_masm
 :# If specified on the command line, and looking reasonably valid, then use it.
 if not "%MASM%" == "" if exist "%MASM%\BIN\ML.EXE" goto :find16.found_masm
 :# Else try the default MASM installation path, and a few likely alternatives
 for /d %%p in (C:\MASM* \MASM* "%PF32%\MASM*" "%PF64%\MASM*") do (
   if exist "%%~p\BIN\ML.EXE" pushd "%%~p" & set "MASM=!CD!" & popd & goto :find16.found_masm
 )
+:find16.no_masm
 set "MASM=" & set "VC16.AS=" & goto :find16.done_masm
 :find16.found_masm
 set "VC16.MASM=%MASM%"
@@ -1396,12 +1400,15 @@ echo DOS	AS	x86	!VC16.AS!
 :find16.done_masm
 
 :# 16-bits Microsoft Visual C++ tools
+:# If disabled on the command line, then skip it.
+if "%MSVC%" == "-" goto :find16.no_msvc
 :# If specified on the command line, and looking reasonably valid, then use it.
 if not "%MSVC%" == "" if exist "%MSVC%\BIN\CL.EXE" set "VC16=%MSVC%" & goto :find16.found_msvc
 :# Else try the default MSVC 1.x installation path, and a few likely alternatives
 for /d %%p in (C:\MSVC* \MSVC* "%PF32%\MSVC*" "%PF64%\MSVC*") do (
   if exist "%%~p\BIN\CL.EXE" pushd "%%~p" & set "VC16=!CD!" & popd & goto :find16.found_msvc
 )
+:find16.no_msvc
 set "VC16=" & set "VC16.CC=" & goto :find16.done_msvc
 :find16.found_msvc
 call :long2short VC16 VC16~S
@@ -1988,8 +1995,8 @@ echo   -d            Debug mode. Display internal variables and function calls
 echo   -E            Ignore environment variable STINCLUDE, and redefine it
 echo   -l LOGFILE    Log output into a file. Default: Don't
 echo   -L            Disable logging. Default: Use the parent script log file, if any
-echo   -masm PATH    Path to MASM install dir. Default: C:\MASM
-echo   -msvc PATH    Path to MSVC 16-bits tools install dir. Default: C:\MSVC
+echo   -masm PATH    Path to MASM install dir, or - to disable. Default: C:\MASM
+echo   -msvc PATH    Path to MSVC 16-bits tools install dir, or -. Default: C:\MSVC
 echo   -o OUTDIR     Output base directory. Default: bin
 echo   -p            Set persistent project path variables in HKCU\Environment
 echo   -r            Recursively configure all subprojects. Default

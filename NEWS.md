@@ -9,6 +9,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SRC/font.c: Fixed the font setting, which did not work well with TrueType fonts.
 ### New
 - C/SRC/font.c: Added an optional weight argument.
+- C/include/configure.bat: Added the ability to disable MASM and MSVC search.
 
 ## [Unreleased] 2019-04-02
 ### Fixed
