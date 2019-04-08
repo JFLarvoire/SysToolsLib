@@ -1446,10 +1446,10 @@ proc Realign {text {merge 1}} {
     # Remove ellipsis characters, which cause ill-looking results in case there were 4 dots or more.
     regsub -all {…} $line "..."  line
     # Remove other common symbols
-    regsub -all {☎|☏|✆} $line {[Tel]} line	;# Telephone
+    regsub -all {☎|☏|✆|} $line {[Tel]} line	;# Telephone
     regsub -all {📱} $line {[Mob]} line		;# Mobile phone
     regsub -all {📠} $line {[Fax]} line		;# Fax machine
-    regsub -all {✉} $line {[Mail]} line		;# Physical mail
+    regsub -all {✉|} $line {[Mail]} line	;# Physical mail
     regsub -all {📧} $line {[E-Mail]} line	;# E-Mail
     # Remove other microsoft-specific symbols
     regsub -all {|} $line "<-" line
@@ -1457,6 +1457,8 @@ proc Realign {text {merge 1}} {
     regsub -all {|} $line "<=" line
     regsub -all {|} $line "=>" line
     regsub -all {} $line "<=>" line
+    # Remove bars
+    regsub -all {▬} $line "==" line
     # Output the modified line
     DebugVars merge endSpace
     if {!$merge} { # The simple case: Output one line for every input line
