@@ -33,8 +33,6 @@ Batch\regx.bat
 Batch\rhs.bat
 Batch\-rhs.bat
 Batch\subcmd.bat
-Batch\TclSetup.bat
-Batch\tclsh.bat
 Batch\TimeX.bat
 Batch\touch.bat
 Batch\trouve.bat
@@ -60,6 +58,7 @@ PowerShell\Reconnect.ps1
 PowerShell\ShadowCopy.ps1
 PowerShell\Test-IPv6Components.ps1
 PowerShell\Window.ps1
+Python\PySetup.bat
 Tcl\b64dec.tcl
 Tcl\b64enc.tcl
 Tcl\camel.tcl
@@ -74,6 +73,8 @@ Tcl\regsub.tcl
 Tcl\rxrename.tcl
 Tcl\show.tcl
 Tcl\sml.tcl
+Tcl\TclSetup.bat
+Tcl\tclsh.bat
 Tcl\unixtime.tcl
 Tcl\upper.tcl
 Tcl\urldecode.tcl

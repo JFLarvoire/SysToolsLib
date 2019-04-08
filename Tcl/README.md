@@ -10,7 +10,7 @@ Most of these scripts work both in Windows and in Linux.
 
     All modern Linux distributions already include Tcl and Expect interpreters.
 
-    - Copy the scripts into a directory in you path. For example: /usr/local/bin
+    - Copy the scripts into a directory in your path. For example: /usr/local/bin
     - Make sure they're executable: chmod +x /usr/local/bin/*.tcl
     - Remove the .tcl extensions, so that they can be invoked with just their base name.
     - Some scripts depend on external packages for some of their features.  
@@ -25,10 +25,10 @@ Most of these scripts work both in Windows and in Linux.
 
         - Download the latest stable 32-bits Tcl interpreter from ActiveState:  
           http://www.activestate.com/activetcl/downloads  
-          Be sure to download the x86 version, even on AMD64/x86_64 machines, because we use Expect,
-          and it's only available in the x86 version.
+          Be sure to download the x86 version, even on AMD64/x86_64 machines, because some scripts here use Expect,
+          and (as of 2018) it's only available in the x86 version.
         - Install it on your system. Accept defaults for all options, unless you know what you're doing.
-        - Copy [tclsh.bat](../Batch) and [TclSetup.bat](../Batch) into your path. Ex: into C:\Windows
+        - Copy [tclsh.bat](tclsh.bat) and [TclSetup.bat](TclSetup.bat) into your path. Ex: into C:\Windows
         - Run `TclSetup.bat -s`  
           (This sets up Windows to run .tcl files as command-line scripts, and .tk files as windowed scripts.)
         - In Windows XP or 2003, close the command prompt and restart it. Not necessary in more recent versions of Windows.

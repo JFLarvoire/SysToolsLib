@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-04-08
+### Changed
+- C/Batch/tcl*.bat moved to the Tcl directory. This is to reflect the fact that these batch scripts are only useful
+  when using Tcl.
+- C/Batch/PySetup.bat moved to the new Python directory. Same reason: This batch script is only useful when using Python.
+  And the Python directory will be there for future Python scripts in the library.
+
 ## [Unreleased] 2019-04-02
 ### Fixed
 - C/SRC/font.c: Fixed the font setting, which did not work well with TrueType fonts.
