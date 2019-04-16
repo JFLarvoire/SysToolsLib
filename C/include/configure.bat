@@ -173,19 +173,21 @@
 :#   2017-03-12 JFL Defining variable OS limits builds to that OS list.       *
 :#   2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           *
 :#   2018-03-09 JFL Find Windows SDK bin dir when in a %WINSDK_VER% subdir.   *
+:#   2019-01-20 JFL Create local configure.bat and make.bat proxies.          *
 :#   2019-02-08 JFL Added support for Visual Studio 2017 and 2019 previews.   *
 :#                  Fixed the detection of ARM & added that of ARM64 tools.   *
 :#   2019-02-10 JFL It's not worth searching the WINSDK if the CC is missing. *
 :#   2019-04-03 JFL Added the ability to disable MASM and MSVC search.        *
 :#   2019-04-15 JFL Added option -nodos.                                      *
 :#                  Fixed option -vs, and split it into options -vsp and -vsn.*
+:#   2019-04-16 JFL Merged in the 2019-01-20 change made for Ag.              *
 :#                                                                            *
 :#      © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-04-15"
+set "VERSION=2019-04-16"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -2576,6 +2578,15 @@ if defined POST_MAKE_ACTIONS (
 :# The config.bat script must explicitly return 0, as in XP some set commands do set errorlevel 1!
 %CONFIG%.
 %CONFIG% exit /b 0 ^&:# Configuration done successfully
+
+:# Create local configure.bat and make.bat proxies
+for %%f in (configure make) do (
+  if not exist %%f.bat (
+    %EXEC% copy %STINCLUDE%\BatProxy.bat %%f.bat ">"NUL 2">"NUL
+  ) else (
+    %EXEC% xcopy /d /y %STINCLUDE%\BatProxy.bat %%f.bat ">"NUL 2">"NUL
+  )
+)
 
 set _DO.XVD=%MACRO% ( %ECHO.XVD% %!%MACRO.ARGS:~1%!% %&% %!%MACRO.ARGS:~1%!% ) %/MACRO%
 

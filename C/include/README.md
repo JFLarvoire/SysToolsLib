@@ -52,6 +52,14 @@ Level 2 is the eXtra debug mode. Use it for displaying more detailed debug infor
 debugging sessions.  
 More levels could be used if desired.
 
+Most common macros:
+
+Macro				| Description
+------------------------------- | ----------------------------------------------------
+DEBUG_CODE(...)			| Code to be present only in the debug version.
+DEBUG_CODE_IF_ON(...)		| Code to be present only in the debug version, and that will run only if debug is enabled.
+DEBUG_PRINTF((format, ...))	| Print something if debug is enabled. (Notice the double parenthesis!)
+
 For a complete list of available macros, see the `debugm.h` header.
 
 
@@ -160,13 +168,13 @@ in the project top directory.
 
 - Copy the include directory inside your project directory:
 
-        include/
+        include\
         myprogram.c
 
   No need to create any specific make file.
 
-- Run `include/configure.bat`  
-  Run `include/make.bat myprogram.exe`
+- Run `include\configure.bat`  (Note that this creates a local make.bat script, invoking include\make.bat)  
+  Run `make.bat myprogram.exe`
 
 2) Several sources, that need to be compiled and linked together into a single executable
 
@@ -177,14 +185,14 @@ in the project top directory.
 
 - The project directory contains:
 
-        include/
+        include\
         Files.mak
         source1.c
         source2.c
         source3.c
 
-- Run `include/configure.bat`  
-  Run `include/make.bat` to rebuild myprogram.exe.
+- Run `include\configure.bat`  
+  Run `make.bat` to rebuild myprogram.exe.
 
 3) Several sources, each generating a corresponding executable, with one requiring special make instructions
 
@@ -194,19 +202,19 @@ in the project top directory.
 
 - The project directory contains:
 
-        include/
+        include\
         Files.mak
         program1.c
         program2.c
         program3.c
         program3.mak
 
-- Run `include/configure.bat`  
-  Run `include/make.bat` to rebuild all three programs.  
+- Run `include\configure.bat`  
+  Run `make.bat` to rebuild all three programs.  
   The make files will automatically search for *.c, *.cpp, *.asm, etc, and build program1.exe, program2.exe, program3.exe.  
   If one (for example program3) requires special make instructions, create a program3.mak file, and put them in there.  
-  Run `include/make.bat program2.exe` to rebuild just the second one from program2.c.  
-  Run `include/make.bat program3.exe` to rebuild just the third one from program3.c and instructions from program3.mak.  
+  Run `make.bat program2.exe` to rebuild just the second one from program2.c.  
+  Run `make.bat program3.exe` to rebuild just the third one from program3.c and instructions from program3.mak.  
 
 4) Build for Windows and Linux
 
@@ -234,8 +242,8 @@ in the project top directory.
 
 - Put a `Files.mak`, and others *mak* as needed in each subproject's subdirectory.  
   (No need to duplicate the include directory in each subdirectory!)
-- Run `include/configure.bat` once in the top directory. 
-  Run `include/make.bat` in the top directory to rebuild all subprojects recursively.  
+- Run `include\configure.bat` once in the top directory. 
+  Run `make.bat` in the top directory to rebuild all subprojects recursively.  
 
 6) A project with several programs, each having several sources, and all these sources in the same directory.
 
@@ -243,7 +251,7 @@ in the project top directory.
 
         PROGRAMS = program1 program2 program3
 
-- In `Files.mak` for each of the above programs, define the $(PROGRAM)_SOURCES as in this example:
+- In `Files.mak`, for each of the above programs, define the $(PROGRAM)_SOURCES as in this example:
 
         program1_SOURCES = program1a.c program1b.c program1c.c
         program2_SOURCES = program2a.c program2b.c
