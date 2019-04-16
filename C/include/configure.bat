@@ -177,13 +177,15 @@
 :#                  Fixed the detection of ARM & added that of ARM64 tools.   *
 :#   2019-02-10 JFL It's not worth searching the WINSDK if the CC is missing. *
 :#   2019-04-03 JFL Added the ability to disable MASM and MSVC search.        *
+:#   2019-04-15 JFL Added option -nodos.                                      *
+:#                  Fixed option -vs, and split it into options -vsp and -vsn.*
 :#                                                                            *
 :#      © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-04-03"
+set "VERSION=2019-04-15"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1524,6 +1526,19 @@ set "PROC[SH]=sh"	&:# SysToolsLib and VC 8 name
 set "PROC[MIPS]=mips"	&:# SysToolsLib and VC 8 name
 set "PROC[IA64]=ia64"	&:# SysToolsLib and VC 8 name
 
+:# List of Visual Studio aliases and paths
+set "VSN[2019]=16"  & set "VSA[16]=16/2019"   & set "VSP[16]=Microsoft Visual Studio\2019"		
+set "VSN[2017]=15"  & set "VSA[15]=15/2017"   & set "VSP[15]=Microsoft Visual Studio\2017"		
+set "VSN[2015]=14"  & set "VSA[14]=14/2015"   & set "VSP[14]=Microsoft Visual Studio 14.0"		
+set "VSN[2013]=12"  & set "VSA[12]=12/2013"   & set "VSP[12]=Microsoft Visual Studio 12.0"		
+set "VSN[2012]=11"  & set "VSA[11]=11/2012"   & set "VSP[11]=Microsoft Visual Studio 11.0"		
+set "VSN[2010]=10"  & set "VSA[10]=10/2010"   & set "VSP[10]=Microsoft Visual Studio 10.0"		
+set "VSN[2008]=9"   & set "VSA[9]=9/2008"     & set "VSP[9]=Microsoft Visual Studio 9.0"		
+set "VSN[2005]=8"   & set "VSA[8]=8/2005"     & set "VSP[8]=Microsoft Visual Studio 8"		
+set "VSN[2003]=7.1" & set "VSA[7.1]=7.1/2003" & set "VSP[7.1]=Microsoft Visual Studio .NET 2003"	
+set "VSN[.NET]=7"   & set "VSA[7]=7/.NET"     & set "VSP[7]=Microsoft Visual Studio .NET"		
+set "VSN[Studio]=6" & set "VSA[6]=6/"         & set "VSP[6]=Microsoft Visual Studio"			
+
 :# Space-separated list of VC subdirectories to search
 set "VC15S=Enterprise\VC Professional\VC Community\VC Preview\VC"
 exit /b
@@ -1535,12 +1550,29 @@ set "VS=%~3"
 set "VC=%~4"
 call :findvs.init
 set "SEARCH_IN=call :FindVsIn !PROC[%~1]!"
+:# Generate VSALIAS and VSTUDIO, based on the -vsn and -vsp options.
+if defined VSNAME if defined VSN[%VSNAME%] set "VSNAME=!VSN[%VSNAME%]!"
+if defined VSNAME if defined VSA[%VSNAME%] ( :# Convert a VS name to a VS alias & path
+  set "VSALIAS=!VSA[%VSNAME%]!"
+  if not defined VSPATH set "VSTUDIO=!VSP[%VSNAME%]!"
+)
+if defined VSPATH ( :# Convert a VS path to a VS alias & path
+  set "VSTUDIO=%VSPATH%"
+  if not defined VSNAME (
+    :# Get the last token in the path
+    for %%t in (%VSPATH:\= %) do set "VSNAME=%%t"
+    :# Remove the trailing .0 if present
+    set "VSNAME=!VSNAME:.0=!"
+    if defined VSN[!VSNAME!] for %%n in (!VSNAME!) do set "VSNAME=!VSN[%%n]!"
+    for %%n in (!VSNAME!) do set "VSALIAS=!VSA[%%n]!"
+  )
+)
 :# If specified on the command line, and looking reasonably valid, then use it.
-if defined VSTUDIO call :FindVsIn %2 "%VSTUDIO%" "%VC15S%" BIN15 && goto :foundvs
-if defined VSTUDIO call :FindVsIn %2 "%VSTUDIO%" "VC VC7 VC98" BIN && goto :foundvs
+if defined VSTUDIO call :FindVsIn %2 %VSALIAS% "%VSTUDIO%" "%VC15S%" BIN15 && goto :foundvs
+if defined VSTUDIO call :FindVsIn %2 %VSALIAS% "%VSTUDIO%" "VC VC7 VC98" BIN && goto :foundvs
 :# If VS' vcvars*.bat has already been run manually, then use it.
-if defined VSINSTALLDIR call :FindVsIn %2 "%VSINSTALLDIR%" "%VC15S%" BIN15 && goto :foundvs
-if defined VSINSTALLDIR call :FindVsIn %2 "%VSINSTALLDIR%" "VC VC7 VC98" BIN && goto :foundvs
+if defined VSINSTALLDIR call :FindVsIn %2 %VSALIAS% "%VSINSTALLDIR%" "%VC15S%" BIN15 && goto :foundvs
+if defined VSINSTALLDIR call :FindVsIn %2 %VSALIAS% "%VSINSTALLDIR%" "VC VC7 VC98" BIN && goto :foundvs
 :# Else scan all Visual Studio versions, starting from the newest ones.
 goto :lastvs &:# Scan all Visual Studio versions
 
@@ -1997,12 +2029,14 @@ echo   -l LOGFILE    Log output into a file. Default: Don't
 echo   -L            Disable logging. Default: Use the parent script log file, if any
 echo   -masm PATH    Path to MASM install dir, or - to disable. Default: C:\MASM
 echo   -msvc PATH    Path to MSVC 16-bits tools install dir, or -. Default: C:\MSVC
+echo   -nodos        Same as -masm - -msvc -
 echo   -o OUTDIR     Output base directory. Default: bin
 echo   -p            Set persistent project path variables in HKCU\Environment
 echo   -r            Recursively configure all subprojects. Default
 echo   -R            Do not recursively configure all subprojects
 echo   -v            Verbose mode. Display what this script does
-echo   -vs PATH      Path to Visual Studio install dir. Default: Latest avail
+echo   -vsp PATH     Visual Studio path in %%ProgramFiles%%. Default: Latest avail
+echo   -vsn NAME     Visual Studio name. Ex: 15 or 2017. Default: Latest avail
 echo   -V            Display %SCRIPT% version
 echo.
 exit /b 0
@@ -2015,6 +2049,8 @@ set "CONFIG=>>%CONFIG.BAT% echo"
 set "MASM="
 set "MSVC="
 set "VSTUDIO="
+set "VSPATH="
+set "VSNAME="
 set "RECURSE=1"
 
 :next_arg
@@ -2030,12 +2066,14 @@ if "!ARG!"=="-l" %POPARG% & call :Debug.SetLog !"ARG"! & goto next_arg
 if "!ARG!"=="-L" call :Debug.SetLog & goto next_arg
 if "!ARG!"=="-masm" %POPARG% & set "MASM=!ARG!" & goto next_arg
 if "!ARG!"=="-msvc" %POPARG% & set "MSVC=!ARG!" & goto next_arg
+if "!ARG!"=="-nodos" set "MASM=-" & set "MSVC=-" & goto next_arg
 if "!ARG!"=="-o" %POPARG% & set "OUTDIR=!ARG!" & goto next_arg
 if "!ARG!"=="-p" set "PERSISTENT_VARS=1" & goto next_arg
 if "!ARG!"=="-r" set "RECURSE=1" & goto next_arg
 if "!ARG!"=="-R" set "RECURSE=0" & goto next_arg
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
-if "!ARG!"=="-vs" %POPARG% & set "VSTUDIO=!ARG!" & goto next_arg
+if "!ARG!"=="-vsp" %POPARG% & set "VSPATH=!ARG!" & goto next_arg
+if "!ARG!"=="-vsn" %POPARG% & set "VSNAME=!ARG!" & goto next_arg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 >&2 echo Unexpected argument ignored: !"ARG"!
 goto next_arg
