@@ -152,13 +152,15 @@
 *		    Version 3.8.    					      *
 *    2019-01-16 JFL Fixed the processing of option --. Really.                *
 *		    Version 3.8.1.    					      *
+*    2019-04-15 JFL Implemented a fullpath() routine for Linux.               *
+*		    Version 3.8.2.    					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.8.1"
-#define PROGRAM_DATE    "2019-01-16"
+#define PROGRAM_VERSION "3.8.2"
+#define PROGRAM_DATE    "2019-04-15"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -276,7 +278,9 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 /* Redefine Microsoft-specific routines */
 off_t _filelength(int hFile);
-#define fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
+// Don't use realpath(), as it resolves links, which we do not want.
+// #define fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
+char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define LocalFileTime localtime
 
 #endif /* __unix__ */
@@ -543,6 +547,11 @@ int main(int argc, char *argv[]) {
 	iResetTime = 1;
 	if (iVerbose) printf("Reset time of equal files.\n");
 	continue;
+      }
+      if (   streq(opt, "tf")) {    /* Test the fullpath() routine */
+	if (iVerbose) printf("Test the fullpath() routine.\n");
+	printf("%s\n", fullpath(NULL, argv[++iArg], 0));
+	exit(0);
       }
 #ifdef _WIN32
       if (   streq(opt, "U")
@@ -1963,6 +1972,108 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength) {
 }
 
 #endif /* _WIN32 */
+
+#ifdef __unix__
+
+/* Reimplementation of Microsoft's _fullpath() for Unix, as realpath() resolves links, which we don't want */
+/* References:
+   https://stackoverflow.com/a/31889126/2215591
+   http://svn.python.org/projects/python/trunk/Lib/posixpath.py
+*/
+char *fullpath(char *absPath, const char *relPath, size_t lBuf) {
+  char *pszBuf = absPath;
+  size_t l = strlen(relPath);
+  size_t lCD = 0;
+  int nSlash = 0;
+  char *pszIn;
+  char *pszOut;
+  char *pszOutMin;
+
+  DEBUG_PRINTF(("fullpath(\"%s\", \"%s\", %lu);\n", absPath, relPath, lBuf));
+
+  // If no buffer was provided, allocate one
+  if (!pszBuf) {
+    lBuf = PATH_MAX;
+    pszBuf = malloc(lBuf);
+    if (!pszBuf) goto fail;
+  }
+  // Make sure the output path is absolute
+  if (relPath[0] != '/') {	// It's a relative path
+    while (!getcwd(pszBuf, lBuf)) {
+      if ((errno == ERANGE) && !absPath) {	// The buffer we allocated was too small
+	pszBuf = realloc(pszBuf, lBuf *= 2);	// Double its size
+	if (pszBuf) continue;
+      }
+      goto fail;	// Buffer too small, or not enough memory
+    }
+    lCD = strlen(pszBuf);
+    if (!absPath) pszBuf = realloc(pszBuf, lCD+1+l); // May be smaller or bigger
+    if (!pszBuf) goto fail;
+    if (pszBuf[lCD-1] != '/') {
+      if ((lCD+1) >= lBuf) goto fail;
+      pszBuf[lCD++] = '/';
+    }
+  }
+  if ((lCD+l) >= lBuf) goto fail;
+  strcpy(pszBuf+lCD, relPath);
+  // Skip initial slashes. 1=Local path; 2=UNC network path; >2=Local path
+  nSlash = 1;	  // At this stage, we're sure that pszBuf[0] == '/'
+  if (pszBuf[1] == '/') {
+    if (pszBuf[2] != '/') {
+      nSlash = 2;
+    }
+  }
+  pszIn = pszOut = pszBuf + nSlash;
+  while (*pszIn == '/') pszIn++;
+  // Record the end of the root path, beyond which we cannot backtrack
+  if (nSlash == 2) {
+    while (*pszIn && *pszIn != '/') *(pszOut++) = *(pszIn++);	// Copy the server name
+    if (*pszIn == '/') *(pszOut++) = *(pszIn++);		// Copy the following slash, if any
+    while (*pszIn == '/') pszIn++;				// Skip any other slashes
+    while (*pszIn && *pszIn != '/') *(pszOut++) = *(pszIn++);	// Copy the share name
+    if (*pszIn == '/') *(pszOut++) = *(pszIn++);		// Copy the following slash, if any
+    while (*pszIn == '/') pszIn++;				// Skip any other slashes
+  }
+  pszOutMin = pszOut;
+  // Scan the remaining path
+  while (*pszIn) {
+    // char *pc = pszOut;
+    // printf("pszBuf = '%.*s'; pszIn = '%s'\n", (int)(pszOut-pszBuf), pszBuf, pszIn); 
+    // Remove single and double dots
+    if (pszIn[0] == '.') {
+      if ((pszIn[1] == '/') || !pszIn[1])  {			// It's a '.'
+      	// printf("Handling './'\n");
+	pszIn++;						// Skip the '.'
+	while (*pszIn == '/') pszIn++;				// Skip the slashes
+      } else if ((pszIn[1] == '.') && ((pszIn[2] == '/') || !pszIn[2])) {	// It's a '..'
+      	// printf("Handling '../'\n");
+	pszIn += 2;						// Skip the '..'
+	while (*pszIn == '/') pszIn++;				// Skip the slashes
+	if (pszOut > pszOutMin) pszOut--;				// Remove the last slash
+	while ((pszOut > pszOutMin) && (pszOut[-1] != '/')) pszOut--;	// Remove the last directory name
+      } else {	// Anything else beginning with a . is a normal file or directory name
+      	goto copy_node_name;
+      }
+    } else {
+copy_node_name:	// Normal file or directory name
+      while (*pszIn && *pszIn != '/') *(pszOut++) = *(pszIn++);	// Copy the name
+      if (*pszIn == '/') *(pszOut++) = *(pszIn++);		// Copy the following slash, if any
+      while (*pszIn == '/') pszIn++;				// Skip any other slashes
+      // printf("Handling '%.*s'\n", (int)(pszOut-pc), pc);
+    }
+  }
+  // Remove the trailing / if there was not one in the input path
+  if ((pszOut[-1] == '/') && (pszIn[-1] != '/')) {
+    if ((pszOut > pszOutMin) || (nSlash == 2)) pszOut--;
+  }
+  *pszOut = '\0';	
+  return pszBuf;
+fail:
+  if (pszBuf && !absPath) free(pszBuf);
+  return NULL;
+}
+
+#endif /* __unix__ */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
