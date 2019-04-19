@@ -8,7 +8,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### New
 - C/include/stversion.bat: New file defining version strings to display with -? and -V options.
 ### Changed
-- C/SRC/*.c and *.cpp: Consistently use the version generated in stversion.h.  
+- C/SRC/*.c and *.cpp: Consistently use the version strings generated in stversion.h.  
 
 ## [Unreleased] 2019-04-16
 ### New
