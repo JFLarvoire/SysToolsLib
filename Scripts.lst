@@ -27,7 +27,6 @@ Batch\MakeZip.bat
 Batch\MCD.BAT
 Batch\mountw.bat
 Batch\n.bat
-Batch\PySetup.bat
 Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat
