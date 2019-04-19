@@ -43,13 +43,15 @@
 *                   Make sure all aborts display consistent error messages.   *
 *		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.1.  					      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.1.1.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2018-04-30"
+#define PROGRAM_NAME    "redo"
+#define PROGRAM_VERSION "3.1.1"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -69,9 +71,9 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <stdarg.h>
-
-/* MsvcLibX debugging macros */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -382,7 +384,6 @@ char *internes[] = {            /* Internal commands. (Only those not duplicated
 
 /* Forward references */
 
-char *version(int iLibsVer);	    /* Build a string with the program versions */
 bool interne(char *);		    /* Is a command internal? */
 void finis(int retcode, ...);	    /* Return to the initial drive & exit */
 void usage(int iErr);               /* Display a brief help and exit */
@@ -468,7 +469,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(option, "V")) {	    /* -V: Display the version */
-	printf("%s\n", version(TRUE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -482,7 +483,7 @@ int main(int argc, char *argv[]) {
     usage(1);
   }
 
-  if (iVerbose) printf("Redo version %s\n", version(FALSE));
+  if (iVerbose) printf(PROGRAM_NAME_AND_VERSION "\n");
 
   /* Build the sub command line to execute recursively */
 
@@ -559,31 +560,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(int iErr) {
-  printf("\
-Redo version %s - Execute a command recursively\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Execute a command recursively\n\
 \n\
 Usage: redo [SWITCHES] {COMMAND LINE}\n\
 \n\
@@ -618,7 +597,7 @@ And of course, use a command that is compatible with paths > 260 bytes.\n\
 #ifdef __unix__
 "\n"
 #endif
-, version(FALSE));
+);
   exit(iErr);
 }
 

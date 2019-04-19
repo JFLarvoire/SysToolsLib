@@ -23,10 +23,12 @@
 *		    The force option now deletes read-only files. 	      *
 *                   Prefix all error messages with the program name.          *
 *		    Version 1.2.    					      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.2"
+#define PROGRAM_NAME    "zap"
+#define PROGRAM_VERSION "1.2.1"
 #define PROGRAM_DATE    "2018-05-31"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
@@ -42,9 +44,10 @@
 #include <fnmatch.h>
 #include <libgen.h>
 #include <sys/stat.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Our house debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
@@ -86,7 +89,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /*********************************** Other ***********************************/
 
-#ifndef EXE_OS_NAME
+#ifndef DIRSEPARATOR_CHAR
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -101,7 +104,6 @@ int GetProgramNames(char *argv0);	/* Initialize the above two */
 int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
 
 /* Forward declarations */
-char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
 int isdir(const char *pszPath);
@@ -208,7 +210,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(zo.iFlags & FLAG_VERBOSE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -264,28 +266,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-    ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\n\
-%s version %s\n\
-\n\
-Delete files visibly, possibly recursively\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Delete files visibly, possibly recursively\n\
 \n\
 Usage:\n\
   %s [SWITCHES] PATHNAME [PATHNAME [...]]\n\
@@ -312,7 +295,7 @@ Pathname: [PATH" DIRSEPARATOR_STRING "]NAME (Wildcards allowed in name)\n\
 When using wildcards in recursive mode, a search is made in each subdirectory.\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, program, version(FALSE), progcmd, progcmd);
+, program, progcmd, progcmd);
 #ifdef __unix__
   printf("\n");
 #endif

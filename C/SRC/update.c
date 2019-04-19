@@ -150,17 +150,17 @@
 *		    Fixed 2018-12-18 bug causing Error: Not enough arguments  *
 *		    Corrected assignments in conditional expressions.	      *
 *		    Version 3.8.    					      *
-*    2019-01-16 JFL Fixed the processing of option --. Really.                *
-*		    Version 3.8.1.    					      *
-*    2019-04-15 JFL Implemented a fullpath() routine for Linux.               *
-*		    Version 3.8.2.    					      *
+*    2019-01-16 JFL Fixed the processing of option --. Really. Version 3.8.1. *
+*    2019-04-15 JFL Implemented a fullpath() routine for Linux.		      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.8.2.*
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.8.2"
-#define PROGRAM_DATE    "2019-04-15"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -193,9 +193,9 @@
 #include <fnmatch.h>
 #include <iconv.h>
 #include <inttypes.h>
-
-/* MsvcLibX debugging macros */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debugging macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -341,7 +341,6 @@ static int iResetTime = 0;		/* Reset time of identical files */
 
 /* Forward references */
 
-char *version(int iVerbose);		/* Build the version string. If verbose, append library versions */
 void usage(void);			/* Display usage */
 int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
@@ -567,7 +566,7 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "V")	    /* -V: Display the version */
 	  || streq(opt, "-version")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       if (   streq(opt, "X")	    /* NoExec/Test mode on */
@@ -635,31 +634,10 @@ int main(int argc, char *argv[]) {
   return iExit;
 }
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void)
     {
-    printf("update version %s - Update files based on their time stamps\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Update files based on their time stamps\n\
 \n\
 Usage: update [SWITCHES] FILES DIRECTORY\n\
        update [SWITCHES] FILES DIRECTORY" DIRSEPARATOR_STRING "NEWDIR" DIRSEPARATOR_STRING "\n\
@@ -681,7 +659,7 @@ Switches:\n\
 "\
   -e|--erase    Erase mode. Delete destination files not in the source.\n\
   -E|--noempty  Noempty mode. Don't copy empty file.\n\
-", version(0));
+");
 
     printf("\
   -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\

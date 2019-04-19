@@ -21,11 +21,13 @@
 *    2018-05-31 JFL Use the new zapFile() and zapDir() from zap.c.            *
 *                   Use routine printError() for all error messages.          *
 *		    Version 1.1.					      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.1.1.*
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2018-05-31"
+#define PROGRAM_NAME    "rd"
+#define PROGRAM_VERSION "1.1.1"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -39,9 +41,10 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>	/* For mkdir() */
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Our house debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
@@ -60,27 +63,23 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
+#if defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
-#endif /* defined(_WIN32) */
-
 /************************ MS-DOS-specific definitions ************************/
 
-#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
+#elif defined(_MSDOS)	/* Automatically defined when targeting an MS-DOS app. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
-#endif /* defined(_MSDOS) */
-
 /*********************************** Other ***********************************/
 
-#ifndef EXE_OS_NAME
+#else
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -95,7 +94,6 @@ int GetProgramNames(char *argv0);	/* Initialize the above two */
 int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
 
 /* Forward declarations */
-char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
 /* zap functions options */
@@ -183,7 +181,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(iVerbose));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -250,28 +248,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-    ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\n\
-%s version %s\n\
-\n\
-Remove a directory\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Remove a directory\n\
 \n\
 Usage:\n\
   %s [SWITCHES] DIRNAME\n\
@@ -291,10 +270,10 @@ Switches:\n\
   -X          NoExec mode: Display what will be deleted, but don't do it\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, program, version(FALSE), progcmd);
 #ifdef __unix__
-  printf("\n");
+"\n"
 #endif
+, progcmd);
   exit(0);
 }
 

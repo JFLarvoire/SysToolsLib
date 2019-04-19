@@ -85,12 +85,14 @@
 *    2019-02-22 JFL Added -i support for PowerShell.			      *
 *    2019-03-01 JFL Fixed option -I.                			      *
 *		    Version 1.12.					      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V1.12.1.*
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.12"
+#define PROGRAM_NAME    "which"
+#define PROGRAM_VERSION "1.12.1"
 #define PROGRAM_DATE    "2019-03-01"
 
 #define _CRT_SECURE_NO_WARNINGS 1
@@ -108,9 +110,9 @@
 #include <sys/stat.h>		/* To get the actual file time */
 #include <time.h>		/* To get the actual file time */
 #include <strings.h>		/* For strcasecmp() */
-
-/* MsvcLibX debugging macros */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -238,7 +240,6 @@ shell_t shell = DEFAULT_SHELL;
 
 /* Prototypes */
 
-char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);
 int IsSwitch(char *pszArg);
 int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iSearchFlags);
@@ -363,7 +364,7 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "V")		/* Get version */
 	  || streq(opt, "-version")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Error: Invalid switch ignored: %s\n", arg);
@@ -533,31 +534,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\n\
-Which version %s - Find which program will be executed\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Find which program will be executed\n\
 \n\
 Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 \n\
@@ -610,7 +589,7 @@ Notes:\n\
 #ifdef __unix__
 "\n"
 #endif
-, version(0));
+);
 
   exit(0);
 }

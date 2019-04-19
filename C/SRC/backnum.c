@@ -51,13 +51,15 @@
 *                   fail. Version 2.1.2.                                      *
 *    2016-01-08 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.1.3.  					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.4.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.1.3"
-#define PROGRAM_DATE    "2016-01-08"
+#define PROGRAM_NAME    "backnum"
+#define PROGRAM_VERSION "2.1.4"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -88,13 +90,11 @@ typedef unsigned long uintmax_t;
 #endif
 #include <unistd.h>		/* For chdir() */
 #include <errno.h>
-
-/* MsvcLibX debugging macros */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
-
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION
 
 /* A convenient macro */
 #define streq(s1, s2) (!strcmp(s1, s2)) /* For the main test routine only */
@@ -102,16 +102,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 app. */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #define DIRSEPARATOR '\\'
 #define PATHNAME_SIZE FILENAME_MAX
@@ -127,8 +117,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
 #define DIRSEPARATOR '\\'
 /* #define PATHNAME_SIZE FILENAME_MAX */
 #define PATHNAME_SIZE 255		/* ~~jfl 2000/12/04 Thanks to chdirx(). */
@@ -141,8 +129,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _OS2       /* To be defined on the command line for the OS/2 version */
 
-#define OS_NAME "OS/2"
-
 #define DIRSEPARATOR '\\'
 #define PATHNAME_SIZE CCHMAXPATH        /* FILENAME_MAX incorrect in stdio.h */
 #define NODENAME_SIZE CCHMAXPATHCOMP
@@ -153,16 +139,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /************************* Unix-specific definitions *************************/
 
 #ifdef __unix__		/* Automatically defined when targeting a Unix app. */
-
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
 
 #define DIRSEPARATOR '/'
 #define PATHNAME_SIZE FILENAME_MAX
@@ -292,7 +268,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(argv[i]+1, "V")) {		/* -V: Display the version */
-	printf("%s\n", VERSION);
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       if (streq(argv[i]+1, "X")) {		/* -X: Do not execute */
@@ -457,8 +433,8 @@ int main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
-  printf("\n\
-BackNum version " VERSION "\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Create a numbered backup copy of a file\n\
 \n\
 Usage:\n\
 \n\

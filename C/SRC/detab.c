@@ -34,13 +34,15 @@
 *                   Display MsvcLibX library version in DOS & Windows.        *
 *                   Version 3.0.1.                                            *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 3.0.2.    *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.0.3.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "3.0.2"
-#define PROGRAM_DATE    "2017-08-25"
+#define PROGRAM_NAME    "detab"
+#define PROGRAM_VERSION "3.0.3"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent security warnings for old routines */
 
@@ -61,15 +63,16 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <errno.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Use MsvcLibX Library's debugging macros */
-#include "debugm.h"
-DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
+DEBUG_GLOBALS		/* Define global variables used by our debugging macros */
 
 /************************** OS-specific definitions **************************/
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
-#define OS_NAME "DOS"
+
 #include <direct.h>
 #include <io.h>
 
@@ -81,15 +84,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #endif /* defined(_MSDOS) */
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
+
 #include <direct.h>
 #include <io.h>
 #define DIRSEPARATOR_CHAR '\\'
@@ -103,15 +98,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #endif /* defined(_WIN32) */
 
 #ifdef __unix__     /* Unix */
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
 
 #define stricmp strcasecmp
 
@@ -144,8 +130,6 @@ void fail(char *pszFormat, ...) {
 #define FAIL(msg) fail("%s", msg);
 
 /* Forward definitions */
-char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
-
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
@@ -153,8 +137,8 @@ int IsSameFile(char *pszPathname1, char *pszPathname2);
 /* Global variables */
 int iVerbose = FALSE;
 FILE *mf;			    /* Message output file */
-char usage[] = "\n\
-detab version %s - Convert tabs to spaces\n\
+char usage[] = 
+PROGRAM_NAME_AND_VERSION " - Convert tabs to spaces\n\
 \n\
 Usage: detab [OPTIONS] [INFILE [OUTFILE|-same [N]]]\n\
 \n\
@@ -174,8 +158,7 @@ Arguments:\n\
   OUTFILE Output file pathname. Default or \"-\": stdout\n\
   N       Number of columns between tab stops. Default: 8\n\
 \n\
-Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n\
-"
+Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n"
 #ifdef __unix__
 "\n"
 #endif
@@ -224,7 +207,7 @@ int main(int argc, char *argv[])
       if (   strieq(pszOpt, "?")
 	  || strieq(pszOpt, "h")
 	  || strieq(pszOpt, "-help")) {
-	printf(usage, version(0));
+	printf(usage);
 	return 0;
       }
       if (strieq(pszOpt, "a")) {	/* Use append mode */
@@ -259,7 +242,7 @@ int main(int argc, char *argv[])
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Invalid switch %s\x07\n", pszArg);
@@ -401,28 +384,6 @@ int main(int argc, char *argv[])
 fail_no_mem:
   fail("Out of memory");
   return 1;
-}
-
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
 }
 
 /*---------------------------------------------------------------------------*\

@@ -17,10 +17,12 @@
 *    2017-10-11 JFL Updated the help screen for Windows. Version 1.0.1.       *
 *    2018-05-31 JFL Bug fix: mkdirp() worked, but returned an error, if the   *
 *		     path contained a trailing [back]slash. Version 1.0.2.    *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.3.*
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_NAME    "md"
+#define PROGRAM_VERSION "1.0.3"
 #define PROGRAM_DATE    "2018-05-31"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
@@ -33,9 +35,10 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <sys/stat.h>	/* For mkdir() */
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Our house debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
@@ -58,32 +61,27 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
+#if defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
-
-#endif /* defined(_WIN32) */
 
 /************************ MS-DOS-specific definitions ************************/
 
-#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
+#elif defined(_MSDOS)	/* Automatically defined when targeting an MS-DOS app. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
-#endif /* defined(_MSDOS) */
-
 /*********************************** Other ***********************************/
 
-#ifndef EXE_OS_NAME
+#else
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
 /********************** End of OS-specific definitions ***********************/
 
 /* Forward declarations */
-char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
 int isdir(const char *pszPath); /* Is this an existing directory */
@@ -149,7 +147,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(iVerbose));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -205,28 +203,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-    ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\n\
-md version %s\n\
-\n\
-Create a directory\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Create a directory\n\
 \n\
 Usage:\n\
   %s [SWITCHES] DIRNAME\n\
@@ -245,7 +224,10 @@ Switches:\n\
   -V          Display this program version and exit\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, version(FALSE), 
+#ifdef __unix__
+"\n"
+#endif
+, 
 #ifdef __unix__
   "md"
 #else
@@ -253,10 +235,6 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #endif
 
 );
-#ifdef __unix__
-  printf("\n");
-#endif
-
   exit(0);
 }
 

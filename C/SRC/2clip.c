@@ -32,13 +32,15 @@
 *    2017-12-05 JFL Added options -h and -r, for HTML and RTF. Version 1.4.   *
 *    2018-01-08 JFL Remove the UTF8 BOM when writing RTF. Version 1.4.1.      *
 *    2018-08-31 JFL Added the -d debug option. Version 1.4.2.		      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4.2"
-#define PROGRAM_DATE    "2018-08-31"
+#define PROGRAM_NAME    "2clip"
+#define PROGRAM_VERSION "1.4.3"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -46,7 +48,9 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+/* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings and routine. Include last. */
 
 #define COMPLAIN(s) fprintf(stderr, "Error %d: %s", GetLastError(), s)
 
@@ -56,14 +60,6 @@
 #define BLOCKSIZE (4096)	// Number of characters that will be allocated in each loop.
 
 #define NARGS 10		// Max number of command line arguments supported.
-
-#if defined(_WIN64)
-#define OS_NAME "Win64"
-#elif defined(_WIN32)
-#define OS_NAME "Win32"
-#else
-#define OS_NAME "Unknown_OS"
-#endif
 
 /* Local definitions */
 
@@ -156,7 +152,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "V")) {	/* Display version */
-	printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
@@ -266,11 +262,8 @@ void usage(void)
     UINT cpOEM = GetOEMCP();
     UINT cpCurrent = GetConsoleOutputCP();
 
-    printf("\
-\n\
-2clip version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
-\n\
-Pipe text from stdin to the Windows clipboard\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Pipe text from stdin to the Windows clipboard\n\
 \n\
 Usage:\n\
 \n\

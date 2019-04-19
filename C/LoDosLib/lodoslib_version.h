@@ -1,0 +1,1 @@
+#define LODOSLIB_VERSION "2018-01-10"

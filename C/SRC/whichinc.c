@@ -20,17 +20,26 @@
 *		    Version 1.3.					      *
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-09-23 JFL Removed warnings. No functional code change.              *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.3.1.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_NAME    "whichinc"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2019-04-19"
+
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+
+#define _UTF8_SOURCE		/* Forces MsvcLibX into UTF-8 mode */
 
 #include <io.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define TRUE 1
 #define FALSE 0
@@ -98,7 +107,6 @@ int main(int argc, char *argv[])
 	{
 	if ((argv[i][0] == '-') || (argv[i][0] == '/')) /* It's a switch */
 	    {
-	    strlwr(argv[i]);
 	    if (   streq(argv[i]+1, "help")
 	        || streq(argv[i]+1, "h")
 	        || streq(argv[i]+1, "?"))
@@ -124,6 +132,11 @@ int main(int argc, char *argv[])
 		iVerbose = TRUE;
 		continue;
 		}
+	    if (streq(argv[i]+1, "V"))		/* -V: Display version information */
+                {
+		puts(DETAILED_VERSION);
+		return 0;
+                }
 	    printf("Unrecognized switch %s. Ignored.\n", argv[i]);
 	    continue;
 	    }
@@ -201,11 +214,10 @@ int main(int argc, char *argv[])
 
 void usage(int iRetCode)
     {
-    printf("\nWhichInc version 1.3\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Find C include files used in a source file\n\
 \n\
-Usage:\n\
-\n\
-whichinc [options] {filename}\n\
+Usage: whichinc [options] {filename}\n\
 \n\
 List the include files referenced by the C source {filename}.\n\
 Uses the INCLUDE environment variable to find them.\n\

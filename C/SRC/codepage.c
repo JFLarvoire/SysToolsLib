@@ -35,13 +35,15 @@
 *		    Version 1.1.					      *
 *    2017-03-16 JFL Display the default console code page (OEMCP). V 1.1.1.   *
 *    2018-01-25 JFL Display console font information. V 1.2.		      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2018-01-25"
+#define PROGRAM_NAME    "codepage"
+#define PROGRAM_VERSION "1.2.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
@@ -51,7 +53,9 @@
 #include <stdlib.h>
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For _setmode() */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 
@@ -60,33 +64,19 @@
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
+#if defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
 
 #include <windows.h>
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
-
-#endif
-
 /************************ MS-DOS-specific definitions ************************/
 
-#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
+#elif defined(_MSDOS)	/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
-#endif
+#error "TO DO: Implement code page support for DOS"
 
 /*********************************** Other ***********************************/
 
-#ifndef OS_NAME
+#else
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -290,7 +280,6 @@ char *GetCPName(int iCP, LPCPINFOEX lpCpi) {
 }
 
 /* Forward declarations */
-char *version(void);
 void usage(void);
 int IsSwitch(char *pszArg);
 int CheckConsoleFont(void);
@@ -375,7 +364,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "V")) {	/* Display version */
-	printf("%s\n", version());
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
@@ -543,19 +532,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " OS_NAME
-//	  DEBUG_VERSION
-	  );
-}
-
 void usage(void) {
-  printf("\n\
-codepage version %s\n\
-\n\
-Get information about code pages on this system.\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Get information about code pages on this system.\n\
 \n\
 Usage:\n\
   codepage [SWITCHES] [CODEPAGE]\n\
@@ -581,11 +560,8 @@ Sample code page numbers:\n\
 Note that code pages other that 437 require cmd.exe using a TrueType font.\n\
 The cmd.exe raster font only supports code page 437.\n\
 \n\
-Author: Jean-Francois Larvoire\n\
-", version());
-#ifdef __unix__
-  printf("\n");
-#endif
+Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
+");
 
   exit(0);
 }

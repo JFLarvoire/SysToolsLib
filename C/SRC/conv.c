@@ -48,13 +48,15 @@
 *		    output files.					      *
 *                   Display MsvcLibX library version in DOS & Windows. V2.0.1.*
 *    2017-08-25 JFL Use strerror() for compatibility with Unix. Version 2.0.2.*
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.0.3.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.0.2"
-#define PROGRAM_DATE    "2017-08-25"
+#define PROGRAM_NAME "conv"
+#define PROGRAM_VERSION "2.0.3"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -70,9 +72,10 @@
 #include <unistd.h>
 #include <iconv.h>
 #include <errno.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Use MsvcLibX Library's debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -130,16 +133,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #include <windows.h>
 
 #include <io.h>
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 /* Define WIN32 replacements for common Standard C library functions. */
 #define malloc(size) (void *)LocalAlloc(LMEM_FIXED, size)
@@ -217,7 +210,6 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
 
 /* Function prototypes */
 
-char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
@@ -247,11 +239,8 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char szUsage[] = "\
-\n\
-conv version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION "\n\
-\n\
-Convert characters from one character set to another.\n\
+char szUsage[] = 
+PROGRAM_NAME_AND_VERSION " - Convert characters from one character set to another.\n\
 \n\
 Usage:\n\
 \n\
@@ -412,7 +401,7 @@ fail_no_mem:
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       /* Unsupported switches are ignored */
@@ -617,28 +606,6 @@ fail_no_mem:
 }
 
 #pragma warning(default:4706)	/* Restore the "assignment within conditional expression" warning */
-
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

@@ -139,13 +139,15 @@
 *		    output files. Version 2.6.1.			      *
 *    2017-05-29 JFL Help only displays the main program version.              *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 2.6.2.    *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.6.3.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.6.2"
-#define PROGRAM_DATE    "2017-08-25"
+#define PROGRAM_NAME    "remplace"
+#define PROGRAM_VERSION "2.6.3"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -167,6 +169,9 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <errno.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define SZ 80               /* Strings size */
 
@@ -176,23 +181,11 @@
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strieq(string1, string2) (stricmp(string1, string2) == 0)
 
-/* Use MsvcLibX Library's debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #include <direct.h>
 #include <io.h>
@@ -220,7 +213,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS applic. */
 
 #define TARGET_MSDOS
-#define OS_NAME "DOS"
 
 #include <direct.h>
 #include <io.h>
@@ -244,16 +236,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 /************************* Unix-specific definitions *************************/
 
 #ifdef __unix__     /* Unix */
-
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
 
 #define getch getchar
 #define stricmp strcasecmp
@@ -309,7 +291,6 @@ FILE *mf;			    /* Message output file */
 
 /* Forward references */
 
-char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(int err);		    /* Display a brief help and exit */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
@@ -483,7 +464,7 @@ fail_no_mem:
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       /* Default: Assume it's not a switch, but a string to replace */
@@ -869,28 +850,6 @@ int is_redirected(FILE *f)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(int err) {
   FILE *f;
 
@@ -900,15 +859,14 @@ void usage(int err) {
 
   /* Note: The help is too long, and needs to be split into several sub strings */
   /*       Also be careful of the % character that appears in some options */
-  fprintf(f, "\
-\n\
-remplace version %s - Replace substrings in a stream\n\
+  fprintf(f,
+PROGRAM_NAME_AND_VERSION " - Replace substrings in a stream\n\
 \n\
 Usage: remplace [SWITCHES] OPERATIONS [FILES_SPEC]\n\
 \n\
 files_spec: [INFILE [OUTFILE|-same]]\n\
   INFILE  Input file pathname. Default or \"-\": stdin\n\
-  OUTFILE Output file pathname. Default or \"-\": stdout\n", version(0));
+  OUTFILE Output file pathname. Default or \"-\": stdout\n");
     fprintf(f, "%s", "\
 \n\
 operation: {old_string new_string}|-=|-%|-.\n\

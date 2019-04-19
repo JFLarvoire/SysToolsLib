@@ -30,12 +30,14 @@
 *    2016-04-12 JFL Removed a duplicate prototype, now defined in pmode.h.    *
 *    2017-05-31 JFL Fixed WIN32 warnings. No functional code change.	      *
 *    2017-12-18 JFL Fixed DOS warnings. No functional code change.	      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h.         *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DATE    "2017-12-18"
+#define PROGRAM_NAME    "cpuid"
+#define PROGRAM_DATE    "2019-04-19"
 
 /* Definitions */
 
@@ -45,7 +47,7 @@
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-#define OS_NAME "WIN32"
+#define SUPPORTED_OS 1
 
 #define _CRT_SECURE_NO_WARNINGS // Don't warn about old unsecure functions.
 
@@ -125,7 +127,7 @@ int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS applic. */
 
-#define OS_NAME "DOS"
+#define SUPPORTED_OS 1
 
 #pragma warning(disable:4209)	// Ignore the benign typedef redefinition warning
 				// as several of the following redefine CHAR, WORD, DWORD
@@ -138,7 +140,16 @@ int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
 #endif /* _MSDOS */
 
+/******************************* Any other OS ********************************/
+
+#ifndef SUPPORTED_OS
+#error "Unsupported OS"
+#endif
+
 /********************** End of OS-specific definitions ***********************/
+
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define streq(s1, s2) (!strcmp(s1, s2))     /* Test if strings are equal */
 
@@ -241,7 +252,6 @@ int _cdecl main(int argc, char *argv[])
 
     for (i=1 ; i<argc ; i++)
         {
-        _strlwr(argv[i]);
         if ((argv[i][0] == '-') || (argv[i][0] == '/'))    /* It's a switch */
             {
 	    if (streq(argv[i]+1, "?"))		/* -?: Help */
@@ -258,6 +268,11 @@ int _cdecl main(int argc, char *argv[])
                 {
 		iVerbose = TRUE;
 		continue;
+                }
+	    if (streq(argv[i]+1, "V"))		/* -V: Display version information */
+                {
+		puts(DETAILED_VERSION);
+		return 0;
                 }
 	    }
 	}
@@ -428,19 +443,17 @@ int _cdecl main(int argc, char *argv[])
 
 void usage(void)
     {
-    puts("\
+    puts(
+PROGRAM_NAME_AND_VERSION " - Identify the processor and its features\n\
 \n\
-Processor identifier, version " PROGRAM_DATE " for " OS_NAME "\n\
-\n\
-Usage:\n\
-\n\
-  CPUID [switches]\n\
+Usage: CPUID [switches]\n\
 \n\
 Optional switches:\n\
 \n\
-  -v    Display detailed processor capabilities information.\n\
+  -v    Display detailed processor capabilities information\n\
+  -V    Display this program version and exit\n\
 \n\
-Author: Jean-Francois Larvoire\n\
+Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
     exit(0);
     }

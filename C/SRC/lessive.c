@@ -34,13 +34,15 @@
 *                   Display MsvcLibX library version in DOS & Windows.        *
 *                   Version 1.4.1.                                            *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 1.4.2.    *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4.2"
-#define PROGRAM_DATE    "2017-08-25"
+#define PROGRAM_NAME    "lessive"
+#define PROGRAM_VERSION "1.4.3"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
 
@@ -61,9 +63,10 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <errno.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-/* Use MsvcLibX Library's debugging macros */
-#include "debugm.h"
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #define TRUE 1
@@ -74,16 +77,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32		/* Defined for Win32 applications */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #include <dos.h>
 #include <direct.h>
@@ -104,8 +97,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #ifdef _MSDOS		/* Defined for MS-DOS applications */
 
-#define OS_NAME "DOS"
-
 #include <dos.h>
 #include <direct.h>
 #include <io.h>
@@ -120,8 +111,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 /************************* Unix-specific definitions *************************/
 
 #ifdef __unix__		/* Defined for Unix applications */
-
-#define OS_NAME "UNIX"
 
 #include <unistd.h>
 #include <ctype.h>
@@ -170,7 +159,6 @@ FILE *mf;			    /* Message output file */
 
 /* Function prototypes */
 
-char *version(int iVerbose);	    /* Build the version string. If verbose, append library versions */
 void usage(void);                   /* Display a brief help and exit */
 int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
@@ -260,7 +248,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(pszOpt, "V")) {
-	printf("%s\n", version(1));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       printf("Unrecognized switch %s. Ignored.\n", argv[i]);
@@ -431,31 +419,9 @@ fail_no_mem:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-    printf("\n\
-lessive version %s - Wipe out trailing blanks\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Wipe out trailing blanks\n\
 \n\
 Usage: lessive [SWITCHES] [INFILE [OUTFILE|-same]]\n\
 \n\
@@ -476,7 +442,7 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
 "\n"
 #endif
-, version(0));
+);
   exit(0);
 }
 

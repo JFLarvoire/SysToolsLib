@@ -27,30 +27,31 @@
 *    2016-12-31 JFL Fixed _setargv for use in WIN64 programs.		      *
 *                   Display help on stdout.                                   *
 *    2017-06-28 JFL Fixed the link warning. No functional code change.	      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h.         *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DATE    "2016-12-31"
+#define PROGRAM_NAME    "msgbox"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
+#ifndef _WIN32
+#error "This program only works in Windows"
+#endif
+
 #include <windows.h>
 #include <stdio.h>	/* For displaying help on the console */
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #pragma comment(lib, "Gdi32.lib")
 #pragma comment(lib, "Comdlg32.lib")
 
 #pragma warning(disable:4204)	/* Ignore the warning: nonstandard extension used : non-constant aggregate initializer */
 #pragma warning(disable:4221)	/* Ignore the warning: nonstandard extension used : ... cannot be initialized using address of automatic variable ... */
-
-#if defined(_WIN32) && !defined(_WIN64)
-#define OS_NAME "WIN32"
-#endif
-#if defined(_WIN64)
-#define OS_NAME "WIN64"
-#endif
 
 // #define USEHIDDENWINDOW
 
@@ -209,7 +210,6 @@ int main(int argc, char *argv[])
         {
 	if (IsSwitch(argv[i]))		    /* It's a switch */
             {
-            strlwr(argv[i]);
 	    if (streq(argv[i]+1, "?"))		/* -?: Help */
                 {
 		usage();
@@ -269,6 +269,11 @@ int main(int argc, char *argv[])
 		if (((i+1) < argc) && !IsSwitch(argv[i+1])) pszTitle = argv[++i];
                 continue;
 		}
+	    if (streq(argv[i]+1, "V") || streq(argv[i]+1, "title"))
+                {
+		puts(DETAILED_VERSION);
+		return 0;
+                }
 	    if (streq(argv[i]+1, "x") || streq(argv[i]+1, "exclamation"))
                 {
 		uiStyle |= MB_ICONEXCLAMATION;
@@ -456,8 +461,8 @@ void usage(void)
 #if 0
     MessageBoxF("Usage", MB_OK | MB_TOPMOST,
 #else
-    printf("%s",
-"MsgBox version " PROGRAM_DATE " " OS_NAME " " DEBUG_VERSION "\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Display a Message Box and wait for results\n\
 \n\
 Usage:\n\
 \n\
@@ -487,6 +492,8 @@ Message:\n\
 \n\
 ErrorLevel return value:\n\
   0=OK  1=Cancel  2=Abort  3=Retry  4=Ignore  5=Yes  6=No  7=Close  8=Help\n\
+\n\
+Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
 
     return;

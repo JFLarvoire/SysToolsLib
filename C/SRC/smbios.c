@@ -47,15 +47,15 @@
 *    2016-07-04 JFL Restructured to make the OEM tables decoding optional.    *
 *		    Use the -m option for DOS too, instead of -20 and -32.    *
 *                   Version 2.3.					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.3.1.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2016-07-05"
-
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME
+#define PROGRAM_NAME    "smbios"
+#define PROGRAM_VERSION "2.3.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -68,7 +68,10 @@
 #include "uuid.h"	    /* UUID management routines */
 #endif
 
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
+
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /* A convenient macro */
@@ -78,15 +81,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
+#define SUPPORTED_OS 1
 
 #endif /* _WIN32 */
 
@@ -94,9 +89,15 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS applic. */
 
-#define OS_NAME "DOS"
+#define SUPPORTED_OS 1
 
 #endif /* _MSDOS */
+
+/******************************* Any other OS ********************************/
+
+#ifndef SUPPORTED_OS
+#error "Unsupported OS"
+#endif
 
 /********************** End of OS-specific definitions ***********************/
 
@@ -269,7 +270,7 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {		/* -V: Display the version */
-	printf("%s\n", VERSION);
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       if (streq(opt, "w")) {		/* -w: Dump a specific word */
@@ -935,8 +936,8 @@ int _cdecl main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 void usage(int retcode) {
-  printf("\n\
-smbios.exe version " VERSION " - Display SMBIOS tables contents\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Display SMBIOS tables contents\n\
 \n\
 Usage: smbios [OPTIONS]\n\
 \n\
@@ -1002,7 +1003,6 @@ Note: All UUIDs and serial numbers are cleared in the copy of the tables\n\
 "\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-\n\
 "
 );
 

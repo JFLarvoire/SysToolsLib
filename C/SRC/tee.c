@@ -11,13 +11,15 @@
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-09-23 JFL Minor tweak to avoid a warning.	                      *
 *    2017-03-15 JFL Changed to a UTF-8 app, to support non-ASCII file names.  *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.1.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2017-03-15"
+#define PROGRAM_NAME    "tee"
+#define PROGRAM_VERSION "1.1.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -29,20 +31,12 @@
 #include <memory.h>
 #include <fcntl.h>
 #include <io.h>
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 /* Avoid warnings for names that MSVC thinks deprecated */
 #define read _read
@@ -52,8 +46,6 @@
 /************************ MS-DOS-specific definitions ************************/
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
-
-#define OS_NAME "DOS"
 
 #define PATHNAME_SIZE FILENAME_MAX
 #define NODENAME_SIZE 13				/* 8.3 name length = 8+1+3+1 = 13 */
@@ -68,8 +60,6 @@
 #define FALSE 0
 
 #define BUFSIZE 1024
-
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME
 
 typedef struct _outStream {
   char *name;
@@ -146,7 +136,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(option, "V") || streq(option, "-version")) { /* -V: Display the version */
-	printf("%s\n", VERSION);
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Unrecognized switch %s. Ignored.\n", argv[i]);
@@ -194,8 +184,8 @@ int main(int argc, char *argv[]) {
 
 void usage(int iErr)
     {
-    printf("\
-Tee version " VERSION " - Copy the input to several outputs\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Copy the input to several outputs\n\
 \n\
 Usage: tee [OPTIONS] [[-a] FILENAME] ...\n\
 \n\
@@ -203,6 +193,7 @@ Options:\n\
   -?	    Display this help screen.\n\
   -a	    Append to the next file. Default: Overwrite it.\n\
   -b	    Set the buffer size. Default: %d\n\
+  -V        Display the program version\n\
 \n\
 Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
 \n"

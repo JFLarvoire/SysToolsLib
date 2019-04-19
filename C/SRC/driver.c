@@ -44,17 +44,23 @@
 *		    Bug fix: Several error cases were also broken.	      *
 *		    Bug fix: Convert2Utf8() could overflow its buffers.	      *
 *		    Version 2.1.					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.1.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2016-03-31"
+#define PROGRAM_NAME    "driver"
+#define PROGRAM_VERSION "2.1.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #define _UTF8_SOURCE /* Tell MsvcLibX we're using UTF-8 strings */
+
+#ifndef _WIN32
+#error "This program only supports Windows"
+#endif
 
 /* #define WINVER 0x0400 /* Minimum OS target: Windows 95 and NT4 */
 
@@ -69,17 +75,9 @@
 /* The following include files are not available in the Microsoft C libraries */
 /* JFL's MsvcLibX library extensions */
 #include <iconv.h>		/* Code page conversion routines an variables */
-#include "debugm.h"		/* Debugging macros */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 // NT Test
 #if defined(_WIN32)
@@ -249,7 +247,7 @@ int main(int argc, char *argv[])
 		continue;
 	    }
 	    if (streq(option, "V")) {		/* -V: Display this program version */
-		printf("Driver " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+		puts(DETAILED_VERSION);
 		exit(0);
 	    }
 	    if (streq(option, "VV")) {		/* -VV: Display VXDLDR version */
@@ -473,8 +471,8 @@ int main(int argc, char *argv[])
 
 void usage(int retcode)
     {
-    printf("\
-Driver version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME " - Manage system drivers and services\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Manage system drivers and services\n\
 \n\
 Usage: driver [switches]\n\
 \n\
@@ -506,7 +504,7 @@ Switches:\n\
   -V		    Display this program version.\n\
   -w		    Wait before exiting.\n\
 \n\
-Author: Jean-François Larvoire - jf.larvoire@free.fr\n\
+Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
 
     exit(retcode);

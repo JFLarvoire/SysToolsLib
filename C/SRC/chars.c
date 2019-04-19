@@ -20,13 +20,15 @@
 *		    Version 1.4.					      *
 *    2019-01-16 JFL Avoid outputing bytes \x80-\xFF by default for UTF-8 CPs. *
 *		    Version 1.4.1.					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.4.2.*
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.4.1"
-#define PROGRAM_DATE    "2019-01-16"
+#define PROGRAM_NAME    "chars"
+#define PROGRAM_VERSION "1.4.2"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -37,16 +39,6 @@
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 app. */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #include <windows.h>
 
@@ -63,8 +55,6 @@
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
 #include <io.h>		/* For _setmode() */
 #include <fcntl.h>  
 
@@ -78,8 +68,6 @@
 
 #ifdef _OS2	/* To be defined on the command line for the OS/2 version */
 
-#define OS_NAME "OS/2"
-
 #define EOL "\r\n"
 
 #define SUPPORTS_UTF8 FALSE
@@ -90,16 +78,6 @@
 
 #ifdef __unix__		/* Automatically defined when targeting a Unix app. */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 #define EOL "\n"
 
 #define SUPPORTS_UTF8 TRUE
@@ -107,6 +85,9 @@
 #endif /* __unix__ */
 
 /********************** End of OS-specific definitions ***********************/
+
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define TRUE 1
 #define FALSE 0
@@ -203,7 +184,7 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "V")     /* -V: Display the version */
 	  || streq(opt, "-version")) {
-	printf(PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n");
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
@@ -335,7 +316,8 @@ void usage(void) {
   if (uCP0 != 65001) SetConsoleOutputCP(65001);
 #endif
 
-  printf("chars version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Output character tables\n\
 \n"
 #ifdef _WIN32
 "Usage: chars [SWITCHES] [CODEPAGE]\n"

@@ -22,13 +22,15 @@
 *                   TrueType fonts.					      *
 *		    Added an optional weight argument.			      *
 *		    Version 2.1.					      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.1.1.*
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2019-04-03"
+#define PROGRAM_NAME    "font"
+#define PROGRAM_VERSION "2.1.1"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _UTF8_SOURCE
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -37,7 +39,9 @@
 #include <stdlib.h>
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For _setmode() */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 
@@ -49,8 +53,6 @@
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
 #include <windows.h>
-
-#define OS_NAME EXE_OS_NAME	// OS name identified in debugm.h
 
 // Undocumented console functions from http://blogs.microsoft.co.il/pavely/2009/07/23/changing-console-fonts/
 typedef struct _CONSOLE_FONT {
@@ -71,11 +73,9 @@ typedef DWORD (WINAPI *PGETNUMBEROFCONSOLEFONTS)(void);
 typedef BOOL (WINAPI *PSETCURRENTCONSOLEFONTEX)(HANDLE hConsoleOutput, BOOL bMaximumWindow, PCONSOLE_FONT_INFOEX lpConsoleCurrentFontEx);
 typedef BOOL (WINAPI *PGETCURRENTCONSOLEFONTEX)(HANDLE h, BOOL b, PCONSOLE_FONT_INFOEX p);
 
-#endif
-
 /*********************************** Other ***********************************/
 
-#ifndef OS_NAME
+#else
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -88,7 +88,6 @@ typedef BOOL (WINAPI *PGETCURRENTCONSOLEFONTEX)(HANDLE h, BOOL b, PCONSOLE_FONT_
 int iVerbose = FALSE;
 
 /* Forward declarations */
-char *version(int iLibsVer);
 void usage(void);
 int IsSwitch(char *pszArg);
 int ListFonts(DWORD dwCriteria);
@@ -163,7 +162,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(TRUE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
@@ -211,31 +210,9 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\n\
-font.exe version %s - Manage the console fonts\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Manage the console fonts\n\
 \n\
 Usage: font [SWITCHES] [FONT_NAME [FONT_SIZE] [FONT_WEIGHT]]\n\
 \n\
@@ -267,11 +244,7 @@ Notes:\n\
     Normally: 400=normal weight, 700=bold\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-", version(FALSE));
-#ifdef __unix__
-  printf("\n");
-#endif
-
+");
   exit(0);
 }
 

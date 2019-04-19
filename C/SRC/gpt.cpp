@@ -25,13 +25,15 @@
 *    2017-08-03 JFL Display MsvcLibX & SysLib library versions in DOS & Win.  *
 *		    Fixed and improved the FormatSize() routine. Version 1.1.4.
 *    2017-08-15 JFL Fixed warnings in Visual Studio 2015. Version 1.1.5.      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.6.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.5"
-#define PROGRAM_DATE    "2017-08-15"
+#define PROGRAM_NAME    "gpt"
+#define PROGRAM_VERSION "1.1.6"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -70,6 +72,9 @@ typedef void *HANDLE;
 #include "gpt.h"
 #include "oprintf.h"
 
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
+
 #define streq(s1, s2) (!strcmp(s1, s2)) /* For the main test routine only */
 
 #define fail(message) { printf message; exit(1); }
@@ -88,7 +93,6 @@ int iKB = 1000;		// Base for hard disk sizes KB, MB, etc. 1000 or 1024
 
 /* Prototypes */
 
-char *version(int iVerbose);
 void usage(void);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
 int dump_part(MASTERBOOTSECTOR *pMbs);
@@ -166,7 +170,7 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(TRUE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       if (streq(opt, "x")) {
@@ -387,39 +391,13 @@ int _cdecl main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Dump GUID Partition Tables\n\
 \n\
-GPT Manager Version %s\n\
-\n\
-Usage:\n\
-\n\
-GPT [switches]\n\
+Usage: gpt [switches]\n\
 \n\
 Switches:\n\
-\n\
 "
 #ifdef _DEBUG
 "\
@@ -433,7 +411,7 @@ Switches:\n\
   -x    Use base 16 for input and output. (default)\n\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-", version(FALSE));
+");
   exit(0);
 }
 

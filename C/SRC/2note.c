@@ -12,16 +12,21 @@
 *		    Convert Unix \n line endings to Windows \r\n. Version 1.0.*
 *    2018-11-02 JFL Fixed a memory reallocation failure when converting \n.   *
 *		    Improved ReportWin32Error().			      *
+*    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.2.*
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.0.1"
-#define PROGRAM_DATE    "2018-11-02"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2019-04-18"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
+
+#ifndef _WIN32
+#error "Unsuported OS. This program is Windows-specific."
+#endif
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -29,7 +34,9 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+/* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 // Report an error.
 void COMPLAIN(char *s) {
@@ -52,7 +59,6 @@ void COMPLAIN(char *s) {
 
 /* Function prototypes */
 
-char *version(int iVerbose);	    /* Build a string with the program versions */
 void usage(void);
 int IsSwitch(char *pszArg);
 int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
@@ -112,7 +118,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "V")) {	/* Display version */
-	printf("%s\n", version(TRUE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
@@ -190,31 +196,12 @@ int main(int argc, char *argv[]) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-char *version(int iVerbose) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " EXE_OS_NAME DEBUG_VERSION;
-  char *pszLibVer = ""
-#if defined(_MSDOS) || defined(_WIN32)
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-    ;
-  char *pszVer = NULL;
-  if (iVerbose) {
-    pszVer = malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
   UINT cpANSI = GetACP();
   UINT cpOEM = GetOEMCP();
   UINT cpCurrent = GetConsoleOutputCP();
-  printf("\n" PROGRAM_NAME " version %s\n", version(FALSE));
-  printf("\
-\n\
-Pipe text from stdin to the Windows Notepad\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Pipe text from stdin to the Windows Notepad\n\
 \n\
 Usage:\n\
 \n\

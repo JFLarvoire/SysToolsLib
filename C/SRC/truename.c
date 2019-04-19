@@ -22,13 +22,15 @@
 *                   Minor tweaks to fix compilation in Linux.                 *
 *		    Version 1.1.1.					      *
 *    2018-04-24 JFL Use NAME_MAX from limits.h. Version 1.1.2.		      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.3.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "1.1.2"
-#define PROGRAM_DATE    "2018-04-24"
+#define PROGRAM_NAME    "truename"
+#define PROGRAM_VERSION "1.1.3"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -41,9 +43,9 @@
 #include <errno.h>
 #include <unistd.h>	/* For the symlink and readlink functions */
 #include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
-
-/* MsvcLibX debugging macros */
-#include "debugm.h"
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -56,11 +58,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define cp codePage		/* Initial console code page in iconv.c */
 
-#endif
-
 /*********************************** Other ***********************************/
 
-#if (!defined(EXE_OS_NAME))
+#else
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -72,7 +72,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define FALSE 0
 
 /* Forward declarations */
-char *version(void);
 void usage(void);
 int IsSwitch(char *pszArg);
 
@@ -160,7 +159,7 @@ int main(int argc, char *argv[]) {
       }
 #endif
       if (streq(arg+1, "V")) {	/* Display version */
-	printf("%s\n", version());
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       DEBUG_CODE(
@@ -236,19 +235,9 @@ report_err:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-char *version(void) {
-  return (PROGRAM_VERSION
-	  " " PROGRAM_DATE
-	  " " EXE_OS_NAME
-	  DEBUG_VERSION
-	  );
-}
-
 void usage(void) {
-  printf("\n\
-truename version %s\n\
-\n\
-Get the canonic name for a pathname, resolving all links in the path.\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Get the canonic name of a path, with all links resolved.\n\
 \n\
 Usage:\n\
   truename [SWITCHES] PATHNAME\n\
@@ -286,7 +275,7 @@ Switches:\n\
 #ifdef __unix__
 "\n"
 #endif
-, version());
+);
 
   exit(0);
 }

@@ -106,13 +106,15 @@
 *		    Added option -D to force dumping output to "-".           *
 *		    Write error messages to stderr.                           *
 *		    Version 4.1.					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.4.1.1.*
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "4.1"
-#define PROGRAM_DATE    "2018-07-12"
+#define PROGRAM_NAME    "sector"
+#define PROGRAM_VERSION "4.1.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -157,6 +159,9 @@ typedef int BOOL;
 #endif
 #endif // HAS_98DDK
 #endif // defined(_WIN95)
+
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define ISECT0 1
 
@@ -468,7 +473,7 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
-	printf("%s\n", version(TRUE));
+	puts(DETAILED_VERSION);
 	exit(0);
       }
       if (streq(opt, "x")) {
@@ -1187,35 +1192,11 @@ geometry_failure:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Get the program version string, optionally with libraries versions */
-char *version(int iLibsVer) {
-  char *pszMainVer = PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION;
-  char *pszVer = NULL;
-  if (iLibsVer) {
-    char *pszLibVer = ""
-#if defined(_MSVCLIBX_H_)	/* If used MsvcLibX */
-#include "msvclibx_version.h"
-	  " ; MsvcLibX " MSVCLIBX_VERSION
-#endif
-#if defined(__SYSLIB_H__)	/* If used SysLib */
-#include "syslib_version.h"
-	  " ; SysLib " SYSLIB_VERSION
-#endif
-    ;
-    pszVer = (char *)malloc(strlen(pszMainVer) + strlen(pszLibVer) + 1);
-    if (pszVer) sprintf(pszVer, "%s%s", pszMainVer, pszLibVer);
-  }
-  if (!pszVer) pszVer = pszMainVer;
-  return pszVer;
-}
-
 void usage(void) {
-  printf("\nDisk sector manager version %s\n\n", version(FALSE));
-
-  printf("\
-Usage:\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Disk sector manager\n\
 \n\
-  sector [switches] {source} [destination [number [origin [origin]]]]\n\
+Usage: sector [switches] {source} [destination [number [origin [origin]]]]\n\
 \n\
 With...\n\
 \n\

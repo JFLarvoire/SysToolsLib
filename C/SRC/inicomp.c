@@ -37,13 +37,15 @@
 *		    issues when encountering duplicate names. (This happens!) *
 *    2017-01-07 JFL Count line ending with \r\r\n as two lines.               *
 *                   Version 2.0.                                              *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.0.1.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2017-01-07"
+#define PROGRAM_NAME    "inicomp"
+#define PROGRAM_VERSION "2.0.1"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -55,8 +57,10 @@
 #include <string.h>
 #include <search.h>
 #include <ctype.h>
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-#include "debugm.h"
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
 #include "dict.h"
@@ -73,8 +77,6 @@ DICT_DEFINE_PROCS();
 
 #ifdef _OS2   /* To be defined on the command line for the OS/2 version */
 
-#define OS_NAME "OS/2"
-
 #define PATHNAME_SIZE 260	/* FILENAME_MAX incorrect in stdio.h */
 
 #endif
@@ -82,16 +84,6 @@ DICT_DEFINE_PROCS();
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	    /* Automatically defined when targeting a Win32 applic. */
-
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
 
 #define PATHNAME_SIZE FILENAME_MAX
 
@@ -107,8 +99,6 @@ DICT_DEFINE_PROCS();
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define OS_NAME "DOS"
-
 #define PATHNAME_SIZE FILENAME_MAX
 
 #pragma warning(disable:4505) /* Ignore the "unreferenced local function has been removed" warning */
@@ -119,25 +109,19 @@ DICT_DEFINE_PROCS();
 
 #ifdef __unix__		/* Automatically defined when targeting a Unix app. */
 
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
-
 #define PATHNAME_SIZE FILENAME_MAX
 
 #define stricmp strcasecmp
 
 #endif /* __unix__ */
 
-/********************** End of OS-specific definitions ***********************/
+/******************************* Any other OS ********************************/
 
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME
+#ifndef PATHNAME_SIZE
+#error "Unsupported OS"
+#endif
+
+/********************** End of OS-specific definitions ***********************/
 
 typedef enum {EQUAL, FILE1, FILE2} outstate;
 
@@ -251,7 +235,7 @@ int main(int argc, char *argv[])
             if (   streq(argv[i]+1, "version")
                 || streq(argv[i]+1, "V"))
                 {
-		printf("inicomp version " VERSION "\n");
+		puts(DETAILED_VERSION);
                 exit(0);
                 }
             printf("Unrecognized switch %s. Ignored.\n", argv[i]);
@@ -1050,10 +1034,8 @@ void outOfMem(void)
 
 void usage(void)
     {
-    printf("\
-inicomp version " VERSION "\n\
-\n\
-Compare two .ini files, section by section, and item by item.\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Compare two .ini files, section by section, and item by item.\n\
 \n\
 Usage: inicomp [switches] FILE1[.ini] FILE2[.ini]\n\
 \n\

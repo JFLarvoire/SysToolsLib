@@ -32,13 +32,15 @@
 *		    Version 1.1.7.  					      *
 *    2017-04-13 JFL Do not print a final blank line in DOS and Windows.       *
 *		    Version 1.1.8.  					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.9.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
 
-#define PROGRAM_VERSION "1.1.8"
-#define PROGRAM_DATE    "2017-04-13"
+#define PROGRAM_NAME    "dump"
+#define PROGRAM_VERSION "1.1.9"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -53,16 +55,6 @@
 /************************* Unix-specific definitions *************************/
 
 #ifdef __unix__     /* Unix */
-
-#if defined(__CYGWIN64__)
-#define OS_NAME "Cygwin64"
-#elif defined(__CYGWIN32__)
-#define OS_NAME "Cygwin"
-#elif defined(__linux__)
-#define OS_NAME "Linux"
-#else
-#define OS_NAME "Unix"
-#endif
 
 #define _getch getchar
 
@@ -79,12 +71,12 @@
 
 #ifdef _OS2    /* To be defined on the command line for the OS/2 version */
 
+#define SUPPORTED_OS 1
+
 #define INCL_DOSFILEMGR
 #define INCL_DOSMISC
 #define INCL_VIO
 #include "os2.h" 
-
-#define OS_NAME "OS/2"
 
 #undef FILENAME_MAX
 #define FILENAME_MAX 260	/* FILENAME_MAX incorrect in stdio.h */
@@ -98,15 +90,7 @@
 
 #ifdef _WIN32	     /* Automatically defined when targeting a Win32 applic. */
 
-#if defined(__MINGW64__)
-#define OS_NAME "MinGW64"
-#elif defined(__MINGW32__)
-#define OS_NAME "MinGW32"
-#elif defined(_WIN64)
-#define OS_NAME "Win64"
-#else
-#define OS_NAME "Win32"
-#endif
+#define SUPPORTED_OS 1
 
 #define NOGDI
 #define NOUSER
@@ -122,18 +106,23 @@
 
 #ifdef _MSDOS	    /* Automatically defined when targeting an MS-DOS applic. */
 
-#define OS_NAME "DOS"
+#define SUPPORTED_OS 1
 
 #include <conio.h>
 #include <io.h>
 
 #endif
 
+/******************************* Any other OS ********************************/
+
+#ifndef SUPPORTED_OS
+#error "Unsupported OS"
+#endif
+
 /********************** End of OS-specific definitions ***********************/
 
-#ifndef OS_NAME
-#error "Failed to identify the OS"
-#endif
+/* SysToolsLib include files */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
@@ -206,7 +195,7 @@ int main(int argc, char *argv[])
 		continue;
                 }
 	    if (streq(argv[i]+1, "V")) {	    /* -V: Display the version */
-		printf("%s\n", PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME);
+		puts(DETAILED_VERSION);
 		exit(0);
 	    }
 	    printf("Unrecognized switch %s. Ignored.\n", argv[i]);
@@ -340,8 +329,8 @@ Offset    00           04           08           0C           0   4    8   C   \
 
 void usage(void)
     {
-    printf("\
-dump version " PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME "\n\
+    printf(
+PROGRAM_NAME_AND_VERSION " - Dump data as both hexadecimal and text\n\
 \n\
 Usage: dump [switches] [filename] [address] [length]\n\
 \n\

@@ -4,6 +4,26 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-04-19
+### New
+- C/include/stversion.bat: New file defining version strings to display with -? and -V options.
+### Changed
+- C/SRC/*.c and *.cpp: Consistently use the version generated in stversion.h.  
+
+## [Unreleased] 2019-04-16
+### New
+- C/include/BatProxy.bat: Proxy script for configure.bat and make.bat, automatically installed by configure.bat in all
+  work directories to avoid having to manually fetch configure.bat and make.bat in the %STINCLUDE% directory.
+### Changed
+- C/include/configure.bat: Create local configure.bat and make.bat proxies.  
+  Added option -nodos. Fixed option -vs, and split it into options -vsp and -vsn.
+- C/include/debugm.h: Changed the debug puts() routine to an fputs-based routine which does not implicitely outputs an \n in the end.  
+  Likewise, renamed SET_DEBUG_PUTS() as SET_DEBUG_PUT().
+### Removed
+- All make.bat and configure.bat proxies (but not the originals in C/include), as the proxies are now all recreated by configure.bat.  
+### Fixed
+- C/SRC/update.c: Implemented a fullpath() routine for Linux. This fixes a minor bug in the Linux version, displaying the link targets instead of the links themselves.
+
 ## [Unreleased] 2019-04-08
 ### Changed
 - C/Batch/tcl*.bat moved to the Tcl directory. This is to reflect the fact that these batch scripts are only useful

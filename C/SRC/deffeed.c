@@ -30,13 +30,15 @@
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-01-08 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.2.2.  					      *
+*    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.2.3.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_VERSION "2.2.2"
-#define PROGRAM_DATE    "2016-01-08"
+#define PROGRAM_NAME    "deffeed"
+#define PROGRAM_VERSION "2.2.3"
+#define PROGRAM_DATE    "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -54,21 +56,11 @@
 
 #define streq(string1, string2) (strcmp(string1, string2) == 0)
 
-#ifdef _DEBUG
-#define DEBUG_VERSION " Debug"
-#define IFDEBUG(args) args
-#else
-#define DEBUG_VERSION
-#define IFDEBUG(args)
-#endif
-
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32           /* Automatically defined when targeting a Win32 applic. */
 
 #define TARGET_WIN32
-
-#define OS_NAME "WIN32"
 
 #include "io.h"
 #include "direct.h"
@@ -86,8 +78,6 @@
 
 #define TARGET_MSDOS
 
-#define OS_NAME "DOS"
-
 #include "io.h"
 #include "direct.h"
 
@@ -100,8 +90,6 @@
 #ifdef __unix__         /* Automatically defined in all Unix variants */
 
 #define TARGET_UNIX
-
-#define OS_NAME "Unix"
 
 #include <unistd.h>     /* Define getcwd(). */
 
@@ -124,7 +112,9 @@ char *strlwr(char *psz)    /* Convenient Microsoft library routine not available
 
 /********************** End of OS-specific definitions ***********************/
 
-#define VERSION PROGRAM_VERSION " " PROGRAM_DATE " " OS_NAME DEBUG_VERSION
+/* SysToolsLib include files */
+#include "debugm.h"	/* SysToolsLib debug macros */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 /* Global variables */
 
@@ -198,7 +188,6 @@ int main(int argc, char *argv[])
         if (   (*(argv[i]) == '/')          /* Process switches first */
             || (*(argv[i]) == '-') )
             {
-            strlwr(argv[i]);
 	    if (   streq(argv[i]+1, "help")
 		|| streq(argv[i]+1, "h")
 		|| streq(argv[i]+1, "?"))
@@ -322,6 +311,11 @@ int main(int argc, char *argv[])
                     nwarnings += 1;
                     }
                 continue;
+                }
+	    if (streq(argv[i]+1, "V"))		/* -V: Display version information */
+                {
+		puts(DETAILED_VERSION);
+		return 0;
                 }
 	    if (streq(argv[i]+1, "wcol"))
                 {
@@ -504,7 +498,7 @@ int main(int argc, char *argv[])
             length -= 1;
             if (!top_without_ff)    /* Except in the case where we're at top line without a form-feed... */
                 {		    /*  ... fill-up the rest of the page with blank lines.		 */
-		IFDEBUG(fprintf(stderr, "Processing form-feed on page %d line %d.\n", npt, nl));
+		DEBUG_CODE(fprintf(stderr, "Processing form-feed on page %d line %d.\n", npt, nl);)
                 while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
                 nl = 0;
                 np += 1;
@@ -513,7 +507,7 @@ int main(int argc, char *argv[])
                 }
             else
                 {
-		IFDEBUG(fprintf(stderr, "Skipping form-feed on page %d line %d.\n", npt, nl));
+		DEBUG_CODE(fprintf(stderr, "Skipping form-feed on page %d line %d.\n", npt, nl);)
                 }
 	    top_without_ff = FALSE; /* Do this exception only once. (We've had a form-feed now.) */
             }
@@ -528,7 +522,7 @@ int main(int argc, char *argv[])
         nl += 1;
         if (nl == lpp)
             {
-            IFDEBUG(fprintf(stderr, "Reached end of page %d on line %d. Moving to top of next page.\n", npt, nl));
+            DEBUG_CODE(fprintf(stderr, "Reached end of page %d on line %d. Moving to top of next page.\n", npt, nl);)
             for (i=0; i<extra; i++) output_line(np, nl+i, format, "", fdest);
             nl = 0;
             np += 1;
@@ -631,11 +625,10 @@ int main(int argc, char *argv[])
 
 void usage(void)
     {
-  printf("\n\
-deffeed version " VERSION "\n\
+  printf(
+PROGRAM_NAME_AND_VERSION " - Remove Form Feeds from a text\n\
 \n\
-Usage:\n\
-deffeed [lpp] [source] [tab] [switches] >destination\n\
+Usage: deffeed [lpp] [source] [tab] [switches] >destination\n\
 \n\
   lpp              Lines Per Page. Default: 60.\n\
   source           Input file.\n\
