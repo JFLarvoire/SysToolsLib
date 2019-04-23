@@ -63,23 +63,27 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
-#if defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
+#endif /* defined(_WIN32) */
+
 /************************ MS-DOS-specific definitions ************************/
 
-#elif defined(_MSDOS)	/* Automatically defined when targeting an MS-DOS app. */
+#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
+#endif /* defined(_MSDOS) */
+
 /*********************************** Other ***********************************/
 
-#else
+#ifndef DIRSEPARATOR_CHAR
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
@@ -267,13 +271,19 @@ Switches:\n\
   -t          Test mode: Just call the raw rmdir() function\n\
   -v          Output verbose information\n\
   -V          Display this program version and exit\n\
-  -X          NoExec mode: Display what will be deleted, but don't do it\n\
+  -X          NoExec mode: Display what would be deleted, but don't do it\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
 "\n"
 #endif
-, progcmd);
+,
+#ifdef __unix__
+  progcmd
+#else
+  "\"rd.exe\""
+#endif
+);
   exit(0);
 }
 
