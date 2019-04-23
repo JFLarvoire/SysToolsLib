@@ -61,21 +61,25 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************ Win32-specific definitions *************************/
 
-#if defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
+
+#endif /* defined(_WIN32) */
 
 /************************ MS-DOS-specific definitions ************************/
 
-#elif defined(_MSDOS)	/* Automatically defined when targeting an MS-DOS app. */
+#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 
+#endif /* defined(_MSDOS) */
+
 /*********************************** Other ***********************************/
 
-#else
+#ifndef DIRSEPARATOR_CHAR
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
