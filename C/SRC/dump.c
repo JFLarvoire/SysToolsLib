@@ -56,6 +56,8 @@
 
 #ifdef __unix__     /* Unix */
 
+#define SUPPORTED_OS 1
+
 #define _getch getchar
 
 #include <unistd.h>

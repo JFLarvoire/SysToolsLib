@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
       if (   strieq(pszOpt, "?")
 	  || strieq(pszOpt, "h")
 	  || strieq(pszOpt, "-help")) {
-	printf(usage);
+	printf("%s", usage);
 	return 0;
       }
       if (strieq(pszOpt, "a")) {	/* Use append mode */
