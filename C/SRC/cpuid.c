@@ -443,7 +443,7 @@ int _cdecl main(int argc, char *argv[])
 
 void usage(void)
     {
-    puts(
+    printf(
 PROGRAM_NAME_AND_VERSION " - Identify the processor and its features\n\
 \n\
 Usage: CPUID [switches]\n\
