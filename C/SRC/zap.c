@@ -295,7 +295,7 @@ Pathname: [PATH" DIRSEPARATOR_STRING "]NAME (Wildcards allowed in name)\n\
 When using wildcards in recursive mode, a search is made in each subdirectory.\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, program, progcmd, progcmd);
+, progcmd, progcmd);
 #ifdef __unix__
   printf("\n");
 #endif
