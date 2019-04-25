@@ -1721,6 +1721,8 @@ set rx "$rxHeader"
 # Append a dummy header after the text, to mark the end of the last mail.
 # include a --- line in that trailing header, in case the last mail itself ends with a --- line.
 set input "\n\n$input\n\n----------\nFrom:\nTo:\nDate:\nSubject:\n"
+# Some mail clients use "Begin forwarded message:" instead of a line separator
+regsub -all "Begin forwarded message:" $input "-------------" input
 set ixs [regexp -all -inline -indices $rx $input]
 DebugVars rx ixs
 set ix0 0
