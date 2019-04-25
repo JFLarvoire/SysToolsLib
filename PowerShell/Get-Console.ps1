@@ -29,6 +29,8 @@
 #                   Fixed Unicode characters in HTML and RTF output.          #
 #    2018-01-10 JFL Use the same font and font size for HTML and RTF.         #
 #                                                                             #
+#         © Copyright 2018 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 <#
