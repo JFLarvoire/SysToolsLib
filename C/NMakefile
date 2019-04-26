@@ -38,6 +38,10 @@
 #    2018-03-17 JFL Generalized the release of extra tools like Ag.           #
 #    2018-11-20 JFL 'make release' adds the LICENSE file.                     #
 #    2019-02-05 JFL 'make release' now support scripts in subdirectories.     #
+#    2019-04-23 JFL 'make release' includes scripts in the Python directory.  #
+#    2019-04-23 JFL Add extras from \bin, if none found in %\OUTDIR%.	      #
+#		    Add ARM64 executables.				      #
+#		    Added the EXEC macro, and use it for all 7-zip calls.     #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -61,7 +65,7 @@ Usage: make.bat [options] [nmake_options] [macro_definitions] [targets] ...
 
 Macro definitions:     (They must be quoted, else the = sign will be lost)
   "DEBUG=1"            Generate the debug version. <==> Target in a Debug\ dir.
-  "OS=BIOS DOS WIN95 WIN32 WIN64"   List of target OSs to build for
+  "OS=BIOS DOS WIN95 WIN32 WIN64 ARM ARM64"   List of target OSs to build for
   "WINVER=4.0"         Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
 
 Targets:
@@ -87,8 +91,15 @@ release:
 	$(MSG) %*
 	exit /b
 	
+	:exec
+	echo %*
+	%*
+	exit /b
+	
 	:main
+	set "EXEC=call :exec"
 	set "MSG=call :msg"
+	%MSG% Enumerating files available by category
 	
 	:# Select the output directory
 	set "CONFIG.H=config.%COMPUTERNAME%.h"
@@ -122,28 +133,36 @@ release:
 	
 	:# Look for optional extra goodies, copied from other projects
 	set "EXTRAS32="
-	if exist ..\Extras%\OUTDIR%\WIN32\*.exe (
-	  pushd ..\Extras%\OUTDIR%\WIN32
-	  for %%f in (*.exe) do set "EXTRAS32=!EXTRAS32! %%f"
-	  set "EXTRAS32=!EXTRAS32:~1!"
-	  popd
+	set "\EXTRAS32DIR="
+	for %%p in (%\OUTDIR% \bin) do if not defined EXTRAS32 (
+	  if exist ..\Extras%%p\WIN32\*.exe (
+	    set "\EXTRAS32DIR=%%p"
+	    pushd ..\Extras%%p\WIN32
+	    for %%f in (*.exe) do set "EXTRAS32=!EXTRAS32! %%f"
+	    set "EXTRAS32=!EXTRAS32:~1!"
+	    popd
+	  )
 	)
 	set "EXTRAS=!EXTRAS32!"
 	set "EXTRAS64="
-	if exist ..\Extras%\OUTDIR%\WIN64\*.exe (
-	  pushd ..\Extras%\OUTDIR%
-	  for %%f in (Win64\*.exe) do (
-	    set "EXTRAS64=!EXTRAS64! %%f"
-	    if not exist "Win32\%%~nxf" set "EXTRAS=!EXTRAS! %%~nxf"
+	set "\EXTRAS64DIR="
+	for %%p in (%\OUTDIR% \bin) do if not defined EXTRAS64 (
+	  if exist ..\Extras%%p\WIN64\*.exe (
+	    set "\EXTRAS64DIR=%%p"
+	    pushd ..\Extras%%p
+	    for %%f in (Win64\*.exe) do (
+	      set "EXTRAS64=!EXTRAS64! %%f"
+	      if not exist "Win32\%%~nxf" set "EXTRAS=!EXTRAS! %%~nxf"
+	    )
+	    set "EXTRAS64=!EXTRAS64:~1!"
+	    popd
 	  )
-	  set "EXTRAS64=!EXTRAS64:~1!"
-	  popd
 	)
 	if defined EXTRAS %MSG% Extras = (!EXTRAS!)
 
 	:# List scripts from Scripts.lst
 	pushd ..
-	for %%l in (Bash Batch PowerShell Tcl) do (
+	for %%l in (Bash Batch PowerShell Python Tcl) do (
 	  set "%%l=:" &:# The list must not be empty, else the search will fail in the second part.
 	  for /f "delims=" %%f in ('find /i "%%l\" ^<Scripts.lst') do (
 	    echo From Scripts.lst: %%f
@@ -188,20 +207,20 @@ release:
 	)
 	if defined PROGRAMS (
 	  set "PROGRAMS=!PROGRAMS:~1!
-	  7z.exe -- a "%ZIP%" !PROGRAMS!
+	  %EXEC% 7z.exe -- a "%ZIP%" !PROGRAMS!
 	  if errorlevel 1 exit /b
 	)
 	if defined PROGRAMS2 ( :# Add the missing ones from WIN32 if avail. there
 	  set "PROGRAMS2=!PROGRAMS2:~1!
 	  cd ..\WIN32
-	  7z.exe -- a "%ZIP%" !PROGRAMS2!
+	  %EXEC% 7z.exe -- a "%ZIP%" !PROGRAMS2!
 	  if errorlevel 1 exit /b
 	  )
 	popd
 	
 	:# Add DOS and WIN64 programs if they're available and not yet added
-	for %%o in (ARM DOS IA64 WIN64) do (
-	  if exist SRC%\OUTDIR%\%%o for %%d in ("%PROGRAMS_DIR%") do if /I "%%~nxd" NEQ "%%o" (
+	for %%o in (DOS IA64 WIN64 ARM ARM64) do (
+	  if exist SRC%\OUTDIR%\%%o\*.exe for %%d in ("%PROGRAMS_DIR%") do if /I "%%~nxd" NEQ "%%o" (
 	    pushd SRC%\OUTDIR%
 	    pushd %%o & set "PROGRAMS%%o_DIR=!CD!" & popd
 	    %MSG% Adding C %%o programs from !PROGRAMS%%o_DIR!
@@ -213,7 +232,7 @@ release:
 	      findstr /C:"no %%o version" "%CD%\SRC\%%~np.mak" >NUL 2>NUL || %MSG% Warning: %%p not found
 	    )
 	    if defined PROGRAMS%%o set "PROGRAMS%%o=!PROGRAMS%%o:~1!
-	    7z.exe -- a "%ZIP%" !PROGRAMS%%o!
+	    %EXEC% 7z.exe -- a "%ZIP%" !PROGRAMS%%o!
 	    if errorlevel 1 exit /b
 	    popd
 	  )
@@ -221,26 +240,26 @@ release:
 
 	:# Add extra WIN32 tools, like The Silver Searcher, if present
 	if defined EXTRAS32 (
-	  pushd ..\Extras%\OUTDIR%\WIN32
+	  pushd ..\Extras%\EXTRAS32DIR%\WIN32
 	  %MSG% Adding Extra WIN32 programs from !CD!
-	  7z.exe -- a "%ZIP%" !EXTRAS32!
+	  %EXEC% 7z.exe -- a "%ZIP%" !EXTRAS32!
 	  if errorlevel 1 exit /b
 	  popd
 	)
 	:# Add extra WIN64 tools, like The Silver Searcher, if present
 	if defined EXTRAS64 (
-	  pushd ..\Extras%\OUTDIR%
+	  pushd ..\Extras%\EXTRAS64DIR%
 	  %MSG% Adding Extra WIN64 programs from !CD!\WIN64
-	  7z.exe -- a "%ZIP%" !EXTRAS64!
+	  %EXEC% 7z.exe -- a "%ZIP%" !EXTRAS64!
 	  if errorlevel 1 exit /b
 	  popd
 	)
 	
 	:# Add scripts for each language
-	for %%l in (Bash Batch PowerShell Tcl) do if defined %%l (
+	for %%l in (Bash Batch PowerShell Python Tcl) do if defined %%l (
 	  pushd ..\%%l
 	  %MSG% Adding %%l scripts from !CD!
-	  7z.exe -- a "%ZIP%" !%%l!
+	  %EXEC% 7z.exe -- a "%ZIP%" !%%l!
 	  if errorlevel 1 exit /b
 	  popd
 	)
@@ -248,14 +267,14 @@ release:
 	:# Add the doc files
 	%MSG% Adding README
 	pushd ..\Docs
-	7z.exe a "%ZIP%" Catalog.md
+	%EXEC% 7z.exe a "%ZIP%" Catalog.md
 	if errorlevel 1 exit /b
-	7z.exe rn "%ZIP%" Catalog.md README.md
+	%EXEC% 7z.exe rn "%ZIP%" Catalog.md README.md
 	if errorlevel 1 exit /b
 	popd
 	%MSG% Adding LICENSE
 	pushd ..
-	7z.exe a "%ZIP%" LICENSE.*
+	%EXEC% 7z.exe a "%ZIP%" LICENSE.*
 	popd
 	
 	:# Conclusion
@@ -273,7 +292,13 @@ source-release:
 	$(MSG) %*
 	exit /b
 	
+	:exec
+	echo %*
+	%*
+	exit /b
+	
 	:main
+	set "EXEC=call :exec"
 	set "MSG=call :msg"
 	
 	:# Select the output directory
@@ -317,8 +342,7 @@ source-release:
 	set OTHERS=!OTHERS: ".gitattributes"=!
 	for %%v in (OTHERS LOWCLIBS HICLIBS) do (
 	  set %%v=!%%v:/=\!
-	  echo 7z.exe -- a "%ZIP%" !%%v!
-	  7z.exe a -- "%ZIP%" !%%v!
+	  %EXEC% 7z.exe a -- "%ZIP%" !%%v!
 	)
 	:# for /f %%f in ('git ls-files') do 7z.exe -- a "%ZIP%" "%%f"
 	popd
