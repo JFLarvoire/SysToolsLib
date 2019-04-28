@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.15] 2019-04-28
+### Changed
+- Extras/ag.exe [The silver searcher](https://github.com/JFLarvoire/the_silver_searcher) now expands wildcards in command-line pathnames.
+### New
+- Batch/AutoRun.cmd.d/which.cmd: Automatically use (which.exe -i) to search for cmd.exe internal commands and doskey macros.
+
+## [Unreleased] 2019-04-25
+### Fixed
+- Batch/n.bat: Work around trailing spaces issue in Windows 10 v 2019-03.
+
 ## [Unreleased] 2019-04-19
 ### New
 - C/include/stversion.bat: New file defining version strings to display with -? and -V options.
