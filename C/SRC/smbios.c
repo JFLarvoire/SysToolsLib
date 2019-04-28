@@ -48,14 +48,15 @@
 *		    Use the -m option for DOS too, instead of -20 and -32.    *
 *                   Version 2.3.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.3.1.*
+*    2019-04-28 JFL Update PROGRAM_VERSION if including HPE-specific tables.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_NAME    "smbios"
-#define PROGRAM_VERSION "2.3.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_NAME      "smbios"
+#define PROGRAM_VERSION_0 "2.3.1"
+#define PROGRAM_DATE      "2019-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -67,6 +68,23 @@
 #include "smbios.h"	    /* SMBIOS access definitions and routines */
 #include "uuid.h"	    /* UUID management routines */
 #endif
+
+#ifndef HAS_SYSLIB
+#pragma message("Including smbios_lib.c")
+#include "smbios_lib.c"		/* SMBIOS access definitions and routines */
+#endif
+
+#include "smbios_defs.c"	/* Standard tables definitions */
+
+#if HAS_SMBIOS_HP
+#pragma message("Including smbios_hp.c")
+#include "smbios_hp.c"		/* HP OEM-specific tables definitions */
+#define PROGRAM_VERSION_HPE "/HPE"
+#else
+#define PROGRAM_VERSION_HPE ""
+#endif
+
+#define PROGRAM_VERSION PROGRAM_VERSION_0 PROGRAM_VERSION_HPE
 
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
@@ -103,15 +121,6 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define FALSE 0
 #define TRUE 1
-
-#ifndef HAS_SYSLIB
-#include "smbios_lib.c"		/* SMBIOS access definitions and routines */
-#endif
-#include "smbios_defs.c"	/* Standard tables definitions */
-#if HAS_SMBIOS_HP
-#pragma message("Including smbios_hp.c")
-#include "smbios_hp.c"		/* HP OEM-specific tables definitions */
-#endif
 
 /* Global variables */
 
