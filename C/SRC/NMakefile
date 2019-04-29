@@ -7,3 +7,6 @@ cleanenv:
 config:
     rem Nothing to do in $(MAKEDIR) as there is no further child level
 
+# Work around a common mistake: These targets are actually in the parent directory's NMakefile
+release source-release:
+    pushd .. & $(SUBMAKE) $@ & popd
