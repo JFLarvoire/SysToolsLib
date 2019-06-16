@@ -2,7 +2,7 @@
 *                                                                             *
 *   File name:	    lessive.c				                      *
 *                                                                             *
-*   Description:    Remove blanks at the end lines in a text file.	      *
+*   Description:    Remove blanks at the end of lines in a text file.	      *
 *                                                                             *
 *   History:								      *
 *    1989-11-28 JFL jf.larvoire@hp.com created this program.                  *
@@ -35,14 +35,16 @@
 *                   Version 1.4.1.                                            *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 1.4.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.4.      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "lessive"
-#define PROGRAM_VERSION "1.4.3"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "1.4.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
 
@@ -421,7 +423,7 @@ fail_no_mem:
 
 void usage(void) {
     printf(
-PROGRAM_NAME_AND_VERSION " - Wipe out trailing blanks\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: lessive [SWITCHES] [INFILE [OUTFILE|-same]]\n\
 \n\

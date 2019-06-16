@@ -21,14 +21,16 @@
 *    2019-01-16 JFL Avoid outputing bytes \x80-\xFF by default for UTF-8 CPs. *
 *		    Version 1.4.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.4.2.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.3.      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.4.2"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.4.3"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -317,7 +319,7 @@ void usage(void) {
 #endif
 
   printf(
-PROGRAM_NAME_AND_VERSION " - Output character tables\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n"
 #ifdef _WIN32
 "Usage: chars [SWITCHES] [CODEPAGE]\n"

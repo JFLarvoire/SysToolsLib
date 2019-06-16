@@ -45,14 +45,16 @@
 *		    Bug fix: Convert2Utf8() could overflow its buffers.	      *
 *		    Version 2.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.2.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Manage system drivers and services"
 #define PROGRAM_NAME    "driver"
-#define PROGRAM_VERSION "2.1.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "2.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -472,7 +474,7 @@ int main(int argc, char *argv[])
 void usage(int retcode)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Manage system drivers and services\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: driver [switches]\n\
 \n\

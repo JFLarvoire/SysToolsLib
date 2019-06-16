@@ -26,14 +26,16 @@
 *		    Fixed and improved the FormatSize() routine. Version 1.1.4.
 *    2017-08-15 JFL Fixed warnings in Visual Studio 2015. Version 1.1.5.      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.6.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.7.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Dump GUID Partition Tables"
 #define PROGRAM_NAME    "gpt"
-#define PROGRAM_VERSION "1.1.6"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.1.7"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -393,7 +395,7 @@ int _cdecl main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Dump GUID Partition Tables\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: gpt [switches]\n\
 \n\

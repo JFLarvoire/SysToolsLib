@@ -44,14 +44,16 @@
 *		    Rewrote finis() so that it displays errors internally.    *
 *		    Version 3.1.  					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.1.2.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.1.1"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "3.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -562,7 +564,7 @@ int main(int argc, char *argv[]) {
 
 void usage(int iErr) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Execute a command recursively\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: redo [SWITCHES] {COMMAND LINE}\n\
 \n\

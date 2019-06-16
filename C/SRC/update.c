@@ -153,14 +153,18 @@
 *    2019-01-16 JFL Fixed the processing of option --. Really. Version 3.8.1. *
 *    2019-04-15 JFL Implemented a fullpath() routine for Linux.		      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.8.2.*
+*    2019-05-21 JFL Lowered the WIN32 buffer sizes to 256KB, to get smoother  *
+*                   progress counts on slow networks. V3.8.3.                 *
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.8.4.      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.8.2"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "3.8.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -312,7 +316,7 @@ typedef unsigned long DWORD;
 #ifdef _MSDOS
 #define BUFFERSIZE 16384
 #else
-#define BUFFERSIZE (1024L * 1024L)
+#define BUFFERSIZE (256L * 1024L)
 #endif
 char *buffer;       /* Pointer on the intermediate copy buffer */
 
@@ -637,7 +641,7 @@ int main(int argc, char *argv[]) {
 void usage(void)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Update files based on their time stamps\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: update [SWITCHES] FILES DIRECTORY\n\
        update [SWITCHES] FILES DIRECTORY" DIRSEPARATOR_STRING "NEWDIR" DIRSEPARATOR_STRING "\n\
@@ -2362,8 +2366,8 @@ int zapDir(const char *path, zapOpts *pzo) {
 
 #ifdef _MSDOS		/* If it's a 16-bits app, use a 4K buffer. */
 #define FBUFSIZE 4096
-#else			/* Else for 32-bits or 64-bits apps, use a 4M buffer */
-#define FBUFSIZE (4096 * 1024)
+#else			/* Else for 32-bits or 64-bits apps, use a 256K buffer */
+#define FBUFSIZE (256 * 1024)
 #endif
 
 int filecompare(char *name1, char *name2) { /* Compare two files */

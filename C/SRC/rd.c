@@ -22,12 +22,14 @@
 *                   Use routine printError() for all error messages.          *
 *		    Version 1.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
 *		    							      *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Remove a directory"
 #define PROGRAM_NAME    "rd"
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "1.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -254,7 +256,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Remove a directory\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   %s [SWITCHES] DIRNAME\n\

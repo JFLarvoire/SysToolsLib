@@ -12,14 +12,16 @@
 *    2016-09-23 JFL Minor tweak to avoid a warning.	                      *
 *    2017-03-15 JFL Changed to a UTF-8 app, to support non-ASCII file names.  *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Duplicate the input to several outputs"
 #define PROGRAM_NAME    "tee"
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -185,7 +187,7 @@ int main(int argc, char *argv[]) {
 void usage(int iErr)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Copy the input to several outputs\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: tee [OPTIONS] [[-a] FILENAME] ...\n\
 \n\

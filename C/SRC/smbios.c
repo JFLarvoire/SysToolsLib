@@ -49,14 +49,16 @@
 *                   Version 2.3.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.3.1.*
 *    2019-04-28 JFL Update PROGRAM_VERSION if including HPE-specific tables.  *
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.3.2.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Display SMBIOS tables contents"
 #define PROGRAM_NAME      "smbios"
-#define PROGRAM_VERSION_0 "2.3.1"
-#define PROGRAM_DATE      "2019-04-19"
+#define PROGRAM_VERSION_0 "2.3.2"
+#define PROGRAM_DATE      "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -75,14 +77,14 @@
 #endif
 
 #include "smbios_defs.c"	/* Standard tables definitions */
-
-#if HAS_SMBIOS_HP
+										/* Include lines in $(O)\smbios.ver.h */
+#if HAS_SMBIOS_HP								/* #define PROGRAM_VERSION */
 #pragma message("Including smbios_hp.c")
 #include "smbios_hp.c"		/* HP OEM-specific tables definitions */
-#define PROGRAM_VERSION_HPE "/HPE"
-#else
-#define PROGRAM_VERSION_HPE ""
-#endif
+#define PROGRAM_VERSION_HPE "/HPE"                                              /* #define PROGRAM_VERSION */
+#else                                                                           /* #define PROGRAM_VERSION */
+#define PROGRAM_VERSION_HPE ""                                                  /* #define PROGRAM_VERSION */
+#endif                                                                          /* #define PROGRAM_VERSION */
 
 #define PROGRAM_VERSION PROGRAM_VERSION_0 PROGRAM_VERSION_HPE
 
@@ -946,7 +948,7 @@ int _cdecl main(int argc, char *argv[]) {
 
 void usage(int retcode) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Display SMBIOS tables contents\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: smbios [OPTIONS]\n\
 \n\

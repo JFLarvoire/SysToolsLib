@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=font.c
-OBJECTS=$(O)\font.obj
+SOURCES=font.c $(O)\font.rc
+OBJECTS=$(O)\font.obj $(O)\font.res
 EXENAME=font.exe
 
 !IF "$(T)"=="DOS"

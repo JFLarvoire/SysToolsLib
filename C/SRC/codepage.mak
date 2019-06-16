@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=codepage.c
-OBJECTS=$(O)\codepage.obj
+SOURCES=codepage.c $(O)\codepage.rc
+OBJECTS=$(O)\codepage.obj $(O)\codepage.res
 EXENAME=codepage.exe
 
 !IF "$(T)"=="DOS"

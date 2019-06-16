@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=2note.c
-OBJECTS=$(O)\2note.obj
+SOURCES=2note.c $(O)\2note.rc
+OBJECTS=$(O)\2note.obj $(O)\2note.res
 EXENAME=2note.exe
 
 !IF "$(T)"=="DOS"

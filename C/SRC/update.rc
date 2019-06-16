@@ -5,3 +5,4 @@ MANIFEST_RESOURCE_ID RT_MANIFEST "update.manifest"
 */
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "update.manifest"
 
+#include "SysToolsLib.rc"

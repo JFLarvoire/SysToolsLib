@@ -33,14 +33,16 @@
 *    2018-01-08 JFL Remove the UTF8 BOM when writing RTF. Version 1.4.1.      *
 *    2018-08-31 JFL Added the -d debug option. Version 1.4.2.		      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.4.      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.4.3"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "1.4.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -263,7 +265,7 @@ void usage(void)
     UINT cpCurrent = GetConsoleOutputCP();
 
     printf(
-PROGRAM_NAME_AND_VERSION " - Pipe text from stdin to the Windows clipboard\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\

@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=conv.c
-OBJECTS=$(O)\conv.obj
+SOURCES=conv.c $(O)\conv.rc
+OBJECTS=$(O)\conv.obj $(O)\conv.res
 EXENAME=conv.exe
 
 !IF "$(T)"=="DOS"

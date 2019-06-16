@@ -35,14 +35,16 @@
 *                   Version 3.0.1.                                            *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 3.0.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.0.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.0.4.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Convert tabs to spaces"
 #define PROGRAM_NAME    "detab"
-#define PROGRAM_VERSION "3.0.3"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "3.0.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent security warnings for old routines */
 
@@ -138,7 +140,7 @@ int IsSameFile(char *pszPathname1, char *pszPathname2);
 int iVerbose = FALSE;
 FILE *mf;			    /* Message output file */
 char usage[] = 
-PROGRAM_NAME_AND_VERSION " - Convert tabs to spaces\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: detab [OPTIONS] [INFILE [OUTFILE|-same [N]]]\n\
 \n\

@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=truename.c
-OBJECTS=$(O)\truename.obj
+SOURCES=truename.c $(O)\truename.rc
+OBJECTS=$(O)\truename.obj $(O)\truename.res
 EXENAME=truename.exe
 
 !IF "$(T)"=="DOS"

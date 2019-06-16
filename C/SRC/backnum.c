@@ -52,14 +52,16 @@
 *    2016-01-08 JFL Fixed all warnings in Linux, and a few real bugs.         *
 *		    Version 2.1.3.  					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.4.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.5.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.1.4"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "2.1.5"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -434,7 +436,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Create a numbered backup copy of a file\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\

@@ -38,14 +38,16 @@
 *    2017-01-07 JFL Count line ending with \r\r\n as two lines.               *
 *                   Version 2.0.                                              *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.0.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.2.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Compare .ini files, section by section, and item by item"
 #define PROGRAM_NAME    "inicomp"
-#define PROGRAM_VERSION "2.0.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "2.0.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -1035,7 +1037,7 @@ void outOfMem(void)
 void usage(void)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Compare two .ini files, section by section, and item by item.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: inicomp [switches] FILE1[.ini] FILE2[.ini]\n\
 \n\

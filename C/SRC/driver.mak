@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=driver.c
-OBJECTS=$(O)\driver.obj
+SOURCES=driver.c $(O)\driver.rc
+OBJECTS=$(O)\driver.obj $(O)\driver.res
 EXENAME=driver.exe
 
 !IF "$(T)"=="DOS"

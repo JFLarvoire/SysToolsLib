@@ -63,14 +63,16 @@
 *    2018-05-31 JFL Changed #if DIRENT2STAT_DEFINED to _DIRENT2STAT_DEFINED.  *
 *		    Version 3.3.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.3.2.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.3.3.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.3.2"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "3.3.3"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -502,7 +504,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Display the total size used by the target directory.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: dirsize [SWITCHES] [TARGET]\n\
 \n\

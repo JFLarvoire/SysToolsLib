@@ -140,14 +140,16 @@
 *    2017-05-29 JFL Help only displays the main program version.              *
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 2.6.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.6.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.6.4.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "2.6.3"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "2.6.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -860,7 +862,7 @@ void usage(int err) {
   /* Note: The help is too long, and needs to be split into several sub strings */
   /*       Also be careful of the % character that appears in some options */
   fprintf(f,
-PROGRAM_NAME_AND_VERSION " - Replace substrings in a stream\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: remplace [SWITCHES] OPERATIONS [FILES_SPEC]\n\
 \n\

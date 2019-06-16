@@ -21,14 +21,16 @@
 *    2014-12-04 JFL Added my name and email in the help.                      *
 *    2016-09-23 JFL Removed warnings. No functional code change.              *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.3.1.*
+*    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.3.2.      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Find C include files used in a source file"
 #define PROGRAM_NAME    "whichinc"
-#define PROGRAM_VERSION "1.3.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.3.2"
+#define PROGRAM_DATE    "2019-06-13"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -215,7 +217,7 @@ int main(int argc, char *argv[])
 void usage(int iRetCode)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Find C include files used in a source file\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: whichinc [options] {filename}\n\
 \n\

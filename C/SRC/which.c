@@ -2,7 +2,7 @@
 *		    							      *
 *   Filename	    which.c						      *
 *		    							      *
-*   Description     Find which versions of a program are accessible	      *
+*   Description     Find which instances of a program are in the PATH	      *
 *		    							      *
 *   Notes	    Inspired by the Unix which.				      *
 *		    In DOS and Windows, we need to extend the search to       *
@@ -86,14 +86,16 @@
 *    2019-03-01 JFL Fixed option -I.                			      *
 *		    Version 1.12.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V1.12.1.*
+*    2019-06-11 JFL Added PROGRAM_DESCRIPTION definition. Version 1.12.2.     *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "which"
-#define PROGRAM_VERSION "1.12.1"
-#define PROGRAM_DATE    "2019-03-01"
+#define PROGRAM_VERSION "1.12.2"
+#define PROGRAM_DATE    "2019-06-11"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -536,7 +538,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Find which program will be executed\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
 \n\

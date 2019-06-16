@@ -36,14 +36,16 @@
 *    2017-03-16 JFL Display the default console code page (OEMCP). V 1.1.1.   *
 *    2018-01-25 JFL Display console font information. V 1.2.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.2.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Get information about code pages on this system"
 #define PROGRAM_NAME    "codepage"
-#define PROGRAM_VERSION "1.2.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.2.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
@@ -534,7 +536,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Get information about code pages on this system.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   codepage [SWITCHES] [CODEPAGE]\n\

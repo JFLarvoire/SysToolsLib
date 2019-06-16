@@ -11,12 +11,14 @@
 *    2016-07-12 JFL Added option -V.                     		      *
 *    2017-06-29 JFL Fixed a warning. No functional code change.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.0.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.2.      *
 *		    							      *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Manage UUIDs"
 #define PROGRAM_NAME    "uuid"
-#define PROGRAM_VERSION "1.0.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.0.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -105,7 +107,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - UUID management tool\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: uuid [OPTIONS]\n\
 \n\

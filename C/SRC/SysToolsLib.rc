@@ -1,0 +1,121 @@
+/*****************************************************************************\
+*		    							      *
+*   Filename	    SysToolsLib.rc					      *
+*		    							      *
+*   Description     Generic resource file for SysToolsLib executables	      *
+*		    							      *
+*   Notes	    Generates consistent properties for all executable.	      *
+*		    							      *
+*		    The following variables must be predefined:		      *
+*		    PROGRAM_VER_H = Name of the $(PROGRAM).ver.h file.	      *
+*		    MY_FULLNAME = Full name of the build maker.		      *
+*		    MY_EMAIL = Email of the build maker.		      *
+*		    							      *
+*		    $(PROGRAM).ver.h must define:			      *
+*		    PROGRAM_NAME = Same as PROGRAM                            *
+*		    PROGRAM_DESCRIPTION = One-line description                *
+*		    PROGRAM_VERSION = Version string: MAJOR.MINOR.PATCH[.BUILD]
+*		    PROGRAM_DATE = C Source ISO Date                          *
+*		    PROGRAM_VERSION_MAJOR = Version string: MAJOR             *
+*		    PROGRAM_VERSION_MINOR = Version string: MINOR             *
+*		    PROGRAM_VERSION_PATCH = Version string: PATCH             *
+*		    PROGRAM_VERSION_BUILD = Version string: BUILD (Optional)  *
+*		    BUILD_DATE = Build ISO Date                               *
+*		    BUILD_YEAR = Build year                                   *
+*		    BUILD_MONTH = Build month (01-12)                         *
+*		    BUILD_DAY = Build day (01-31)                             *
+*		    							      *
+*   History								      *
+*    2019-06-12 JFL jf.larvoire@hpe.com created this file.		      *
+*		    							      *
+*        (C) Copyright 2019 Hewlett Packard Enterprise Development LP         *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
+\*****************************************************************************/
+
+#define VER_STRINGIZE(x) #x /* Convert the raw argument to a string */
+#define VER_VALUEIZE(x) VER_STRINGIZE(x) /* Substitute the argument, then convert its value to a string */
+
+/* Include the program versions definitions */
+#include VER_VALUEIZE(PROGRAM_VER_H) /* Ex: "which.ver.h" */
+
+
+/* Build SysToolsLib version strings from the above */
+#include "stversion.h"
+
+
+/* Build standard VERSIONINFO definitions from all the above */
+/* Reference: https://docs.microsoft.com/en-us/windows/desktop/menurc/versioninfo-resource */
+
+#include <winver.h>
+
+#ifndef PROGRAM_VERSION_PATCH
+#define PROGRAM_VERSION_PATCH 0
+#endif
+#ifndef PROGRAM_VERSION_BUILD
+#define PROGRAM_VERSION_BUILD 0
+#endif
+
+#define VER_COMPANYNAME_STR         "Jean-François Larvoire's System Tools Library"
+#define VER_LEGALCOPYRIGHT_STR      "Open-source Freeware, w. Apache V2.0 License"
+#define VER_HOMEPAGE_STR            "https://github.com/JFLarvoire/SysToolsLib"
+#define VER_LEGALTRADEMARKS_STR     VER_HOMEPAGE_STR "/blob/master/C/SRC/" PROGRAM_NAME ".c"
+
+#define VER_FILEVERSION             PROGRAM_VERSION_MAJOR,PROGRAM_VERSION_MINOR,PROGRAM_VERSION_PATCH,PROGRAM_VERSION_BUILD
+#define VER_FILEVERSION_STR         PROGRAM_VERSION
+#define VER_FILEDESCRIPTION_STR	    PROGRAM_DESCRIPTION
+#define VER_INTERNALNAME_STR        PROGRAM_NAME
+#define VER_ORIGINALFILENAME_STR    PROGRAM_NAME EXE_SUFFIX
+
+/* For the product, give information about the build and builder */
+#define VER_PRODUCTVERSION          BUILD_YEAR,BUILD_MONTH,BUILD_DAY,0
+#define VER_PRODUCTVERSION_STR      BUILD_DATE AND_EXE_PROC_NAME AND_EXE_OS_NAME AND_MIN_OS_NAME AND_DEBUG_VERSION 
+#define VER_PRODUCTNAME_STR         SYSTOOLSLIB_NAME " - Built by " VER_VALUEIZE(MY_FULLNAME) " - " VER_VALUEIZE(MY_EMAIL)
+
+#define VER_COMMENTS_STR            DETAILED_VERSION
+
+#ifndef _DEBUG
+#define VER_FF_DEBUG                0
+#else
+#define VER_FF_DEBUG                VS_FF_DEBUG
+#endif
+
+#ifndef _WIN64
+#define VER_FILEOS                  VOS__WINDOWS32
+#else
+#define VER_FILEOS                  VOS_NT
+#endif
+
+
+/* Generate the final VERSIONINFO resource */
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VER_FILEVERSION
+PRODUCTVERSION  VER_PRODUCTVERSION
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       VER_FF_DEBUG /* (VS_FF_PRIVATEBUILD|VS_FF_PRERELEASE|VS_FF_DEBUG) */
+FILEOS          VER_FILEOS /* VOS__WINDOWS32 or VOS_NT */
+FILETYPE        VFT_APP
+FILESUBTYPE     0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"	/* 0x409 = US English, 0x4E4 = CP 1252 */
+        BEGIN							/* Visible in Windows 10 properties dialog */
+            VALUE "CompanyName",      VER_COMPANYNAME_STR	"\0"	/* No  */	
+            VALUE "FileDescription",  VER_FILEDESCRIPTION_STR	"\0"	/* Yes */
+            VALUE "FileVersion",      VER_FILEVERSION_STR	"\0"	/* No  */
+            VALUE "InternalName",     VER_INTERNALNAME_STR	"\0"	/* No  */
+            VALUE "LegalCopyright",   VER_LEGALCOPYRIGHT_STR	"\0"	/* Yes */
+            VALUE "LegalTrademarks",  VER_LEGALTRADEMARKS_STR	"\0"	/* Yes */
+            VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR	"\0"	/* Yes */
+            VALUE "ProductName",      VER_PRODUCTNAME_STR	"\0"	/* Yes */
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR	"\0"	/* Yes */
+            VALUE "Comments",         VER_COMMENTS_STR		"\0"	/* No  */
+            VALUE "HomePage",         VER_HOMEPAGE_STR		"\0"	/* No  */
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04E4
+    END
+END

@@ -107,14 +107,16 @@
 *		    Write error messages to stderr.                           *
 *		    Version 4.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.4.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 4.1.2.      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
-#define PROGRAM_VERSION "4.1.1"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "4.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -1194,7 +1196,7 @@ geometry_failure:
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Disk sector manager\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: sector [switches] {source} [destination [number [origin [origin]]]]\n\
 \n\

@@ -19,7 +19,13 @@
 
 #ifndef	_STVERSION_H
 #define	_STVERSION_H	1
-                                                                  
+                                               
+
+#define SYSTOOLSLIB_VERSION         2019,6,15,0
+#define SYSTOOLSLIB_VERSION_STR     "2019-06-15"
+#define SYSTOOLSLIB_NAME            "System Tools Library"
+
+
 /******************** OS identification string definition ********************/
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
@@ -78,6 +84,8 @@
 #    define EXE_PROC_NAME "x86"
 #  elif defined(_M_IA64)
 #    define EXE_PROC_NAME "ia64"
+#  elif defined(RC_INVOKED) && defined(MACHINE)
+#    define EXE_PROC_NAME MACHINE
 #  else
 #    undef EXE_PROC_NAME
 #  endif
@@ -89,7 +97,11 @@
 #  elif defined(_WIN64)
 #    define EXE_OS_NAME "Win64"
 #  else
-#    define EXE_OS_NAME "Win32"
+#    if defined(WITH_DOS_STUB)
+#      define EXE_OS_NAME "DOS+Win32"
+#    else
+#      define EXE_OS_NAME "Win32"
+#    endif
 #  endif
 
 #  define EXE_SUFFIX ".exe"

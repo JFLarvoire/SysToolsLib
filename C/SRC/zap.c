@@ -24,12 +24,14 @@
 *                   Prefix all error messages with the program name.          *
 *		    Version 1.2.    					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.2.1.*
+*    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
 *		    							      *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Delete files visibly, possibly recursively"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.2.1"
-#define PROGRAM_DATE    "2018-05-31"
+#define PROGRAM_VERSION "1.2.2"
+#define PROGRAM_DATE    "2019-06-13"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -268,7 +270,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Delete files visibly, possibly recursively\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   %s [SWITCHES] PATHNAME [PATHNAME [...]]\n\

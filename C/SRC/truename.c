@@ -23,14 +23,16 @@
 *		    Version 1.1.1.					      *
 *    2018-04-24 JFL Use NAME_MAX from limits.h. Version 1.1.2.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.4.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
-#define PROGRAM_VERSION "1.1.3"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.1.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -237,7 +239,7 @@ report_err:
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Get the canonic name of a path, with all links resolved.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   truename [SWITCHES] PATHNAME\n\

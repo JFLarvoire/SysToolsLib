@@ -23,14 +23,16 @@
 *		    Added an optional weight argument.			      *
 *		    Version 2.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.1.1.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.2.      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Manage the console fonts"
 #define PROGRAM_NAME    "font"
-#define PROGRAM_VERSION "2.1.1"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "2.1.2"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _UTF8_SOURCE
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -212,7 +214,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Manage the console fonts\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: font [SWITCHES] [FONT_NAME [FONT_SIZE] [FONT_WEIGHT]]\n\
 \n\

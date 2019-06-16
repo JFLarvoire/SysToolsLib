@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=1clip.c
-OBJECTS=$(O)\1clip.obj
+SOURCES=1clip.c $(O)\1clip.rc
+OBJECTS=$(O)\1clip.obj $(O)\1clip.res
 EXENAME=1clip.exe
 
 !IF "$(T)"=="DOS"

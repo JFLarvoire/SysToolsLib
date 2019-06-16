@@ -39,14 +39,16 @@
 *                   This fixes the v1.3 issues with large output in CP 65001. *
 *    2018-11-02 JFL Improved ReportWin32Error(). Version 2.0.1.		      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.0.2.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.3.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.0.2"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "2.0.3"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -236,7 +238,7 @@ void usage(void) {
   UINT cpCurrent = GetConsoleOutputCP();
 
   printf(
-PROGRAM_NAME_AND_VERSION " - Pipe text data from the Windows clipboard to stdout.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\

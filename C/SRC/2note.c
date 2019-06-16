@@ -13,14 +13,16 @@
 *    2018-11-02 JFL Fixed a memory reallocation failure when converting \n.   *
 *		    Improved ReportWin32Error().			      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.2.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.3.      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows Notepad"
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.0.2"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "1.0.3"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -201,7 +203,7 @@ void usage(void) {
   UINT cpOEM = GetOEMCP();
   UINT cpCurrent = GetConsoleOutputCP();
   printf(
-PROGRAM_NAME_AND_VERSION " - Pipe text from stdin to the Windows Notepad\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\

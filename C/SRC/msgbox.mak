@@ -14,8 +14,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-SOURCES=MsgBox.c
-OBJECTS=$(O)\MsgBox.obj
+SOURCES=MsgBox.c $(O)\MsgBox.rc
+OBJECTS=$(O)\MsgBox.obj $(O)\MsgBox.res
 EXENAME=MsgBox.exe
 
 !IF "$(T)"=="DOS"

@@ -14,8 +14,14 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+!IF "$(T)"=="DOS"
 SOURCES=gpt.c
 OBJECTS=$(O)\gpt.obj
+!ELSE # WIN95, WIN32, WIN64
+SOURCES=gpt.c $(O)\gpt.rc
+OBJECTS=$(O)\gpt.obj $(O)\gpt.res
+!ENDIF
+
 EXENAME=gpt.exe
 
 !IF ("$(HAS_GNUEFI)"!="1")

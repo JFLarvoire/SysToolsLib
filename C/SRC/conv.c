@@ -49,14 +49,16 @@
 *                   Display MsvcLibX library version in DOS & Windows. V2.0.1.*
 *    2017-08-25 JFL Use strerror() for compatibility with Unix. Version 2.0.2.*
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.0.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.4.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.0.3"
-#define PROGRAM_DATE    "2019-04-18"
+#define PROGRAM_VERSION "2.0.4"
+#define PROGRAM_DATE    "2019-06-12 "
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -240,7 +242,7 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
 \*---------------------------------------------------------------------------*/
 
 char szUsage[] = 
-PROGRAM_NAME_AND_VERSION " - Convert characters from one character set to another.\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\

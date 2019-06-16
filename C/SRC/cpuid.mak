@@ -17,8 +17,14 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+!IF "$(T)"=="DOS"
 SOURCES=cpuid.c
 OBJECTS=$(O)\cpuid.obj
+!ELSE # WIN95, WIN32, WIN64
+SOURCES=cpuid.c $(O)\cpuid.rc
+OBJECTS=$(O)\cpuid.obj $(O)\cpuid.res
+!ENDIF
+
 EXENAME=cpuid.exe
 
 !IF "$(T)"=="DOS" && ("$(HAS_BIOSLIB)"!="1" || "$(HAS_LODOSLIB)"!="1" || "$(HAS_PMODELIB)"!="1")

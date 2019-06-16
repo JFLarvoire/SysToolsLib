@@ -18,12 +18,14 @@
 *    2018-05-31 JFL Bug fix: mkdirp() worked, but returned an error, if the   *
 *		     path contained a trailing [back]slash. Version 1.0.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.3.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.4.      *
 *		    							      *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Create a directory"
 #define PROGRAM_NAME    "md"
-#define PROGRAM_VERSION "1.0.3"
-#define PROGRAM_DATE    "2018-05-31"
+#define PROGRAM_VERSION "1.0.4"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -209,7 +211,7 @@ int main(int argc, char *argv[]) {
 
 void usage(void) {
   printf(
-PROGRAM_NAME_AND_VERSION " - Create a directory\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   %s [SWITCHES] DIRNAME\n\

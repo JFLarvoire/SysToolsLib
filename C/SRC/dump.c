@@ -33,14 +33,16 @@
 *    2017-04-13 JFL Do not print a final blank line in DOS and Windows.       *
 *		    Version 1.1.8.  					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.9.*
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.10.     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.1.9"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "1.1.10"
+#define PROGRAM_DATE    "2019-06-12"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -332,7 +334,7 @@ Offset    00           04           08           0C           0   4    8   C   \
 void usage(void)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Dump data as both hexadecimal and text\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: dump [switches] [filename] [address] [length]\n\
 \n\

@@ -31,13 +31,16 @@
 *    2017-05-31 JFL Fixed WIN32 warnings. No functional code change.	      *
 *    2017-12-18 JFL Fixed DOS warnings. No functional code change.	      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h.         *
+*    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition.		      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_DATE    "2019-04-19"
+#define PROGRAM_VERSION "2019.06.12"
+#define PROGRAM_DATE    "2019-06-12"
 
 /* Definitions */
 
@@ -444,7 +447,7 @@ int _cdecl main(int argc, char *argv[])
 void usage(void)
     {
     printf(
-PROGRAM_NAME_AND_VERSION " - Identify the processor and its features\n\
+PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: CPUID [switches]\n\
 \n\
