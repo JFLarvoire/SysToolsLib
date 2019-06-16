@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-06-15
+### New
+- Updated the C make system so that every executable includes program properties, with a description, version, product infos, etc
+
 ## [1.15] 2019-04-28
 ### Changed
 - Extras/ag.exe [The silver searcher](https://github.com/JFLarvoire/the_silver_searcher) now expands wildcards in command-line pathnames.
