@@ -100,18 +100,18 @@ BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040904E4"	/* 0x409 = US English, 0x4E4 = CP 1252 */
-        BEGIN							/* Visible in Windows 10 properties dialog */
-            VALUE "CompanyName",      VER_COMPANYNAME_STR	"\0"	/* No  */	
-            VALUE "FileDescription",  VER_FILEDESCRIPTION_STR	"\0"	/* Yes */
-            VALUE "FileVersion",      VER_FILEVERSION_STR	"\0"	/* No  */
-            VALUE "InternalName",     VER_INTERNALNAME_STR	"\0"	/* No  */
-            VALUE "LegalCopyright",   VER_LEGALCOPYRIGHT_STR	"\0"	/* Yes */
-            VALUE "LegalTrademarks",  VER_LEGALTRADEMARKS_STR	"\0"	/* Yes */
-            VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR	"\0"	/* Yes */
-            VALUE "ProductName",      VER_PRODUCTNAME_STR	"\0"	/* Yes */
-            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR	"\0"	/* Yes */
-            VALUE "Comments",         VER_COMMENTS_STR		"\0"	/* No  */
-            VALUE "HomePage",         VER_HOMEPAGE_STR		"\0"	/* No  */
+        BEGIN								/* Name in Properties dialog / Details tab */
+            VALUE "CompanyName",      VER_COMPANYNAME_STR	"\0"	/* - */	
+            VALUE "FileDescription",  VER_FILEDESCRIPTION_STR	"\0"	/* File Description */
+            VALUE "FileVersion",      VER_FILEVERSION_STR	"\0"	/* - */
+            VALUE "InternalName",     VER_INTERNALNAME_STR	"\0"	/* - */
+            VALUE "LegalCopyright",   VER_LEGALCOPYRIGHT_STR	"\0"	/* Copyright */
+            VALUE "LegalTrademarks",  VER_LEGALTRADEMARKS_STR	"\0"	/* Legal Trademarks */
+            VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR	"\0"	/* Original Filename */
+            VALUE "ProductName",      VER_PRODUCTNAME_STR	"\0"	/* Product Name */
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR	"\0"	/* Product Version */
+            VALUE "Comments",         VER_COMMENTS_STR		"\0"	/* - */
+            VALUE "HomePage",         VER_HOMEPAGE_STR		"\0"	/* - */
         END
     END
     BLOCK "VarFileInfo"
