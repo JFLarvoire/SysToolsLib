@@ -87,6 +87,7 @@
 *		    Version 1.12.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V1.12.1.*
 *    2019-06-11 JFL Added PROGRAM_DESCRIPTION definition. Version 1.12.2.     *
+*    2019-06-22 JFL Avoid searching twice in the same directory. Version 1.13.*
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -94,8 +95,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "which"
-#define PROGRAM_VERSION "1.12.2"
-#define PROGRAM_DATE    "2019-06-11"
+#define PROGRAM_VERSION "1.13"
+#define PROGRAM_DATE    "2019-06-22"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -452,6 +453,16 @@ int main(int argc, char *argv[]) {
 #endif
   if (pszPath) {
     for (pszTok = strtok(pszPath, PATH_SEP); pszTok; pszTok = strtok(NULL, PATH_SEP)) {
+      int i;
+      /* Avoid searching twice in the same directory, if it appears twice in the PATH.
+         Note that in this case, it's the one in the first matching instance that runs anyway */
+      for (i=0; i<nPaths; i++) {
+      	if (!_stricmp(pszTok, pathList[i])) break;
+      }
+      if (i<nPaths) {
+	if (iVerbose) printf("# Skipping duplicate instance of %s in the PATH.\n", pathList[i]);
+      	continue;
+      }
       pathList = realloc(pathList, (sizeof(char *))*(++nPaths));
       pathList[nPaths-1] = pszTok;	/* Append each PATH directory */
     }
