@@ -14,6 +14,7 @@
 :#   2017-11-24 JFL Added paths for Visual Studio up to 2017.		      *
 :#                  Fixed the display of variables set by the script.         *
 :#   2018-01-10 JFL Added option -X.                           		      *
+:#   2019-05-09 JFL Added support for Visual Studio 2019.		      *
 :#                                                                            *
 :#        © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license: www.apache.org/licenses/LICENSE-2.0 *
@@ -21,7 +22,7 @@
 
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "VERSION=2018-01-10"
+set "VERSION=2019-05-09"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 set "RETURN=goto :eof"
@@ -33,12 +34,15 @@ goto main
 
 :findvs
 set "PGM32=%ProgramFiles(x86)%"
-if "%PGM32%"=="" set "PGM32=%ProgramFiles%"
-if "%PGM32%"=="" echo>&2 Error: Can't find 32-bits Program Files directory & exit /b 1
+if not defined PGM32 set "PGM32=%ProgramFiles%"
+if not defined PGM32 echo>&2 Error: Can't find 32-bits Program Files directory & exit /b 1
 set "VSTUDIOS="
-for %%s in ("\2017" " 14.0" " 12.0" " 11.0" " 10.0" " 9.0" " 8" " .NET 2003" " .NET" "") do @(
+for %%s in ("\2019" "\2017" " 14.0" " 12.0" " 11.0" " 10.0" " 9.0" " 8" " .NET 2003" " .NET" "") do @(
   set "VSTUDIO=%PGM32%\Microsoft Visual Studio%%~s"
-  if exist "!VSTUDIO!" set VSTUDIOS=!VSTUDIOS! "!VSTUDIO!"
+  if exist "!VSTUDIO!" (
+    %ECHO.V% :# VSTUDIO dir "!VSTUDIO!"
+    set VSTUDIOS=!VSTUDIOS! "!VSTUDIO!"
+  )
 )
 %RETURN%
 
@@ -48,15 +52,21 @@ for %%s in ("\2017" " 14.0" " 12.0" " 11.0" " 10.0" " 9.0" " 8" " .NET 2003" " .
 :findvc32
 call :findvs
 for %%s in (%VSTUDIOS%) do @(
-  for %%c in ("VC" "VC7" "VC98") do @(
-    if exist "%%~s\%%~c\bin" (
-      set "VSTUDIO=%%~s"
-      set "MSVC32=%%~s\%%~c"
-      goto foundvc32
+  for %%c in ("Enterprise\VC" "Professional\VC" "Community\VC" "Preview\VC" "VC" "VC7" "VC98") do @(
+    for %%p in ("\Auxiliary\Build" "") do (
+      %ECHO.V% :# Searching vcvarsall.bat in "%%~s\%%~c%%~p"
+      if exist "%%~s\%%~c%%~p\vcvarsall.bat" (
+        set "VSTUDIO=%%~s"
+        set "VC=%%~s\%%~c"
+        set "VCVARSDIR=%%~s\%%~c%%~p"
+        goto foundvc32
+      )
     )
   )
 )
 :foundvc32
+%ECHO.V% :# Found "%VCVARSDIR%\vcvarsall.bat"
+%ECHOVARS.V% VSTUDIO VC
 %RETURN%
 
 :#-----------------------------------------------------------------------------
@@ -82,7 +92,7 @@ goto :eof
 
 :echo.msvcvars
 echo :# Environment variables used or set by Visual C++' script
-call :echo.vars DevEnvDir FrameworkDir FrameworkVersion INCLUDE LIB LIBPATH PATH VCINSTALLDIR VSINSTALLDIR WindowsSdkDir
+call :echovars.v DevEnvDir FrameworkDir FrameworkVersion INCLUDE LIB LIBPATH PATH VCINSTALLDIR VSINSTALLDIR WindowsSdkDir
 goto :eof
 
 :#-----------------------------------------------------------------------------
@@ -125,14 +135,14 @@ echo          Use the subcmd.bat script for doing that in a controlled way.
 :exec_cmd
 set "VCINSTALLDIR="
 call :findvc32
-if exist "%MSVC32%\vcvarsall.bat" call "%MSVC32%\vcvarsall.bat" %ARCHI%
+if exist "%VCVARSDIR%\vcvarsall.bat" call "%VCVARSDIR%\vcvarsall.bat" %ARCHI%
 if "%VCINSTALLDIR%"=="" (
   >&2 echo Error: Cannot find Visual C++
   endlocal
   exit /b 1
 )
-%ECHO.VARS%
-%1 %2 %3 %4 %5 %6 %7 %8 %9
+%ECHOVARS.V% %*
+%*
 %RETURN%
 
 :#-----------------------------------------------------------------------------
@@ -140,8 +150,9 @@ if "%VCINSTALLDIR%"=="" (
 :# %* = Command line arguments
 
 :main
+set "ECHOVARS=call :echo.vars"
 set "ECHO.V=rem"
-set "ECHO.VARS=rem"
+set "ECHOVARS.V=rem"
 set "ECHO.MSVCVARS=rem"
 set "ARCHI="
 set "NOEXEC=0"
@@ -154,7 +165,7 @@ if .%1.==.. goto go
 if .%1.==.-?. goto help
 if .%1.==./?. goto help
 if .%1.==.-h. goto help
-if .%1.==.-v. set "ECHO.V=call :echo" & set "ECHO.VARS=call :echo.vars" & set "ECHO.MSVCVARS=call :echo.msvcvars" & goto next_arg
+if .%1.==.-v. set "ECHO.V=call :echo" & set "ECHOVARS.V=call :echo.vars" & set "ECHO.MSVCVARS=call :echo.msvcvars" & goto next_arg
 if .%1.==.-V. echo %VERSION% & exit /b 0
 if .%1.==.-x. shift & goto exec_cmd
 if .%1.==.-X. set "NOEXEC=1" & goto next_arg
@@ -168,21 +179,29 @@ goto next_arg
 call :findvc32
 
 %ECHO.V% :# Predefined context variables
-%ECHO.VARS% PROCESSOR_ARCHITECTURE
+%ECHOVARS.V% PROCESSOR_ARCHITECTURE
 %ECHO.V%
 
 %ECHO.V% :# Environment variables used or set by this script
-%ECHO.VARS% VSTUDIOS VSTUDIO MSVC32
+%ECHOVARS.V% VSTUDIOS VSTUDIO VC VCVARSDIR
 %ECHO.V%
 
 :# Find and execute the corresponding vcvars.bat script
 :# vcvarsall.bat $1=%PROCESSOR_ARCHITECTURE%, optional, default=x86
-if not exist "%MSVC32%\vcvarsall.bat" (
+if not exist "%VCVARSDIR%\vcvarsall.bat" (
   >&2 echo Error: Could not find a vcvarsall.bat script
   exit /b 1
 )
+
+:# Visual Studio 2017 and later require the ARCHI parameter
+if not "%VCVARSDIR%"=="%VC%" if "%ARCHI%"=="" set "ARCHI=x86"
+
+:# Generate the final command
+set CMD=call "%VCVARSDIR%\vcvarsall.bat" %ARCHI%
 if "%NOEXEC%"=="1" (
-  echo call "%MSVC32%\vcvarsall.bat" %ARCHI%
+  echo %CMD%
   exit /b 0
+) else (
+  %ECHO.V% %CMD%
 )
-endlocal & call "%MSVC32%\vcvarsall.bat" %ARCHI% & %ECHO.MSVCVARS%
+endlocal & %CMD% & %ECHO.MSVCVARS%
