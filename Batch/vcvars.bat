@@ -15,6 +15,8 @@
 :#                  Fixed the display of variables set by the script.         *
 :#   2018-01-10 JFL Added option -X.                           		      *
 :#   2019-05-09 JFL Added support for Visual Studio 2019.		      *
+:#   2019-09-17 JFL Added option -l.					      *
+:#                  Allow passing multiple arguments to vcvarsall.bat.	      *
 :#                                                                            *
 :#        © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license: www.apache.org/licenses/LICENSE-2.0 *
@@ -22,7 +24,7 @@
 
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "VERSION=2019-05-09"
+set "VERSION=2019-09-17"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 set "RETURN=goto :eof"
@@ -50,6 +52,8 @@ for %%s in ("\2019" "\2017" " 14.0" " 12.0" " 11.0" " 10.0" " 9.0" " 8" " .NET 2
 :# Find the most recent 32-bits Microsoft Visual C++ instance
 
 :findvc32
+setlocal
+set "VCVARS_VAR=%~1"
 call :findvs
 for %%s in (%VSTUDIOS%) do @(
   for %%c in ("Enterprise\VC" "Professional\VC" "Community\VC" "Preview\VC" "VC" "VC7" "VC98") do @(
@@ -59,7 +63,8 @@ for %%s in (%VSTUDIOS%) do @(
         set "VSTUDIO=%%~s"
         set "VC=%%~s\%%~c"
         set "VCVARSDIR=%%~s\%%~c%%~p"
-        goto foundvc32
+        if not defined VCVARS_VAR goto foundvc32
+        set %VCVARS_VAR%=!%VCVARS_VAR%! "!VCVARSDIR!\vcvarsall.bat"
       )
     )
   )
@@ -67,6 +72,9 @@ for %%s in (%VSTUDIOS%) do @(
 :foundvc32
 %ECHO.V% :# Found "%VCVARSDIR%\vcvarsall.bat"
 %ECHOVARS.V% VSTUDIO VC
+set "OPTRESULT=rem"
+if defined VCVARS_VAR set OPTRESULT=set %VCVARS_VAR%=!%VCVARS_VAR%!
+endlocal & set "VSTUDIO=%VSTUDIO%" & set "VC=%VC%" & set "VCVARSDIR=%VCVARSDIR%" & %OPTRESULT%
 %RETURN%
 
 :#-----------------------------------------------------------------------------
@@ -100,18 +108,21 @@ goto :eof
 
 :help
 echo.
-echo Set Visual C++ environment variables
+echo Set Visual C++ environment variables using the latest vcvarsall.bat available
 echo.
-echo Usage: %ARG0% [OPTIONS] [ARCHI]
+echo Usage: %ARG0% [OPTIONS] [ARGS]
 echo.
 echo Options:
-echo   -?^|-h          This help
+echo   -?^|-h          Display this help
+echo   -l             List all vcvarsall.bat instances installed
 echo   -v             Display verbose information
 echo   -V             Display the script version and exit
 echo   -x CMD [ARGS]  Run the command line with VC variables and return
 echo   -X             Display the actual vcvars command to run, but don't run it
 echo.
-echo Archi:           Target architecture. Default: x86
+echo Args:            vcvarsall.bat arguments
+echo   help           Display vcvarsall.bat usage
+echo                  Target architecture. Default: x86. Common values:
 echo   x86            32-bits x86
 echo   ia64           64-bits IA64
 echo   amd64          64-bits x86
@@ -154,7 +165,7 @@ set "ECHOVARS=call :echo.vars"
 set "ECHO.V=rem"
 set "ECHOVARS.V=rem"
 set "ECHO.MSVCVARS=rem"
-set "ARCHI="
+set "VCVARS_ARGS="
 set "NOEXEC=0"
 goto get_args
 
@@ -165,12 +176,12 @@ if .%1.==.. goto go
 if .%1.==.-?. goto help
 if .%1.==./?. goto help
 if .%1.==.-h. goto help
+if .%1.==.-l. call :findvc32 ALL & (for %%v in (!ALL!) do echo %%~v) & exit /b
 if .%1.==.-v. set "ECHO.V=call :echo" & set "ECHOVARS.V=call :echo.vars" & set "ECHO.MSVCVARS=call :echo.msvcvars" & goto next_arg
 if .%1.==.-V. echo %VERSION% & exit /b 0
 if .%1.==.-x. shift & goto exec_cmd
 if .%1.==.-X. set "NOEXEC=1" & goto next_arg
-if "%ARCHI%"=="" set "ARCHI=%1" & goto next_arg
->&2 echo Warning: Unexpected argument %1 ignored
+set ^"VCVARS_ARGS=!VCVARS_ARGS! %1^"
 goto next_arg
 
 :go
@@ -194,10 +205,10 @@ if not exist "%VCVARSDIR%\vcvarsall.bat" (
 )
 
 :# Visual Studio 2017 and later require the ARCHI parameter
-if not "%VCVARSDIR%"=="%VC%" if "%ARCHI%"=="" set "ARCHI=x86"
+if not "%VCVARSDIR%"=="%VC%" if "%VCVARS_ARGS%"=="" set "VCVARS_ARGS=x86"
 
 :# Generate the final command
-set CMD=call "%VCVARSDIR%\vcvarsall.bat" %ARCHI%
+set CMD=call "%VCVARSDIR%\vcvarsall.bat" !VCVARS_ARGS!
 if "%NOEXEC%"=="1" (
   echo %CMD%
   exit /b 0
