@@ -1,3 +1,4 @@
+Bash\paths
 Batch\12.bat
 Batch\25.BAT
 Batch\43.BAT
@@ -5,7 +6,6 @@ Batch\50.bat
 Batch\72w.bat
 Batch\82w.bat
 Batch\a2u.bat
-Batch\ADDPATH.BAT
 Batch\AddPaths.bat
 Batch\AutoRun.cmd
 Batch\AutoRun.cmd.d\history.bat
@@ -28,6 +28,7 @@ Batch\MakeZip.bat
 Batch\MCD.BAT
 Batch\mountw.bat
 Batch\n.bat
+Batch\paths.bat
 Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat

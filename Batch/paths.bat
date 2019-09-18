@@ -16,7 +16,7 @@
 :#                  new path is immediately reloaded in all of them.          #
 :#                                                                            #
 :#  History                                                                   #
-:#   1994-12-07 JFL Created ADDPATHS.BAT for DOS and Windows 95.              #
+:#   1994-12-07 JFL Created ADDPATH.BAT for DOS and Windows 95.		      #
 :#   2012-12-11 JFL Added the -m option to get/set the Windows machine path.  #
 :#                  Fixed a problem when the added path contains spaces.      #
 :#   2012-12-13 JFL Bugfix: Some machines paths are in a REG_SZ. (Non EXPAND) #
@@ -37,7 +37,7 @@
 :#   2012-03-01 JFL Created paths.bat.					      #
 :#   2019-08-14 JFL Added an optional variable name, the default being PATH.  #
 :#   ------------------------------------------------------------------------ #
-:#   2019-09-18 JFL Merged ADDPATHS.BAT into paths.bat.			      #
+:#   2019-09-18 JFL Merged ADDPATH.BAT into paths.bat.			      #
 :#                  Renamed option -l as -c.				      #
 :#                  Added options -h, -l, -n, -t.			      #
 :#                  Avoid duplications when adding multiple paths.	      #

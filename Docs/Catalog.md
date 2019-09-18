@@ -45,8 +45,9 @@ Easily add, remove, or search entries in your PATH variables.
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
-addpath.bat	| -W-	| Manage the local and global path easily.						| `addpath \| sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
 AddPaths.bat	| -W-	| Configure the system path to include my tool boxes					| `addpaths`
+paths		| --L	| Manage the local and global path easily.						| `paths \| sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
+paths.bat	| -W-	| Manage the local and global path easily.						| `paths \| sort` &:# Display the local path, one entry per line, sorted. Useful to check if a a directory is already in a long %PATH%.
 which.exe	| -W-	| Check which program will execute by the given name. Supports any executable type, including tcl and ps1. (Contrary to most WIN32 ports of which, which ignore Windows' %PATHEXT% variable, and don't know the different precedence rules of cmd and powershell shells.)	| `which which`
 
 ## Pipes and the Windows Clipboard

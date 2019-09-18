@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-09-18
+### New
+- Batch/paths.bat: A major redesign of the old ADDPATHS.BAT script.
+- Bash/paths: A PATH manager for Unix, eventually equivalent to paths.bat for Windows.
+### Changed
+- Batch/vcvars.bat: Added support for Visual Studio 2019; Added option -l; Allow passing multiple arguments to vcvarsall.bat.
+- C/src/which.c: Avoid searching twice in the same directory, if it appears twice in the PATH.
+### Fixed
+- Tcl/cfdt.tcl: Fixed bug when adding multiple names on the command line.
+
 ## [Unreleased] 2019-06-15
 ### New
 - Updated the C make system so that every executable includes program properties, with a description, version, product infos, etc
