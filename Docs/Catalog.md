@@ -33,6 +33,7 @@ redo.exe	 | DWL	| Execute a command recursively in a whole directory tree.				| 
 rhs.bat		 | DW-	| Set all RHS flags for a file. Conversely, -rhs.bat removes them all.			| `-rhs msdos.sys` &:# Often needed in the 1980s.
 rxrename.tcl	 | -WL	| Rename a series of files, based on a regular expression.		 		| 
 trouve.bat	 | DWL	| Find files containing a string. Uses WIN32 ports of Unix find and grep tools.		| `trouve "Error 1234"` &:# Did I record this error before?
+truename	 | --L	| Alias of Unix' realpath, for old programmers used to DOS' truename.                   | `truename /var/run`
 truename.exe	 | DW-	| Display the true name of a file or directory, like old DOS' truename internal command. Resolves links, junctions, etc. | `truename "C:\Documents and Settings"`
 update.exe	 | DWL	| Copy files only if newer.								| `update -X *.c X:\backup` &:# Display files which need updating, but don't do it.
 zap.bat 	 | -W-	| Delete files and directories, displaying the exact list of files deleted.		| `zap *.obj *.lst`

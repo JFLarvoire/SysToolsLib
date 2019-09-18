@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "# Please use realpath, which is Unix equivalent to DOS truename"
+realpath "$@"
+

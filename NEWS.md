@@ -8,6 +8,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### New
 - Batch/paths.bat: A major redesign of the old ADDPATHS.BAT script.
 - Bash/paths: A PATH manager for Unix, eventually equivalent to paths.bat for Windows.
+- Bash/truename: A front end Unix' realpath, for old programmers used to DOS' truename.
 ### Changed
 - Batch/vcvars.bat: Added support for Visual Studio 2019; Added option -l; Allow passing multiple arguments to vcvarsall.bat.
 - C/src/which.c: Avoid searching twice in the same directory, if it appears twice in the PATH.
