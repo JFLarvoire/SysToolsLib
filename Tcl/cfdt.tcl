@@ -39,12 +39,13 @@
 #                   Improved the debug and error reporting.                   #
 #                   Added option -q|--quiet.                                  #
 #    2019-04-02 JFL Fixed bug in --i2n option moving files to the curr. dir.  #
+#    2019-09-18 JFL Fixed bug when adding multiple names on the command line. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-04-02"
+set version "2019-09-18"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -445,13 +446,13 @@ while {"$args" != ""} {
         continue
       }
       # It's a file name. Resolve wildcards, if any.
-      incr nNames ;# Count names provided. Wildcards may produce 0 names, which is valid.
       regsub -all {\\} $arg "/" name
       if [regexp {[?*]} $name -] {
 	set names [concat $names [lsort -dictionary [glob -nocomplain $name]]]
       } else {
-      	set names [lappend $names $name]
+      	lappend names $name
       }
+      set nNames [llength $names] ;# Count names provided. Wildcards may produce 0 names, which is valid.
       continue
     }
   }
