@@ -88,15 +88,18 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V1.12.1.*
 *    2019-06-11 JFL Added PROGRAM_DESCRIPTION definition. Version 1.12.2.     *
 *    2019-06-22 JFL Avoid searching twice in the same directory. Version 1.13.*
+*    2019-09-23 JFL Added the ability to search names with wildcards.	      *
+*    2019-09-25 JFL Added a verbose msg about case-independent matches in Unix.
+*		    Version 1.14.					      *
 *		    							      *
-*       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
+*       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "which"
-#define PROGRAM_VERSION "1.13"
-#define PROGRAM_DATE    "2019-06-22"
+#define PROGRAM_VERSION "1.14"
+#define PROGRAM_DATE    "2019-09-25"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
@@ -113,6 +116,8 @@
 #include <sys/stat.h>		/* To get the actual file time */
 #include <time.h>		/* To get the actual file time */
 #include <strings.h>		/* For strcasecmp() */
+#include <fnmatch.h>
+#include <ctype.h>
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -141,7 +146,10 @@ char *pszShells[] = {
 
 char *pszExtDos[] = {"COM", "EXE", "BAT", NULL};
 char **ppszExt = pszExtDos;
+int iMatchFlags = FNM_CASEFOLD;
 
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
 #define SEARCH_IN_CD TRUE  /* Command.com searches in the current directory */
 #define DEFAULT_SHELL SHELL_COMMAND
 
@@ -159,7 +167,10 @@ char **ppszExt = pszExtDos;
 char *pszExtReal[] = {"COM", "EXE", "BAT", NULL};
 char *pszExtProt[] = {"EXE", "CMD", NULL};
 char **ppszExt = pszExtProt;
+int iMatchFlags = FNM_CASEFOLD;
 
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
 #define SEARCH_IN_CD TRUE  /* The OS/2 shell searches in the current directory */
 #define DEFAULT_SHELL SHELL_COMMAND
 
@@ -177,7 +188,10 @@ char **ppszExt = pszExtProt;
    it is it that Windows will attempt (and fail) to run. */
 char *pszExtWin32[] = {"com", "exe", "cmd", "bat", NULL};
 char **ppszExt = pszExtWin32;
+int iMatchFlags = FNM_CASEFOLD;
 
+#define DIRSEPARATOR_CHAR '\\'
+#define DIRSEPARATOR_STRING "\\"
 #define SEARCH_IN_CD TRUE  /* Cmd.exe searches in the current directory */
 #define DEFAULT_SHELL SHELL_CMD
 
@@ -189,7 +203,10 @@ char **ppszExt = pszExtWin32;
 
 char *pszExtUnix[] = {NULL};
 char **ppszExt = pszExtUnix;
+int iMatchFlags = 0;	/* Case-dependant search in Unix */
 
+#define DIRSEPARATOR_CHAR '/'
+#define DIRSEPARATOR_STRING "/"
 #define SEARCH_IN_CD FALSE  /* Unix shells do not search in the current directory */
 #define DEFAULT_SHELL SHELL_BASH
 
@@ -197,7 +214,8 @@ char **ppszExt = pszExtUnix;
 #define _stricmp strcasecmp
 #define _strnicmp strncasecmp
 
-#define _makepath(buf, d, p, n, x) do {strcpy(buf,p); strcat(buf,"/"); strcat(buf,n);} while (0)
+/* Partial implementation of Microsoft's _makepath() for Unix */ 
+#define _makepath(buf, d, p, n, x) do {strcpy(buf,p?p:""); strcat(buf,"/"); strcat(buf,n);} while (0)
 
 #endif
 
@@ -209,7 +227,10 @@ char **ppszExt = pszExtUnix;
 
 char *pszExtOther[] = {NULL};
 char **ppszExt = pszExtOther;
+int iMatchFlags = 0;	/* Case-dependant search */
 
+#define DIRSEPARATOR_CHAR '/'
+#define DIRSEPARATOR_STRING "/"
 #define SEARCH_IN_CD TRUE
 
 #endif
@@ -231,6 +252,7 @@ typedef unsigned char BYTE;
 #define WHICH_VERBOSE	0x02	    /* Display verbose information */
 #define WHICH_LONG	0x04	    /* Display the file time */
 #define WHICH_XCD	0x08	    /* Force eXcluding files in CD */
+#define WHICH_XCASE	0x10	    /* Force eXcluding files as wrong case */
 
 /* Global variables */
 
@@ -253,6 +275,8 @@ size_t strnirepl(char *pszResultBuffer, size_t lResultBuffer, const char *pszStr
 #endif
 #if defined(_WIN32)
 int GetProcessName(pid_t pid, char *name, size_t lname);
+#endif
+#if defined(_WIN32) || defined(__unix__)
 int FixNameCase(char *pszPathname);
 #endif
 #if defined(_MSDOS) || defined(_WIN32)
@@ -268,6 +292,7 @@ int SearchPowerShellAliases(char *pszCommand, int iSearchFlags);
 int SearchPowerShellInternal(char *pszCommand, int iSearchFlags);
 int SearchBashInternal(char *pszCommand, int iSearchFlags);
 #endif
+int is_directory(char *);		/* Is name a directory? -> TRUE/FALSE */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -362,7 +387,7 @@ int main(int argc, char *argv[]) {
       if (   streq(opt, "v")		/* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
-	iFlags |= WHICH_VERBOSE | WHICH_LONG;
+	iFlags |= WHICH_VERBOSE;
 	continue;
       }
       if (   streq(opt, "V")		/* Get version */
@@ -581,6 +606,7 @@ Options:\n\
 Notes:\n\
   Supports specific cmd and PowerShell rules for search in the current dir.\n\
   Uses the PATHEXT variable to infer other possible names, plus *.ps1 for PS.\n\
+  Supports searching commands with wildcards. Ex: which -a *zip*\n\
   When using the -i option (1), searches for internal commands and aliases:\n\
         Ex in cmd.exe:    'which md' outputs: cmd /c MD\n\
         Ex in PowerShell: 'which md' outputs: Alias md -> mkdir\n\
@@ -995,33 +1021,30 @@ int SearchCommandInternal(char *pszCommand, int iFlags) {
 \*---------------------------------------------------------------------------*/
 
 int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
-  int iFound = FALSE;
+  int nFound = 0;
   int i;
 
 #ifndef __unix__
   if (strchr(pszCommand, '.')) {
 #endif
-    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, NULL, iFlags);
+    nFound += SearchProgramWithOneExt(pszPath, pszCommand, NULL, iFlags);
 #ifndef __unix__
   }
 #endif
   if (!initExtListDone) initExtList();
   for (i=0; ppszExt[i]; i++) {
-    iFound |= SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i], iFlags);
-    if (iFound && !(iFlags & WHICH_ALL)) return iFound;
+    nFound += SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i], iFlags);
+    if (nFound && !(iFlags & WHICH_ALL)) return nFound;
   }
 
-  return iFound;
+  return nFound;
 }
 
-int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iFlags) {
-  char szFname[FILENAME_MAX];
+int CheckProgram(char *pszName, int iFlags) {
   int nChars = 0;
 
-  _makepath(szFname, "", pszPath, pszCommand, pszExt);
-  DEBUG_PRINTF(("  Looking for \"%s\"", szFname));
-  if (!access(szFname, F_OK)) {
-    char *pszName = szFname;
+  DEBUG_PRINTF(("  Looking for \"%s\"", pszName));
+  if ((!access(pszName, F_OK)) && (!is_directory(pszName))) {
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
     char szName2[FILENAME_MAX];
 #endif
@@ -1030,7 +1053,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
 #endif
     int iExecutable;
 
-    DEBUG_PRINTF(("  Matched with errno %d\n", errno));
+    DEBUG_PRINTF(("  Matched\n"));
 #if defined(_WIN32)
     FixNameCase(pszName);
 #endif
@@ -1040,9 +1063,9 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
       pszName = szName2;
     }
 #endif
-    iExecutable = !access(szFname, X_OK); /* access() returns 0=success, -1=error */
+    iExecutable = !access(pszName, X_OK); /* access() returns 0=success, -1=error */
     if (iFlags & WHICH_XCD) iExecutable = FALSE; /* CD not in PATH, so actually not executable */
-    if (!iExecutable) {
+    if ((iFlags & WHICH_XCASE) || !iExecutable) {
       if (!(iFlags & WHICH_VERBOSE)) goto search_failed;
       nChars += printf("# "); /* Display a comment showing the file, and why it's excluded */
     }
@@ -1083,15 +1106,62 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
       }
       goto search_failed;
     }
+    if (iFlags & WHICH_XCASE) {
+      nChars += printf(" # Case does not match");
+      goto search_failed;
+    }
     printf("\n");
-    return TRUE;	/* Match */
+    return 1;	/* Match */
   }
 search_failed:
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
   if (nChars) printf("\n"); /* nChars cannot be > 0 for cases this is compiled out (MSDOS) */
 #endif
   DEBUG_PRINTF(("  Error %d\n", errno));
-  return FALSE;	/* No match */
+  return 0;	/* No match */
+}
+
+int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iFlags) {
+  int nFound = 0;
+  char szPathName[PATH_MAX];
+
+  if (!strpbrk(pszCommand, "*?")) { /* If no wildcards */
+    _makepath(szPathName, NULL, pszPath, pszCommand, pszExt);
+    nFound = CheckProgram(szPathName, iFlags);
+#if defined(__unix__)
+    if ((!nFound) && (iFlags & WHICH_VERBOSE) && !(iMatchFlags & FNM_CASEFOLD)) { /* But if we tested this in a case-sensitive OS */
+      FixNameCase(szPathName);
+      CheckProgram(szPathName, iFlags | WHICH_XCASE); /* Test it it would match with another case */
+    }
+#endif
+  } else { /* There are wildcards. Scan all directory entries that match the requested name */
+    char szName[FILENAME_MAX];
+    DIR *pDir;
+    struct dirent *pDE;
+
+    pDir = opendir(pszPath);
+    if (!pDir) return 0;	/* No match */
+    _makepath(szName, NULL, NULL, pszCommand, pszExt);
+    while ((pDE = readdir(pDir)) != NULL) {
+      if (fnmatch(szName, pDE->d_name, iMatchFlags)) { /* That name does not match */
+#if defined(__unix__)
+	if ((iFlags & WHICH_VERBOSE) && !(iMatchFlags & FNM_CASEFOLD)) { /* But if we tested this in a case-sensitive OS */
+	  if (!fnmatch(szName, pDE->d_name, iMatchFlags | FNM_CASEFOLD)) { /* And the name matches with another case */
+	    _makepath(szPathName, NULL, pszPath, pDE->d_name, NULL);
+	    CheckProgram(szPathName, iFlags | WHICH_XCASE); /* Test it it would match with another case */
+	  }
+	}
+#endif
+      	continue; /* Names differ */
+      }
+      _makepath(szPathName, NULL, pszPath, pDE->d_name, NULL);
+      nFound += CheckProgram(szPathName, iFlags);
+      if (nFound && !(iFlags & WHICH_ALL)) break;
+    }
+    closedir(pDir);
+  }
+
+  return nFound;
 }
 
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
@@ -1206,10 +1276,11 @@ int GetProcessName(pid_t pid, char *name, size_t lname) {
 |    2013-03-27 JFL Initial implementattion.				      |
 |    2014-03-20 JFL Bug fix: Make sure the drive letter is upper case.        |
 |		    Bug fix: Avoid an unnecessary search if the path is empty.|
+|    2019-09-25 JFL Adapted for Linux.      				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__unix__)
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
@@ -1218,8 +1289,13 @@ int FixNameCase(char *pszPathname) {
   struct dirent *pDE;
   int iModified = FALSE;
   int lDrive = 0;
+#if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
   char szRootDir[] = "C:\\";
   char szDriveCurDir[] = "C:.";
+#else
+  char szRootDir[] = "/";
+  char szDriveCurDir[] = ".";
+#endif
 
   DEBUG_ENTER(("FixNameCase(\"%s\");\n", pszPathname));
 
@@ -1235,7 +1311,7 @@ int FixNameCase(char *pszPathname) {
     if (!pszPathname[2]) RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
   }
 
-  pszName = strrchr(pszPathname, '\\');
+  pszName = strrchr(pszPathname, DIRSEPARATOR_CHAR);
   if (pszName) { /* There's a path separator */
     if (pszName != (pszPathname + lDrive)) { /* Possibly a drive letter, then a parent path name */
       *(pszName++) = '\0';
@@ -1245,7 +1321,7 @@ int FixNameCase(char *pszPathname) {
 	pszPath = szRootDir; /* Use the "C:\\" copy on the stack to make sure the routine is reentrant */
 	pszPath[0] = pszPathname[0];
       } else { /* Just a root directory name */
-	pszPath = "\\";
+	pszPath = DIRSEPARATOR_STRING;
       }
       pszName += 1;
     }
@@ -1264,7 +1340,7 @@ int FixNameCase(char *pszPathname) {
   /* Scan all directory entries that match the requested name */
   pDir = opendir(pszPath);
   if (!pDir) {
-    if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
+    if (pszName != pszPathname) *(--pszName) = DIRSEPARATOR_CHAR; /* Restore the initial \ */
     RETURN_BOOL_COMMENT(FALSE, ("Can't open directory \"%s\"\n", pszPath));
   }
   while ((pDE = readdir(pDir)) != NULL) {
@@ -1277,7 +1353,7 @@ int FixNameCase(char *pszPathname) {
   }
   closedir(pDir);
 
-  if (pszName != pszPathname) *(--pszName) = '\\'; /* Restore the initial \ */
+  if (pszName != pszPathname) *(--pszName) = DIRSEPARATOR_CHAR; /* Restore the initial \ */
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
 
@@ -1501,3 +1577,33 @@ cleanup_and_return:
 }
 
 #endif /* defined(_WIN32) */
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    is_directory					      |
+|									      |
+|   Description     Check if a pathname is a directory			      |
+|									      |
+|   Returns:	    TRUE if directory, FALSE if not			      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2019-09-25 JFL Removed a useless test for wildcards.		      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int is_directory(char *name) {	/* Is name a directory? -> TRUE/FALSE */
+  int result;
+  int err;
+  struct stat sstat;
+
+  DEBUG_ENTER(("is_directory(\"%s\");\n", name));
+
+  err = lstat(name, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
+  result = ((err == 0) && (sstat.st_mode & S_IFDIR));
+
+  RETURN_BOOL_COMMENT(result, ("Directory \"%s\" %s\n", name, result ? "exists"
+								     : "does not exist"));
+}
+
