@@ -220,6 +220,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set "VERSION=2018-11-19"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
+set "SNAME=%~n0"				&:# Script name, without its extension
 set "SFULL=%~f0"				&:# Script full pathname
 set ^"ARG0=%0^"					&:# Script invokation name
 set ^"ARGS=%*^"					&:# Argument line
