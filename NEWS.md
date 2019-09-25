@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-09-25
+### New
+- C/SRC/which.c: Added the ability to search program names with wildcards;
+  Added a verbose message about case-independent matches in Unix.
+### Changed
+- Batch/Library.bat: Added variable SNAME. Useful for writing generic help messages.
+### Fixed
+- C/include/debugm.h: Fixed Linux crash in debug_vsprintf() using new try_vsnprintf() wrapper around _vsnprintf().
+
 ## [Unreleased] 2019-09-18
 ### New
 - Batch/paths.bat: A major redesign of the old ADDPATHS.BAT script.
