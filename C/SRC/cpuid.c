@@ -32,6 +32,7 @@
 *    2017-12-18 JFL Fixed DOS warnings. No functional code change.	      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h.         *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition.		      *
+*    2019-09-27 JFL Fixed a minor formating error in a debug message.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -39,8 +40,8 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2019.06.12"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2019.09.27"
+#define PROGRAM_DATE    "2019-09-27"
 
 /* Definitions */
 
@@ -407,12 +408,12 @@ int _cdecl main(int argc, char *argv[])
 	// Compute frequency
 	dwt1 -= dwt0;			// Number of cycles
 	lt1 -= lt0;			// Number of 1/1000th of a second
-	if (iDebug) printf("Counted %uld cycles in %ld ms\n", dwt1, lt1);
+	if (iDebug) printf("Counted %lu cycles in %ld ms\n", dwt1, lt1);
 	if (lt1 < 0) lt1 += 86400000;	// Possible wrap-around at midnight
 	lt1 *= 1000;			// Convert to microseconds
 	dwt1 += lt1/2;			// Round quotient to the nearest value
 	dwt1 /= lt1;			// First frequency evaluation
-	if (iDebug) printf("Raw frequency measure: %ld MHz\n", dwt1);
+	if (iDebug) printf("Raw frequency measure: %lu MHz\n", dwt1);
 	// Round to the nearest multiple of 16.66666 = (100/6)
 	if (dwt1 > 95)	// Rule applies only for processors above 100 MHz
 	    {
