@@ -61,6 +61,8 @@ PowerShell\ShadowCopy.ps1
 PowerShell\Test-IPv6Components.ps1
 PowerShell\Window.ps1
 Python\PySetup.bat
+Python\python.bat
+Python\pip.bat
 Tcl\b64dec.tcl
 Tcl\b64enc.tcl
 Tcl\camel.tcl

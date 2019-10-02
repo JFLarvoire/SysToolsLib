@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-10-02
+### New
+- Python/python.bat: Run the python interpreter, even if it's not in the PATH. Allows choosing one instance if there are multiple Python instances installed.
+- Python/pip.bat: Run Python's pip.exe, even if it's not in the PATH. Allows choosing one instance if there are multiple Python instances installed.
+
 ## [Unreleased] 2019-09-25
 ### New
 - C/SRC/which.c: Added the ability to search program names with wildcards;
