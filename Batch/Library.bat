@@ -23,7 +23,7 @@
 :#                  Reserved characters that affect batch files:              #
 :#                  Command sequencing (escaped by ^ and ""): & | ( ) < > ^   #
 :#                  Echo control (escaped by enclosing command in ""): @      #
-:#                  Argument delim. (escaped by enclosing in ""): , ; = space #
+:#                  Argument delim. (escaped by enclosing in ""): , ; = blanks#
 :#		    Environment variables (escaped by %): %                   #
 :#		    Delayed variables (escaped by ^): !			      #
 :#                  Wildcards: * ?                                            #
@@ -52,6 +52,8 @@
 :#			its own arguments. (Depending on /V:OFF or /V:ON)     #
 :#			Note: Most internals command, like cd or set, have no #
 :#			effect in this case on the original shell.            #
+:#                  For a complete description of the cmd line parser, see:   #
+:#                  https://stackoverflow.com/a/4095133		              #
 :#                                                                            #
 :#                  Steps 4 & 5 are not done for the call command.            #
 :#                  Step 3 is done, but the redirections are ignored.         #
@@ -202,6 +204,12 @@
 :#   2018-03-01 JFL New faster version of the FALSE.EXE macro.		      #
 :#		    Simpler and faster versions of function is_dir.	      #
 :#		    Added functions dirname, filename, has_wildcards.	      #
+:#   2019-10-02 JFL Disable delayed expansion when capturing cmd-line args.   #
+:#   2019-10-03 JFL Added macros ECHOSVARS, ECHOSVARS.V, ECHOSVARS.D.         #
+:#		    Fixed the passing of ^ ! arguments in options -c, -C, -M. #
+:#   2019-10-04 JFL Added routines :EscapeCmdString & :TestEscapeCmdString.   #
+:#		    Rewrote routine :convert_entities as :ConvertEntities.    #
+:#   2019-10-05 JFL Finalized :TestEscapeCmdString & :TestConvertEntities.    #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -216,14 +224,16 @@ ver | find "Windows NT" >NUL && goto ErrNT
 :# Called by (%LCALL% :label [arguments]), with LCALL defined in the Call module below.
 if '%1'=='call' %*& exit /b
 
-setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-11-19"
-set "SCRIPT=%~nx0"				&:# Script name
-set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
-set "SNAME=%~n0"				&:# Script name, without its extension
-set "SFULL=%~f0"				&:# Script full pathname
-set ^"ARG0=%0^"					&:# Script invokation name
-set ^"ARGS=%*^"					&:# Argument line
+setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
+set "VERSION=2019-10-05"
+set "SCRIPT=%~nx0"		&:# Script name
+set "SNAME=%~n0"		&:# Script name, without its extension
+set "SPATH=%~dp0"		&:# Script path
+set "SPATH=%SPATH:~0,-1%"	&:# Script path, without the trailing \
+set "SFULL=%~f0"		&:# Script full pathname
+set ^"ARG0=%0^"			&:# Script invokation name
+set ^"ARGS=%*^"			&:# Argument line
+setlocal EnableExtensions EnableDelayedExpansion &:# Use the ! expansion now on
 
 :# Mechanism for calling subroutines in a second instance of a script, from its main instance.
 :# Done by (%XCALL% :label [arguments]), with XCALL defined in the Call module below.
@@ -677,6 +687,10 @@ goto :eof
 :#                  %ECHOVARS.V%    Idem, but display them in verb. mode only #
 :#                  %ECHOVARS.D%    Idem, but display them in debug mode only #
 :#                                                                            #
+:#                  %ECHOSVARS%	    Echo ARG1 before each variable.           #
+:#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
+:#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
+:#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
 :#                                                                            #
@@ -761,6 +775,7 @@ if exist echo >&2 echo WARNING: The file "echo" in the current directory will ca
 :# Initialize other debug variables
 set "ECHO=%LCALL% :Echo"
 set "ECHOVARS=%LCALL% :EchoVars"
+set "ECHOSVARS=%LCALL% :EchoStringVars"
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -831,6 +846,8 @@ set "ECHO.V=%LCALL% :Echo.Verbose"
 set "ECHO.D=%LCALL% :Echo.Debug"
 set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
+set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
+set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -1009,7 +1026,12 @@ setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
-:EchoVars
+:EchoStringVars %1=string %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+set "INDENT=%INDENT%%~1 "
+shift
+goto :EchoVars.loop
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
 setlocal EnableExtensions EnableDelayedExpansion
 :EchoVars.loop
 if "%~1"=="" endlocal & goto :eof
@@ -1031,6 +1053,22 @@ goto :eof
   call :EchoVars %*
 ) else ( :# Make sure the variables are logged
   call :EchoVars %* >NUL 2>NUL
+)
+goto :eof
+
+:EchoStringVars.Verbose
+%IF_VERBOSE% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
+:EchoStringVars.Debug
+%IF_DEBUG% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
 )
 goto :eof
 
@@ -3844,13 +3882,182 @@ if "!!"=="" (
 %RETURN%
 
 :#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        EscapeCmdString					      #
+:#                                                                            #
+:#  Description     Prepare a command for passing through multiple parsings   #
+:#                                                                            #
+:#  Arguments       %1	Name of the variable containing the command string    #
+:#                  %2	Output variable name. Default: Same as input variable #
+:#                  %3	Number of parsings to go through. Default: 1          #
+:#                  %4	# of the above with !expansion. Default: 1 if exp. on #
+:#                                                                            #
+:#  Notes 	    The cmd parser tokenizer removes levels of ^ escaping.    #
+:#                  This routine escapes a command line, or an argument, so   #
+:#                  that special characters like ^ & | > < ( ) make it        #
+:#		    through intact through one or more tokenizations.	      #
+:#                                                                            #
+:#                  Known limitation: The LF character is not managed.        #
+:#                                                                            #
+:#  History                                                                   #
+:#   2019-10-03 JFL Initial implementation                                    #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:EscapeCmdString %1=CMDVAR [%2=OUTVAR] [%3=# parsings] [%4=# with !expansion]
+for /f "tokens=2" %%e in ("!! 0 1") do setlocal EnableDelayedExpansion & set "CallerExp=%%e"
+%ECHO.D% :# :EscapeCmdString called with expansion=%CallerExp%
+set "H0=^^"		&:# Return a Hat ^ with QUOTE_MODE 0=off
+set "H1=^"		&:# Return a Hat ^ with QUOTE_MODE 1=on
+if %CallerExp%==1 set "H0=!H0!!H0!" & set "H1=!H1!!H1!" &:# !escape our return value
+set "NPESC=1"			  &:# Default number of %expansion escaping to do
+if not "%~3"=="" set "NPESC=%~3"  &:# specified # of extra %expansion escaping to do 
+set /a "NXESC=%CallerExp%*NPESC"  &:# Default number of !expansion escaping to do
+if not "%~4"=="" set "NXESC=%~4"  &:# specified # of extra !expansion escaping to do
+for /l %%i in (1,1,%NXESC%) do set "H0=!H0!!H0!" & set "H1=!H1!!H1!"
+for /l %%i in (1,1,%NPESC%) do set "H0=!H0!!H0!"
+:# Define characters that need escaping outside of quotes
+for %%c in ("<" ">" "|" "&" "(" ")") do set ^"EscapeCmdString.NE[%%c]=1^"
+set ^"STRING=!%1!^"
+%ECHOVARS.D% STRING H0 H1
+set "OUTVAR=%2"
+if not defined OUTVAR set "OUTVAR=%1"
+set "RESULT="
+set "QUOTE_MODE=0"	&:# 1=Inside a quoted string
+set "ESCAPE=0"		&:# 1=The previous character was a ^ character
+set "N=-1"
+:EscapeCmdString.loop
+  set /a "N+=1"
+  set "C=!STRING:~%N%,1!" &:# Get the Nth character in the string
+  %ECHOVARS.D% N C
+  if not defined C goto :EscapeCmdString.end
+  if "!C!!C!"=="""" (
+    if !ESCAPE!==0 (
+      set /a "QUOTE_MODE=1-QUOTE_MODE"
+    ) else ( :# Open " quotes can be escaped, but not close " quotes
+      if "!QUOTE_MODE!"=="0" set "RESULT=!RESULT!!H0:~1!"
+    )
+  ) else if "!C!"=="^" (
+    if "!QUOTE_MODE!"=="0" set /a "ESCAPE=1-ESCAPE"
+    set "RESULT=!RESULT!!H%QUOTE_MODE%:~1!"
+  ) else if "!C!"=="^!" (
+    set "RESULT=!RESULT!!H%QUOTE_MODE%:~1!"
+  ) else if defined EscapeCmdString.NE["!C!"] ( :# Characters that need escaping outside of quotes
+    if "!QUOTE_MODE!"=="0" set "RESULT=!RESULT!!H0:~1!"
+  )
+  if not "!C!"=="^" set "ESCAPE=0"
+  set "RESULT=!RESULT!!C!"
+  %ECHOSVARS.D% RESULT
+goto :EscapeCmdString.loop
+:EscapeCmdString.end
+endlocal & set ^"%OUTVAR%=%RESULT%^" ! = &:# The ! forces always having !escaping ^ removal in delayed expansion mode
+exit /b
+
+:ParseDelayedExpansion %1=OUTVAR %2=0|1|off|on|Disable|Enable
+goto :ParseDelayedExpansion.%~2
+:ParseDelayedExpansion.0
+:ParseDelayedExpansion.off
+:ParseDelayedExpansion.disable
+:ParseDelayedExpansion.DisableDelayedExpansion
+set "%1=DisableDelayedExpansion"
+exit /b
+:ParseDelayedExpansion.
+:ParseDelayedExpansion.1
+:ParseDelayedExpansion.on
+:ParseDelayedExpansion.enable
+:ParseDelayedExpansion.EnableDelayedExpansion
+set "%1=EnableDelayedExpansion"
+exit /b
+
+:# Convert the supported html entities to their corresponding character
+:# Internal subroutine that does not create a setlocal frame. Only uses !expansion!.
+:ConvertEntities.internal %1=INPUTVAR [%2=OUTPUTVAR]
+set "OUTVAR=%2"
+if not defined OUTVAR set "OUTVAR=%1"
+set "ARG=!%1!"
+%ECHOSVARS.D% 1 ARG
+for %%e in (quot lt gt amp vert rpar lpar rbrack lbrack sp bs cr lf hat) do (
+  for %%c in ("!DEBUG.%%e!") do set "ARG=!ARG:[%%e]=%%~c!"
+)
+%ECHOSVARS.D% 2 ARG
+:# Then convert special characters that need special attention
+:# The ! character cannot be substituted in a !variable! substitution
+:# So use the % character instead
+set "ARG=!ARG:%%=[percnt]!" &:# Make sure there are no % characters in ARG
+set "ARG2=!ARG:[excl]=%%!"
+if not "!ARG2!"=="!ARG!" ( :# If ARG does contain ! characters
+  set "ARG="		  &:# Then individually convert each % to an !
+  set "N=0"
+  :ConvertEntities.loop
+    set "C=!ARG2:~%N%,1!"
+    if not defined C goto :ConvertEntities.end_loop
+    if "!C!"=="%%" set "C=^!"
+    set "ARG=!ARG!!C!"
+    set /a "N+=1"
+    goto :ConvertEntities.loop
+  :ConvertEntities.end_loop
+  rem
+)
+set "ARG=!ARG:[percnt]=%%!" &:# Convert % characters back to their real value
+%ECHOSVARS.D% 3 ARG
+set "%OUTVAR%=!ARG:[lbrack]=[!" &:# Must be converted last
+exit /b
+
+:ConvertEntities %1=INPUTVAR [%2=OUTPUTVAR]
+for /f "tokens=2" %%e in ("!! 0 1") do setlocal EnableDelayedExpansion & set "CallerExp=%%e"
+%ECHO.D% :# :ConvertEntities called with expansion=%CallerExp%
+call :ConvertEntities.internal %1 %2
+call :EscapeCmdString ARG ARG 1 %CallerExp%
+endlocal & set ^"%OUTVAR%=%ARG%^" ! &:# The ! forces always having !escaping ^ removal in delayed expansion mode
+goto :eof
+
+:TestConvertEntities %1=VAR [%2=0|1=Disable|Enable Delayed Expansion]
+setlocal EnableDelayedExpansion
+%POPARG%
+set "INPUT=!ARG!"
+set INPUT
+%POPARG%
+call :ParseDelayedExpansion EXP=!ARG! & echo # !EXP! & setlocal !EXP!
+call :ConvertEntities INPUT OUTPUT
+set OUTPUT
+endlocal & endlocal
+exit /b
+
+:TestEscapeCmdString %1=VAR [%2=EXPANSION] [%3=# parsings] [%4=# with !expansion]
+setlocal EnableDelayedExpansion
+%POPARG%
+call :ConvertEntities.internal ARG _INITIAL
+:# set ^"_INITIAL=!_INITIAL:Q="!^"
+:# for %%r in ("H=^" "A=&" "O=|" "G=>" "L=<") do set "_INITIAL=!_INITIAL:%%~r!"
+set _INITIAL
+%POPARG%
+call :ParseDelayedExpansion EXP=!ARG! & echo # !EXP! & setlocal !EXP!
+call :EscapeCmdString _INITIAL _ESCAPED !ARGS!
+set _ESCAPED
+set ^"REPARSED=%_ESCAPED%^" ! = &:# The ! forces always having !escaping ^ removal in delayed expansion mode
+set REPARSED
+%POPARG%
+set "NPARSE=1"
+if defined ARG set "NPARSE=%ARG%"
+:TestEscapeCmdString.loop
+if %NPARSE%==1 goto :TestEscapeCmdString.done
+set ^"REPARSED=%REPARSED%^" ! = &:# The ! forces always having !escaping ^ removal in delayed expansion mode
+set REPARSED
+set /a "NPARSE-=1"
+goto :TestEscapeCmdString.loop
+:TestEscapeCmdString.done
+endlocal & endlocal
+exit /b
+
+:#----------------------------------------------------------------------------#
 :# Test %EXEC% one command line. Display start/end time if looping.
 
 :exec_cmd_line
 %CMD_BEFORE%
-set CMDLINE=%ARGS%
+set ^"CMDLINE=!ARGS!^"
+call :ConvertEntities CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
-for /l %%n in (1,1,%NLOOPS%) do %EXEC% %CMDLINE%
+for /l %%n in (1,1,%NLOOPS%) do %EXEC% !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
 if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
 %CMD_AFTER%
@@ -3863,10 +4070,10 @@ goto :eof
 
 :call_cmd_line
 %CMD_BEFORE%
-set CMDLINE=%ARGS%
-%ECHOVARS.V% CMDLINE
+set ^"CMDLINE=!ARGS!^"
+call :ConvertEntities CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
-for /l %%n in (1,1,%NLOOPS%) do call %CMDLINE%
+for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
 if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
 %CMD_AFTER%
@@ -3874,13 +4081,12 @@ goto :eof
 
 :call_macro_line
 %CMD_BEFORE%
-echo :call_macro_line %ARGS%
 %POPARG%
-set CMDLINE=%%%ARG%%% %ARGS%
-%ECHOVARS.V% CMDLINE
+set ^"CMDLINE=%%%ARG%%% !ARGS!^"
+call :ConvertEntities CMDLINE
+%ECHOVARS.D% CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
-:# for /l %%n in (1,1,%NLOOPS%) do cmd /c echo off ^& %%%ARG%%% %ARGS%
-for /l %%n in (1,1,%NLOOPS%) do (echo off & %CMDLINE%) | more
+for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
 if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
 %CMD_AFTER%
@@ -3891,21 +4097,6 @@ goto :eof
 :# Do not add anything to the inner do loop, such as echoing the command, as this
 :# would prevent from doing accurate measurements of the duration of the commands.
 
-:# Convert the supported html entities to their corresponding character
-:convert_entities %1=variable name
-setlocal EnableDelayedExpansion
-set "ARG=!%1!"
-for %%e in (quot lt gt amp vert rpar lpar rbrack lbrack sp bs cr lf) do (
-  call set "ARG=%%ARG:[%%e]=!DEBUG.%%e!%%"
-)
-:# Then convert special characters that need quoting to survive the return
-set "ARG=!ARG:[percnt]=%%!"
-set "ARG=!ARG:[Hat]=^^^^^^^^^^^^^^^^!"
-set "ARG=%ARG:[excl]=^^^^^^^^^^^^^^^!%"
-set "ARG=!ARG:[lbrack]=[!" &:# Must be converted last
-endlocal & set "%1=%ARG%" !
-goto :eof
-
 :call_all_cmds
 %IF_XDLEVEL% 3 set FUNCTION & set UPVAR & set RETURN &:# Dump the structured programming macros
 :# Record all commands to run, converting entities to special characters
@@ -3914,13 +4105,13 @@ set NCMDS=0
 %POPARG%
 if not defined "ARG" goto :call_all_cmds.done_args
 set /a NCMDS+=1
-call :convert_entities ARG
+call :ConvertEntities ARG
 %IF_XDLEVEL% 2 set ARG | findstr ARG=
 set "CMD[%NCMDS%]=!ARG!"
 goto :call_all_cmds.next_arg
 :call_all_cmds.done_args
-if defined CMD_BEFORE call :convert_entities CMD_BEFORE
-if defined CMD_AFTER call :convert_entities CMD_AFTER
+if defined CMD_BEFORE call :ConvertEntities CMD_BEFORE
+if defined CMD_AFTER call :ConvertEntities CMD_AFTER
 %IF_DEBUG% %>DEBUGOUT% (
   if defined CMD_BEFORE set CMD_BEFORE
   set CMD[
@@ -4278,6 +4469,10 @@ echo   -n N     Run the commands N times and display the start and end times
 echo   -qe      Query the current cmd extensions and delayed expansion settings
 echo   -r       Test %%EXEC%% with an output redirection to exec.log
 echo   -R       Test %%EXEC%% without an output redirection
+echo   -te CMDLINE [EXP] [#PARSE] [#w.EXP]  Test escaping a command line. (1)
+echo            EXP=0^|1 or off^|on : Delayed ^^!expansion^^!. Default: on
+echo            #PARSE : Number of parsings to escape for. Default: 1
+echo            #w.EXP : Number of those with delayed ^^!expansion^^!. Default: 0^|#PARSE
 echo   -v       Verbose mode. Display commands executed
 echo   -V       Display the script version and exit
 echo   -X       Display commands to execute, but don't execute them
@@ -4295,17 +4490,18 @@ goto :eof
 set "NLOOPS=1"
 set "CMD_AFTER="
 set "CMD_BEFORE="
-
+set "CMDLINE=!ARG0! !ARGS!"
 :next_arg
 if not defined ARGS set "ARG=" & set ""ARG"=" & goto :Start
 %POPARG%
+%ECHOVARS.D% ARG ARGS
 if "!ARG!"=="-?" goto :Help
 if "!ARG!"=="/?" goto :Help
 if "!ARG!"=="-a" %POPARG% & set "CMD_AFTER=!ARG!" & goto next_arg
 if "!ARG!"=="-b" %POPARG% & set "CMD_BEFORE=!ARG!" & goto next_arg
 if "!ARG!"=="-c" goto :call_all_cmds
 if "!ARG!"=="-C" goto :call_cmd_line
-if "!ARG!"=="-d" call :Debug.On & goto next_arg
+if "!ARG!"=="-d" call :Debug.On & %ECHOVARS% CMDLINE ARG ARGS & goto next_arg
 if "!ARG!"=="-d0" set ">DEBUGOUT=>NUL" & call :Debug.On & goto next_arg	&:# Useful for library performance measurements
 if "!ARG!"=="-d1" set ">DEBUGOUT=>&3" & call :Debug.On & goto next_arg	&:# Useful to test debug output routines to 
 if "!ARG!"=="-d2" set ">DEBUGOUT=>&2" & call :Debug.On & goto next_arg	&:# Useful to test debug output routines
@@ -4317,6 +4513,8 @@ if "!ARG!"=="-n" %POPARG% & set "NLOOPS=!ARG!" & goto next_arg
 if "!ARG!"=="-qe" endlocal & (set ECHO=echo) & goto :extensions.show
 if "!ARG!"=="-r" call :Debug.Setlog test.log & %EXEC% cmd /c %SCRIPT% -? ">"exec.log & goto :eof
 if "!ARG!"=="-R" call :Debug.Setlog test.log & %EXEC% cmd /c %SCRIPT% -? & goto :eof
+if "!ARG!"=="-tc" goto :TestConvertEntities &:# Test routine :ConvertEntities
+if "!ARG!"=="-te" goto :TestEscapeCmdString &:# Test routine :EscapeCmdString
 if "!ARG!"=="-tg" %POPARG% & call :GetServerAddress !ARG! & %ECHOVARS% ADDRESS & goto :eof &:# Test routine GetServerAddress
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
 if "!ARG!"=="-V" (echo.%VERSION%) & goto :eof
