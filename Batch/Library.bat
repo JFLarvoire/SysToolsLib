@@ -340,6 +340,9 @@ goto :eof
 :#                  But call itself has a quirk, which requires a convoluted  #
 :#                  workaround to process the /? argument.                    #
 :#                                                                            #
+:#                  Known limitation: Special character ^ is preserved within #
+:#                  "quoted" arguments, but not within unquoted arguments.    #
+:#                                                                            #
 :#                  Known limitation: After using :PopArg, all consecutive    #
 :#                  argument separators in %ARGS% are replaced by one space.  #
 :#                  For example: "A==B" becomes "A B"                         #
@@ -442,6 +445,9 @@ if defined ARGS (
   setlocal EnableDelayedExpansion
   for /f "delims=" %%a in ("!ARGS:%%=%%%%!") do endlocal & set ^"PopArg.ARGS=%%a^"
 )
+:# Note: The following call doubles ^ within "quotes", but not those outside of quotes.
+:# So :PopArg.Helper will correctly record ^ within quotes, but miss those outside. (Unless quadrupled!)
+:# The only way to fix this would be to completely rewrite :PopArg as a full fledged batch parser written in batch!
 call :PopArg.Helper %PopArg.ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
 :# Finding that impossible combination now is proof that the call was not executed.
 :# In this case, try again with the /? quoted, to prevent the call parser from processing it.
@@ -467,7 +473,7 @@ goto :PopArg.GetNext
 
 :PopArg.Eon
 setlocal DisableDelayedExpansion
-call :PopArg
+call :PopArg.Eoff
 call :Prep2ExpandVars ARG ^""ARG"^" ARGS
 setlocal EnableDelayedExpansion
 for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS!") do (
