@@ -14,6 +14,8 @@
 *		    Improved ReportWin32Error().			      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.2.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.3.      *
+*    2019-09-27 JFL Fixed a formatting error in ReportWin32Error(), and       *
+*                   Prepend the program name to the output. Version 1.0.4.    *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -21,8 +23,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows Notepad"
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.0.3"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.0.4"
+#define PROGRAM_DATE    "2019-09-27"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -276,6 +278,8 @@ int IsSwitch(char *pszArg) {
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
 |    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
 |                   Make sure WIN32 msg and explanation are on the same line. |
+|    2019-09-27 JFL Fixed a formatting error.                                 |
+|                   Prepend the program name to the output.		      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
@@ -296,13 +300,13 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
       (LPTSTR) &lpMsgBuf,
       0,
       NULL )) { // Display both the error code and the description string.
-    n = wsprintf(szErrorMsg, "Error %uld: %s", dwErr, lpMsgBuf);
+    n = wsprintf(szErrorMsg, "Error %lu: %s", dwErr, lpMsgBuf);
     LocalFree(lpMsgBuf); // Free the buffer.
     // Remove the trailing new line
     if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
     if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
   } else { // Error, we did not find a description string for this error code.
-    n = wsprintf(szErrorMsg, "Error %ld.", dwErr);
+    n = wsprintf(szErrorMsg, "Error %lu.", dwErr);
   }
 
   if (pszExplanation) {
@@ -312,7 +316,7 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
     va_end(pArgs);
   }
 
-  return fprintf(stderr, "%s\n", szErrorMsg);
+  return fprintf(stderr, PROGRAM_NAME ".exe: %s\n", szErrorMsg);
 }
 
 /*---------------------------------------------------------------------------*\
