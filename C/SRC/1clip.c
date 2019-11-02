@@ -42,6 +42,8 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.3.      *
 *    2019-09-27 JFL Fixed a formatting error in ReportWin32Error(), and       *
 *                   Prepend the program name to the output. Version 2.0.4.    *
+*    2019-11-01 JFL Added option -Z to append a Ctrl-Z (EOF) to the output.   *
+*		    Version 2.1.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -49,8 +51,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.0.4"
-#define PROGRAM_DATE    "2019-09-27"
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2019-11-01"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -126,6 +128,7 @@ int main(int argc, char *argv[]) {
   int iAction = COPYCLIP;
   UINT type = CF_UNICODETEXT;
   UINT codepage = consoleCodePage; /* The code page to use for the output */
+  int iCtrlZ = FALSE;		   /* If true, append a Ctrl-Z to the output */
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -190,6 +193,10 @@ int main(int argc, char *argv[]) {
 	puts(DETAILED_VERSION);
 	exit(0);
       }
+      if (streq(arg+1, "Z")) {			/* -z: Append a Ctrl-Z to the output */
+	iCtrlZ = TRUE;
+	continue;
+      }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
       continue;
     }
@@ -202,6 +209,7 @@ int main(int argc, char *argv[]) {
   switch (iAction) {
     case COPYCLIP:
       CopyClip(type, codepage);
+      if (iCtrlZ) putc('\x1A', stdout);
       break;
     case ENUMCLIP:
       EnumClip();
@@ -265,6 +273,7 @@ Options:\n\
   -u      Get the Unicode text from the clipboard. (Default)\n\
   -U      Output using the UTF-8 encoding (Code page 65001).\n\
   -V      Display the program version\n\
+  -Z      Append a Ctrl-Z (aka. SUB or EOF) to the output\n\
 \n\
 Default output encoding: The current console code page (Code page %u).\n\
 \n"

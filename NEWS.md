@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-11-02
+### Changed
+- C/SRC/1clip.c, 2clip.c, conv.c, dump.c: Added -z and/or -Z options, for handling a Ctrl-Z as EOF respectively on input and output.
+
 ## [Unreleased] 2019-10-02
 ### New
 - Python/python.bat: Run the python interpreter, even if it's not in the PATH. Allows choosing one instance if there are multiple Python instances installed.

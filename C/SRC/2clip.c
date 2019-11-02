@@ -34,6 +34,7 @@
 *    2018-08-31 JFL Added the -d debug option. Version 1.4.2.		      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.4.      *
+*    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.5.     *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -41,8 +42,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.4.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.5"
+#define PROGRAM_DATE    "2019-10-31"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -109,6 +110,7 @@ int main(int argc, char *argv[]) {
   int iDone;
   int isHTML = FALSE;
   int isRTF = FALSE;
+  int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
 
   /* Record the console code page, to allow converting the output accordingly */
   codepage = GetConsoleOutputCP();
@@ -157,6 +159,10 @@ int main(int argc, char *argv[]) {
 	puts(DETAILED_VERSION);
 	exit(0);
       }
+      if (streq(arg+1, "z")) {		/* -z: Stop input on Ctrl-Z */
+	iCtrlZ = TRUE;
+	continue;
+      }
       fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
       continue;
     }
@@ -176,7 +182,19 @@ int main(int argc, char *argv[]) {
       COMPLAIN("Insufficient memory!");
       exit(1);
     }
-    nTotal += fread(pBuffer+nTotal, 1, BLOCKSIZE, stdin);
+    if (!iCtrlZ) {
+      nTotal += fread(pBuffer+nTotal, 1, BLOCKSIZE, stdin);
+    } else { /* Read characters 1 by 1, to avoid blocking if the EOF character is not on a BLOCKSIZE boundary */
+      int nRead;
+      for (nRead = 0; nRead < BLOCKSIZE; nRead++) {
+	char c;
+	if (!fread(&c, 1, 1, stdin)) break;
+	if (c == '\x1A') break; /* We got a SUB <==> EOF character */
+	pBuffer[nTotal+nRead] = c;
+      }
+      nTotal += nRead;
+      if (nRead < BLOCKSIZE) break;
+    }
     Sleep(0);	    // Release end of time-slice
   }
   if (nTotal > 0) {
@@ -285,6 +303,7 @@ Switches:\n\
   -u        Assume input is Unicode text\n\
   -U        Assume input is UTF-8 text (Code page 65001)\n\
   -V        Display the program version\n\
+  -z        Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
 \n\
 Default input encoding: The current console code page (Code page %u).\n\
 \n"

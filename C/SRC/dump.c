@@ -34,6 +34,7 @@
 *		    Version 1.1.8.  					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.9.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.10.     *
+*    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.2.     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -41,8 +42,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.1.10"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2019-10-31"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -177,6 +178,7 @@ int main(int argc, char *argv[])
     WORD u;
     char *pszName = NULL;	    /* File name */
     FILE *f;
+    int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
 
 #ifndef __unix__
     /* Force stdin and stdout to untranslated */
@@ -185,42 +187,48 @@ int main(int argc, char *argv[])
 
     for (i=1; i<argc; i++)
         {
-        if (IsSwitch(argv[i]))
+	char *pszArg = argv[i];
+        if (IsSwitch(pszArg))
             {
-	    if (   streq(argv[i]+1, "?")
-	        || streq(argv[i]+1, "h")
-	        || streq(argv[i]+1, "-help"))
+	    char *pszOpt = pszArg+1;
+	    if (   streq(pszOpt, "?")
+	        || streq(pszOpt, "h")
+	        || streq(pszOpt, "-help"))
                 {
 		usage();
                 }
-	    if (streq(argv[i]+1, "p"))
+	    if (streq(pszOpt, "p"))
                 {
-		paginate = GetScreenRows() - 1;  /* Pause once per screen */
+		paginate = GetScreenRows() - 1;	/* Pause once per screen */
 		continue;
                 }
-	    if (streq(argv[i]+1, "V")) {	    /* -V: Display the version */
+	    if (streq(pszOpt, "V")) {		/* -V: Display the version */
 		puts(DETAILED_VERSION);
 		exit(0);
+	    }
+	    if (streq(pszOpt, "z")) {		/* -z: Stop input on Ctrl-Z */
+		iCtrlZ = TRUE;
+		continue;
 	    }
 	    printf("Unrecognized switch %s. Ignored.\n", argv[i]);
             continue;
 	    }
 	if (!pszName)
 	    {
-	    pszName = argv[i];
+	    pszName = pszArg;
 	    continue;
 	    }
 	if (dwBase == 0xFFFFFFFFL)
             {
-	    if (sscanf(argv[i], "%lX", &ul)) dwBase = ul;
+	    if (sscanf(pszArg, "%lX", &ul)) dwBase = ul;
             continue;
             }
 	if (dwLength == 0xFFFFFFFFL)
             {
-	    if (sscanf(argv[i], "%lX", &ul)) dwLength = ul;
+	    if (sscanf(pszArg, "%lX", &ul)) dwLength = ul;
             continue;
             }
-        printf("Unexpected argument: %s\nIgnored.\n", argv[i]);
+        printf("Unexpected argument: %s\nIgnored.\n", pszArg);
         break;  /* Ignore other arguments */
 	}
 
@@ -254,7 +262,16 @@ Offset    00           04           08           0C           0   4    8   C   \
 	{
 	size_t nRead;
 
-	nRead = fread(table, 1, 16, f);
+	if (!iCtrlZ) {
+	    nRead = fread(table, 1, 16, f);
+	} else { /* Read characters 1 by 1, to avoid blocking if the EOF character is not on a 16-bytes boundary */
+	    for (nRead = 0; nRead < 16; nRead++) {
+	        char c;
+	        if (!fread(&c, 1, 1, f)) break;
+	        if (c == '\x1A') break; /* We got a SUB <==> EOF character */
+	        table[nRead] = c;
+	    }
+	}
 	if (!nRead) break;
 
 	printf("%08lX ", ul);
@@ -306,6 +323,8 @@ Offset    00           04           08           0C           0   4    8   C   \
 	    }
 
 	printflf();
+
+	if (iCtrlZ && (nRead < 16)) break;
 	}
 
 #ifdef __unix__
@@ -342,6 +361,7 @@ Switches:\n\
 \n\
   -?	Display this help screen\n\
   -p	Pause for each screen-full of information.\n\
+  -z    Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"

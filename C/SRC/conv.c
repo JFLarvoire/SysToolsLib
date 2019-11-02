@@ -50,6 +50,9 @@
 *    2017-08-25 JFL Use strerror() for compatibility with Unix. Version 2.0.2.*
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.0.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.4.      *
+*    2019-10-24 JFL Added option -z to stop input on Ctrl-Z.		      *
+*    2019-11-01 JFL Added option -Z to append a Ctrl-Z (EOF) to the output.   *
+*		    Version 2.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,8 +60,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.0.4"
-#define PROGRAM_DATE    "2019-06-12 "
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2019-11-01"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -262,6 +265,8 @@ Options:\n\
   -st       Set the output file time to the same time as the input file.\n\
   -v        Display verbose information\n\
   -V        Display this program version\n\
+  -z        Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
+  -Z        Append a Ctrl-Z (aka. SUB or EOF) to the output\n\
 \n\
 ICS = Input Character Set, or code page number. Default = Detect input encoding\n\
 OCS = Output Character Set, or code page number. Default = cmd.exe code page\n\
@@ -325,6 +330,8 @@ int __cdecl main(int argc, char *argv[]) {
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;	/* Output file directory */
   int iErr;
+  int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
+  int iCtrlZ2 = FALSE;		/* If true, append a Ctrl-Z to the output */
 
   if (!pszBuffer) {
 fail_no_mem:
@@ -405,6 +412,14 @@ fail_no_mem:
       if (streq(pszOpt, "V")) {
 	puts(DETAILED_VERSION);
 	exit(0);
+      }
+      if (streq(pszOpt, "z")) {		/* -z: Stop input on Ctrl-Z */
+	iCtrlZ = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "Z")) {		/* -z: Append a Ctrl-Z to the output */
+	iCtrlZ2 = TRUE;
+	continue;
       }
       /* Unsupported switches are ignored */
       continue;
@@ -511,7 +526,16 @@ fail_no_mem:
   /* Go for it */
 
   while (!feof(sf)) {
-    nRead = fread(pszBuffer+nTotal, 1, BLOCKSIZE, sf);
+    if (!iCtrlZ) {
+      nRead = fread(pszBuffer+nTotal, 1, BLOCKSIZE, sf);
+    } else { /* Read characters 1 by 1, to avoid blocking if the EOF character is not on a BLOCKSIZE boundary */
+      for (nRead = 0; nRead < BLOCKSIZE; nRead++) {
+	char c;
+	if (!fread(&c, 1, 1, sf)) break;
+	if (c == '\x1A') break; /* We got a SUB <==> EOF character */
+	pszBuffer[nTotal+nRead] = c;
+      }
+    }
     verbose((mf, "Read %d input bytes.\n", (int)nRead));
     nTotal += nRead;
     if ((nTotal+BLOCKSIZE)>nBufSize) {
@@ -520,6 +544,7 @@ fail_no_mem:
       }
       nBufSize += BLOCKSIZE;
     }
+    if (iCtrlZ && (nRead < BLOCKSIZE)) break;
     Sleep(0);	    /* Release end of time-slice */
   }
   if (*pszInType == '?') { /* Then detect the input data encoding, using the Unicode BOM */
@@ -566,6 +591,7 @@ fail_no_mem:
       WIN32FAIL("Cannot write to the output file.");
     }
   }
+  if (iCtrlZ2) putc('\x1A', stdout);
 
   if (sf != stdin) fclose(sf);
   if (df != stdout) fclose(df);
