@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-11-11
+### Changed
+- Tcl/cfdt.tcl: Keep scanning files, even if one of them fails.  
+  Skip directories when scanning zip files contents dates.  
+  In verbose mode, display the old and new time changed.  
+  Also allow time arguments formatted as 01h02m03s.
+
 ## [Unreleased] 2019-11-02
 ### Changed
 - C/SRC/1clip.c, 2clip.c, conv.c, dump.c: Added -z and/or -Z options, for handling a Ctrl-Z as EOF respectively on input and output.
