@@ -40,12 +40,14 @@
 #                   Added option -q|--quiet.                                  #
 #    2019-04-02 JFL Fixed bug in --i2n option moving files to the curr. dir.  #
 #    2019-09-18 JFL Fixed bug when adding multiple names on the command line. #
+#    2019-11-05 JFL Keep scanning files, even if one of them fails.           #
+#                   Skip directories when scanning zip files contents dates.  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-09-18"
+set version "2019-11-05"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -230,9 +232,15 @@ proc GetFileZipTime {name} {
     error "File $name is not a valid archive"
   }
   set mtime 0
-  foreach line [split $listing \n] {
-    if [regexp {^\d\d\d\d.\d\d.\d\d \d\d:\d\d:\d\d} $line date] {
-      if [Debug] {puts "Found $date"}
+  foreach line [split $listing \n] { # Example lines:
+    #    Date      Time    Attr         Size   Compressed  Name
+    # ------------------- ----- ------------ ------------  ------------------------
+    # 1993-09-29 02:28:12 ....A        37901         8416  PENTIUM.TXT
+    # 2015-11-03 12:22:48 D....            0            0  SAMPLES
+    # 2019-06-20 02:51:22 ....A        14946               0
+    if [regexp {^(\d\d\d\d.\d\d.\d\d \d\d:\d\d:\d\d) (\S)\S+\s+\d+\s{1,12}\d*\s+(.*)} $line - date dir fname] {
+      if {"$dir" == "D"} continue ;# Skip directories
+      if [Debug] {puts "Found $date $fname"}
       set date [clock scan $date]
       if {$date > $mtime} {
 	set mtime $date
@@ -509,9 +517,18 @@ set err [catch {
     }
 
     if {"$action" != "set"} {
-      foreach {var verb} $typeNames {
-	set $var [GetFile${verb}Time $name]
-	DebugVars $var
+      set err [catch {
+	foreach {var verb} $typeNames {
+	  set $var [GetFile${verb}Time $name]
+	  DebugVars $var
+	}
+      } errMsg]
+      if $err { # Report it now, but continue with the next files, which might be work.
+	if {!$quiet} {
+	  puts stderr "Error: $errMsg"
+	  set exitCode 1
+	}
+	continue
       }
     }
 
@@ -583,11 +600,20 @@ set err [catch {
     if [info exists $what] {
       set old_time [set $what]
     } else {
-      foreach {var verb} $typeNames {
-      	if {"$var" == "$what"} {
-	  set old_time [GetFile${verb}Time $name]
-	  break
+      set err [catch {
+	foreach {var verb} $typeNames {
+	  if {"$var" == "$what"} {
+	    set old_time [GetFile${verb}Time $name]
+	    break
+	  }
 	}
+      } errMsg]
+      if $err { # Report it now, but continue with the next files, which might be work.
+	if {!$quiet} {
+	  puts stderr "Error: $errMsg"
+	  set exitCode 1
+	}
+	continue
       }
     }
     DebugVars old_time
