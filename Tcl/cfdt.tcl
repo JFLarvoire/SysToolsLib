@@ -42,12 +42,15 @@
 #    2019-09-18 JFL Fixed bug when adding multiple names on the command line. #
 #    2019-11-05 JFL Keep scanning files, even if one of them fails.           #
 #                   Skip directories when scanning zip files contents dates.  #
+#    2019-11-11 JFL Improved zip file & dir contents dates scanning.          #
+#                   In verbose mode, display the old and new time changed.    #
+#		    Also allow time arguments formatted as 01h02m03s.         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-11-05"
+set version "2019-11-11"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -231,23 +234,35 @@ proc GetFileZipTime {name} {
   if $err {
     error "File $name is not a valid archive"
   }
-  set mtime 0
+  set ftime 0 ;# The latest file time
+  set dtime 0 ;# The latest directory time
   foreach line [split $listing \n] { # Example lines:
     #    Date      Time    Attr         Size   Compressed  Name
     # ------------------- ----- ------------ ------------  ------------------------
     # 1993-09-29 02:28:12 ....A        37901         8416  PENTIUM.TXT
     # 2015-11-03 12:22:48 D....            0            0  SAMPLES
     # 2019-06-20 02:51:22 ....A        14946               0
-    if [regexp {^(\d\d\d\d.\d\d.\d\d \d\d:\d\d:\d\d) (\S)\S+\s+\d+\s{1,12}\d*\s+(.*)} $line - date dir fname] {
-      if {"$dir" == "D"} continue ;# Skip directories
+    if [regexp {^(\d\d\d\d.\d\d.\d\d \d\d:\d\d:\d\d) (\S)\S+\s+\d+\s{1,12}\d*\s+(.*)} $line - date dFlag fname] {
       if [Debug] {puts "Found $date $fname"}
       set date [clock scan $date]
-      if {$date > $mtime} {
-	set mtime $date
+      if {"$dFlag" == "D"} {
+	if {$date > $dtime} {
+	  set dtime $date
+	}
+      	continue ;# Skip directories
+      }
+      if {$date > $ftime} {
+	set ftime $date
       }
     }
   }
-  return $mtime
+  if {$ftime == 0} {  # In the unlikely case that there are no files, but some directories
+    set ftime $dtime ;# then use the directories time
+  }
+  if {$ftime == 0} {  # If the zip file is empty
+    set ftime $mtime ;# then use its actual modify time (To avoid resetting its time to 1970-01-01)
+  }
+  return $ftime
 }
 
 # Recursively copy the latest file time to the directory time
@@ -288,6 +303,11 @@ proc FilesTime2Dir {dirname {what mtime}} {
     }
   }
   return $dtime
+}
+
+# Format a Unix timestamp as ISO 8601
+proc FormatTime {time} {
+  return [clock format $time -format "%Y-%m-%d %H:%M:%S"]
 }
 
 #-----------------------------------------------------------------------------#
@@ -339,9 +359,10 @@ Filename:
 A file pathname. May include wildcards if a single name is provided.
 
 Date time:
-Any combination of date and time recognized by Tcl. Ex: 2009-10-18 16:15:45
+ISO 8601 date and time. Ex: 2009-10-18 16:15:45
 Default date: today
 Default time: 00:00:00
+The time can also be formatted as 01h02m03s
 
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr
 }]
@@ -448,9 +469,11 @@ while {"$args" != ""} {
         set date $arg
         continue
       }
-      if {("$time" == "") && [regexp {^\d+:\d+(:\d+)?$} $arg -]} {
+      if {("$time" == "") && [regexp {^\d+[:Hh]\d+([:Mm]\d+[Ss]?)?$} $arg -]} {
         set action set
         set time $arg
+        regsub -all {\D} $time ":" time
+        regsub {:$} $time "" time
         continue
       }
       # It's a file name. Resolve wildcards, if any.
@@ -619,14 +642,15 @@ set err [catch {
     DebugVars old_time
     set err [catch {
       if {"$time" != "$old_time"} {
-	DebugPuts "file $what [CondQuote $name] $time"
 	# Display the list of files processed, to allow monitoring progress
 	puts $local_name
+      	VerbosePuts "# Changing $what from [FormatTime $old_time] to [FormatTime $time]"
+	DebugPuts "file $what [CondQuote $name] $time"
 	if {!$noexec} {
 	  file $what $name $time
 	}
       } else {
-      	VerbosePuts "# [CondQuote $local_name] $what is already correct"
+      	VerbosePuts "# [CondQuote $local_name] $what [FormatTime $time] is already correct"
       }
     } errMsg]
     if $err { # Report it now, but continue with the next files, which might be writable.
