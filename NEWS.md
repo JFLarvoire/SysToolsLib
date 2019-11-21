@@ -8,6 +8,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### New
 - Batch/2note2.bat: New script to pipe text into a new instance of [Notepad2](http://www.flos-freeware.ch/notepad2.html).
 - Batch/Get-Console.bat: Front-end to Get-Console.ps1, for use in cmd.exe shells.
+- C/include/versions.h: Most OS, program, and library version strings initially defined in stversion.h. Usable in SysToolsLib-independent projects.
 ### Fixed
 - C/include/win32.mak: Fix alignment errors in ARM64 builds. (Still not tested due to lack of an Windows 10/ARM64 test system)
 
@@ -21,6 +22,13 @@ For more details about changes in a particular area, see the README.txt and/or N
 ## [Unreleased] 2019-11-02
 ### Changed
 - C/SRC/1clip.c, 2clip.c, conv.c, dump.c: Added -z and/or -Z options, for handling a Ctrl-Z as EOF respectively on input and output.
+
+## [Unreleased] 2019-10-05
+### Changed
+- Batch/Library.bat:* Added macros ECHOSVARS, ECHOSVARS.V, ECHOSVARS.D.  
+  Added routines :EscapeCmdString & :TestEscapeCmdString, and added option -te.  
+  Fixed the passing of ^ ! arguments in options -c, -C, -M.  
+  Rewrote (the broken) routine :convert_entities, and renamed it as :ConvertEntities.
 
 ## [Unreleased] 2019-10-02
 ### New
@@ -431,6 +439,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SRC/rd.c: Remove a directory, without complaining if already absent.
   The force mode removes all contents. The no-exec mode allows testing what would be deleted.
   The verbose mode displays the list of all files and directories actually removed, possibly empty.
+- C/SRC/zap.c: Remove files, without complaining if already absent.
 
 ## [Unreleased] 2017-09-11
 ### Fixed
