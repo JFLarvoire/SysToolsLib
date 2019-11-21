@@ -1,0 +1,1 @@
+@powershell -c Get-Console.ps1 %*

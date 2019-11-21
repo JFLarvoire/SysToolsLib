@@ -7,6 +7,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ## [Unreleased] 2019-11-21
 ### New
 - Batch/2note2.bat: New script to pipe text into a new instance of [Notepad2](http://www.flos-freeware.ch/notepad2.html).
+- Batch/Get-Console.bat: Front-end to Get-Console.ps1, for use in cmd.exe shells.
 ### Fixed
 - C/include/win32.mak: Fix alignment errors in ARM64 builds. (Still not tested due to lack of an Windows 10/ARM64 test system)
 
