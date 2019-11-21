@@ -61,6 +61,7 @@ Name		| OS   	| Description																							| Example
 1clip.exe	| -W-	| Pipe Windows clipboard contents into a program.							| `1clip \| sort`
 2clip.exe	| -W-	| Pipe a program output into Windows clipboard.								| `dir \| 2clip`
 2note.exe	| -W-	| Pipe a program output into a new instance of Windows Notepad.						| `dir \| 2note`
+2note2.bat	| -W-	| Pipe a program output into a new instance of [Notepad2](http://www.flos-freeware.ch/notepad2.html).	| `dir \| 2note2`
 Get-Console.ps1	| -W-	| Capture the console window as HTML (or optionally RTF or plain Text), and send it to the clipboard.	| `Get-Console`
 
 ## Convert data

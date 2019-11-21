@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-11-21
+### New
+- Batch/2note2.bat: New script to pipe text into a new instance of [Notepad2](http://www.flos-freeware.ch/notepad2.html).
+### Fixed
+- C/include/win32.mak: Fix alignment errors in ARM64 builds. (Still not tested due to lack of an Windows 10/ARM64 test system)
+
 ## [Unreleased] 2019-11-11
 ### Changed
 - Tcl/cfdt.tcl: Keep scanning files, even if one of them fails.  
