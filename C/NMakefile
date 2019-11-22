@@ -42,6 +42,7 @@
 #    2019-04-23 JFL Add extras from \bin, if none found in %\OUTDIR%.	      #
 #		    Add ARM64 executables.				      #
 #		    Added the EXEC macro, and use it for all 7-zip calls.     #
+#    2019-11-22 JFL Add extras scripts from \bin\Scripts\.		      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -132,18 +133,35 @@ release:
 	if not defined PROGRAMS (%MSG% Error: Can't get the programs list. & exit 1)
 	
 	:# Look for optional extra goodies, copied from other projects
+	set "EXTRAS="
+	set "EXTRAS0="
+	set "\EXTRAS0DIR="
+	for %%p in (%\OUTDIR% \bin) do if not defined EXTRAS0 (
+	  if exist ..\Extras%%p\Scripts\* (
+	    set "\EXTRAS0DIR=%%p\Scripts"
+	    pushd ..\Extras%%p\Scripts
+	    for %%f in (*) do (
+	      set "EXTRAS0=!EXTRAS0! %%f"
+	      set "EXTRAS=!EXTRAS! %%f"
+	    )
+	    set "EXTRAS0=!EXTRAS0:~1!"
+	    popd
+	  )
+	)
 	set "EXTRAS32="
 	set "\EXTRAS32DIR="
 	for %%p in (%\OUTDIR% \bin) do if not defined EXTRAS32 (
 	  if exist ..\Extras%%p\WIN32\*.exe (
 	    set "\EXTRAS32DIR=%%p"
 	    pushd ..\Extras%%p\WIN32
-	    for %%f in (*.exe) do set "EXTRAS32=!EXTRAS32! %%f"
+	    for %%f in (*.exe) do (
+	      set "EXTRAS32=!EXTRAS32! %%f"
+	      set "EXTRAS=!EXTRAS! %%f"
+	    )
 	    set "EXTRAS32=!EXTRAS32:~1!"
 	    popd
 	  )
 	)
-	set "EXTRAS=!EXTRAS32!"
 	set "EXTRAS64="
 	set "\EXTRAS64DIR="
 	for %%p in (%\OUTDIR% \bin) do if not defined EXTRAS64 (
@@ -158,7 +176,10 @@ release:
 	    popd
 	  )
 	)
-	if defined EXTRAS %MSG% Extras = (!EXTRAS!)
+	if defined EXTRAS (
+	  set "EXTRAS=!EXTRAS:~1!"
+	  %MSG% Extras = (!EXTRAS!)
+	)
 
 	:# List scripts from Scripts.lst
 	pushd ..
@@ -238,6 +259,14 @@ release:
 	  )
 	)
 
+	:# Add extra scripts, like WhereAmI.bat, if present
+	if defined EXTRAS0 (
+	  pushd ..\Extras%\EXTRAS0DIR%
+	  %MSG% Adding Extra scripts from !CD!
+	  %EXEC% 7z.exe -- a "%ZIP%" !EXTRAS0!
+	  if errorlevel 1 exit /b
+	  popd
+	)
 	:# Add extra WIN32 tools, like The Silver Searcher, if present
 	if defined EXTRAS32 (
 	  pushd ..\Extras%\EXTRAS32DIR%\WIN32
