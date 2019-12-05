@@ -199,12 +199,12 @@ n.bat		| -W-	| Start Notepad										| `n readme.md`
 Option | Description
 ------ | -----------
   -?   | Display a help screen.
-       |
+       |       
   -d   | Display debug information: Help the author understand what code is running. (In the debug build only)
   -v   | Display verbose information: Help the users understand what the program is doing.
   -V   | Display the script or program version and exit.
   -X   | No-eXec mode: Display what the program would do, but don't do it.
-       |
+       |       
   -A   | Force ANSI encoding (aka. Windows System Code Page) output. (Windows only)
   -O   | Force OEM encoding (aka. DOS Code Page) output. (Windows only)
   -U   | Force UTF8 encoding output. (Windows only)
