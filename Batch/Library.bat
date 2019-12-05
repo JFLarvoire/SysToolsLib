@@ -210,6 +210,7 @@
 :#   2019-10-04 JFL Added routines :EscapeCmdString & :TestEscapeCmdString.   #
 :#		    Rewrote routine :convert_entities as :ConvertEntities.    #
 :#   2019-10-05 JFL Finalized :TestEscapeCmdString & :TestConvertEntities.    #
+:#   2019-12-03 JFL Added routines :condquote4PS and :GetFullPathName.        #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -2489,6 +2490,28 @@ for %%c in (" " "&" "(" ")" "@" "," ";" "[" "]" "{" "}" "=" "'" "+" "`" "~") do 
 endlocal&set RETVAL=%P%&set %RETVAR%=%P%&%RETURN%
 
 :#----------------------------------------------------------------------------#
+:# Quote a string to pass to PowerShell, if needed
+
+:condquote4PS	 %1=Input variable. %2=Opt. output variable.
+setlocal EnableExtensions Disabledelayedexpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+call set "P=%%%~1%%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=''" & goto :condquote4PS_ret
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=''" & goto :condquote4PS_ret
+:# Look for any special character that needs quoting in batch
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set "P='%P:'=''%'"
+:condquote4PS_ret
+endlocal & set "%RETVAR%=%P%" & exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        time                                                      #
 :#                                                                            #
@@ -2948,6 +2971,13 @@ if defined NAME goto :has_wildcards.next
 set "RESULT=1"
 :has_wildcards.done
 endlocal & exit /b %RESULT%
+
+:#----------------------------------------------------------------------------#
+
+:GetFullPathName
+:CanonicName NAME VAR	:# Return the canonic absolute pathname for (maybe relative) NAME
+set "%~2=%~f1"
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
