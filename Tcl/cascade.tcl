@@ -1470,7 +1470,7 @@ proc Cascade {app x y dx dy} {
     DebugPuts "Changed dy to $dy"
   }
   # Move all windows
-  foreach hWnd $hWnds {
+  foreach hWnd [lsort -dictionary $hWnds] { # Sort by hWnd, like in the task bar buttons
     minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
     show_window $hWnd -normal -sync -activate
     move_window $hWnd $x $y ; # Note: Does not work when minimized.
