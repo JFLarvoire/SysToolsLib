@@ -14,13 +14,14 @@
 :#   2019-10-01 JFL Added options --, -# and -l.                              #
 :#   2019-10-02 JFL Use DisableDelayedExpansion to avoid issues w. ! in args. #
 :#                  Added option -V.                                          #
+:#   2019-11-29 JFL Make the python instance number inheritable.              #
 :#                                                                            #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2019-10-02"
+set "VERSION=2019-11-29"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -141,7 +142,7 @@ exit /b
 :main
 set "EXEC="
 set "PYARGS="
-set "INSTANCE=0"
+if not defined PY# set "PY#=0"
 
 goto :get_arg
 :next_arg
@@ -151,8 +152,8 @@ if [%1]==[] goto :go
 set "ARG=%~1"
 if "%ARG%"=="-?" call :usage & set "PYARGS=-h" & goto :go
 if "%ARG%"=="--" goto :next_pyarg &:# All remaining arguments are for pip.exe
-if "%ARG%"=="-#" set "INSTANCE=%~2" & shift & goto :next_arg
-if "%ARG:~0,1%"=="#" set "INSTANCE=%ARG:~1%" & goto :next_arg
+if "%ARG%"=="-#" set "PY#=%~2" & shift & goto :next_arg
+if "%ARG:~0,1%"=="#" set "PY#=%ARG:~1%" & goto :next_arg
 if "%ARG%"=="-l" call :list & exit /b
 if "%ARG%"=="-V" (echo %SCRIPT% %VERSION%) & set "PYARGS=-V" & goto :go
 if "%ARG%"=="-X" set "EXEC=echo" & goto :next_arg
@@ -167,13 +168,13 @@ goto :get_pyarg
 
 :# Get the Nth Pip instance
 set "PIP="
-if %INSTANCE%==0 ( :# Performance optimization for instance #0
+if %PY#%==0 ( :# Performance optimization for instance #0
   call :GetPythonExe PYTHON
   if defined PYTHON call call :GetPythonPipExe "%%PYTHON%%" PIP
 )
-if not defined PIP ( :# For %INSTANCE% > 0, or if the above search for #0 failed
+if not defined PIP ( :# For %PY#% > 0, or if the above search for #0 failed
   call :GetAllPipExe LIST
-  call :lindex LIST %INSTANCE% PIP
+  call :lindex LIST %PY#% PIP
 )
 if not defined PIP (
   echo %SCRIPT%: Error: No pip command found
