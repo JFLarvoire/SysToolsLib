@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-12-05
+### New
+- Batch/md2h.bat: Convert Markdown to HTML, and display it in a Web browser.
+
 ## [1.16] 2019-11-21
 ### New
 - Batch/2note2.bat: New script to pipe text into a new instance of [Notepad2](http://www.flos-freeware.ch/notepad2.html).

@@ -84,6 +84,7 @@ detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab t
 dump.exe	| DWL	| Hexadecimal dump.									| `1clip \| dump`
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
 lower.tcl	| -WL	| Convert text to lower case.								| `12 lower`
+md2h.bat        | -W-   | Convert MarkDown to HTML, and display it in a Web browser.                            | `md2h catalog.md` &:# Display this catalog
 regsub.tcl	|  WL	| Replace a regular expression at the file level.					| `regsub "(\d\d)/(\d\d)/(\d\d)" "19\1-\2-\3" *.c` &:# Change old dates to the ISO format
 remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip \| remplace "; " \r\n \| sort` &:# Sort an email distribution list alphabetically
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
