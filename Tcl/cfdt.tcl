@@ -45,12 +45,13 @@
 #    2019-11-11 JFL Improved zip file & dir contents dates scanning.          #
 #                   In verbose mode, display the old and new time changed.    #
 #		    Also allow time arguments formatted as 01h02m03s.         #
+#    2019-11-29 JFL Improved an error message.                                #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-11-11"
+set version "2019-11-29"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -232,7 +233,7 @@ proc GetFileZipTime {name} {
     set listing [exec $::7Zip l $name]
   } msg]
   if $err {
-    error "File $name is not a valid archive"
+    error "File \"$name\" is not a valid archive"
   }
   set ftime 0 ;# The latest file time
   set dtime 0 ;# The latest directory time
