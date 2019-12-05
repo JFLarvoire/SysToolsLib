@@ -34,13 +34,14 @@
 #		    Recognize several new Unicode bullet types.		      #
 #    2018-09-18 JFL If the mail has double interline, halve interlines.       #
 #    2018-10-09 JFL Decode many common Unicode emoticons to ASCII art.        #
+#    2019-05-13 JFL Remove URL defense call wrappers.			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2018-11-07"
+set version "2019-05-13"
 
 # Force running the script as UTF-8, if executed in a system with a different encoding.
 # This is necessary because we have Unicode strings in this script encoded as UTF-8.
@@ -1365,19 +1366,13 @@ proc Realign {text {merge 1}} {
         #       converted to characters in that code page. Ex:  becomes è
         #       Many Unicode characters are converted to ASCII '?'.
         foreach {rx repl} [list		  \
-          {•}  "*"			  \
-          {\*} "*"			  \
-          {} "-"			  \
-          {\?} "-"			  \
-          {\+} "+"			  \
-          {[""]} "+"			  \
-          {¢} ">"			  \
-          {ó} ">"			  \
-          {} "=>"			  \
-          {è} "=>"			  \
-          {Ò} "->"			  \
-          {} ">"			  \
-          {} "x"			  \
+          {•|\*} "*"			  \
+          {\?||} "-"			  \
+          {\+|[""]|} "+"		  \
+          {¢|ó|} ">"			  \
+          {è|||} "=>"		  \
+          {Ò||} "->"			  \
+          {} "#"			  \
           {\d+[-.()<>_/\\:]?} {\1}	  \
           {[a-z]+[-.()<>_/\\:]?} {\1}	  \
           {[A-Z]+[-.()<>_/\\:]?} {\1}	  \
@@ -1442,7 +1437,9 @@ proc Realign {text {merge 1}} {
     # Change fancy quotes to ASCII quotes
     regsub -all {[‘’‚‛′‵]} $line "'"	  line
     regsub -all {[“”„‟″‴‶‷]‎} $line "\""  line
+    # Remove bars
     regsub -all {‐|‑|‒|–|—|―} $line "-"	  line
+    regsub -all {▬} $line "==" line
     # Remove ellipsis characters, which cause ill-looking results in case there were 4 dots or more.
     regsub -all {…} $line "..."  line
     # Remove other common symbols
@@ -1452,13 +1449,39 @@ proc Realign {text {merge 1}} {
     regsub -all {✉|} $line {[Mail]} line	;# Physical mail
     regsub -all {📧} $line {[E-Mail]} line	;# E-Mail
     # Remove other microsoft-specific symbols
+    # Note: Replacements for list-item bullets are done in another section further up!
     regsub -all {|} $line "<-" line
     regsub -all {|} $line "->" line
     regsub -all {|} $line "<=" line
     regsub -all {|} $line "=>" line
     regsub -all {} $line "<=>" line
-    # Remove bars
-    regsub -all {▬} $line "==" line
+    #
+    # Remove URL defense call wrappers
+    #
+    # Ex: https://urldefense.proofpoint.com/v2/url?u=https-3A__www.yammer.com_hpe.com_threads_143059452674048-3Ftrk-5Fevent-3Dcom-5Fthread-5Fclick-26allow-5Fapp-5Fredirect-3D1&d=DwMFaQ&c=C5b8zRQO1miGmBeVZ2LFWg&r=HeQwHVgKUDuMuuGjAnjtmPYqoHH-FWAG3YagsV7NNT8&m=Lo_HyNRlWa4H4Gnl9czTTJtdHpNYXxjE7a6bNwUHbyw&s=BUsJfCNVVlg5qE86Z6ItGQwDlr0Ohkh9KhPQwhO8yMM&e=
+    package require uri::urn
+    set rxUrl {https://urldefense.proofpoint.com/v2/url\?([][\w.~!*'();:@&=+$,/?#%-]+)}
+    DebugVars line
+    foreach {url query} [regexp -all -inline -line $rxUrl $line] {
+      DebugVars url
+      DebugVars query
+      foreach pair [split $query "&"] {
+        DebugVars pair
+      	foreach {- name value} [regexp -inline {([^=]+)=(.*)} $pair] {
+	  DebugVars name value
+      	  if {$name == "u"} {
+      	    regsub -all "_" $value "/" value
+      	    regsub -all -- "-" $value "%" value
+      	    set url2 [uri::urn::unquote $value]
+      	    set first [string first $url $line]
+      	    set length [string length $url]
+      	    set last [expr {$first + $length - 1}]
+      	    set line [string replace $line $first $last $url2]
+	    DebugVars url2 line
+      	  }
+      	}
+      }
+    }
     # Output the modified line
     DebugVars merge endSpace
     if {!$merge} { # The simple case: Output one line for every input line
