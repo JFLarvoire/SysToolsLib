@@ -28,6 +28,7 @@
 #                   Also enumerate popup windows by default.                  #
 #                   Added a 100ms delay before screen captures, to give time  #
 #                   to the system to redraw all fields that are reactivated.  #
+#    2019-12-03 JFL Avoid displaying an error if there is no matching window. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -180,7 +181,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2016-06-03"
+$scriptVersion = "2019-12-03"
 if ($Version) {
   echo $scriptVersion
   return
@@ -750,7 +751,7 @@ Process {
     }
 
     # Move or resize windows
-    if ($Move) {
+    if ($Move -and $Windows.count) {
       $MoveTo = Move-Window $Windows -MoveTo $MoveTo -Resize $Resize -Step $Step -OnTop:$OnTop -PassWhereArrived
     }
 
