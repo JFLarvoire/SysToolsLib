@@ -18,13 +18,15 @@
 #    2017-08-31 JFL Bugfix: get_window_coordinates and minimize_window may    #
 #                   throw exceptions.					      #
 #                   Added a -V|--version option.                              #
+#    2019-12-05 JFL Added option -l|--list.                                   #
+#                   Added the ability to cascade Windows Explorer windows.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set defaults
-set version "2017-08-31"
+set version "2019-12-05"
 
 set err [catch {
   set twapiVersion [package require twapi]
@@ -1420,31 +1422,40 @@ proc Cascade {app x y dx dy} {
   set pids [get_process_ids -glob -name $app]
   set hWnds {}
   set nWnds 0
-  foreach pid $pids {
-    set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
-    lappend hWnds $hWnd
-    incr nWnds
-  }
-  # Find the biggest window
   set maxWidth 0
   set maxHeight 0
-  foreach hWnd $hWnds {
-    if {[catch {
+  foreach pid $pids {
+    set name [get_process_name $pid]
+    foreach hWnd [find_windows -pids $pid -toplevel 1 -visible 1] {
+      # Eliminate all helper windows, which do not have a title
+      set title [get_window_text $hWnd]
+      if {$title == ""} continue
+      # Eliminate all windows with 0 pixels, as they're actually hidden
       foreach {left top right bottom} [get_window_coordinates $hWnd] break
-    }]} {
-      foreach {left top right bottom} {0 0 0 0} break
-    }
-    set width [expr $right - $left]
-    set height [expr $bottom - $top]
-    if {$width > $maxWidth} {
-      set maxWidth $width
-    }
-    if {$height > $maxHeight} {
-      set maxHeight $height
+      set width [expr $right - $left]
+      set height [expr $bottom - $top]
+      if {($width==0) || ($height == 0)} continue
+      # Handle special applications
+      if {$name == "explorer.exe"} { # Special case for Windows Explorer
+      	# explorer.exe is the parent application for very different things,
+      	# like the Task Bar, Program Manager, etc.
+	set class [get_window_class $hWnd]
+	if {$class != "CabinetWClass"} continue
+      }
+      # OK, this window must be cascaded
+      lappend hWnds $hWnd
+      incr nWnds
+      # Record the biggest window
+      if {$width > $maxWidth} {
+	set maxWidth $width
+      }
+      if {$height > $maxHeight} {
+	set maxHeight $height
+      }
     }
   }
   # Will the cascade fit?
-  # Get the screen usable area size
+  # Get the desktop usable area size
   foreach {- - width height} [get_system_parameters_info SPI_GETWORKAREA] break
   set xMax [expr $width - $x]
   set yMax $height
@@ -1459,17 +1470,95 @@ proc Cascade {app x y dx dy} {
     DebugPuts "Changed dy to $dy"
   }
   # Move all windows
-  foreach pid $pids {
-    catch {
-      set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
-      minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
-      show_window $hWnd -normal -sync -activate
-      move_window $hWnd $x $y ; # Note: Does not work when minimized.
-    }
+  foreach hWnd $hWnds {
+    minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
+    show_window $hWnd -normal -sync -activate
+    move_window $hWnd $x $y ; # Note: Does not work when minimized.
     incr x $dx
     incr y $dy
   }
   return 0
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function	    ListWindows                                        	      #
+#                                                                             #
+#   Description     Enumerate all windows for an application		      #
+#                                                                             #
+#   Parameters      app                Application name. Ex: putty.exe        #
+#                   -                  Place holders for Cascade() arguments  #
+#                                                                             #
+#   Returns 	    The number of windows                                     #
+#                                                                             #
+#   Notes:	                                                              #
+#                                                                             #
+#   History:								      #
+#    2019-12-05 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+# Set a variable with the result of a command, or set it to "" in case of error. 
+proc tryset {varName cmd} {
+  upvar $varName var
+  if [catch {
+    set var [uplevel $cmd]
+  } errmsg] {
+    set var ""
+  }
+}
+
+proc ListWindows {app - - - -} {
+  set pids [get_process_ids -glob -name $app]
+  set hWnds {}
+  set nWnds 0
+  foreach pid $pids {
+    set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
+    # This hWnd if just the first element of the list, and so may be an empty.
+    # And unfortunately, this may be a helper window, not the true main window.
+    DebugPuts "# pid $pid -single hWnd is '$hWnd'"
+    foreach hWnd [find_windows -pids $pid -toplevel 1 -visible 1] {
+      DebugPuts "# Got hWnd $hWnd in the first loop"
+      lappend hWnds $hWnd
+      incr nWnds
+#      This test brings lots of child windows, but none interesting
+#      set err [catch {
+#	set pid [get_window_process $hWnd]
+#	foreach hWnd [get_toplevel_windows -pid $pid] {
+#	  if {[lsearch $hWnds $hWnd] == -1} {
+#	    DebugPuts "# Got missing hWnd $hWnd in the second inner loop"
+#	    lappend hWnds $hWnd
+#	    incr nWnds
+#	  }
+#	}
+#      } errmsg]
+    }
+  }
+  # Get Windows properties
+  set format "%-9s %5s %5s %5s %5s %6s  %-15s  %-20s  %s" 
+  puts [format $format hWnd left top width height pid name class title]
+  set format "%-9s %5s %5s %5s %5s  %6s  %-15s  %-20s  %s" 
+  foreach hWnd $hWnds {
+    if {[catch {
+      foreach {left top right bottom} [get_window_coordinates $hWnd] break
+    }]} {
+      foreach {left top right bottom} {0 0 0 0} break
+    }
+    set width [expr $right - $left]
+    set height [expr $bottom - $top]
+    # The twapi calls below sometimes throw errors, for example with chrome.exe.
+    # So use routine tryset, to get an empty value in case of error.
+    tryset title [list get_window_text $hWnd]
+    tryset pid [list get_window_process $hWnd]
+    tryset hInst [list get_window_application $hWnd] ;# hInstance <==> name below
+    tryset name [list get_process_name $pid]
+    tryset class [list get_window_class $hWnd]
+    # tryset hParent [list get_parent_window $hWnd] ;# Always the desktop window for top-level windows
+    # tryset created [list get_process_info $pid -createtime]
+    regsub " HWND" $hWnd "" hWnd ;# Every such handle ends with " HWND"
+    puts [format $format $hWnd $left $top $width $height $pid $name $class $title]
+  }
+  return $nWnds
 }
 
 #-----------------------------------------------------------------------------#
@@ -1506,6 +1595,7 @@ Usage: $argv0 [OPTIONS] [PROGRAM]
 Options:
   -f, --from X Y    Start point. Default: $x $y
   -h, --help, -?    Display this help screen.
+  -l, --list        List PROGRAM top-level windows
   -s, --step DX DY  Increment step. Default: $dx $dy
   -v, --verbose     Verbose attributes
   -V, --version     Display this script version
@@ -1517,6 +1607,7 @@ Program:            Program name. Default: putty.exe. Default extension: .exe
 # Scan all arguments.
 set args $argv
 set noOptions 0
+set action Cascade
 while {"$args" != ""} {
   set arg [PopArg]
   switch -- $arg {
@@ -1533,6 +1624,9 @@ while {"$args" != ""} {
     "-h" - "--help" - "-?" {
       puts -nonewline $usage
       exit 0
+    }
+    "-l" - "--list" { # List Windows
+      set action ListWindows
     }
     "-s" - "--step" {
       set dx [PopArg]
@@ -1602,5 +1696,5 @@ if {$noexec} {
   exit 0
 }
 
-Cascade $app $x $y $dx $dy
+$action $app $x $y $dx $dy
 
