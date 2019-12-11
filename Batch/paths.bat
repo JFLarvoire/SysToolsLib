@@ -42,18 +42,61 @@
 :#                  Added options -h, -l, -n, -t.			      #
 :#                  Avoid duplications when adding multiple paths.	      #
 :#                  Added support for moving and removing multiple paths.     #
+:#   2019-12-11 JFL Avoid displaying empty lines when PATH ends with a ;      #
 :#                  							      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-09-18"
+set "VERSION=2019-12-11"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "SNAME=%~n0"
 set "ARG0=%~f0"
-goto Main
+
+set "ECHO=call :echo"
+set "ECHO.D=call :noop"
+set "ECHOVARS=call :EchoVars"
+set "ECHOVARS.D=call :noop"
+set "ECHOVAL=call :EchoVal"
+set "ECHOVAL.D=call :noop"
+goto :main
+
+:Debug.on
+set "DEBUG=1"
+set "ECHO.D=call :Echo.d"
+set "ECHOVARS.D=call :EchoVars.d"
+set "ECHOVAL.D=call :EchoVal.d"
+exit /b
+
+:EchoVars.d
+if not "%DEBUG%"=="1" exit /b
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+:EchoVars.loop
+if "%~1"=="" endlocal & goto :eof
+%>DEBUGOUT% echo %INDENT%set "%~1=!%~1!"
+if defined LOGFILE %>>LOGFILE% echo %INDENT%set "%~1=!%~1!"
+shift
+goto EchoVars.loop
+
+:EchoVal.d
+if not "%DEBUG%"=="1" exit /b
+:EchoValue	%1=VARNAME
+setlocal EnableExtensions EnableDelayedExpansion
+%>DEBUGOUT% echo.%INDENT%!%~1!
+if defined LOGFILE %>>LOGFILE% echo %INDENT%!%~1!
+exit /b
+
+:Echo.d
+if not "%DEBUG%"=="1" exit /b
+:Echo
+echo %*
+:noop
+exit /b
+
+:#----------------------------------------------------------------------------#
 
 :Help
 echo.
@@ -114,7 +157,7 @@ if "%~1"=="-?" goto :Help
 if "%~1"=="-a" set "METHOD=Add" & set "VALUE=%~2" & goto :next_2nd_arg
 if "%~1"=="-b" set "WHERE=before" & set "BEFORE=%~2" & goto :next_2nd_arg
 if "%~1"=="-c" set "OBJECT=LocalPath" & goto :next_arg
-if "%~1"=="-d" set "DEBUG=1" & goto :next_arg
+if "%~1"=="-d" call :Debug.on & goto :next_arg
 if "%~1"=="-h" set "WHERE=head" & goto :next_arg
 if "%~1"=="-l" set "METHOD=Echo" & goto :next_arg
 if "%~1"=="-m" set "METHOD=Move" & set "VALUE=%~2" & goto :next_2nd_arg
@@ -132,8 +175,8 @@ set "ARG=%~1"
 if "%ARG:~0,1%"=="-" (>&2 echo Error: Invalid switch %1) & goto :Help
 if not defined PATHVAR if "%METHOD%"=="Echo" set "PATHVAR=%ARG%" & goto :next_arg
 :# Now rebuild a list with ; separators, as cmd.exe removes the ; 
-if "%VALUE%"=="" set "METHOD=Add"
-if not "%VALUE%"=="" set "VALUE=%VALUE%;"
+if not defined VALUE set "METHOD=Add"
+if defined VALUE set "VALUE=%VALUE%;"
 set "VALUE=%VALUE%%~1"
 goto :next_arg
 
@@ -155,7 +198,7 @@ exit /b
 
 :LocalPath.Add1 %1=path to add to %PATHVAR%
 setlocal EnableExtensions EnableDelayedExpansion
-if "%DEBUG%"=="1" echo call %0 %*
+%ECHO.D% call %0 %*
 :# First check if the path to add was already there
 set "VALUE=!%PATHVAR%:;;=;!"	&:# The initial paths list value
 set "VALUE2=;!VALUE!;"		&:# Make sure all paths have a ; on both sides
@@ -208,7 +251,7 @@ exit /b
 
 :LocalPath.Remove1 %1=path to remove from %PATHVAR%
 setlocal EnableExtensions EnableDelayedExpansion
-if "%DEBUG%"=="1" echo call %0 %*
+%ECHO.D% call %0 %*
 set "VALUE=;!%PATHVAR%:;;=;!;"	&:# Make sure all paths have one ; on both sides
 set "VALUE=!VALUE:;%~1;=;!"	&:# Remove the requested value
 set "VALUE=!VALUE:~1,-1!"	&:# Remove the extra ; we added above
@@ -238,14 +281,17 @@ goto :LocalPath.Set
 setlocal EnableExtensions DisableDelayedExpansion
 :# Note: The Path is usuallly in a REG_EXPAND_SZ, but sometimes in a REG_SZ. 
 set MCMD=reg query "%MKEY%" /v "%PATHVAR%" 2^>NUL ^| findstr REG_
+%ECHOVAL.D% MCMD
 for /f "tokens=1,2,*" %%a in ('"%MCMD%"') do set "MPATH=%%c"
+:MasterPath.Get.TrimR
+if "%MPATH:~-1%"==";" set "MPATH=%MPATH:~0,-1%" & goto :MasterPath.Get.TrimR
 endlocal & set "MPATH=%MPATH%" & exit /b
 
 :MasterPath.Echo
 if "%VERBOSE%"=="1" echo :# Global %OWNER% PATH list items
 call :MasterPath.Get
 :# Display path list items, one per line
-if not "%MPATH%"=="" echo.%MPATH:;=&echo.%
+if defined MPATH echo.%MPATH:;=&echo.%
 exit /b
 
 :MasterPath.Add1 %1=path to add to %PATHVAR%
@@ -281,7 +327,7 @@ for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to add
 :MasterPath.Set
 set "SETX="
 for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
-if not "%SETX%" == "" ( :# If setx.exe is in the PATH, then use it. (Preferred)
+if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred)
   :# Gotcha: regex.exe does interpret a trailing \" as escaping the "
   if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
   :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
