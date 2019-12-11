@@ -73,6 +73,7 @@ exit /b 0
 set "MD="
 set "DEBUG=0"
 set "ECHO.D=if 0==1 echo"
+set "ECHO.V=if 0==1 echo"
 set "OPTS= -s"
 set "EXEC="
 set ">=>"
@@ -87,7 +88,7 @@ set "ARG=%~1"
 if "%ARG%"=="-?" goto :help
 if "%ARG%"=="/?" goto :help
 if "%ARG%"=="-d" set "DEBUG=1" & set "ECHO.D=echo" & goto :next_arg
-if "%ARG%"=="-v" set "OPTS=%OPTS: -s=%" & goto :next_arg
+if "%ARG%"=="-v" set "OPTS=%OPTS: -s=%" & set "ECHO.V=echo" & goto :next_arg
 if "%ARG%"=="-V" (echo %VERSION%) & exit /b
 if "%ARG%"=="-X" set "EXEC=echo" & set ">=^>" & set ">>=^>^>" & goto :next_arg
 if "%ARG:~0,1%"=="-" >&2 echo Error: Unexpected switch: %1 & exit /b 1
