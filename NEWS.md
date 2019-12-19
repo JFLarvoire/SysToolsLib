@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2019-12-19
+### Changed
+- Batch/regx.bat: Always force creating keys without confirmation.
+
+## [Unreleased] 2019-12-11
+### Fixed
+- Batch/paths.bat: Avoid displaying empty lines when PATH ends with a ';',
+
 ## [Unreleased] 2019-12-05
 ### New
 - Batch/md2h.bat: Convert Markdown to HTML, and display it in a Web browser.
