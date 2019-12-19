@@ -71,13 +71,14 @@
 :#                  In verbose mode, type now "casts" the value type.         #
 :#   2018-06-13 JFL Added command md to create a key.			      #
 :#   2019-01-31 JFL Fixed the dir command when the pathname contains spaces.  #
+:#   2019-12-19 JFL Always force creating keys without confirmation.          #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-01-31"
+set "VERSION=2019-12-19"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1700,10 +1701,7 @@ if defined OPTS set "CMD=!CMD! !OPTS!"
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 set "KEY=%~1"
 if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
-set "OPTS="
-if "%~2"=="-f" set "OPTS=/f"	&:# Force writing without confirmation
-set CMD=reg add "!KEY!"
-if defined OPTS set "CMD=!CMD! !OPTS!"
+set CMD=reg add "!KEY!" /f
 %EXEC% %CMD%
 %RETURN%
 
@@ -1716,7 +1714,7 @@ if defined OPTS set "CMD=!CMD! !OPTS!"
 set "KEY=%~1"
 if "!KEY:~-1!"=="\" set "KEY=!KEY:~0,-1!" &:# If there's a trailing \, remove it
 set "OPTS="
-if "%~2"=="-f" set "OPTS=/f"	&:# Force writing without confirmation
+if "%~2"=="-f" set "OPTS=/f"	&:# Force deleting without confirmation
 set CMD=reg delete "!KEY!"
 if defined OPTS set "CMD=!CMD! !OPTS!"
 %EXEC% %CMD%
