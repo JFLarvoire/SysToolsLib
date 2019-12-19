@@ -2411,6 +2411,7 @@ exit /b
 :#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
 :#   2018-11-19 JFL Improved routine condquote2.                              #
+:#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -2432,7 +2433,7 @@ echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^
 if not errorlevel 1 set P="!P!"
 :condquote_ret
 set "%RETVAR%=!P!"
-%RETURN%
+%RETURN% 0
 
 :# Simpler version not using the %FUNCTION%/%RETURN% macros
 :condquote2	 %1=Input variable. %2=Opt. output variable.
@@ -2456,7 +2457,7 @@ if not errorlevel 1 set P="%P%"
 :# because this interferes with the quoting already added above. This would
 :# fail if the quoted string contained an & character.
 :# But because of this, do not leave any space around & separators.
-endlocal&set RETVAL=%P%&set %RETVAR%=%P%&%RETURN%
+endlocal&set %RETVAR%=%P%&exit /b 0
 
 :#----------------------------------------------------------------------------#
 :# Older implementation (More complex, but actually just as fast)
