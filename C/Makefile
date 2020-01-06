@@ -44,7 +44,7 @@ check:
 	@echo Success
 	@true
 
-# How to reluild all targets
+# How to rebuild all targets
 DIRS=SysLib SRC
 .PHONY: all
 all: $(DIRS)

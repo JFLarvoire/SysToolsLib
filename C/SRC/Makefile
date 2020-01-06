@@ -280,7 +280,7 @@ checkenv:
 	    false ; \
 	fi
 
-# How to reluild all targets
+# How to rebuild all targets
 .PHONY: all
 all: $(PROGRAMS)
 	echo "All C programs built."
