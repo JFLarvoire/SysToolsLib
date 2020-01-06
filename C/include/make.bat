@@ -109,13 +109,14 @@
 :#                  Added %MD_OUTDIR% to allow creating a junction or symlink.*
 :#   2017-10-22 JFL Support goals like bin\WIN32\myprog.exe.                  *
 :#   2017-10-27 JFL Fixed OUTDIR changes.				      *
+:#   2020-01-06 JFL Output a more helpful message if can't find nmake.exe.    *
 :#                                                                            *
-:#      © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
+:#      © Copyright 2016-2020 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2017-10-27"
+set "VERSION=2020-01-06"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1347,7 +1348,14 @@ if errorlevel 1 %RETURN%
 :# Update the PATH for running Visual Studio tools, from definitions set in %CONFIG.BAT%
 set PATH=!%MAKEORIGIN%_PATH!
 if not defined MAKE for %%m in (nmake.exe) do set "MAKE="%%~$PATH:m"" &:# Includes enclosing quotes
-%ECHOVARS.D% CD MESSAGES OUTDIR MAKEORIGIN PATH INCLUDE %MAKEORIGIN%_CC
+%ECHOVARS.D% CD MESSAGES OUTDIR MAKE MAKEORIGIN PATH INCLUDE %MAKEORIGIN%_CC
+if [%MAKE%]==[""] set "MAKE="
+if not defined MAKE (
+  set "MSG=Can't find nmake.exe"
+  if defined MSVC32LONG set ^"MSG=!MSG! in "%MSVC32LONG%"^"
+  >&2 echo Error: !MSG!. Try running configure.bat.
+  exit /b 1
+)
 set "NMAKEFLAGS=/NOLOGO /c /s"
 %IF_VERBOSE% set "NMAKEFLAGS=/NOLOGO"
 :# Clear a few multi-line variables that pollute the (nmake /P) logs
