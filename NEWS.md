@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-01-09
+### New
+- C/Makefile: Also install Bash scripts.  
+  Added option NOEXEC=1 to display files to install, without doing it.
+
+### Changed
+- Batch/Library.bat: Added several new routines: :strchr, :streq, :strstr, and :PopCArg.  
+  Added macros %+INDENT% and %-INDENT%.
+
 ## [Unreleased] 2019-12-19
 ### Changed
 - Batch/regx.bat: Always force creating keys without confirmation.
