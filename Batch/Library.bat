@@ -211,6 +211,10 @@
 :#		    Rewrote routine :convert_entities as :ConvertEntities.    #
 :#   2019-10-05 JFL Finalized :TestEscapeCmdString & :TestConvertEntities.    #
 :#   2019-12-03 JFL Added routines :condquote4PS and :GetFullPathName.        #
+:#   2019-12-13 JFL Fix :condquote to always return 0, to prevent false alarms#
+:#   2019-12-26 JFL Added routines :strchr, :streq, :strstr, and :PopCArg.    #
+:#		    Added argument -tca and routine :test_CArg.               #
+:#		    Added macros %+INDENT% and %-INDENT%.                     #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -705,6 +709,9 @@ goto :eof
 :#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
 :#                  %RETURN#%       Idem, with comments after the return      #
 :#                                                                            #
+:#                  %+INDENT%       Manually increase the debug INDENT        #
+:#                  %-INDENT%       Manually decrease the debug INDENT        #
+:#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
 :#                                  Always set using call :Debug.SetLog       #
@@ -855,6 +862,8 @@ set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
 set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "+INDENT=%LCALL% :Debug.IncIndent"
+set "-INDENT=%LCALL% :Debug.DecIndent"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -942,6 +951,7 @@ setlocal DisableDelayedExpansion
 %>DEBUGOUT% echo %INDENT%call %*
 if defined LOGFILE %>>LOGFILE% echo %INDENT%call %*
 endlocal
+:Debug.IncIndent
 set "INDENT=%INDENT%  "
 goto :eof
 
@@ -956,7 +966,8 @@ goto :eof
 :Debug.Return0 %1=Exit code
 %>DEBUGOUT% echo %INDENT%return %1
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %1
-set "INDENT=%INDENT:~0,-2%"
+:Debug.DecIndent
+if defined INDENT set "INDENT=%INDENT:~2%"
 exit /b %1
 
 :Debug.Return# :# %RETURN.ERR% %MACRO.ARGS%
@@ -2116,6 +2127,46 @@ for %%a in ("a=A" "b=B" "c=C" "d=D" "e=E" "f=F" "g=G" "h=H" "i=I"
 %RETURN%
 
 :#----------------------------------------------------------------------------#
+
+:strchr stringVar charVar indexVar      -- returns the index of char in a string
+setlocal EnableDelayedExpansion
+set "C0=!%~2!"
+set "I=0"
+:strchr.loop
+set "C=!%~1:~%I%,1!"
+if not defined C set "I=-1" & goto :strchr.exit
+if not "%C%%C%"=="%C0%%C0%" set /a "I+=1" & goto :strchr.loop
+:strchr.exit
+endlocal & if "%~3" neq "" set "%~3=%I%"
+exit /b
+
+:#----------------------------------------------------------------------------#
+
+:streq string1Var string2Var
+setlocal EnableDelayedExpansion
+if "!%~1!"=="!%~2!" endlocal & exit /b 0
+endlocal & exit /b 1
+
+:#----------------------------------------------------------------------------#
+
+:strstr stringVar substrVar indexVar    -- returns the index of a substring in a string
+setlocal EnableDelayedExpansion
+%ECHO.D% call %0 %*
+call :strlen %1 L1
+call :strlen %2 L
+%ECHOVARS.D% %1 %2 L1 L
+set /a "IMAX=L1-L"
+set "I=0"
+:strstr.loop
+if %I% GTR %IMAX% set "I=-1" & goto :strstr.exit
+set "SS=!%~1:~%I%,%L%!"
+if not "!SS!"=="!%~2!" set /a "I+=1" & goto :strstr.loop
+:strstr.exit
+%ECHO.D% return %~3=%I%
+endlocal & if "%~3" neq "" set "%~3=%I%"
+exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        trim						      #
 :#                                                                            #
@@ -2808,6 +2859,116 @@ goto :eof
 
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        PopCArg                                                   #
+:#                                                                            #
+:#  Description     Get the first argument in %ARGS%, using C-style rules     #
+:#                                                                            #
+:#  Arguments       %1            Optional output variable name. Default: ARG #
+:#                  %ARGS%        Command line arguments                      #
+:#                                                                            #
+:#  Returns 	    %1 or ARG     The first argument, unquoted                #
+:#                  '%1' or 'ARG' The first argument, with its quotes, if any #
+:#                                                                            #
+:#  Notes 	    Despite its name, this routine does not work like MSVC's  #
+:#                  command-line parser, for which rules are:                 #
+:#                  Every " quote flips string mode                           #
+:#                  2N backslashes + " ==> N backslashes and begin/end quote  #
+:#                  2N+1 backslashes + " ==> N backslashes + literal "	      #
+:#                  N backslashes ==> N backslashes                           #
+:#                                                                            #
+:#                  Here, rules are:                                          #
+:#                  Quotes flip string mode; Backslashes are output literally.#
+:#                  Exception: \" generates a " , and this does not flip mode.#
+:#                                                                            #
+:#  History                                                                   #
+:#   2019-12-03 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:PopCArg [VARNAME]	:# Pop an arguments using the C escaping convention
+%ECHO.D% call %0 %*
+%+INDENT%
+%ECHOVARS.D% ARGS
+setlocal EnableDelayedExpansion
+set "VAR=%~1"
+if not defined VAR set "VAR=ARG"
+set "ARG="
+set "'ARG'="
+if not defined ARGS goto :PopCArg.Exit
+set "I=0"
+:# Skip initial spaces and tabs
+%ECHO.D% # 1 Skip initial spaces and tabs
+goto :PopCArg.Begin1
+:PopCArg.Loop1
+%ECHOVARS.D% ARG 'ARG'
+set /a "I+=1"
+:PopCArg.Begin1
+set "C=!ARGS:~%I%,1!"
+%ECHOVARS.D% I C
+if not defined C goto :PopCArg.Done
+if "%C%%C%"=="  " goto :PopCArg.Loop1
+if "%C%%C%"=="		" goto :PopCArg.Loop1
+:# Collect argument contents
+%ECHO.D% # 2 Collect argument contents
+set "STRING_MODE=0"
+goto :PopCArg.Begin2
+:PopCArg.Loop2
+%ECHOVARS.D% ARG 'ARG'
+set /a "I+=1"
+:PopCArg.Begin2
+set "C=!ARGS:~%I%,1!"
+%ECHOVARS.D% I C
+if not defined C goto :PopCArg.Done
+if %STRING_MODE%==0 (
+  if "%C%%C%"=="  " goto :PopCArg.Step3
+  if "%C%%C%"=="		" goto :PopCArg.Step3
+)
+if "%C%%C%"=="\\" (
+  set /a "I1=I+1"
+  for %%i in (!I1!) do set "C1=!ARGS:~%%i,1!"
+  %ECHOVARS.D% I1 C1
+  if "!C1!!C1!"=="""" set "ARG=!ARG!!C1!" & set "'ARG'=!'ARG'!!C!!C1!" & set /a "I+=1" & goto :PopCArg.Loop2
+)
+if "%C%%C%"=="""" (
+  set /a "STRING_MODE=1-STRING_MODE"
+) else (
+  set "ARG=!ARG!!C!"
+)
+set "'ARG'=!'ARG'!!C!"
+goto :PopCArg.Loop2
+:# Skip final spaces and tabs
+:PopCArg.Step3
+%ECHO.D% # 3 Skip final spaces and tabs
+goto :PopCArg.Begin3
+:PopCArg.Loop3
+%ECHOVARS.D% ARG 'ARG'
+set /a "I+=1"
+:PopCArg.Begin3
+set "C=!ARGS:~%I%,1!"
+%ECHOVARS.D% I C
+if not defined C goto :PopCArg.Done
+if "%C%%C%"=="  " goto :PopCArg.Loop3
+if "%C%%C%"=="		" goto :PopCArg.Loop3
+:PopCArg.Done
+%ECHO.D% # 4 Done
+set ^"ARGS=!ARGS:~%I%!^"
+%ECHOVARS.D% ARG 'ARG' ARGS VAR
+if defined ARG   set "ARG=!ARG:%%=%%%%!"
+if defined 'ARG' set ^"'ARG'=!'ARG':%%=%%%%!^"
+if defined ARGS  set ^"ARGS=!ARGS:%%=%%%%!^"
+:PopCArg.Exit
+set ^"FOR=for /f "delims="^"
+%FOR% %%a in ("=!ARGS!") do %FOR% %%b in ("=!ARG!") do %FOR% %%c in ("=!'ARG'!") do for %%v in ("!VAR!") do (
+  %ECHO.D% # This should loop once
+  endlocal & set ^"ARGS%%a^" & set "%%~v%%b" & set ^"'%%~v'%%c^"
+  %ECHOVARS.D% %%~v '%%~v' ARGS
+)
+%ECHO.D% return from :PopCArg
+%-INDENT%
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -4470,6 +4631,17 @@ cmd /c "rundll32 1>&4 4>&6 | rundll32 0>&3 3>&6"
 exit /b
 
 :#----------------------------------------------------------------------------#
+
+:test_CArg
+call :PopCArg S1
+%ECHOVARS.D% S1 'S1' ARGS
+call :PopCArg S2
+%ECHOVARS.D% S2 'S2' ARGS
+call :strstr S1 S2 I
+echo I=%I%
+exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        Main                                                      #
 :#                                                                            #
@@ -4551,6 +4723,7 @@ if "!ARG!"=="-qe" endlocal & (set ECHO=echo) & goto :extensions.show
 if "!ARG!"=="-r" call :Debug.Setlog test.log & %EXEC% cmd /c %SCRIPT% -? ">"exec.log & goto :eof
 if "!ARG!"=="-R" call :Debug.Setlog test.log & %EXEC% cmd /c %SCRIPT% -? & goto :eof
 if "!ARG!"=="-tc" goto :TestConvertEntities &:# Test routine :ConvertEntities
+if "!ARG!"=="-tca" call :test_CArg %ARGS% & exit /b
 if "!ARG!"=="-te" goto :TestEscapeCmdString &:# Test routine :EscapeCmdString
 if "!ARG!"=="-tg" %POPARG% & call :GetServerAddress !ARG! & %ECHOVARS% ADDRESS & goto :eof &:# Test routine GetServerAddress
 if "!ARG!"=="-v" call :Verbose.On & goto next_arg
