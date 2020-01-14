@@ -51,19 +51,52 @@
 :#		    Enforce the fact that AutoRun scripts must be output      #
 :#		    anything, nor change directory.                           #
 :#   2019-02-06 JFL Fixed routine :query in Windows XP.                       #
+:#   2020-01-13 JFL Install the extension scripts from "%SPATH%\AutoRun.d\"   #
+:#		    listed in default.lst.                                    #
+:#		    Added options -d and -q.                                  #
+:#   2020-01-14 JFL Updated messages.                                         #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-02-06"
+set "VERSION=2020-01-14"
 set "SCRIPT=%~nx0"				&:# Script name
+set "SNAME=%~n0"				&:# Script name, without its extension
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
 set ^"ARG0=%0^"					&:# Script invokation name
 set ^"ARGS=%*^"					&:# Argument line
+
+set "ECHOVARS=call :EchoVars"
+set "ECHOVARS.D=call :noop"
+set "ECHO.D=call :noop"
 goto :main
+
+:Debug.on
+set "DEBUG=1"
+set "ECHOVARS.D=call :EchoVars.d"
+set "ECHO.D=call :Echo.d"
+exit /b
+
+:EchoVars.d
+if not "%DEBUG%"=="1" exit /b
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+:EchoVars.loop
+if "%~1"=="" endlocal & goto :eof
+%>DEBUGOUT% echo %INDENT%set "%~1=!%~1!"
+if defined LOGFILE %>>LOGFILE% echo %INDENT%set "%~1=!%~1!"
+shift
+goto EchoVars.loop
+
+:Echo.d
+if not "%DEBUG%"=="1" exit /b
+:Echo
+echo %*
+:noop
+exit /b
 
 :#----------------------------------------------------------------------------#
 :# make sure a directory is in the PATH
@@ -89,6 +122,18 @@ set "ARG1=%2"
 exit /b
 
 :#----------------------------------------------------------------------------#
+
+:is_newer FILE1 FILE2
+:# Query xcopy to know if the copy by date would be done.
+:# If the copy is done, the file name is output.
+:# If that name does not contain "\", then the drive name "C:" is prepended!
+:# So search either for a : or a \
+if not exist %2 exit /b 0 &:# ERRORLEVEL 0 if target is missing
+xcopy /d /l /y %1 %2 | findstr ": \\" >nul &:# ERRORLEVEL 0 if newer, 1 if older
+if errorlevel 1 %ECHO.D% %2 is already up-to-date
+exit /b
+
+:#----------------------------------------------------------------------------#
 :# Installation routine
 :install
 setlocal EnableExtensions EnableDelayedExpansion
@@ -101,11 +146,6 @@ if /i "%PROCESSOR_ARCHITECTURE%" neq "x86" if /i "%PROCESSOR_ARCHITECTURE%" neq 
   )
 )
 
-:# Create the extension directories
-for %%h in (HKLM HKCU) do (
-  if not exist "!AUTORUN.D[%%h]!" %EXEC% md "!AUTORUN.D[%%h]!"
-)
-
 :# Test if there are previously installed AutoRun scripts
 for %%h in (HKLM HKCU) do (
   call :query %%h AutoRun
@@ -116,14 +156,14 @@ for %%h in (HKLM HKCU) do (
 	endlocal & exit /b 1
       )
       :# In force mode, move the previous autorun to AutoRun.cmd.d
-      %ECHO.COMMENT% Moving the existing AutoRun script !AutoRun! to !AUTORUN.D[%%h]!
+      %COMMENT% Moving the existing AutoRun script !AutoRun! to !AUTORUN.D[%%h]!
       %EXEC% move "!AutoRun!" "!AUTORUN.D[%%h]!"
       :# Also delete its key, else the next call to :query will display an error
       set "KEY=%%h\Software\Microsoft\Command Processor"
-      %ECHO.COMMENT% Deleting "!KEY!\AutoRun"
+      %COMMENT% Deleting "!KEY!\AutoRun"
       %EXEC% reg delete "!KEY!" /v "AutoRun" /f
     ) else (
-      %ECHO.COMMENT% Already installed
+      %COMMENT% Already installed
       endlocal & exit /b 0
     )
   )
@@ -138,8 +178,36 @@ if not defined HIVE (
   )
 )
 set "KEY=%HIVE%\Software\Microsoft\Command Processor"
-%ECHO.COMMENT% Creating registry key "%KEY%" value "AutoRun"
+%COMMENT% Creating registry key "%KEY%" value "AutoRun"
 %EXEC% reg add "%KEY%" /v "AutoRun" /t REG_SZ /d "%SFULL%" /f
+
+:# Check if our target directory exists, and adapt the message to use further down 
+set "DESTDIR=!AUTORUN.D[%HIVE%]!"
+set "INSTALLING=Installing"
+if exist "!DESTDIR!" set "INSTALLING=Updating"
+
+:# Create both extension directories
+for %%h in (HKLM HKCU) do (
+  if not exist "!AUTORUN.D[%%h]!" %EXEC% md "!AUTORUN.D[%%h]!"
+)
+
+:# Install the autorun.d scripts listed in "%SPATH%\AutoRun.d\default.lst"
+set "CMD.D=%SPATH%\AutoRun.cmd.d" &:# Where to copy the extensions from
+if exist "%CMD.D%\default.lst" ( :# If we have a list of extensions to install by default
+  echo.
+  %COMMENT% !INSTALLING! extension scripts for !USER[%HIVE%]! into !DESTDIR!
+  for %%p in ("%CMD.D%\default.lst") do for /f "tokens=1" %%f in (%%~sp) do (
+    set "TOCOPY=%CMD.D%\%%~nxf"
+    if exist "!TOCOPY!" (
+      call :is_newer "!TOCOPY!" "!DESTDIR!\%%~nxf" &:# Returns ERRORLEVEL 0 if newer
+      if not errorlevel 1 ( :# If it's newer, display its name, and copy it
+      	:# Avoid using update.exe, as we want this to be independent of other SysToolsLib tools.
+	echo !TOCOPY!
+	%EXEC% copy /y !TOCOPY! "!DESTDIR!\" >NUL
+      )
+    )
+  )
+)
 
 endlocal & exit /b
 
@@ -158,7 +226,7 @@ for %%h in (%HIVES%) do (
       endlocal & exit /b 1
     )
     set "KEY=%%h\Software\Microsoft\Command Processor"
-    %ECHO.COMMENT% Deleting regisry key "!KEY!" value "AutoRun"
+    %COMMENT% Deleting regisry key "!KEY!" value "AutoRun"
     %EXEC% reg delete "!KEY!" /v "AutoRun" /f
   )
 )
@@ -182,11 +250,11 @@ endlocal & (if not "%~2"=="" (set "%~2=%VALUE%")) & exit /b
 :list
 setlocal EnableExtensions EnableDelayedExpansion
 :# First display the AutoRun scripts configured
-%ECHO.COMMENT% AutoRun scripts:
+echo AutoRun scripts:
 for %%h in (HKLM HKCU) do call :query %%h
 :# Then display available extension scripts
-%ECHO.COMMENT%.
-%ECHO.COMMENT% Extension scripts:
+echo.
+echo Extension scripts:
 for %%h in (HKLM HKCU) do if exist "!AUTORUN.D[%%h]!" (
   for %%b in ("!AUTORUN.D[%%h]!\*.bat" "!AUTORUN.D[%%h]!\*.cmd") do (
     echo !USER[%%h]!: %%~b
@@ -206,7 +274,7 @@ echo   -?    Display this help
 echo   -a    Do install/uninstall for all users (Default if running as admin.)
 echo   -c    Do install/uninstall for the current user (Default if non-admin.)
 echo   -f    Force install/uninstall in the presence of another AutoRun script
-echo   -i    Install %SCRIPT%, to run automatically every time cmd.exe starts
+echo   -i    Install %SCRIPT%, to run automatically every time cmd.exe starts (1)
 echo   -l    List AutoRun scripts installed
 echo   -u    Uninstall %SCRIPT%, or any other AutoRun script with option -f
 echo   -V    Display this script version
@@ -217,12 +285,17 @@ echo   "%%ALLUSERSPROFILE%%\AutoRun.cmd.d\" for all users
 echo   "%%USERPROFILE%%\AutoRun.cmd.d\" for yourself only
 echo These extension scripts must not display anything, or change directory, or
 echo do anything that might surprise other scripts that start a sub-cmd shell.
+echo.
+echo (1) The installation will install/update extension scripts present in directory
+echo     %SPATH%\AutoRun.d, and that are listed in the default.lst file there.
+echo     It is recommended to run '%SNAME% -i' as Administrator if possible, so that
+echo     the installation works for all users.
 exit /b
 
 :#----------------------------------------------------------------------------#
 :# Main routine
 :main
-set "ECHO.COMMENT=echo"
+set "COMMENT=echo #"
 set "DEBUG.LOG=rem"
 set "DEBUG.LOG=if exist "%TEMP%\AutoRun.log" >>"%TEMP%\AutoRun.log" echo"
 %DEBUG.LOG% :#------------ %DATE% %TIME% - %SFULL% ------------#
@@ -247,12 +320,14 @@ if "%~1"=="-?" goto :help
 if "%~1"=="/?" goto :help
 if "%~1"=="-a" set "HIVE=HKLM" & goto :next_arg
 if "%~1"=="-c" set "HIVE=HKCU" & goto :next_arg
+if "%~1"=="-d" call :Debug.on & goto :next_arg
 if "%~1"=="-f" set "FORCE=1" & goto :next_arg
 if "%~1"=="-i" set "ACTION=install" & goto :next_arg
 if "%~1"=="-l" set "ACTION=list" & goto :next_arg
+if "%~1"=="-q" set "COMMENT=if 0==1 echo #" & goto :next_arg
 if "%~1"=="-u" set "ACTION=uninstall" & goto :next_arg
 if "%~1"=="-V" (echo.%VERSION%) & exit /b
-if "%~1"=="-X" set "EXEC=echo" & set "ECHO.COMMENT=echo :#" & goto :next_arg
+if "%~1"=="-X" set "EXEC=echo" & set "COMMENT=echo :#" & goto :next_arg
 >&2 echo Unknown argument: %1
 exit /b 1
 

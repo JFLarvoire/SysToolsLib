@@ -60,7 +60,7 @@ The scripts there are NOT intended to be run manually.
 AutoRun scripts available in SysToolsLib
 ----------------------------------------
 
-This directory provides a few scripts that may be used as AutoRun scripts.
+This directory provides a few scripts that may be used as AutoRun extension scripts.
 
 Prerequisite: Install AutoRun.cmd as explained above.
 
@@ -74,4 +74,8 @@ Only install the AutoRun scripts that you really need!
 | ------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
 | history.bat	| Defines a history macro displaying the command history. Allows piping it to another program. | `history \| findstr /i make` |
 | pid.bat	| Defines a PID environment variable, containing the Process ID of the current cmd.exe shell instance. | `echo %PID%` |
+| which.cmd	| Redefine the which command, so that it uses `which -i` by default to detect cmd.exe macros.  | `which history` |
 
+Note: `AutoRun -i` installs the autorun extension scripts listed in the `AutoRun.cmd.d\default.lst` file.  
+This file contains only the extension scripts that are particularly useful, and that initialize quickly.
+For example, the pid.bat command is not included by default, because it noticeably slows down the cmd.exe startup.

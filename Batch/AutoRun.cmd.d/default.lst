@@ -1,0 +1,4 @@
+# List of AutoRun.d extension scripts to install by default
+history.bat
+# pid.bat is not recommended, as it noticeably slows does the cmd.exe startup
+which.cmd
