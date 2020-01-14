@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-01-14
+### New
+- Batch/Autorun.cmd: `AutoRun -i` now installs the extension scripts from `AutoRun.d\` listed in `AutoRun.d\default.lst`.
+
+### Fixed
+- C/SRC/MsgBox.c: Fixed a regression due to a change in MsvcLibX's version of BreakArgLine():
+  Remove C escape sequences, like \n \t \xXX, from the string.
+
 ## [Unreleased] 2020-01-09
 ### New
 - C/Makefile: Also install Bash scripts.  
