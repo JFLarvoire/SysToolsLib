@@ -29,15 +29,17 @@
 *    2017-06-28 JFL Fixed the link warning. No functional code change.	      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h.         *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition.		      *
+*    2020-01-14 JFL Fixed a regression due to a change in MsvcLibX's version  *
+*		    of BreakArgLine():					      *
+*                   Remove C escape sequences, like \n \xXX, from the string. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DESCRIPTION "Display a Message Box and return the user choice"
+#define PROGRAM_DESCRIPTION "Display a Message Box and return the user's choice"
 #define PROGRAM_NAME    "msgbox"
-#define PROGRAM_VERSION "2019.06.12"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2020-01-14"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -73,10 +75,9 @@
 
 #define NARGS 20
 
-HINSTANCE ThisInstance(void)
-    {
-    return GetModuleHandle(NULL);
-    }
+HINSTANCE ThisInstance(void) {
+  return GetModuleHandle(NULL);
+}
 
 /* Debug */
 
@@ -87,20 +88,19 @@ HINSTANCE ThisInstance(void)
 
 #include "MsgNames.h"
 
-void _cdecl OutputDebugF(const char *pszFormat, ...)
-    {
-    char szLine[1024];
-    va_list pArgs;
-    int n;
+void _cdecl OutputDebugF(const char *pszFormat, ...) {
+  char szLine[1024];
+  va_list pArgs;
+  int n;
 
-    va_start(pArgs, pszFormat);
-    n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
-    va_end(pArgs);
+  va_start(pArgs, pszFormat);
+  n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
+  va_end(pArgs);
 
-    OutputDebugString(szLine);
-    
-    return;
-    }
+  OutputDebugString(szLine);
+  
+  return;
+}
 #else
 #define DEBUG_VERSION
 #endif // defined(_DEBUG)
@@ -124,6 +124,7 @@ HWND _cdecl messagefx(HWND hWnd, const char *pszFormat, ...);
 int messagefxEnd(HWND *phWnd);
 #endif // defined(USEHIDDENWINDOW)
 int PromptWindow(const char *pszTitle, const char *pszPrompt, char *pszBuffer, int iLength);
+int unescape(char *pszString);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -150,16 +151,15 @@ int PromptWindow(const char *pszTitle, const char *pszPrompt, char *pszBuffer, i
 #define main main_ // Avoid having a main label, to make sure we're a Windows app.
 int main(int argc, char *argv[]);
 
-int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int iCmdShow)
-    {
-    char *argv[NARGS];
-    int argc;
+int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int iCmdShow) {
+  char *argv[NARGS];
+  int argc;
 
-    // Break the argument line
-    argc = BreakArgLine(lpszCmdLine, argv, NARGS);
+  // Break the argument line
+  argc = BreakArgLine(lpszCmdLine, argv, NARGS);
 
-    return main(argc, argv);
-    }
+  return main(argc, argv);
+}
 
 #endif // WINMAIN_NEEDED
 
@@ -186,263 +186,237 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLi
 
 HWND hWndHidden;	    // The hidden window that solves our problems
 
-void __cdecl CleanupHiddenWindow(void)
-    {
-    if (hWndHidden) messagefxEnd(&hWndHidden);    // Destroy the hidden window.
-    }
+void __cdecl CleanupHiddenWindow(void) {
+  if (hWndHidden) messagefxEnd(&hWndHidden);    // Destroy the hidden window.
+}
 
 #endif // defined(USEHIDDENWINDOW)
 
-int main(int argc, char *argv[])
-    {
-    int i;
-    int iFormat = 0;
-    char *pszFormat = NULL;
-    char *pszTitle = "";
-    UINT uiStyle = MB_OK | MB_TOPMOST | MB_TASKMODAL;
-    int iRet;
-    char *pszOpenFile = NULL;	// If not NULL, display open file dialog box, and store result in given output file.
-    char *pszBatch = "MBResult.bat";
-    char *pszPrompt = NULL;
-    char szBatch[MAX_PATH];
-    HANDLE hf;
+int main(int argc, char *argv[]) {
+  int i;
+  int iFormat = 0;
+  char *pszFormat = NULL;
+  char *pszTitle = "";
+  UINT uiStyle = MB_OK | MB_TOPMOST | MB_TASKMODAL;
+  int iRet;
+  char *pszOpenFile = NULL;	// If not NULL, display open file dialog box, and store result in given output file.
+  char *pszBatch = "MBResult.bat";
+  char *pszPrompt = NULL;
+  char szBatch[MAX_PATH];
+  HANDLE hf;
 
-    /* Process arguments */
+  /* Process arguments */
 
-    for (i=1; i<argc; i++)
-        {
-	if (IsSwitch(argv[i]))		    /* It's a switch */
-            {
-	    if (streq(argv[i]+1, "?"))		/* -?: Help */
-                {
-		usage();
-                return 0;
-		}
-	    if (streq(argv[i]+1, "b") || streq(argv[i]+1, "batch"))
-                {
-		if (((i+1) < argc) && !IsSwitch(argv[i+1])) 
-		    {
-		    pszBatch = argv[++i];
-		    }
-                continue;
-		}
-	    if (streq(argv[i]+1, "c") || streq(argv[i]+1, "cancel"))
-                {
-		uiStyle |= MB_OKCANCEL;
-                continue;
-		}
-	    if (streq(argv[i]+1, "debug"))
-                {
-		iDebug = TRUE;
-                continue;
-		}
-	    if (streq(argv[i]+1, "e") || streq(argv[i]+1, "edit"))
-                {
-		if (((i+1) < argc) && !IsSwitch(argv[i+1]))
-		    pszPrompt = argv[++i];
-		else
-		    pszPrompt = "";
-                continue;
-		}
-	    if (streq(argv[i]+1, "i") || streq(argv[i]+1, "information"))
-                {
-		uiStyle |= MB_ICONINFORMATION;
-                continue;
-		}
-	    if (streq(argv[i]+1, "o") || streq(argv[i]+1, "openfile"))
-                {
-		if (((i+1) < argc) && !IsSwitch(argv[i+1])) 
-		    pszOpenFile = argv[++i];
-		else
-		    pszOpenFile = "C:\\";
-                continue;
-		}
-	    if (streq(argv[i]+1, "q") || streq(argv[i]+1, "question"))
-                {
-		uiStyle |= MB_ICONQUESTION;
-                continue;
-		}
-	    if (streq(argv[i]+1, "s") || streq(argv[i]+1, "stop"))
-                {
-		uiStyle |= MB_ICONSTOP;
-                continue;
-		}
-	    if (streq(argv[i]+1, "t") || streq(argv[i]+1, "title"))
-                {
-		if (((i+1) < argc) && !IsSwitch(argv[i+1])) pszTitle = argv[++i];
-                continue;
-		}
-	    if (streq(argv[i]+1, "V") || streq(argv[i]+1, "title"))
-                {
-		puts(DETAILED_VERSION);
-		return 0;
-                }
-	    if (streq(argv[i]+1, "x") || streq(argv[i]+1, "exclamation"))
-                {
-		uiStyle |= MB_ICONEXCLAMATION;
-                continue;
-		}
-	    // Unsupported switch!
-	    // Fall through
-            }
-	iFormat = i;
-	pszFormat = argv[i];
-	break;		// All following arguments to be displayed
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if (IsSwitch(arg)) {		    /* It's a switch */
+      char *opt = arg+1;
+      if (streq(opt, "?")) {			/* -?: Help */
+	usage();
+	return 0;
+      }
+      if (streq(opt, "b") || streq(opt, "batch")) {
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) {
+	  pszBatch = argv[++i];
 	}
+	continue;
+      }
+      if (streq(opt, "c") || streq(opt, "cancel")) {
+	uiStyle |= MB_OKCANCEL;
+	continue;
+      }
+#ifdef _DEBUG
+      if (streq(opt, "d") || streq(opt, "debug")) {
+	iDebug = TRUE;
+	continue;
+      }
+#endif
+      if (streq(opt, "e") || streq(opt, "edit")) {
+	if (((i+1) < argc) && !IsSwitch(argv[i+1]))
+	  pszPrompt = argv[++i];
+	else
+	  pszPrompt = "";
+	continue;
+      }
+      if (streq(opt, "i") || streq(opt, "information")) {
+	uiStyle |= MB_ICONINFORMATION;
+	continue;
+      }
+      if (streq(opt, "o") || streq(opt, "openfile")) {
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) 
+	  pszOpenFile = argv[++i];
+	else
+	  pszOpenFile = "C:\\";
+	continue;
+      }
+      if (streq(opt, "q") || streq(opt, "question")) {
+	uiStyle |= MB_ICONQUESTION;
+	continue;
+      }
+      if (streq(opt, "s") || streq(opt, "stop")) {
+	uiStyle |= MB_ICONSTOP;
+	continue;
+      }
+      if (streq(opt, "t") || streq(opt, "title")) {
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) pszTitle = argv[++i];
+	continue;
+      }
+      if (streq(opt, "V") || streq(opt, "title")) {
+	puts(DETAILED_VERSION);
+	return 0;
+      }
+      if (streq(opt, "x") || streq(opt, "exclamation")) {
+	uiStyle |= MB_ICONEXCLAMATION;
+	continue;
+      }
+      // Unsupported switch!
+      // Fall through
+    }
+    iFormat = i;
+    pszFormat = argv[i];
+    unescape(pszFormat);	// Remove C escape sequences, like \n \xXX
+    break;			// All following arguments to be displayed
+  }
 
-    // Convert relative names to absolute before GetOpenFileName() changes the current directory.
-    GetFullPathName(pszBatch, sizeof(szBatch), szBatch, NULL);  
+  // Convert relative names to absolute before GetOpenFileName() changes the current directory.
+  GetFullPathName(pszBatch, sizeof(szBatch), szBatch, NULL);  
 
 #if defined(USEHIDDENWINDOW)
-    // Create a hidden window. Its only reason for being is that its very existence
-    // forces MessageBox() to wait for the closure of the message box before returning!
-    // ~~JFL 2001-09-25 This does not seem necessary if the application is a console app instead of a Windows app.
-    hWndHidden = messagefx(NULL, "MsgBox.exe helper window", SW_HIDE, "You should not see this...");
-    atexit(CleanupHiddenWindow);
+  // Create a hidden window. Its only reason for being is that its very existence
+  // forces MessageBox() to wait for the closure of the message box before returning!
+  // ~~JFL 2001-09-25 This does not seem necessary if the application is a console app instead of a Windows app.
+  hWndHidden = messagefx(NULL, "MsgBox.exe helper window", SW_HIDE, "You should not see this...");
+  atexit(CleanupHiddenWindow);
 #endif // defined(USEHIDDENWINDOW)
 
-    /* Case of OpenFile request */
+  /* Case of OpenFile request */
 
-    if (pszOpenFile)
-	{
-	char szSelected[MAX_PATH+13] = "SET MBRESULT=";
-	OPENFILENAME ofn = 
-	    {
-	    sizeof(OPENFILENAME),	//  DWORD         lStructSize; 
-	    NULL,			//  HWND          hwndOwner; 
-	    ThisInstance(),		//  HINSTANCE     hInstance; 
-	    NULL,			//  LPCTSTR       lpstrFilter; 
-	    NULL,			//  LPTSTR        lpstrCustomFilter; 
-	    0,				//  DWORD         nMaxCustFilter; 
-	    0,				//  DWORD         nFilterIndex; 
-	    szSelected+13,		//  LPTSTR        lpstrFile; 
-	    sizeof(szSelected)-13,	//  DWORD         nMaxFile; 
-	    NULL,			//  LPTSTR        lpstrFileTitle; 
-	    0,				//  DWORD         nMaxFileTitle; 
-	    pszOpenFile,		//  LPCTSTR       lpstrInitialDir; 
-	    pszTitle,			//  LPCTSTR       lpstrTitle; 
-	    OFN_LONGNAMES,		//  DWORD         Flags; 
-	    0,				//  WORD          nFileOffset; 
-	    0,				//  WORD          nFileExtension; 
-	    NULL,			//  LPCTSTR       lpstrDefExt; 
-	    0,				//  LPARAM        lCustData; 
-	    NULL,			//  LPOFNHOOKPROC lpfnHook; 
-	    NULL,			// LPCTSTR       lpTemplateName; 
-	    };
-	BOOL bResult;
+  if (pszOpenFile) {
+    char szSelected[MAX_PATH+13] = "SET MBRESULT=";
+    OPENFILENAME ofn = {
+      sizeof(OPENFILENAME),	//  DWORD         lStructSize; 
+      NULL,			//  HWND          hwndOwner; 
+      ThisInstance(),		//  HINSTANCE     hInstance; 
+      NULL,			//  LPCTSTR       lpstrFilter; 
+      NULL,			//  LPTSTR        lpstrCustomFilter; 
+      0,			//  DWORD         nMaxCustFilter; 
+      0,			//  DWORD         nFilterIndex; 
+      szSelected+13,		//  LPTSTR        lpstrFile; 
+      sizeof(szSelected)-13,	//  DWORD         nMaxFile; 
+      NULL,			//  LPTSTR        lpstrFileTitle; 
+      0,			//  DWORD         nMaxFileTitle; 
+      pszOpenFile,		//  LPCTSTR       lpstrInitialDir; 
+      pszTitle,			//  LPCTSTR       lpstrTitle; 
+      OFN_LONGNAMES,		//  DWORD         Flags; 
+      0,			//  WORD          nFileOffset; 
+      0,			//  WORD          nFileExtension; 
+      NULL,			//  LPCTSTR       lpstrDefExt; 
+      0,			//  LPARAM        lCustData; 
+      NULL,			//  LPOFNHOOKPROC lpfnHook; 
+      NULL,			//  LPCTSTR       lpTemplateName; 
+    };
+    BOOL bResult;
 
-	// Launch the Open File dialog box.
-	bResult = GetOpenFileName(&ofn);	// Open the standard dialog box for finding files.
-	if (!bResult)
-	    {
-	    DWORD dwErr = CommDlgExtendedError();
-	    MessageBoxF("MsgBox.exe debug error", MB_OK | MB_TOPMOST, "Returned err 0x%x.\n", dwErr);
-	    exit(252);
-	    }
-	// MessageBoxF("MsgBox.exe debug", MB_OK | MB_TOPMOST, "Returned 0x%x for File %s\n", bResult, szSelected);
-
-	// Output the result into a batch file to call as a subroutine of the parent batch.
-	hf = CreateFile(szBatch,	// file name
-			GENERIC_READ | GENERIC_WRITE,    // access mode
-			0,              // share mode
-			NULL,		// SD
-			CREATE_ALWAYS,  // how to create: Erase if already existing.
-			FILE_ATTRIBUTE_NORMAL,	// file attributes
-			NULL);          // handle to template file
-	if (hf != INVALID_HANDLE_VALUE) 
-	    { 
-	    DWORD dw;
-	    WriteFile(hf, szSelected, strlen(szSelected), &dw, NULL); 
-	    WriteFile(hf, "\r\n", 2, &dw, NULL); 
-	    CloseHandle(hf);
-	    }
-	else
-	    {
-	    MessageBoxF("MsgBox.exe error", MB_OK | MB_TOPMOST, "Cannot open file %s\n", szBatch);
-	    }
-
-	exit(0);
-	}
-
-    // Other cases require a message string/
-
-    if (!pszFormat) 
-	{
-	usage();
-	return 255;
-	}
-
-    /* Case of Prompt Window */
-
-    if (pszPrompt)
-	{
-	char szBuf[256] = "SET MBRESULT=";
-	int iStart = strlen(szBuf);
-	strcat(szBuf, pszPrompt);
-
-	iRet = PromptWindow(pszTitle, pszFormat, szBuf+iStart, sizeof(szBuf)-iStart);
-
-	// Output the result into a batch file to call as a subroutine of the parent batch.
-	hf = CreateFile(szBatch,	// file name
-			GENERIC_READ | GENERIC_WRITE,    // access mode
-			0,              // share mode
-			NULL,		// SD
-			CREATE_ALWAYS,  // how to create: Erase if already existing.
-			FILE_ATTRIBUTE_NORMAL,	// file attributes
-			NULL);          // handle to template file
-	if (hf != INVALID_HANDLE_VALUE) 
-	    { 
-	    DWORD dw;
-	    WriteFile(hf, szBuf, strlen(szBuf), &dw, NULL); 
-	    WriteFile(hf, "\r\n", 2, &dw, NULL); 
-	    CloseHandle(hf);
-	    }
-	else
-	    {
-	    MessageBoxF("MsgBox.exe error", MB_OK | MB_TOPMOST, "Cannot open file %s\n", szBatch);
-	    }
-
-	exit(iRet);
-	}
-
-    /* Default: Standard message box */
-
-    if (pszFormat[0] == '@')
-	{
-	long lSize;
-	HFILE hFile;
-
-	hFile = _lopen(pszFormat+1, OF_READ);
-	if (hFile == HFILE_ERROR)
-	    {
-	    MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Cannot open file %s.\n", pszFormat+1);
-	    return 254;
-	    }
-	// Get the file size.
-	{
-	long lPos = _llseek(hFile, 0, FILE_CURRENT);	// Current position
-	lSize = _llseek(hFile, 0, FILE_END);		// Find the position of the end
-	_llseek(hFile, lPos, FILE_BEGIN);		// Return to the initial position
-	}
-
-	pszFormat = malloc(lSize);
-	if (!pszFormat)
-	    {
-	    MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Not enough memory.\n");
-	    return 253;
-	    }
-	_lread(hFile, pszFormat, lSize);
-	_lclose(hFile);
-	}
-
-    i = iFormat;
-    iRet = MessageBoxF(pszTitle, uiStyle, pszFormat, argv[i+1], argv[i+2], argv[i+3], argv[i+4], argv[i+5], argv[i+6], argv[i+7], argv[i+8], argv[i+9]);
-    iRet -= 1;	// Change from 1-based to 0-based. 0=OK.
-
-    /* Terminate, reporting success */
-
-    return iRet;
+    // Launch the Open File dialog box.
+    bResult = GetOpenFileName(&ofn);	// Open the standard dialog box for finding files.
+    if (!bResult) {
+      DWORD dwErr = CommDlgExtendedError();
+      MessageBoxF("MsgBox.exe debug error", MB_OK | MB_TOPMOST, "Returned err 0x%x.\n", dwErr);
+      exit(252);
     }
+    // MessageBoxF("MsgBox.exe debug", MB_OK | MB_TOPMOST, "Returned 0x%x for File %s\n", bResult, szSelected);
+
+    // Output the result into a batch file to call as a subroutine of the parent batch.
+    hf = CreateFile(szBatch,	// file name
+		    GENERIC_READ | GENERIC_WRITE,    // access mode
+		    0,              // share mode
+		    NULL,		// SD
+		    CREATE_ALWAYS,  // how to create: Erase if already existing.
+		    FILE_ATTRIBUTE_NORMAL,	// file attributes
+		    NULL);          // handle to template file
+    if (hf != INVALID_HANDLE_VALUE) { 
+      DWORD dw;
+      WriteFile(hf, szSelected, strlen(szSelected), &dw, NULL); 
+      WriteFile(hf, "\r\n", 2, &dw, NULL); 
+      CloseHandle(hf);
+    } else {
+      MessageBoxF("MsgBox.exe error", MB_OK | MB_TOPMOST, "Cannot open file %s\n", szBatch);
+    }
+
+    exit(0);
+  }
+
+  // Other cases require a message string/
+
+  if (!pszFormat) {
+    usage();
+    return 255;
+  }
+
+  /* Case of Prompt Window */
+
+  if (pszPrompt) {
+    char szBuf[256] = "SET MBRESULT=";
+    int iStart = strlen(szBuf);
+    strcat(szBuf, pszPrompt);
+
+    iRet = PromptWindow(pszTitle, pszFormat, szBuf+iStart, sizeof(szBuf)-iStart);
+
+    // Output the result into a batch file to call as a subroutine of the parent batch.
+    hf = CreateFile(szBatch,	// file name
+		    GENERIC_READ | GENERIC_WRITE,    // access mode
+		    0,              // share mode
+		    NULL,		// SD
+		    CREATE_ALWAYS,  // how to create: Erase if already existing.
+		    FILE_ATTRIBUTE_NORMAL,	// file attributes
+		    NULL);          // handle to template file
+    if (hf != INVALID_HANDLE_VALUE) {
+      DWORD dw;
+      WriteFile(hf, szBuf, strlen(szBuf), &dw, NULL); 
+      WriteFile(hf, "\r\n", 2, &dw, NULL); 
+      CloseHandle(hf);
+    } else {
+      MessageBoxF("MsgBox.exe error", MB_OK | MB_TOPMOST, "Cannot open file %s\n", szBatch);
+    }
+
+    exit(iRet);
+  }
+
+  /* Default: Standard message box */
+
+  if (pszFormat[0] == '@') {
+    long lSize;
+    HFILE hFile;
+
+    hFile = _lopen(pszFormat+1, OF_READ);
+    if (hFile == HFILE_ERROR) {
+      MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Cannot open file %s.\n", pszFormat+1);
+      return 254;
+    }
+    // Get the file size.
+    {
+    long lPos = _llseek(hFile, 0, FILE_CURRENT);	// Current position
+    lSize = _llseek(hFile, 0, FILE_END);		// Find the position of the end
+    _llseek(hFile, lPos, FILE_BEGIN);		// Return to the initial position
+    }
+
+    pszFormat = malloc(lSize);
+    if (!pszFormat) {
+      MessageBoxF("MsgBox.exe Error", MB_OK | MB_TOPMOST, "Not enough memory.\n");
+      return 253;
+    }
+    _lread(hFile, pszFormat, lSize);
+    _lclose(hFile);
+  }
+
+  i = iFormat;
+  iRet = MessageBoxF(pszTitle, uiStyle, pszFormat, argv[i+1], argv[i+2], argv[i+3], argv[i+4], argv[i+5], argv[i+6], argv[i+7], argv[i+8], argv[i+9]);
+  iRet -= 1;	// Change from 1-based to 0-based. 0=OK.
+
+  /* Terminate, reporting success */
+
+  return iRet;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -459,12 +433,11 @@ int main(int argc, char *argv[])
 *									      *
 \*---------------------------------------------------------------------------*/
 
-void usage(void)
-    {
+void usage(void) {
 #if 0
-    MessageBoxF("Usage", MB_OK | MB_TOPMOST,
+  MessageBoxF("Usage", MB_OK | MB_TOPMOST,
 #else
-    printf(
+  printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
@@ -472,26 +445,31 @@ Usage:\n\
 "
 #endif
 "\
-[start /b [/w]] MsgBox [switches] {message}\n\
+[start /b [/w]] MsgBox [SWITCHES] MESSAGE [ARGUMENTS]\n\
 \n\
 Optional switches:\n\
-  -b {bat}	Set output batch name for opts -e, -o. Default: MBResult.bat.\n\
-		Content: \"set MBRESULT=string\".\n\
-  -c		Add a cancel button.\n\
-  -e [init]	Add an edit box below the message. Default initial value: \"\".\n\
+  -b BATCH      Set output batch name for opts -e, -o. Default: MBResult.bat\n\
+                Content: \"set MBRESULT=string\"\n\
+  -c            Add a cancel button.\n"
+#ifdef _DEBUG
+"\
+  -d            Enable debug output.\n"
+#endif
+"\
+  -e [INIT]     Add an edit box below the message. Default initial value: \"\"\n\
                 Creates a batch file with the input text. See option -b.\n\
-  -i		Add an (i)nformation icon.\n\
-  -o [init]	Display an Open File dialog box. Default initial path: C:\\.\n\
+  -i            Add an (i)nformation icon.\n\
+  -o [PATH]     Display an Open File dialog box. Default initial path: C:\\\n\
                 Creates a batch file with the selected path. See option -b.\n\
-  -q		Add a question-mark icon.\n\
-  -s		Add a stop-sign icon.\n\
-  -t \"title\"	String to put on the title bar.\n\
-  -x		Add an exclamation-point icon.\n\
+  -q            Add a question-mark icon.\n\
+  -s            Add a stop-sign icon.\n\
+  -t TITLE      String to put on the title bar.\n\
+  -x            Add an exclamation-point icon.\n\
 \n\
 Message:\n\
-  \"a string to display\"	Use \\n or \\xXX for special characters.\n\
-  \"a %%s found\" {string}	%%s replaced by the {string} argument.\n\
-  @inputfile		Display contents from this file.\n\
+  \"a string to display\"   Use \\n or or \\t or \\xXX for special characters.\n\
+  \"a %%s found\" STRING     %%s replaced by the STRING argument.\n\
+  @inputfile              Display contents from this file.\n\
 \n\
 ErrorLevel return value:\n\
   0=OK  1=Cancel  2=Abort  3=Retry  4=Ignore  5=Yes  6=No  7=Close  8=Help\n\
@@ -499,8 +477,8 @@ ErrorLevel return value:\n\
 Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
 
-    return;
-    }
+  return;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -519,29 +497,92 @@ Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    switch (*pszArg)
-	{
-	case '-':
-	case '/':
-	    return TRUE;
-	default:
-	    return FALSE;
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+    case '/':
+      return TRUE;
+    default:
+      return FALSE;
+  }
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    unescape						      |
+|									      |
+|   Description	    Remove C escape sequences, like \r \n \xXX		      |
+|									      |
+|   Parameters	    char *pszString	    String to unescape in place       |
+|									      |
+|   Returns	    The new length of the string			      |
+|									      |
+|   Notes	    Necessary since a 2014-03-04 change in the MsvclibX       |
+|		    version of BreakArgLine(), that removed this feature      |
+|		    to be compatible with MS C library.			      |
+|		    							      |
+|		    Can be done in place, as the unescaped string is always   |
+|		    shorter than the original.				      |
+|		    							      |
+|   History								      |
+|    2020-01-14 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int unescape(char *pszString) {
+  char *pszIn;
+  char *pszOut;
+  char c;
+
+#ifdef _DEBUG
+  if (iDebug) printf("unescape(\"%s\")\n", pszString);
+#endif
+
+  for (pszIn = pszOut = pszString; *pszIn; ) {
+    c = *(pszIn++);
+    if (c == '\\') {
+      c = *(pszIn++);
+      switch (c) {
+	case 'n': c = '\n'; break;
+	case 'r': c = '\r'; break;
+	case 't': c = '\t'; break;
+	case 'x': {
+	  char szBuf[3];
+	  char *pszEnd;
+	  szBuf[0] = pszIn[0];
+	  szBuf[1] = pszIn[0] ? pszIn[1] : '\0';
+	  szBuf[2] = '\0';
+	  c = (char)strtoul(szBuf, &pszEnd, 16);
+	  pszIn += (pszEnd - szBuf);
+	  break;
 	}
+	default: break;	// Ignore others, including \ and ".
+      }
     }
+    *(pszOut++) = c;
+  }
+  *pszOut = '\0';
+
+#ifdef _DEBUG
+  if (iDebug) printf("  return %d; // \"%s\"\n", (pszOut - pszString), pszString);
+#endif
+
+  return (int)(pszOut - pszString); // The new string length
+}
+
+#if WINMAIN_NEEDED && !HAS_MSVCLIBX
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function	    BreakArgLine                                              |
 |                                                                             |
-|   Description	    Break the DOS command line into standard C arguments      |
+|   Description     Break the Windows command line into standard C arguments  |
 |                                                                             |
-|   Parameters	    LPSTR fpParms       NUL-terminated argument line          |
+|   Parameters      LPSTR pszCmdLine    NUL-terminated argument line          |
 |                   char *pszArg[]      Array of arguments pointers           |
 |                   int iMaxArgs        Number of elements in pszArg          |
 |                                                                             |
-|   Returns         int argc            Number of arguments found             |
+|   Returns         int argc            Number of arguments found. -1 = Error |
 |                                                                             |
 |   Notes           This routine does not set argv[0] to the program name.    |
 |                                                                             |
@@ -554,82 +595,74 @@ int IsSwitch(char *pszArg)
 |    2001-09-18 JFL Set argv[0] with actual module file name.		      |
 |                   Manage quoted strings as a single argument.               |
 |    2001-09-25 JFL Only process \x inside strings.                           |
+|    2017-02-05 JFL Check memory allocation errors, and if so return -1.      |
+|    2020-01-14 JFL Merged in some changes from MsvcLibx\SRC\main.c.          |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int BreakArgLine(LPSTR fpParms, char *ppszArg[], int iMaxArgs)
-    {
-    int i, j;
-    int argc;
-    char c, c0;
-    char *pszCopy;
-    int iString = FALSE;
-    int iQuote = FALSE;
-    static char szModule[MAX_PATH] = {0};
+int BreakArgLine(LPSTR pszCmdLine, char *ppszArg[], int iMaxArgs) {
+  int i, j;
+  int argc = 0;
+  char c, c0;
+  char *pszCopy;
+  int iString = FALSE;	/* TRUE = string mode; FALSE = non-string mode */
+  int iQuote = FALSE;
+  static char szModule[MAX_PATH] = {0};
 
-    if (!szModule[0]) GetModuleFileName(NULL, szModule, sizeof(szModule));
-    ppszArg[0] = szModule;
+  if (!szModule[0]) GetModuleFileName(NULL, szModule, sizeof(szModule));
+  ppszArg[0] = szModule;
 
-    /* Make a local copy of the argument line */
-    /* Break down the local copy into standard C arguments */
+  /* Make a local copy of the argument line */
+  /* Break down the local copy into standard C arguments */
 
-    pszCopy = malloc(lstrlen(fpParms) + 1);
-    // Copy the string, managing quoted characters
-    for (i=0, j=0, iQuote = FALSE, argc=1, c0='\0'; argc<iMaxArgs; i++)
-	{
-	c = fpParms[i];
-	if (!c)		    // End of argument line
-	    {
-	    pszCopy[j++] = c;
-	    break;
-	    }
-	if (iQuote)
-	    {
-	    iQuote = FALSE;
-	    switch (c)
-		{
-		char *pc;
-		case 'n': c = '\n'; break;
-		case 'r': c = '\r'; break;
-		case 'x': c = (char)strtoul(fpParms+i+1, &pc, 16); i = (int)(pc-fpParms); i-=1; break;
-		default: break;	// Ignore others, including \ and ".
-		}
-	    }
-	else
-	    {
-	    if (iString && (c == '\\'))	    // Quoted character in string
-		{
-		iQuote = TRUE; 
-		continue;
-		}
-	    if (c == '"')
-		{
-		iString = !iString;
-		if (iString) continue;
-		c = '\0';   // Force end of argument at end of string.
-		if (!c0)    // Case of empty string: Define an empty argument.
-		    {
-		    pszCopy[j] = '\0';
-		    ppszArg[argc] = pszCopy+j;
-		    argc += 1;
-		    j += 1;
-		    continue;
-		    }
-		}
-	    }
-	if ((!iString) && ((c == ' ') || (c == '\t'))) c = '\0';
-	pszCopy[j] = c;
-        if (c && !c0)
-            {
-            ppszArg[argc] = pszCopy+j;
-            argc += 1;
-            }
-        c0 = c;
-	j += 1;
-	}
-    
-    return argc;
+  pszCopy = malloc(lstrlen(pszCmdLine) + 1);
+  if (!pszCopy) return -1;
+  /* Copy the string, managing quoted characters */
+  for (i=0, j=0, iQuote = FALSE, argc=1, c0='\0'; argc<iMaxArgs; i++) {
+    c = pszCmdLine[i];
+    if (!c) {		    /* End of argument line */
+      pszCopy[j++] = c;
+      break;
     }
+    if (iQuote) {
+      iQuote = FALSE;
+      switch (c) {
+	char *pc;
+	case 'n': c = '\n'; break;
+	case 'r': c = '\r'; break;
+	case 'x': c = (char)strtoul(pszCmdLine+i+1, &pc, 16); i = (int)(pc-pszCmdLine); i-=1; break;
+	default: break;	// Ignore others, including \ and ".
+      }
+    } else {
+      if (iString && (c == '\\')) {	    // Quoted character in string
+	iQuote = TRUE; 
+	continue;
+      }
+      if (c == '"') {
+	iString = !iString;
+	if (iString) continue;
+	c = '\0';   // Force end of argument at end of string.
+	if (!c0) {  // Case of empty string: Define an empty argument.
+	  pszCopy[j] = '\0';
+	  ppszArg[argc] = pszCopy+j;
+	  argc += 1;
+	  j += 1;
+	  continue;
+	}
+      }
+    }
+    if ((!iString) && ((c == ' ') || (c == '\t'))) c = '\0';
+    pszCopy[j] = c;
+    if (c && !c0) {
+      ppszArg[argc] = pszCopy+j;
+      argc += 1;
+    }
+    c0 = c;
+    j += 1;
+  }
+  
+  return argc;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -657,19 +690,20 @@ int BreakArgLine(LPSTR fpParms, char *ppszArg[], int iMaxArgs)
 
 _CRTIMP extern char *_acmdln;
 
-int __cdecl _setargv(void)
-    {
-    static char *argv[NARGS];
+int __cdecl _setargv(void) {
+  static char *argv[NARGS];
 
-    // Break the argument line
-    __argc = BreakArgLine(_acmdln, argv, NARGS) - 1;
-    __argv = argv+1;	// _acmdln has a copy of the program name.
-    _pgmptr = argv[0];
+  // Break the argument line
+  __argc = BreakArgLine(_acmdln, argv, NARGS) - 1;
+  __argv = argv+1;	// _acmdln has a copy of the program name.
+  _pgmptr = argv[0];
 
-    return 0;
-    }
+  return 0;
+}
 
 #endif
+
+#endif // WINMAIN_NEEDED && !HAS_MSVCLIBX
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -694,18 +728,17 @@ int __cdecl _setargv(void)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl MessageBoxF(char *pszTitle, UINT uiStyle, const char *pszFormat, ...)
-    {
-    char szLine[1024];
-    va_list pArgs;
-    int n;
+int _cdecl MessageBoxF(char *pszTitle, UINT uiStyle, const char *pszFormat, ...) {
+  char szLine[1024];
+  va_list pArgs;
+  int n;
 
-    va_start(pArgs, pszFormat);
-    n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
-    va_end(pArgs);
+  va_start(pArgs, pszFormat);
+  n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
+  va_end(pArgs);
 
-    return MessageBox(NULL, szLine, pszTitle, uiStyle);
-    }
+  return MessageBox(NULL, szLine, pszTitle, uiStyle);
+}
 
 #if defined(USEHIDDENWINDOW)
 
@@ -735,138 +768,128 @@ int _cdecl MessageBoxF(char *pszTitle, UINT uiStyle, const char *pszFormat, ...)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-static LRESULT CALLBACK messagefxWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-    {
-    static char szLine[1024];
-    char *pc;
-    char *pc0;
-    int iLen;
+static LRESULT CALLBACK messagefxWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  static char szLine[1024];
+  char *pc;
+  char *pc0;
+  int iLen;
 
-    switch (uMsg) {
-	case WM_CREATE:
-	    lstrcpy(szLine, ((LPCREATESTRUCT)lParam)->lpCreateParams);
-	    break;
+  switch (uMsg) {
+    case WM_CREATE:
+	lstrcpy(szLine, ((LPCREATESTRUCT)lParam)->lpCreateParams);
+	break;
 
-	case WM_USER:	    // Display another message in the same window.
-	    lstrcpy(szLine, (char *)lParam);
-	    InvalidateRect(hWnd, NULL, TRUE);
-	    UpdateWindow(hWnd);
-	    return 0;
+    case WM_USER:	    // Display another message in the same window.
+	lstrcpy(szLine, (char *)lParam);
+	InvalidateRect(hWnd, NULL, TRUE);
+	UpdateWindow(hWnd);
+	return 0;
 
-        case WM_PAINT:
-	    {
-	    HDC hDC;			/* display-context variable  */
-	    PAINTSTRUCT ps;		/* paint structure	     */
-	    int x, y;
-	    TEXTMETRIC tm;
+    case WM_PAINT: {
+      HDC hDC;			/* display-context variable  */
+      PAINTSTRUCT ps;		/* paint structure	     */
+      int x, y;
+      TEXTMETRIC tm;
 
-	    /* Set up a display context to begin painting */
-	    hDC = BeginPaint (hWnd, &ps);
-	    SetBkColor(hDC, GetSysColor(COLOR_MENU));
+      /* Set up a display context to begin painting */
+      hDC = BeginPaint (hWnd, &ps);
+      SetBkColor(hDC, GetSysColor(COLOR_MENU));
 
-	    GetTextMetrics(hDC, &tm);
-	    x = tm.tmMaxCharWidth;
-	    y = tm.tmHeight;
+      GetTextMetrics(hDC, &tm);
+      x = tm.tmMaxCharWidth;
+      y = tm.tmHeight;
 
-	    for (pc=pc0=szLine; pc; pc0=pc+1)	// For every line
-		{
-		pc = strchr(pc0, '\n'); 	// Search end of line
-		if (pc)
-		    iLen = pc-pc0;
-		else
-		    iLen = lstrlen(pc0);
-		TextOut(hDC, x, y, pc0, iLen);
-		y += tm.tmHeight;
-		}
+      for (pc=pc0=szLine; pc; pc0=pc+1)	{ // For every line
+	pc = strchr(pc0, '\n'); 	  // Search end of line
+	if (pc)
+	    iLen = pc-pc0;
+	else
+	    iLen = lstrlen(pc0);
+	TextOut(hDC, x, y, pc0, iLen);
+	y += tm.tmHeight;
+      }
 
-            /* Tell Windows you are done painting */
-            EndPaint (hWnd,  &ps);
+      /* Tell Windows you are done painting */
+      EndPaint (hWnd,  &ps);
 
-	    return 0;
-	    }
-
-	default:
-	    break;
+      return 0;
     }
-    return (DefWindowProc(hWnd, uMsg, wParam, lParam));
+
+    default:
+	break;
+  }
+  return (DefWindowProc(hWnd, uMsg, wParam, lParam));
 }
 
-HWND _cdecl messagefx(HWND hWnd, const char *pszFormat, ...)
-    {
-    char szLine[1024];
-    va_list pArgs;
-    int n;
-    WNDCLASS wc;
-    static BOOL bRegistered = FALSE;
-    int iShow;
-    const char *pszTitle;
+HWND _cdecl messagefx(HWND hWnd, const char *pszFormat, ...) {
+  char szLine[1024];
+  va_list pArgs;
+  int n;
+  WNDCLASS wc;
+  static BOOL bRegistered = FALSE;
+  int iShow;
+  const char *pszTitle;
 
-    // Create our Window style (To be done only once)
-    if (!bRegistered)
-	{
-	wc.style = 0;
-	wc.lpfnWndProc = messagefxWindowProc;
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hInstance = ThisInstance();
-	wc.hIcon = NULL;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)(COLOR_MENU+1);
-	wc.lpszMenuName = NULL;
-	wc.lpszClassName = "MfxWindowClass";
+  // Create our Window style (To be done only once)
+  if (!bRegistered) {
+    wc.style = 0;
+    wc.lpfnWndProc = messagefxWindowProc;
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
+    wc.hInstance = ThisInstance();
+    wc.hIcon = NULL;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_MENU+1);
+    wc.lpszMenuName = NULL;
+    wc.lpszClassName = "MfxWindowClass";
 
-	RegisterClass(&wc);
+    RegisterClass(&wc);
 
-	bRegistered = TRUE;
-	}
+    bRegistered = TRUE;
+  }
 
-    // Extract command line arguments
-    va_start(pArgs, pszFormat);
-    if (!hWnd)
-	{
-	pszTitle = pszFormat;
-	// Extract window creation parameters
-	iShow = va_arg(pArgs, int);
-	pszFormat = va_arg(pArgs, char *);
-	}
-    // Format the line to output
-    n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
-    va_end(pArgs);
+  // Extract command line arguments
+  va_start(pArgs, pszFormat);
+  if (!hWnd) {
+    pszTitle = pszFormat;
+    // Extract window creation parameters
+    iShow = va_arg(pArgs, int);
+    pszFormat = va_arg(pArgs, char *);
+  }
+  // Format the line to output
+  n = wvsprintf(szLine, pszFormat, pArgs);	// Non-portable. pArgs not guarantied to point to the next argument.
+  va_end(pArgs);
 
-    // Create a message window
-    if (!hWnd)
-	{
-	hWnd = CreateWindow(
-		"MfxWindowClass",   // pointer to registered class name
-		pszTitle,	    // pointer to window name
-		WS_BORDER | WS_CAPTION | WS_DISABLED | WS_POPUP, // window style
-	        (GetSystemMetrics(SM_CXFULLSCREEN) - 250)/2, // horizontal position of window: Centered
-	        (GetSystemMetrics(SM_CYFULLSCREEN) - 100)/2, // vertical position of window: Centered
-		250,		    // window width
-		100,		    // window height
-		NULL,		    // handle to parent or owner window
-		NULL,		    // handle to menu or child-window identifier
-		ThisInstance(),	    // handle to application instance
-		szLine);	    // pointer to window-creation data
-	ShowWindow(hWnd, iShow);
-	UpdateWindow(hWnd);
-	}
-    else
-	{
-	SendMessage(hWnd, WM_USER, 0, (LPARAM)szLine);
-	}
+  // Create a message window
+  if (!hWnd) {
+    hWnd = CreateWindow(
+	    "MfxWindowClass",   // pointer to registered class name
+	    pszTitle,	    // pointer to window name
+	    WS_BORDER | WS_CAPTION | WS_DISABLED | WS_POPUP, // window style
+	    (GetSystemMetrics(SM_CXFULLSCREEN) - 250)/2, // horizontal position of window: Centered
+	    (GetSystemMetrics(SM_CYFULLSCREEN) - 100)/2, // vertical position of window: Centered
+	    250,		    // window width
+	    100,		    // window height
+	    NULL,		    // handle to parent or owner window
+	    NULL,		    // handle to menu or child-window identifier
+	    ThisInstance(),	    // handle to application instance
+	    szLine);	    // pointer to window-creation data
+    ShowWindow(hWnd, iShow);
+    UpdateWindow(hWnd);
+  } else {
+    SendMessage(hWnd, WM_USER, 0, (LPARAM)szLine);
+  }
 
-    return hWnd;
-    }
+  return hWnd;
+}
 
-int messagefxEnd(HWND *phWnd)
-    {
-    int iErr = 0;
+int messagefxEnd(HWND *phWnd) {
+  int iErr = 0;
 
-    if (*phWnd) iErr = !DestroyWindow(*phWnd);
-    *phWnd = NULL;
-    return iErr;
-    }
+  if (*phWnd) iErr = !DestroyWindow(*phWnd);
+  *phWnd = NULL;
+  return iErr;
+}
 
 #endif // defined(USEHIDDENWINDOW)
 
@@ -894,44 +917,42 @@ int messagefxEnd(HWND *phWnd)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-void GetMessageArea(HWND hWnd, char *pszMsg, PSIZE pSize)
-    {
-    HDC hDC;
-    PAINTSTRUCT ps;		/* paint structure	     */
-    int x, y;
-    int xMax;
-    char *pc0;
-    char *pc;
-    TEXTMETRIC tm;
-    int iLen;
+void GetMessageArea(HWND hWnd, char *pszMsg, PSIZE pSize) {
+  HDC hDC;
+  PAINTSTRUCT ps;		/* paint structure	     */
+  int x, y;
+  int xMax;
+  char *pc0;
+  char *pc;
+  TEXTMETRIC tm;
+  int iLen;
 
-    /* Set up a display context to the window */
-    hDC = BeginPaint (hWnd, &ps);
-    GetTextMetrics(hDC, &tm);
+  /* Set up a display context to the window */
+  hDC = BeginPaint (hWnd, &ps);
+  GetTextMetrics(hDC, &tm);
 
-    x = 0;
-    y = 0;
-    xMax = 0;
+  x = 0;
+  y = 0;
+  xMax = 0;
 
-    for (pc=pc0=pszMsg; pc; pc0=pc+1)	// For every line
-	{
-	pc = strchr(pc0, '\n'); 	// Search end of line
-	if (pc)
-	    iLen = (int)(pc-pc0);
-	else
-	    iLen = lstrlen(pc0);
-	x = iLen * tm.tmAveCharWidth;
-	if (x > xMax) xMax = x;
-	y += tm.tmHeight;
-	}
+  for (pc=pc0=pszMsg; pc; pc0=pc+1) {	// For every line
+    pc = strchr(pc0, '\n'); 	// Search end of line
+    if (pc)
+	iLen = (int)(pc-pc0);
+    else
+	iLen = lstrlen(pc0);
+    x = iLen * tm.tmAveCharWidth;
+    if (x > xMax) xMax = x;
+    y += tm.tmHeight;
+  }
 
-    EndPaint (hWnd,  &ps);
+  EndPaint (hWnd,  &ps);
 
-    pSize->cx = xMax;
-    pSize->cy = y;
+  pSize->cx = xMax;
+  pSize->cy = y;
 
-    return;
-    }
+  return;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -960,13 +981,12 @@ void GetMessageArea(HWND hWnd, char *pszMsg, PSIZE pSize)
 #define CXBUTTON 77	// OK button width.
 #define CYBUTTON 27	// OK button height.
 
-typedef struct PromptWindowExtras
-    {
-    LONG_PTR hEdit;	    // Edit control child window
-    LONG_PTR pszOutBuf;	    // Output buffer for the input text
-    long lBufSize;	    // Size of the output buffer
-    int iExitCode;	    // The window exit code
-    } PromptWindowExtras, *PPWE;
+typedef struct PromptWindowExtras {
+  LONG_PTR hEdit;	    // Edit control child window
+  LONG_PTR pszOutBuf;	    // Output buffer for the input text
+  long lBufSize;	    // Size of the output buffer
+  int iExitCode;	    // The window exit code
+} PromptWindowExtras, *PPWE;
 #define PWEOFFSET(item) ((char *)&(((PPWE)NULL)->item) - (char *)&(((PPWE)NULL)->hEdit))
 
 #define ID_CHILDEDIT 101
@@ -974,236 +994,227 @@ typedef struct PromptWindowExtras
 
 static LRESULT CALLBACK PromptWindowProc1(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-static LRESULT CALLBACK PromptWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-    {
+static LRESULT CALLBACK PromptWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 #ifdef _DEBUG
-    char szMsgName[64];
-    LRESULT lResult;
-    static int iShift = 0;
+  char szMsgName[64];
+  LRESULT lResult;
+  static int iShift = 0;
 
-    if (iDebug) OutputDebugF("PromptWindowProc[%d](0x%x, %s, 0x%x, 0x%x)\n", iShift, hWnd, GetMsgName(uMsg, szMsgName, sizeof(szMsgName)), wParam, lParam);
+  if (iDebug) OutputDebugF("PromptWindowProc[%d](0x%x, %s, 0x%x, 0x%x)\n", iShift, hWnd, GetMsgName(uMsg, szMsgName, sizeof(szMsgName)), wParam, lParam);
 
-    iShift++;
+  iShift++;
 
-    lResult = PromptWindowProc1(hWnd, uMsg, wParam, lParam);
+  lResult = PromptWindowProc1(hWnd, uMsg, wParam, lParam);
 
-    iShift--;
+  iShift--;
 
-    if (iDebug) OutputDebugF("PromptWindowProc[%d]() returns 0x%x\n", iShift, lResult);
+  if (iDebug) OutputDebugF("PromptWindowProc[%d]() returns 0x%x\n", iShift, lResult);
 
-    return lResult;
-    }
+  return lResult;
+}
 
-static LRESULT CALLBACK PromptWindowProc1(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-    {
+static LRESULT CALLBACK PromptWindowProc1(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 #endif // defined(_DEBUG)
-    static char szLine[1024] = "Le commentaire";
-    char *pc;
-    char *pc0;
-    int iLen;
-    HWND hWndEdit = (HWND)GetWindowLongPtr(hWnd, PWEOFFSET(hEdit));
-    char *pszBuf = (char *)GetWindowLongPtr(hWnd, PWEOFFSET(pszOutBuf));
-    HWND hWndButton;
-    SIZE size;
-    long lyEdit;
-    long lyButton;
-    NONCLIENTMETRICS ncm;
+  static char szLine[1024] = "Le commentaire";
+  char *pc;
+  char *pc0;
+  int iLen;
+  HWND hWndEdit = (HWND)GetWindowLongPtr(hWnd, PWEOFFSET(hEdit));
+  char *pszBuf = (char *)GetWindowLongPtr(hWnd, PWEOFFSET(pszOutBuf));
+  HWND hWndButton;
+  SIZE size;
+  long lyEdit;
+  long lyButton;
+  NONCLIENTMETRICS ncm;
 
+  // char szMsgName[64];
+  // OutputDebugF("PromptWindowProc(%d, %s, 0x%x, 0x%x)\n", hWnd, GetMsgName(uMsg, szMsgName, sizeof(szMsgName)), wParam, lParam);
+
+  switch (uMsg) {
+    case WM_CREATE:
+      lstrcpy(szLine, ((LPCREATESTRUCT)lParam)->lpCreateParams);
+
+      GetMessageArea(hWnd, szLine, &size);
+      ncm.cbSize = sizeof(NONCLIENTMETRICS);
+      SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+
+      size.cx += ncm.iBorderWidth;
+      size.cx += 10;  // 5 pixels margins on both sides
+      size.cx += ncm.iBorderWidth;
+      size.cx += 30;  // ???
+      if (size.cx < PWWIDTH) size.cx = PWWIDTH;
+
+      size.cy += ncm.iBorderWidth;;
+      size.cy += ncm.iCaptionHeight; // Title bar heigth
+      size.cy += 5;
+      lyEdit = size.cy;
+      size.cy += CYEDIT;
+      size.cy += 5;
+      lyButton = size.cy;
+      size.cy += CYBUTTON;
+      size.cy += 5;
+      size.cy += ncm.iBorderWidth;;
+      size.cy += 25;  // ???
+
+      MoveWindow(hWnd,      // handle to window
+		 (GetSystemMetrics(SM_CXFULLSCREEN) - size.cx)/2, // horizontal position of window: Centered
+		 (GetSystemMetrics(SM_CYFULLSCREEN) - size.cy)/2, // vertical position of window: Centered
+		 size.cx,	    // window width
+		 size.cy,	    // window height
+		 FALSE);	    // repaint option: Don't.
+      
+      // Create the edit control
+      hWndEdit = CreateWindow( 
+	"EDIT",     // predefined class 
+	NULL,       // no window title 
+	WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, 
+	5, lyEdit, size.cx-25, CYEDIT, // set size in WM_SIZE message 
+	hWnd,       // parent window 
+	(HMENU)ID_CHILDEDIT, // edit control ID 
+	/* (HINSTANCE) GetWindowLong(hWnd, GWL_HINSTANCE), */ /* Not supported by WIN64 */
+	(HINSTANCE) GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
+	NULL);                // pointer not needed 
+      SetWindowLongPtr(hWnd, PWEOFFSET(hEdit), (LONG_PTR)hWndEdit); // Save the child window handle.
+      // Note: The default content is later set by the main thread.
+
+      // Create the OK button
+      hWndButton = CreateWindow(	
+	"BUTTON",   // predefined class 
+	"OK",       // button text 
+	WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // styles 
+	// Size and position values are given explicitly, because 
+	// the CW_USEDEFAULT constant gives zero values for buttons. 
+	(size.cx - CXBUTTON)/2,         // starting x position: Centered
+	lyButton,         // starting y position 
+	CXBUTTON,        // button width 
+	CYBUTTON,        // button height 
+	hWnd,       // parent window 
+	(HMENU)ID_OK,       // No menu 
+	/* (HINSTANCE) GetWindowLong(hWnd, GWL_HINSTANCE), */ /* Not supported by WIN64 */
+	(HINSTANCE) GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
+	NULL);      // pointer not needed 
+
+      break;
+
+    case WM_COMMAND:
+      if (wParam == ID_OK) wParam = 1;   // User clicked [OK]. Do as if he pressed Enter.
+      if (   (wParam == 1)        // User pressed Enter
+	  || (wParam == 2)) {	// User pressed ESC
+	SetWindowLong(hWnd, PWEOFFSET(iExitCode), (LONG)wParam-1);	// Update the exit code.
+	*(WORD *)pszBuf = (WORD)GetWindowLong(hWnd, PWEOFFSET(lBufSize));
+	SendDlgItemMessage(hWnd, 
+	    ID_CHILDEDIT, 
+	    EM_GETLINE, 
+	    (WPARAM) 0,       // line 0 
+	    (LPARAM) pszBuf); 
+	DestroyWindow(hWnd);
+	return wParam;
+      }
+      break;
+
+    case WM_DESTROY:
+      // SetEvent(hEvent);	    // Unblock the main thread
+      PostQuitMessage(GetWindowLong(hWnd, PWEOFFSET(iExitCode)));
+      break;
+
+    case WM_SETFOCUS: 
+      SetFocus(hWndEdit); 
+      return 0; 
+
+    case WM_PAINT: {
+      HDC hDC;			/* display-context variable  */
+      PAINTSTRUCT ps;		/* paint structure	     */
+      int x, y;
+      TEXTMETRIC tm;
+
+      /* Set up a display context to begin painting */
+      hDC = BeginPaint (hWnd, &ps);
+      SetBkColor(hDC, GetSysColor(COLOR_MENU));
+
+      GetTextMetrics(hDC, &tm);
+      x = 5;
+      y = tm.tmHeight / 2;
+
+      for (pc=pc0=szLine; pc; pc0=pc+1)	{ // For every line
+	pc = strchr(pc0, '\n'); 	  // Search end of line
+	if (pc)
+	    iLen = (int)(pc-pc0);
+	else
+	    iLen = lstrlen(pc0);
+	TextOut(hDC, x, y, pc0, iLen);
+	y += tm.tmHeight;
+      }
+
+      /* Tell Windows you are done painting */
+      EndPaint (hWnd,  &ps);
+
+      return 0;
+    }
+
+    default:
+	break;
+  }
+
+  return DefWindowProc(hWnd, uMsg, wParam, lParam);
+}
+
+int PromptWindow(const char *pszTitle, const char *pszPrompt, char *pszBuffer, int iLength) {
+  WNDCLASS wc;
+  static BOOL bRegistered = FALSE;
+  HWND hWnd;
+  MSG msg;
+
+  // Create our Window style (To be done only once)
+  if (!bRegistered)
+      {
+      wc.style = 0;
+      wc.lpfnWndProc = PromptWindowProc;
+      wc.cbClsExtra = 0;
+      wc.cbWndExtra = sizeof(PromptWindowExtras);
+      wc.hInstance = ThisInstance();
+      wc.hIcon = NULL;
+      wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+      wc.hbrBackground = (HBRUSH)(COLOR_MENU+1);
+      wc.lpszMenuName = NULL;
+      wc.lpszClassName = "PromptWindowClass";
+
+      RegisterClass(&wc);
+
+      bRegistered = TRUE;
+      }
+
+  // Create a Prompt window
+  hWnd = CreateWindow(
+	  "PromptWindowClass",   // pointer to registered class name
+	  pszTitle,	    // pointer to window name
+	  WS_BORDER | WS_POPUP | WS_DISABLED | WS_CAPTION, // window style
+	  (GetSystemMetrics(SM_CXFULLSCREEN) - PWWIDTH)/2, // horizontal position of window: Centered
+	  (GetSystemMetrics(SM_CYFULLSCREEN) - PWHEIGHT)/2, // vertical position of window: Centered
+	  PWWIDTH,		    // window width
+	  PWHEIGHT,		    // window height
+	  NULL,		    // handle to parent or owner window
+	  NULL,		    // handle to menu or child-window identifier
+	  ThisInstance(),	    // handle to application instance
+	  (LPVOID)pszPrompt);	    // pointer to window-creation data
+  SetWindowLongPtr(hWnd, PWEOFFSET(pszOutBuf), (LONG_PTR)pszBuffer);
+  SetWindowLong(hWnd, PWEOFFSET(lBufSize), (LONG_PTR)iLength);
+  SetWindowLong(hWnd, PWEOFFSET(iExitCode), 1);   // Assume failure
+  // Add default text to the window. 
+  SendDlgItemMessage(hWnd, ID_CHILDEDIT, WM_SETTEXT, 0, (LPARAM)pszBuffer); 
+  EnableWindow(hWnd, TRUE);	    // Allow user input
+  ShowWindow(hWnd, SW_SHOW);
+  UpdateWindow(hWnd);
+
+  // Message loop: Forward messages to the dialog box.
+  while (GetMessage(&msg, NULL, 0, 0)) { // Repeat until we receive WM_QUIT...
     // char szMsgName[64];
-    // OutputDebugF("PromptWindowProc(%d, %s, 0x%x, 0x%x)\n", hWnd, GetMsgName(uMsg, szMsgName, sizeof(szMsgName)), wParam, lParam);
+    // OutputDebugF("Message loop: msg = %s\n", GetMsgName(msg.message, szMsgName, sizeof(szMsgName)));
+    if (!IsDialogMessage(hWnd, &msg)) {
+      TranslateMessage(&msg); 
+      DispatchMessage(&msg); 
+    } 
+  }
 
-    switch (uMsg) 
-	{
-	case WM_CREATE:
-	    lstrcpy(szLine, ((LPCREATESTRUCT)lParam)->lpCreateParams);
-
-	    GetMessageArea(hWnd, szLine, &size);
-	    ncm.cbSize = sizeof(NONCLIENTMETRICS);
-	    SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
-
-	    size.cx += ncm.iBorderWidth;
-	    size.cx += 10;  // 5 pixels margins on both sides
-	    size.cx += ncm.iBorderWidth;
-	    size.cx += 30;  // ???
-	    if (size.cx < PWWIDTH) size.cx = PWWIDTH;
-
-	    size.cy += ncm.iBorderWidth;;
-	    size.cy += ncm.iCaptionHeight; // Title bar heigth
-	    size.cy += 5;
-	    lyEdit = size.cy;
-	    size.cy += CYEDIT;
-	    size.cy += 5;
-	    lyButton = size.cy;
-	    size.cy += CYBUTTON;
-	    size.cy += 5;
-	    size.cy += ncm.iBorderWidth;;
-	    size.cy += 25;  // ???
-
-	    MoveWindow(hWnd,      // handle to window
-		       (GetSystemMetrics(SM_CXFULLSCREEN) - size.cx)/2, // horizontal position of window: Centered
-		       (GetSystemMetrics(SM_CYFULLSCREEN) - size.cy)/2, // vertical position of window: Centered
-		       size.cx,	    // window width
-		       size.cy,	    // window height
-		       FALSE);	    // repaint option: Don't.
-	    
-	    // Create the edit control
-            hWndEdit = CreateWindow( 
-                "EDIT",     // predefined class 
-                NULL,       // no window title 
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, 
-                5, lyEdit, size.cx-25, CYEDIT, // set size in WM_SIZE message 
-                hWnd,       // parent window 
-                (HMENU)ID_CHILDEDIT, // edit control ID 
-                /* (HINSTANCE) GetWindowLong(hWnd, GWL_HINSTANCE), */ /* Not supported by WIN64 */
-                (HINSTANCE) GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
-                NULL);                // pointer not needed 
-	    SetWindowLongPtr(hWnd, PWEOFFSET(hEdit), (LONG_PTR)hWndEdit); // Save the child window handle.
-	    // Note: The default content is later set by the main thread.
-
-	    // Create the OK button
-	    hWndButton = CreateWindow(	
-		"BUTTON",   // predefined class 
-		"OK",       // button text 
-		WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // styles 
- 		// Size and position values are given explicitly, because 
-		// the CW_USEDEFAULT constant gives zero values for buttons. 
-		(size.cx - CXBUTTON)/2,         // starting x position: Centered
-		lyButton,         // starting y position 
-		CXBUTTON,        // button width 
-		CYBUTTON,        // button height 
-		hWnd,       // parent window 
-		(HMENU)ID_OK,       // No menu 
-                /* (HINSTANCE) GetWindowLong(hWnd, GWL_HINSTANCE), */ /* Not supported by WIN64 */
-                (HINSTANCE) GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
-		NULL);      // pointer not needed 
-
-	    break;
-
-	case WM_COMMAND:
-	    if (wParam == ID_OK) wParam = 1;   // User clicked [OK]. Do as if he pressed Enter.
-	    if (   (wParam == 1)        // User pressed Enter
-		|| (wParam == 2))	// User pressed ESC
-		{
-		SetWindowLong(hWnd, PWEOFFSET(iExitCode), (LONG)wParam-1);	// Update the exit code.
-		*(WORD *)pszBuf = (WORD)GetWindowLong(hWnd, PWEOFFSET(lBufSize));
-		SendDlgItemMessage(hWnd, 
-		    ID_CHILDEDIT, 
-		    EM_GETLINE, 
-		    (WPARAM) 0,       // line 0 
-		    (LPARAM) pszBuf); 
-		DestroyWindow(hWnd);
-		return wParam;
-		}
-	    break;
-
-	case WM_DESTROY:
-	    // SetEvent(hEvent);	    // Unblock the main thread
-	    PostQuitMessage(GetWindowLong(hWnd, PWEOFFSET(iExitCode)));
-	    break;
-
-        case WM_SETFOCUS: 
-            SetFocus(hWndEdit); 
-            return 0; 
-
-        case WM_PAINT:
-	    {
-	    HDC hDC;			/* display-context variable  */
-	    PAINTSTRUCT ps;		/* paint structure	     */
-	    int x, y;
-	    TEXTMETRIC tm;
-
-	    /* Set up a display context to begin painting */
-	    hDC = BeginPaint (hWnd, &ps);
-	    SetBkColor(hDC, GetSysColor(COLOR_MENU));
-
-	    GetTextMetrics(hDC, &tm);
-	    x = 5;
-	    y = tm.tmHeight / 2;
-
-	    for (pc=pc0=szLine; pc; pc0=pc+1)	// For every line
-		{
-		pc = strchr(pc0, '\n'); 	// Search end of line
-		if (pc)
-		    iLen = (int)(pc-pc0);
-		else
-		    iLen = lstrlen(pc0);
-		TextOut(hDC, x, y, pc0, iLen);
-		y += tm.tmHeight;
-		}
-
-            /* Tell Windows you are done painting */
-            EndPaint (hWnd,  &ps);
-
-	    return 0;
-	    }
-
-	default:
-	    break;
-	}
-
-    return DefWindowProc(hWnd, uMsg, wParam, lParam);
-    }
-
-int PromptWindow(const char *pszTitle, const char *pszPrompt, char *pszBuffer, int iLength)
-    {
-    WNDCLASS wc;
-    static BOOL bRegistered = FALSE;
-    HWND hWnd;
-    MSG msg;
-
-    // Create our Window style (To be done only once)
-    if (!bRegistered)
-	{
-	wc.style = 0;
-	wc.lpfnWndProc = PromptWindowProc;
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = sizeof(PromptWindowExtras);
-	wc.hInstance = ThisInstance();
-	wc.hIcon = NULL;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)(COLOR_MENU+1);
-	wc.lpszMenuName = NULL;
-	wc.lpszClassName = "PromptWindowClass";
-
-	RegisterClass(&wc);
-
-	bRegistered = TRUE;
-	}
-
-    // Create a Prompt window
-    hWnd = CreateWindow(
-	    "PromptWindowClass",   // pointer to registered class name
-	    pszTitle,	    // pointer to window name
-	    WS_BORDER | WS_POPUP | WS_DISABLED | WS_CAPTION, // window style
-	    (GetSystemMetrics(SM_CXFULLSCREEN) - PWWIDTH)/2, // horizontal position of window: Centered
-	    (GetSystemMetrics(SM_CYFULLSCREEN) - PWHEIGHT)/2, // vertical position of window: Centered
-	    PWWIDTH,		    // window width
-	    PWHEIGHT,		    // window height
-	    NULL,		    // handle to parent or owner window
-	    NULL,		    // handle to menu or child-window identifier
-	    ThisInstance(),	    // handle to application instance
-	    (LPVOID)pszPrompt);	    // pointer to window-creation data
-    SetWindowLongPtr(hWnd, PWEOFFSET(pszOutBuf), (LONG_PTR)pszBuffer);
-    SetWindowLong(hWnd, PWEOFFSET(lBufSize), (LONG_PTR)iLength);
-    SetWindowLong(hWnd, PWEOFFSET(iExitCode), 1);   // Assume failure
-    // Add default text to the window. 
-    SendDlgItemMessage(hWnd, ID_CHILDEDIT, WM_SETTEXT, 0, (LPARAM)pszBuffer); 
-    EnableWindow(hWnd, TRUE);	    // Allow user input
-    ShowWindow(hWnd, SW_SHOW);
-    UpdateWindow(hWnd);
-
-    // Message loop: Forward messages to the dialog box.
-    while (GetMessage(&msg, NULL, 0, 0)) // Repeat until we receive WM_QUIT...
-	{ 
-        // char szMsgName[64];
-	// OutputDebugF("Message loop: msg = %s\n", GetMsgName(msg.message, szMsgName, sizeof(szMsgName)));
-	if (!IsDialogMessage(hWnd, &msg)) 
-	    { 
-	    TranslateMessage(&msg); 
-	    DispatchMessage(&msg); 
-	    } 
-	}
-
-    return (int)(msg.wParam);	    // Return the exit code from the window (0 to 8)
-    }
+  return (int)(msg.wParam);	    // Return the exit code from the window (0 to 8)
+}
 
