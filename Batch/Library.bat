@@ -215,6 +215,7 @@
 :#   2019-12-26 JFL Added routines :strchr, :streq, :strstr, and :PopCArg.    #
 :#		    Added argument -tca and routine :test_CArg.               #
 :#		    Added macros %+INDENT% and %-INDENT%.                     #
+:#   2020-01-13 JFL Added routine :is_newer.                                  #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -3055,6 +3056,32 @@ if errorlevel 1 (
   popd
 )
 %RETURN% %ERROR%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        is_newer						      #
+:#                                                                            #
+:#  Description     Check if FILE %1 is newer than FILE %2                    #
+:#                                                                            #
+:#  Arguments       %1	    pathname of file #1. Must exist.                  #
+:#                  %2	    pathname of file #2. May not exist.               #
+:#                                                                            #
+:#  Notes 	    Returns errorlevel 0 FILE1 is newer, 1 if same or older   #
+:#                                                                            #
+:#  History                                                                   #
+:#   2019-11-30 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:is_newer FILE1 FILE2
+:# Query xcopy to know if the copy by date would be done.
+:# If the copy is done, the file name is output.
+:# If that name does not contain "\", then the drive name "C:" is prepended!
+:# So search either for a : or a \
+if not exist %2 exit /b 0 &:# ERRORLEVEL 0 if target is missing
+xcopy /d /l /y %1 %2 | findstr ": \\" >nul &:# ERRORLEVEL 0 if newer, 1 if older
+if errorlevel 1 %ECHO.D% %2 is already up-to-date
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
