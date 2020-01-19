@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-01-19
+### Fixed
+- C/SRC/1clip.c: Fixed the default HTML output code page (with option -h) to be UTF8 in any console code page.
+
 ## [Unreleased] 2020-01-14
 ### New
 - Batch/Autorun.cmd: `AutoRun -i` now installs the extension scripts from `AutoRun.d\` listed in `AutoRun.d\default.lst`.
