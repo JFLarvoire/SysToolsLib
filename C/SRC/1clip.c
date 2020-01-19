@@ -44,6 +44,7 @@
 *                   Prepend the program name to the output. Version 2.0.4.    *
 *    2019-11-01 JFL Added option -Z to append a Ctrl-Z (EOF) to the output.   *
 *		    Version 2.1.					      *
+*    2020-01-19 JFL Fixed the default HTML output to be UTF8 in any console CP.
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,7 +53,7 @@
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
 #define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2019-11-01"
+#define PROGRAM_DATE    "2020-01-19"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -89,11 +90,22 @@ enum {
   ENUMCLIP,
 };
 
-#define CP_NULL ((UINT)-1) /* No output code page. Can't use 0 as CP_ACP is 0 */
+#define CP_NULL ((UINT)-1)	/* No output code page. Can't use 0 as CP_ACP is 0 */
+#define CP_AUTO ((UINT)-2)	/* Autoselect code page. Can't use 0 as CP_ACP is 0 */
 
 /* Global variables */
 
 DEBUG_GLOBALS
+
+#if _DEBUG
+UINT ActualCP(UINT cp) { /* Return the actual code page number for special constants */
+  switch (cp) {
+    case CP_ACP: return GetACP();	/* CP_ACP = 0 = Default Windows code page */
+    case CP_OEMCP: return GetOEMCP();	/* CP_OEMCP = 1 = Default DOS code page */
+    default: return cp;	 /* Anything else is an actual code page number */
+  }
+}
+#endif
 
 /* Function prototypes */
 
@@ -127,8 +139,8 @@ int main(int argc, char *argv[]) {
   int i;
   int iAction = COPYCLIP;
   UINT type = CF_UNICODETEXT;
-  UINT codepage = consoleCodePage; /* The code page to use for the output */
-  int iCtrlZ = FALSE;		   /* If true, append a Ctrl-Z to the output */
+  UINT codepage = CP_AUTO;	    /* The code page to use for the output. Default: Choose automatically */
+  int iCtrlZ = FALSE;		    /* If true, append a Ctrl-Z to the output */
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -245,7 +257,7 @@ int main(int argc, char *argv[]) {
 void usage(void) {
   UINT cpANSI = GetACP();
   UINT cpOEM = GetOEMCP();
-  UINT cpCurrent = GetConsoleOutputCP();
+  // UINT cpCurrent = GetConsoleOutputCP();
 
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
@@ -255,31 +267,31 @@ Usage:\n\
     1clip [OPTIONS] | <command>\n\
 \n\
 Options:\n\
-  -?      Display this help screen.\n\
-  -a      Get the ANSI text from the clipboard.\n\
-  -A      Output using the ANSI encoding (Code page %u).\n\
-  -b      Output binary data.\n"
+  -?      Display this help screen\n\
+  -a      Get the ANSI text from the clipboard\n\
+  -A      Output using the ANSI encoding (Code page %u)\n\
+  -b      Output binary data\n"
 #ifdef _DEBUG
 "\
-  -d      Output debug information.\n"
+  -d      Output debug information\n"
 #endif
 "\
-  -h      Get the HTML data from the clipboard. (Encoded in UTF-8)\n\
-  -l      List clipboard formats available.\n\
-  -o      Get the OEM text from the clipboard.\n\
-  -O      Output using the OEM encoding (Code page %u).\n\
-  -r      Get the RTF data from the clipboard.\n\
-  -t N    Get format N. Default: 1 = plain text.\n\
-  -u      Get the Unicode text from the clipboard. (Default)\n\
-  -U      Output using the UTF-8 encoding (Code page 65001).\n\
+  -h      Get the HTML data from the clipboard (Encoded in UTF-8)\n\
+  -l      List clipboard formats available\n\
+  -o      Get the OEM text from the clipboard\n\
+  -O      Output using the OEM encoding (Code page %u)\n\
+  -r      Get the RTF data from the clipboard\n\
+  -t N    Get format N. Default: 1 = plain text\n\
+  -u      Get the Unicode text from the clipboard (Default)\n\
+  -U      Output using the UTF-8 encoding (Code page 65001)\n\
   -V      Display the program version\n\
   -Z      Append a Ctrl-Z (aka. SUB or EOF) to the output\n\
 \n\
-Default output encoding: The current console code page (Code page %u).\n\
+Default output encoding: The current console code page (Code page %u)\n\
 \n"
 "Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, cpANSI, cpOEM, cpCurrent
+, cpANSI, cpOEM, consoleCodePage // cpCurrent
 );
 
   return;
@@ -380,11 +392,12 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
 *                                                                             *
 |   Function:	    CopyClip						      |
 |									      |
-|   Description:    Copy text from the clipboard to the output file	      |
+|   Description:    Copy text from the clipboard to the standard output file  |
 |									      |
 |   Parameters:     UINT type		Clipboard data type. Ex: CF_TEXT      |
 |		    UINT codepage	Output code page. Ex: CP_ACP.	      |
 |					CP_NULL=((UINT)-1) ==> Output raw data|
+|					CP_AUTO=((UINT)-2) ==> Autoselect CP. |
 |									      |
 |   Returns:	    The number of characters copied.			      |
 |									      |
@@ -393,6 +406,8 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
 |    2010-10-08 JFL Added the type argument.				      |
 |    2010-10-14 JFL Skip the HTML header.				      |
 |    2014-03-31 JFL Added the second argument to set an ouput code page.      |
+|    2020-01-19 JFL Added CP_AUTO constant management.                        |
+|		    Fixed the default HTML output to be UTF8 in any console CP|
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -443,6 +458,13 @@ int CopyClip(UINT type, UINT codepage) {
 	    int iFirst = 0;
 	    int iLast = nChars - 1; // Remove the trailing NUL
 	    isUtf8 = TRUE; // HTML is already encoded in UTF8 in the clipboard
+	    if (codepage == CP_AUTO) { // For HTML, the default CP choice is special:
+	      if (isConsole(_fileno(stdout))) { // Make sure all characters are displayed correctly
+	      	codepage = consoleCodePage;
+	      } else { // For both pipes and files, output the HTML encoded in UTF-8
+	      	codepage = CP_UTF8;
+	      }
+	    }
 	    DEBUG_CODE(
 	    if (!iDebug) { // Show the unmodified header in debug mode
 	    )
@@ -472,6 +494,8 @@ int CopyClip(UINT type, UINT codepage) {
 	  }
 	}
       }
+      /* For data types other than HTML, the default output CP is the console CP */
+      if (codepage == CP_AUTO) codepage = consoleCodePage;
       /* Check if MsvcLibX can output UTF-16 */
       if (isConsole(_fileno(stdout)) && (codepage == consoleCodePage)) {
 	DEBUG_PRINTF(("Writing Unicode\n"));
@@ -498,6 +522,7 @@ int CopyClip(UINT type, UINT codepage) {
       	    codepage0 = CP_OEMCP;
       	    break;
       	  default:
+      	    if (isUtf8) codepage0 = CP_UTF8;
       	    break;
       	  }
 	  nWChars = MultiByteToWideChar(codepage0,	/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
@@ -511,7 +536,7 @@ int CopyClip(UINT type, UINT codepage) {
 	    PUTERR("Cannot convert the data to Unicode.");
 	    goto cleanup;
 	  }
-	  DEBUG_PRINTF(("Converted %d chars to %d WCHARs\n", nChars, nWChars));
+	  DEBUG_PRINTF(("Converted %d chars in CP %u to %d WCHARs\n", nChars, ActualCP(codepage0), nWChars));
         } else {
           pwszBuf = (WCHAR *)lpString;
           nWChars = nChars / 2;
@@ -530,7 +555,7 @@ int CopyClip(UINT type, UINT codepage) {
 	  PUTERR("Cannot convert the data to the output code page.");
 	  goto cleanup;
 	}
-	DEBUG_PRINTF(("Converted %d WCHARs to %d chars in CP %d\n", nWChars, nChars, codepage));
+	DEBUG_PRINTF(("Converted %d WCHARs to %d chars in CP %u\n", nWChars, nChars, ActualCP(codepage)));
 	lpString = pszBuf;
 	// lpString[nChars] = '\0'; 
       }
