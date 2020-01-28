@@ -156,6 +156,7 @@
 *    2019-05-21 JFL Lowered the WIN32 buffer sizes to 256KB, to get smoother  *
 *                   progress counts on slow networks. V3.8.3.                 *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.8.4.      *
+*    2020-01-28 JFL Fixed issue with D:myFile input files. Version 3.8.5.     *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -163,8 +164,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.8.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "3.8.5"
+#define PROGRAM_DATE    "2020-01-28"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -819,9 +820,19 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       	  *(pSlash-1) = DIRSEPARATOR_CHAR;
 	  *pSlash++ = '\0';
 	}
-      } else {
-      	pattern = p1;
-      	strcpy(path0, ".");
+      } else { /* There's no / in the pathname */
+	pattern = p1;
+#if defined(_MSDOS) || defined(_WIN32)
+      	if (path0[0] && (path0[1] == ':')) {
+      	  if (path0[2]) {	/* path0 was like "D:something" */
+      	    pattern = p1 + 2;
+      	  } else {		/* path0 was like "D:" */
+	    pattern = PATTERN_ALL;
+      	  }
+	  strcpy(path0+2, ".");
+      	} else
+#endif /* defined(_MSDOS) || defined(_WIN32) */
+	strcpy(path0, ".");
       }
     }
 
