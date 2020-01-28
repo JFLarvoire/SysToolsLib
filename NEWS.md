@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-01-28
+### Fixed
+- C/SRC/update.c: Fixed issue with "D:myFile" input files, where the path was set to "." instead of "D:.".
+
 ## [Unreleased] 2020-01-19
 ### Fixed
 - C/SRC/1clip.c: Fixed the default HTML output code page (with option -h) to be UTF8 in any console code page.
