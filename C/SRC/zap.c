@@ -25,13 +25,14 @@
 *		    Version 1.2.    					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
+*    2020-01-29 JFL Fixed FLAG_NOCASE default initialization. Version 1.2.3.  *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files visibly, possibly recursively"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.2.2"
-#define PROGRAM_DATE    "2019-06-13"
+#define PROGRAM_VERSION "1.2.3"
+#define PROGRAM_DATE    "2020-01-29"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -148,7 +149,7 @@ int main(int argc, char *argv[]) {
   int i;
   int nErr = 0;
   int iRet = 0;
-  zapOpts zo = {FLAG_VERBOSE | IGNORECASE, ""};
+  zapOpts zo = {FLAG_VERBOSE | (IGNORECASE ? FLAG_NOCASE : 0), ""};
   int iZapBackup = FALSE;
   int nZaps = 0;
 
