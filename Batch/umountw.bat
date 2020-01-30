@@ -22,13 +22,15 @@
 :#                  Display a notice and stop if there's no mounted image.    #
 :#   2013-11-12 JFL Use my latest debugging framework.                        #
 :#                  Fixed bug in detection of mount RW/RO mode.               #
+:#   2018-06-14 JFL Fixed bug with default /commit or /discard.		      #
+:#                  Fixed bug if the mount point is relative or has no drive. #
 :#                                                                            #
 :#         © Copyright 2018 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2013-11-12"
+set "VERSION=2018-06-14"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 
@@ -497,7 +499,7 @@ echo Author: jf.larvoire@hpe.com
 goto :eof
 
 :main
-set "COMMIT="
+set "/COMMIT="
 set "MNTPT="
 set "DISMOPT= /Quiet"
 
@@ -507,15 +509,15 @@ shift
 :test_args
 if .%1.==.-?. goto help
 if .%1.==./?. goto help
-if .%1.==.-c. set "COMMIT=commit" & goto next_arg
-if .%1.==.-d. set "COMMIT=discard" & goto next_arg
+if .%1.==.-c. set "/COMMIT=/commit" & goto next_arg
+if .%1.==.-d. set "/COMMIT=/discard" & goto next_arg
 if .%1.==.--debug. call :Debug.On & goto next_arg
 if .%1.==.-q. call :Verbose.Off & goto next_arg
 if .%1.==.-v. call :Verbose.On & goto next_arg
 if .%1.==.-V. echo.%VERSION%& goto :eof
 if .%1.==.-X. call :Exec.Off & goto next_arg
 :# Process optional positional arguments
-if not .%1.==.. if "%MNTPT%"=="" set "MNTPT=%~1" & goto next_arg
+if not .%1.==.. if not defined MNTPT for %%p in (%1) do set "MNTPT=%%~fp" & goto next_arg
 
 :# Enumerate current mounts
 call :enum_mwi
@@ -528,16 +530,16 @@ if "%MNTPT%"=="" (
 )
 
 :# Default changes saving: Based on the image mount mode (RO or RW)
-if .%COMMIT%.==.. (
+if .%/COMMIT%.==.. (
   for /l %%n in (0,1,%LAST_MWI%) do (
     set N=%%n
     call set DIR=%%MWI!N!.DIR%%
     call set MODE=%%MWI!N!.MODE%%
     if "!DIR!"=="%MNTPT%" (
       if "!MODE!"=="RW" (
-      	set COMMIT=commit
+      	set "/COMMIT=/commit"
       ) else (
-      	set COMMIT=discard
+      	set "/COMMIT=/discard"
       )
     )
     %ECHOVARS.D% N DIR MODE COMMIT
@@ -548,5 +550,5 @@ if .%COMMIT%.==.. (
 :# In verbose mode, remove the dism /Quiet option
 %IF_VERBOSE% set "DISMOPT=%DISMOPT: /Quiet=%"
 %ECHO% Unmounting image from %MNTPT%
-%EXEC% dism%DISMOPT% /Unmount-Wim /MountDir:"%MNTPT%" /%COMMIT%
+%EXEC% dism%DISMOPT% /Unmount-Wim /MountDir:"%MNTPT%" %/COMMIT%
 
