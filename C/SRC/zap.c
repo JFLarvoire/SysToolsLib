@@ -26,13 +26,15 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
 *    2020-01-29 JFL Fixed FLAG_NOCASE default initialization. Version 1.2.3.  *
+*    2020-02-05 JFL Added the ability to delete directories using wild cards. *
+*		    Version 1.3.    					      *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files visibly, possibly recursively"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.2.3"
-#define PROGRAM_DATE    "2020-01-29"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2020-02-05"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -66,6 +68,8 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_STRING "/"
 #define IGNORECASE FALSE
 
+#define isRootDir(dir) (streq(dir, DIRSEPARATOR_STRING))
+
 #endif
 
 /************************ Win32-specific definitions *************************/
@@ -75,6 +79,8 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 #define IGNORECASE TRUE
+
+#define isRootDir(dir) (streq(dir, "\\") || (dir[0] && streq(dir+1, ":\\")))
 
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
@@ -87,6 +93,8 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
 #define IGNORECASE TRUE
+
+#define isRootDir(dir) (streq(dir, "\\") || (dir[0] && streq(dir+1, ":\\")))
 
 #endif /* defined(_MSDOS) */
 
@@ -128,6 +136,7 @@ int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
 int zapDirM(const char *path, int iMode, zapOpts *pzo); /* Faster */
+int zapDirs(const char *path, zapOpts *pzo); /* Delete multiple directories */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -152,6 +161,7 @@ int main(int argc, char *argv[]) {
   zapOpts zo = {FLAG_VERBOSE | (IGNORECASE ? FLAG_NOCASE : 0), ""};
   int iZapBackup = FALSE;
   int nZaps = 0;
+  size_t len;
 
   /* Extract the program names from argv[0] */
   GetProgramNames(argv[0]);
@@ -225,12 +235,30 @@ int main(int argc, char *argv[]) {
       nErr += zapBaks(arg, &zo);
       continue;
     }
+    len = strlen(arg);
+    if (!len) {
+      printError("Error: Empty argument ignored");
+      nErr += 1;
+      continue;
+    }
+    if (isRootDir(arg)) {   /* Refuse to delete a root directory */
+hal_refuses:
+      printError("I'm sorry Dave, I'm afraid I can't do that");
+      nErr += 1;
+      continue;
+    }
+    if (streq(arg, ".")) {
+      char buf[PATH_MAX];
+      if (isRootDir(getcwd(buf, sizeof(buf)))) goto hal_refuses;
+      nErr += zapDirs("*", &zo);	/* Remove all directories */
+      nErr += zap("*", &zo);		/* Remove all files */
+      continue;
+    }
+    if (arg[len-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name */
+      nErr += zapDirs(arg, &zo);		/* Remove whole directories */
+      continue;
+    }
     if (isdir(arg)) {
-      if (   (!(zo.iFlags & FLAG_NOEXEC)) /* Skip warning if nothing will be deleted anyway */
-      	  && (!(zo.iFlags & FLAG_RECURSE))) {
-      	printError("Error: \"%s\" is a directory! Use -r if your really want to delete it", arg);
-	continue;
-      }
       nErr += zapDir(arg, &zo);   /* Remove a whole directory */
       continue;
     }
@@ -285,7 +313,7 @@ Switches:\n\
 #endif
 "\
   -b          Delete backup files: *.bak, *~, #*#\n\
-  -f          Force deleting read-only files\n\
+  -f          Force deleting read-only files, and non-empty directories\n\
   -i          Ignore case. Default in Windows\n\
   -I          Do not ignore case. Default in Unix\n\
   -p PREFIX   Prefix string to insert ahead of output file names\n\
@@ -294,14 +322,21 @@ Switches:\n\
   -V          Display this program version and exit\n\
   -X          NoExec mode: Display what would be deleted, but don't do it\n\
 \n\
-Pathname: [PATH" DIRSEPARATOR_STRING "]NAME (Wildcards allowed in name)\n\
+Pathname: [PATH" DIRSEPARATOR_STRING "]NAME[" DIRSEPARATOR_STRING "]    (A trailing " DIRSEPARATOR_STRING " flags NAME as a directory name.)\n\
+Wildcards are allowed in NAME, but not in PATH.\n\
 When using wildcards in recursive mode, a search is made in each subdirectory.\n\
+Without a trailing " DIRSEPARATOR_STRING ", wildcards refer to files and links only.\n\
+With a trailing " DIRSEPARATOR_STRING ", wildcards refer to directories only.\n\
+\n\
+Notes:\n\
+* If pathname is . then all . contents will be deleted, but not . itself.\n\
+* Deleting a non-empty directory (including .) will fail without option -f.\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, progcmd, progcmd);
 #ifdef __unix__
-  printf("\n");
+"\n"
 #endif
+, progcmd, progcmd);
   exit(0);
 }
 
@@ -509,8 +544,16 @@ int zap(const char *path, zapOpts *pzo) {
   struct dirent *pDE;
   int nErr = 0;
   int iFNM = (pzo->iFlags & FLAG_NOCASE) ? FNM_CASEFOLD : 0;
+  size_t len;
 
   DEBUG_ENTER(("zap(\"%s\");\n", path));
+
+  if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
+
+  if (!strpbrk(path, "*?")) {	/* If there are no wild cards */
+    nErr = zapFile(path, pzo);	    /* Remove that file, and we're done */
+    goto cleanup_and_return;
+  }
 
   pPath2 = strdup(path);
   if (!pPath2) {
@@ -523,6 +566,12 @@ out_of_memory:
   pPath3 = strdup(path);
   if (!pPath3) goto out_of_memory;
   pName = basename(pPath3);
+
+  if (strpbrk(pPath, "*?")) { /* If there are wild cards in the path */
+    printError("Error: Wild cards aren't allowed in the directory name");
+    nErr += 1;
+    goto cleanup_and_return;
+  }
 
   pDir = opendir(pPath);
   if (!pDir) goto cleanup_and_return;
@@ -648,8 +697,11 @@ int zapFileM(const char *path, int iMode, zapOpts *pzo) {
 int zapFile(const char *path, zapOpts *pzo) {
   int iErr;
   struct stat sStat;
+  size_t len;
 
   DEBUG_ENTER(("zapFile(\"%s\");\n", path));
+
+  if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
 
   iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
   if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
@@ -678,50 +730,52 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     RETURN_INT(1);
   }
 
-  pDir = opendir(path);
-  if (!pDir) RETURN_INT(1);
-  while ((pDE = readdir(pDir))) {
-    DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
-    pPath = NewPathName(path, pDE->d_name);
-    pszSuffix = "";
+  if (iFlags & FLAG_FORCE) { /* If in force mode, delete everything inside */
+    pDir = opendir(path);
+    if (!pDir) RETURN_INT(1);
+    while ((pDE = readdir(pDir))) {
+      DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+      pPath = NewPathName(path, pDE->d_name);
+      pszSuffix = "";
 #if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
-    iErr = dirent2stat(pDE, &sStat);
+      iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
-    iErr = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
+      iErr = -lstat(pPath, &sStat); /* If error, iErr = 1 = # of errors */
 #endif
-    if (!iErr) switch (pDE->d_type) {
-      case DT_DIR:
-      	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
-      	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
-      	iErr = zapDirM(pPath, sStat.st_mode, pzo);
-      	pszSuffix = DIRSEPARATOR_STRING;
-      	break;
+      if (!iErr) switch (pDE->d_type) {
+	case DT_DIR:
+	  if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
+	  if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
+	  iErr = zapDirM(pPath, sStat.st_mode, pzo);
+	  pszSuffix = DIRSEPARATOR_STRING;
+	  break;
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-      case DT_LNK:
-      	pszSuffix = ">";
-      	/* Fall through into the DT_REG case */
+	case DT_LNK:
+	  pszSuffix = ">";
+	  /* Fall through into the DT_REG case */
 #endif
-      case DT_REG:
-	iErr = zapFileM(pPath, sStat.st_mode, pzo);
-      	break;
-      default:
-      	iErr = 1;		/* We don't support deleting there */
+	case DT_REG:
+	  iErr = zapFileM(pPath, sStat.st_mode, pzo);
+	  break;
+	default:
+	  iErr = 1;		/* We don't support deleting there */
 #if defined(ENOSYS)
-      	errno = ENOSYS;		/* Function not supported */
+	  errno = ENOSYS;		/* Function not supported */
 #else
-      	errno = EPERM;		/* Operation not permitted */
+	  errno = EPERM;		/* Operation not permitted */
 #endif
-      	pszSuffix = "?";
-      	break;
+	  pszSuffix = "?";
+	  break;
+      }
+      if (iErr) {
+	if (pDE->d_type != DT_DIR) printError("Error deleting \"%s%s\": %s", pPath, pszSuffix, strerror(errno));
+	nErr += iErr;
+	/* Continue the directory scan, looking for other files to delete */
+      }
+      free(pPath);
     }
-    if (iErr) {
-      if (pDE->d_type != DT_DIR) printError("Error deleting \"%s%s\": %s", pPath, pszSuffix, strerror(errno));
-      nErr += iErr;
-      /* Continue the directory scan, looking for other files to delete */
-    }
-    free(pPath);
+    closedir(pDir);
   }
-  closedir(pDir);
 
   iErr = 0;
   pszSuffix = DIRSEPARATOR_STRING;
@@ -739,8 +793,13 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
 int zapDir(const char *path, zapOpts *pzo) {
   int iErr;
   struct stat sStat;
+  size_t len;
+  zapOpts zo = *pzo;
+  zo.iFlags |= FLAG_RECURSE;	/* Removing dirs requires that flag */
 
   DEBUG_ENTER(("zapDir(\"%s\");\n", path));
+
+  if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
 
   iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
   if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
@@ -748,12 +807,78 @@ int zapDir(const char *path, zapOpts *pzo) {
     printError("Error: Can't stat \"%s\": %s", path, strerror(errno));
     RETURN_INT(1);
   }
-  
-  iErr = zapDirM(path, sStat.st_mode, pzo);
+
+  iErr = zapDirM(path, sStat.st_mode, &zo);
   RETURN_INT(iErr);
+}
+
+int zapDirs(const char *path, zapOpts *pzo) {
+  char *pPath;
+  char *pName;
+  char *pPath2 = NULL;
+  char *pPath3 = NULL;
+  DIR *pDir;
+  struct dirent *pDE;
+  int nErr = 0;
+  int iFNM = (pzo->iFlags & FLAG_NOCASE) ? FNM_CASEFOLD : 0;
+  size_t len;
+
+  DEBUG_ENTER(("zapDirs(\"%s\");\n", path));
+
+  if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
+
+  if (!strpbrk(path, "*?")) { /* If there are no wild cards */
+    nErr = zapDir(path, pzo);	/* Remove that directory, and we're done */
+    goto cleanup_and_return;
+  }
+
+  pPath2 = strdup(path);
+  if (!pPath2) {
+out_of_memory:
+    printError("Out of memory");
+    nErr += 1;
+    goto cleanup_and_return;
+  }
+  if (pPath2[len-1] == DIRSEPARATOR_CHAR) pPath2[--len] = '\0'; /* Remove that directory indicator */
+  pPath3 = strdup(pPath2);
+  if (!pPath3) goto out_of_memory;
+  pPath = dirname(pPath2);
+  pName = basename(pPath3);
+
+  if (strpbrk(pPath, "*?")) { /* If there are wild cards in the path */
+    printError("Error: Wild cards aren't allowed in the directory name");
+    nErr += 1;
+    goto cleanup_and_return;
+  }
+
+  pDir = opendir(pPath);
+  if (!pDir) goto cleanup_and_return;
+  if (streq(pPath, ".")) pPath = NULL;	/* Hide the . path in the output */
+  while ((pDE = readdir(pDir))) {
+    char *pPathname = NewPathName(pPath, pDE->d_name);
+    DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+    if (!pPathname) goto out_of_memory;
+    switch (pDE->d_type) {
+      case DT_DIR:
+      	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
+      	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
+      	if (fnmatch(pName, pDE->d_name, iFNM) == FNM_NOMATCH) break;
+	nErr += zapDir(pPathname, pzo);
+      	break;
+      default:
+      	break;
+    }
+    free(pPathname);
+  }
+  closedir(pDir);
+
+cleanup_and_return:
+  free(pPath2);
+  free(pPath3);
+
+  RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
 }
 
 #ifdef _MSC_VER
 #pragma warning(default:4706)
 #endif
-
