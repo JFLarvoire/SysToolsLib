@@ -2,9 +2,9 @@
 *		    							      *
 *   Filename:	    zap.c						      *
 *		    							      *
-*   Description:    Delete files visibly, possibly recursively		      *
+*   Description:    Delete files and/or directories visibly		      *
 *		    							      *
-*   Notes:	    Uses our custom debugging macros in debugm.h.	      *
+*   Notes:	    Uses SysToolsLib's custom debugging macros in debugm.h.   *
 *		    							      *
 *		    To build in Unix/Linux, copy debugm.h into your ~/include *
 *		    directory or equivalent, then run commands like:	      *
@@ -26,15 +26,16 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
 *    2020-01-29 JFL Fixed FLAG_NOCASE default initialization. Version 1.2.3.  *
-*    2020-02-05 JFL Added the ability to delete directories using wild cards. *
-*		    Version 1.3.    					      *
+*    2020-02-04 JFL Added the ability to delete directories using wild cards. *
+*    2020-02-05 JFL Fixed and improved the error reporting.		      *
+*    2020-02-06 JFL Make sure never to delete a root direcory. Version 1.3.   *
 *		    							      *
 \*****************************************************************************/
 
-#define PROGRAM_DESCRIPTION "Delete files visibly, possibly recursively"
+#define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
 #define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2020-02-05"
+#define PROGRAM_DATE    "2020-02-06"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -68,7 +69,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_STRING "/"
 #define IGNORECASE FALSE
 
-#define isRootDir(dir) (streq(dir, DIRSEPARATOR_STRING))
+#define OS_HAS_DRIVES FALSE
 
 #endif
 
@@ -80,7 +81,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_STRING "\\"
 #define IGNORECASE TRUE
 
-#define isRootDir(dir) (streq(dir, "\\") || (dir[0] && streq(dir+1, ":\\")))
+#define OS_HAS_DRIVES TRUE
 
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
@@ -94,7 +95,7 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 #define DIRSEPARATOR_STRING "\\"
 #define IGNORECASE TRUE
 
-#define isRootDir(dir) (streq(dir, "\\") || (dir[0] && streq(dir+1, ":\\")))
+#define OS_HAS_DRIVES TRUE
 
 #endif /* defined(_MSDOS) */
 
@@ -113,6 +114,7 @@ char *program;	/* This program basename, with extension in Windows */
 char *progcmd;	/* This program invokation name, without extension in Windows */
 int GetProgramNames(char *argv0);	/* Initialize the above two */
 int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
+char *szHalRefusal = "I'm sorry Dave, I'm afraid I can't do that";
 
 /* Forward declarations */
 void usage(void);
@@ -123,6 +125,7 @@ char *NewPathName(const char *path, const char *name);
 typedef struct zapOpts {
   int iFlags;
   char *pszPrefix;
+  unsigned long *pNDeleted;
 } zapOpts;
 /* zapOpts iFlags */
 #define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
@@ -130,13 +133,14 @@ typedef struct zapOpts {
 #define FLAG_RECURSE	0x0004		/* Recursive operation */
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
-int zap(const char *pathname, zapOpts *pzo); /* Remove files in a directory */
+int zapFiles(const char *pathname, zapOpts *pzo); /* Remove files in a directory */
 int zapBaks(const char *path, zapOpts *pzo); /* Remove backup files in a dir */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
 int zapDirM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDirs(const char *path, zapOpts *pzo); /* Delete multiple directories */
+int isRootDir(const char *dir);		/* Check if dir is a root directory */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -158,11 +162,14 @@ int main(int argc, char *argv[]) {
   int i;
   int nErr = 0;
   int iRet = 0;
-  zapOpts zo = {FLAG_VERBOSE | (IGNORECASE ? FLAG_NOCASE : 0), ""};
+  unsigned long nDeleted = 0;
+  zapOpts zo = {FLAG_VERBOSE | (IGNORECASE ? FLAG_NOCASE : 0), "", NULL};
   int iZapBackup = FALSE;
   int nZaps = 0;
   size_t len;
 
+  zo.pNDeleted = &nDeleted;
+  
   /* Extract the program names from argv[0] */
   GetProgramNames(argv[0]);
 
@@ -180,7 +187,7 @@ int main(int argc, char *argv[]) {
 	  continue;
 	}
       )
-      if (streq(opt, "f")) {	/* Force deleting directories */
+      if (streq(opt, "f")) {	/* Force deleting files and non-empty directories */
 	zo.iFlags |= FLAG_FORCE;
 	continue;
       }
@@ -210,11 +217,11 @@ int main(int argc, char *argv[]) {
 	zo.iFlags |= FLAG_RECURSE;
 	continue;
       }
-      if (streq(opt, "rf")) {	/* Deleting files recursively in all subdirectories */
+      if (streq(opt, "rf")) {	/* For people used to Unix' rm -rf */
 	zo.iFlags |= FLAG_RECURSE | FLAG_FORCE;
 	continue;
       }
-      if (streq(opt, "X")) {	/* NoExec mode: Display what files will be deleted */
+      if (streq(opt, "X")) {	/* NoExec mode: Display what would be deleted */
 	zo.iFlags |= FLAG_NOEXEC;
 	continue;
       }
@@ -241,20 +248,8 @@ int main(int argc, char *argv[]) {
       nErr += 1;
       continue;
     }
-    if (isRootDir(arg)) {   /* Refuse to delete a root directory */
-hal_refuses:
-      printError("I'm sorry Dave, I'm afraid I can't do that");
-      nErr += 1;
-      continue;
-    }
-    if (streq(arg, ".")) {
-      char buf[PATH_MAX];
-      if (isRootDir(getcwd(buf, sizeof(buf)))) goto hal_refuses;
-      nErr += zapDirs("*", &zo);	/* Remove all directories */
-      nErr += zap("*", &zo);		/* Remove all files */
-      continue;
-    }
     if (arg[len-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name */
+      arg[len-1] = '\0';			/* Trim the trailing / */
       nErr += zapDirs(arg, &zo);		/* Remove whole directories */
       continue;
     }
@@ -262,7 +257,7 @@ hal_refuses:
       nErr += zapDir(arg, &zo);   /* Remove a whole directory */
       continue;
     }
-    nErr += zap(arg, &zo);
+    nErr += zapFiles(arg, &zo);
     continue;
   }
 
@@ -274,7 +269,8 @@ hal_refuses:
   if (!nZaps) usage(); /* No deletion was requested */ 
 
   if (nErr) {
-    if (nErr > 1) printError("%d files or directories could not be deleted", nErr);
+    /* Display the error summary if we tried deleting more than one file */
+    if ((nErr+nDeleted) > 1UL) printError("%d files or directories could not be deleted", nErr);
     iRet = 1;
   } else {
     iRet = 0;
@@ -303,7 +299,7 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
   %s [SWITCHES] PATHNAME [PATHNAME [...]]\n\
-  %s [SWITCHES] -b PATH [PATH [...]]\n\
+  %s [SWITCHES] -b [PATH [PATH [...]]]\n\
 \n\
 Switches:\n\
   -?          Display this help message and exit\n"
@@ -312,7 +308,7 @@ Switches:\n\
   -d          Output debug information\n"
 #endif
 "\
-  -b          Delete backup files: *.bak, *~, #*#\n\
+  -b          Delete backup files: *.bak, *~, #*#    Default path: .\n\
   -f          Force deleting read-only files, and non-empty directories\n\
   -i          Ignore case. Default in Windows\n\
   -I          Do not ignore case. Default in Unix\n\
@@ -329,8 +325,10 @@ Without a trailing " DIRSEPARATOR_STRING ", wildcards refer to files and links o
 With a trailing " DIRSEPARATOR_STRING ", wildcards refer to directories only.\n\
 \n\
 Notes:\n\
+* Deleting a non-existent file or directory is not an error. Nothing's output.\n\
 * If pathname is . then all . contents will be deleted, but not . itself.\n\
-* Deleting a non-empty directory (including .) will fail without option -f.\n\
+* Deleting a non-empty directory (including .) requires using option -r or -f.\n\
+* For your own safety, the program will refuse to delete root directories.\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 #ifdef __unix__
@@ -484,6 +482,48 @@ int isdir(const char *pszPath) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
+|   Function	    isRootDir						      |
+|									      |
+|   Description     Check if pathname refers to a root directory	      |
+|									      |
+|   Parameters      const char *path		The directory name	      |
+|		    							      |
+|   Returns	    TRUE or FALSE					      |
+|		    							      |
+|   Notes	    Resolves links to see what they point to		      |
+|		    							      |
+|   History								      |
+|    2020-02-06 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+const char *GetFileName(const char *path) {
+  char *pName;
+  pName = strrchr(path, DIRSEPARATOR_CHAR);
+#if OS_HAS_DRIVES /* DOS / OS2 / Windows */
+  if (!pName) pName = strrchr(path, ':');
+#endif
+  return pName ? pName+1 : path;
+}
+
+int isRootDir(const char *dir) {
+  int iResult = FALSE;
+  DEBUG_ENTER(("isRootDir(\"%s\");\n", dir));
+  if (streq(dir, DIRSEPARATOR_STRING)) RETURN_INT(TRUE);
+#if OS_HAS_DRIVES /* DOS / OS2 / Windows */
+  if (dir[0] && streq(dir+1, ":\\")) RETURN_INT(TRUE);
+#endif
+  if (streq(GetFileName(dir), ".") || strstr(dir, "..")) {
+    char *pszReal = realpath(dir, NULL);
+    if (!pszReal) return FALSE; /* Missing dir, or too long to be root */
+    iResult = isRootDir(pszReal);
+    free(pszReal);
+  }
+  RETURN_INT(iResult);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
 |   Function	    NewPathName						      |
 |									      |
 |   Description     Join a directory name and a file name into a new pathname |
@@ -491,7 +531,7 @@ int isdir(const char *pszPath) {
 |   Parameters      const char *path		The directory name, or NULL   |
 |		    const char *name		The file name		      |
 |		    							      |
-|   Returns	    0 = Success, else # of failures encountered.	      |
+|   Returns	    Pointer to the new pathname, or NULL if allocation failed.|
 |		    							      |
 |   Notes	    Wildcards allowed only in the name part of the pathname.  |
 |		    							      |
@@ -514,7 +554,7 @@ char *NewPathName(const char *path, const char *name) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    zap							      |
+|   Function	    zapFiles						      |
 |									      |
 |   Description     Delete files visibly, possibly recursively		      |
 |									      |
@@ -534,7 +574,8 @@ char *NewPathName(const char *path, const char *name) {
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-int zap(const char *path, zapOpts *pzo) {
+/* Delete files or links in a given directory, possibly recursively */
+int zapFiles(const char *path, zapOpts *pzo) {
   char *pPath;
   char *pName;
   char *pPath2 = NULL;
@@ -546,7 +587,7 @@ int zap(const char *path, zapOpts *pzo) {
   int iFNM = (pzo->iFlags & FLAG_NOCASE) ? FNM_CASEFOLD : 0;
   size_t len;
 
-  DEBUG_ENTER(("zap(\"%s\");\n", path));
+  DEBUG_ENTER(("zapFiles(\"%s\");\n", path));
 
   if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
 
@@ -559,6 +600,7 @@ int zap(const char *path, zapOpts *pzo) {
   if (!pPath2) {
 out_of_memory:
     printError("Out of memory");
+fail:
     nErr += 1;
     goto cleanup_and_return;
   }
@@ -569,18 +611,24 @@ out_of_memory:
 
   if (strpbrk(pPath, "*?")) { /* If there are wild cards in the path */
     printError("Error: Wild cards aren't allowed in the directory name");
-    nErr += 1;
-    goto cleanup_and_return;
+    goto fail;
+  }
+
+  if (isRootDir(pPath) && (streq(pName, "*") || streq(pName, "*.*"))) {   /* Refuse to delete a whole root directory */
+    printError(szHalRefusal);
+    goto fail;
   }
 
   pDir = opendir(pPath);
-  if (!pDir) goto cleanup_and_return;
+  if (!pDir) {
+    printError("Error: Can't access \"%s\": %s", pPath, strerror(errno));
+    goto fail;
+  }
   if (streq(pPath, ".")) pPath = NULL;	/* Hide the . path in the output */
   while ((pDE = readdir(pDir))) {
     char *pPathname = NewPathName(pPath, pDE->d_name);
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
     if (!pPathname) goto out_of_memory;
-    iErr = 0;
     switch (pDE->d_type) {
       case DT_DIR:
       	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
@@ -588,19 +636,22 @@ out_of_memory:
       	if (pzo->iFlags & FLAG_RECURSE) {
 	  char *pPathname2 = NewPathName(pPathname, pName);
 	  if (!pPathname2) goto out_of_memory;
-      	  nErr += zap(pPathname2, pzo);
+      	  nErr += zapFiles(pPathname2, pzo);
       	  free(pPathname2);
       	}
       	break;
       default:
       	if (fnmatch(pName, pDE->d_name, iFNM) == FNM_NOMATCH) break;
       	if (pzo->iFlags & FLAG_VERBOSE) printf("%s%s\n", pzo->pszPrefix, pPathname);
+	iErr = 0;
       	if (!(pzo->iFlags & FLAG_NOEXEC)) iErr = unlink(pPathname);
+	if (iErr) {
+	  printError("Error deleting \"%s\": %s", pPathname, strerror(errno));
+	  nErr += 1; /* Continue the directory scan, looking for other files to delete */
+	} else {
+	  if (pzo->pNDeleted) *(pzo->pNDeleted) += 1; /* Number of files successfully deleted */
+	}
       	break;
-    }
-    if (iErr) {
-      printError("Error deleting \"%s\": %s", pPathname, strerror(errno));
-      nErr += 1; /* Continue the directory scan, looking for other files to delete */
     }
     free(pPathname);
   }
@@ -628,7 +679,7 @@ int zapBaks(const char *path, zapOpts *pzo) {
       printError("Out of memory");
       return ++nErr;
     }
-    nErr += zap(pszPath, pzo);
+    nErr += zapFiles(pszPath, pzo);
     free(pszPath);
   }
   return nErr;
@@ -661,6 +712,7 @@ int zapBaks(const char *path, zapOpts *pzo) {
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
+/* Delete one file or link - Internal method */
 int zapFileM(const char *path, int iMode, zapOpts *pzo) {
   int iFlags = pzo->iFlags;
   char *pszSuffix = "";
@@ -670,7 +722,8 @@ int zapFileM(const char *path, int iMode, zapOpts *pzo) {
 
   if (S_ISDIR(iMode)) {
     errno = EISDIR;
-    RETURN_INT(1);
+    iErr = 1;
+    goto cleanup_and_return;
   }
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
   if (S_ISLNK(iMode)) {
@@ -687,13 +740,21 @@ int zapFileM(const char *path, int iMode, zapOpts *pzo) {
       iErr = -chmod(path, iMode); /* Try making the target file writable */
       DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
     }
-    if (iErr) RETURN_INT(iErr);
+    if (iErr) goto cleanup_and_return;
   }
   iErr = -unlink(path); /* If error, iErr = 1 = # of errors */
+
+cleanup_and_return:
+  if (iErr) {
+    printError("Error deleting \"%s\": %s", path, strerror(errno));
+  } else {
+    if (pzo->pNDeleted) *(pzo->pNDeleted) += 1; /* Number of files successfully deleted */
+  }
 
   RETURN_INT(iErr);
 }
 
+/* Delete one file or link */
 int zapFile(const char *path, zapOpts *pzo) {
   int iErr;
   struct stat sStat;
@@ -705,12 +766,16 @@ int zapFile(const char *path, zapOpts *pzo) {
 
   iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
   if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
-  if (iErr) RETURN_INT(1);
+  if (iErr) {
+    printError("Error: Can't delete \"%s\": %s", path, strerror(errno));
+    RETURN_INT(1);
+  }
   
   iErr = zapFileM(path, sStat.st_mode, pzo);
   RETURN_INT(iErr);
 }
 
+/* Delete one directory - Internal method */
 int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   char *pPath;
   int iErr;
@@ -721,21 +786,22 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   int iFlags = pzo->iFlags;
   int iVerbose = iFlags & FLAG_VERBOSE;
   int iNoExec = iFlags & FLAG_NOEXEC;
-  char *pszSuffix;
+  char *pszSuffix = DIRSEPARATOR_STRING;
 
   DEBUG_ENTER(("zapDirM(\"%s\", 0x%04X);\n", path, iMode));
 
   if (!S_ISDIR(iMode)) {
     errno = ENOTDIR;
-    RETURN_INT(1);
+    goto fail;
   }
 
-  if (iFlags & FLAG_FORCE) { /* If in force mode, delete everything inside */
+  if (iFlags & FLAG_RECURSE) { /* If in recursive mode, delete everything inside */
     pDir = opendir(path);
-    if (!pDir) RETURN_INT(1);
+    if (!pDir) goto fail;
     while ((pDE = readdir(pDir))) {
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
       pPath = NewPathName(path, pDE->d_name);
+      if (!pPath) goto fail; /* Will report out of memory */
       pszSuffix = "";
 #if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
       iErr = dirent2stat(pDE, &sStat);
@@ -746,7 +812,8 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
 	case DT_DIR:
 	  if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
 	  if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
-	  iErr = zapDirM(pPath, sStat.st_mode, pzo);
+	  /* Do not update iErr, as the error is already reported by the subroutine */
+	  nErr += zapDirM(pPath, sStat.st_mode, pzo);
 	  pszSuffix = DIRSEPARATOR_STRING;
 	  break;
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
@@ -755,7 +822,8 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
 	  /* Fall through into the DT_REG case */
 #endif
 	case DT_REG:
-	  iErr = zapFileM(pPath, sStat.st_mode, pzo);
+	  /* Do not update iErr, as the error is already reported by the subroutine */
+	  nErr += zapFileM(pPath, sStat.st_mode, pzo);
 	  break;
 	default:
 	  iErr = 1;		/* We don't support deleting there */
@@ -777,34 +845,49 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     closedir(pDir);
   }
 
-  iErr = 0;
-  pszSuffix = DIRSEPARATOR_STRING;
-  if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
-  if (iVerbose) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
-  if (!iNoExec) iErr = rmdir(path);
-  if (iErr) {
-    printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
-    nErr += 1;
+  /* Skip the directory deletion if the directory is . or PATH\. or  D:. */
+  if (!streq(GetFileName(path), ".")) {
+    iErr = 0;
+    pszSuffix = DIRSEPARATOR_STRING;
+    if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
+    if (iVerbose) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+    if (!iNoExec) iErr = rmdir(path);
+    if (iErr) {
+fail:
+      printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
+      nErr += 1;
+    } else {
+      if (pzo->pNDeleted) *(pzo->pNDeleted) += 1; /* Number of files successfully deleted */
+    }
   }
 
   RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
 }
 
+/* Delete one directory */
 int zapDir(const char *path, zapOpts *pzo) {
   int iErr;
   struct stat sStat;
   size_t len;
   zapOpts zo = *pzo;
-  zo.iFlags |= FLAG_RECURSE;	/* Removing dirs requires that flag */
 
   DEBUG_ENTER(("zapDir(\"%s\");\n", path));
 
+  if (zo.iFlags & FLAG_FORCE) zo.iFlags |= FLAG_RECURSE; /* Removing non-empty dirs requires that flag */
+
   if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
+
+  if (isRootDir(path)) {
+    printError(szHalRefusal);
+    RETURN_INT_COMMENT(1, ("Can't delete root\n"));
+  }
 
   iErr = lstat(path, &sStat); /* Use lstat, as stat does not detect SYMLINKDs. */
   if (iErr && (errno == ENOENT)) RETURN_INT(0); /* Already deleted. Not an error. */
   if (iErr) {
-    printError("Error: Can't stat \"%s\": %s", path, strerror(errno));
+    char *pszSuffix = DIRSEPARATOR_STRING;
+    if (path[len-1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
+    printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
     RETURN_INT(1);
   }
 
@@ -812,6 +895,7 @@ int zapDir(const char *path, zapOpts *pzo) {
   RETURN_INT(iErr);
 }
 
+/* Delete subdirectories in a given directory */
 int zapDirs(const char *path, zapOpts *pzo) {
   char *pPath;
   char *pName;
@@ -851,8 +935,17 @@ out_of_memory:
     goto cleanup_and_return;
   }
 
+  if (isRootDir(pPath) && (streq(pName, "*") || streq(pName, "*.*"))) {   /* Refuse to delete everything in the root directory */
+    printError(szHalRefusal);
+    nErr += 1;
+    goto cleanup_and_return;
+  }
+
   pDir = opendir(pPath);
-  if (!pDir) goto cleanup_and_return;
+  if (!pDir) {
+    printError("Error deleting \"%s\": %s", pPath, strerror(errno));
+    goto cleanup_and_return;
+  }
   if (streq(pPath, ".")) pPath = NULL;	/* Hide the . path in the output */
   while ((pDE = readdir(pDir))) {
     char *pPathname = NewPathName(pPath, pDE->d_name);
