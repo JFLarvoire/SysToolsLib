@@ -4,6 +4,25 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-01-29
+### Changed
+- C/SRC/zap.c: Added the ability to delete directories using wild cards.   
+  Fixed and improved the error reporting.  
+  Make sure never to delete a root directory.
+
+## [Unreleased] 2020-01-30
+### Fixed
+- Batch/umountw.bat: Old fixes that got forgotten on a lab system:
+  Fixed bug with default /commit or /discard.
+  Fixed bug if the mount point is relative or has no drive.
+
+## [Unreleased] 2020-01-29
+### Changed
+- C/Include.make.bat: In the end of the make process, count warnings, and open the log if any warning found.
+
+### Fixed
+- C/SRC/zap.c: Fixed FLAG_NOCASE default initialization.
+
 ## [Unreleased] 2020-01-28
 ### Fixed
 - C/SRC/update.c: Fixed issue with "D:myFile" input files, where the path was set to "." instead of "D:.".
