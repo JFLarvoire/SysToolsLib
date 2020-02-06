@@ -28,7 +28,7 @@
 *    2020-01-29 JFL Fixed FLAG_NOCASE default initialization. Version 1.2.3.  *
 *    2020-02-04 JFL Added the ability to delete directories using wild cards. *
 *    2020-02-05 JFL Fixed and improved the error reporting.		      *
-*    2020-02-06 JFL Make sure never to delete a root direcory. Version 1.3.   *
+*    2020-02-06 JFL Make sure never to delete a root directory. Version 1.3.  *
 *		    							      *
 \*****************************************************************************/
 
@@ -238,22 +238,36 @@ int main(int argc, char *argv[]) {
     } /* End if it's a switch */
     /* If it's an argument */
     nZaps += 1;
+    len = strlen(arg);
+#if defined(_MSDOS) || defined(_WIN32) /* Make sure the path uses only native \ separators */
+    { int j; for (j=0; (unsigned)j<len; j++) if (arg[j] == '/') arg[j] = '\\'; }
+#endif
     if (iZapBackup) {
       nErr += zapBaks(arg, &zo);
       continue;
     }
-    len = strlen(arg);
     if (!len) {
-      printError("Error: Empty argument ignored");
+      printError("Error: Empty pathname");
       nErr += 1;
       continue;
     }
-    if (arg[len-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name */
-      arg[len-1] = '\0';			/* Trim the trailing / */
+#if OS_HAS_DRIVES /* If it's just a drive, append the implicit . path */
+    if ((len == 2) && (arg[1] == ':')) {
+      char *arg2 = "C:.";
+      arg2[0] = arg[0];
+      arg = arg2;
+    }
+#endif
+    if (isRootDir(arg)) {
+      printError(szHalRefusal);
+      nErr += 1;
+      continue;
+    }
+    if (arg[len-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name, but not root */
       nErr += zapDirs(arg, &zo);		/* Remove whole directories */
       continue;
     }
-    if (isdir(arg)) {
+    if (isdir(arg)) { /* If the pathname refers to an existing directory */
       nErr += zapDir(arg, &zo);   /* Remove a whole directory */
       continue;
     }
@@ -538,8 +552,29 @@ int isRootDir(const char *dir) {
 |   History								      |
 |    2017-10-05 JFL Created this routine				      |
 |    2017-10-09 JFL Allow the path pointer to be NULL. If so, dup. the name.  |
+|    2019-02-06 JFL Added call to new routine TrimDot, removing all ./ parts. |
 *									      *
 \*---------------------------------------------------------------------------*/
+
+void TrimDot(char *path) { /* Remote ./ parts in the path */
+  char *pIn = path;
+  char *pOut = path;
+  char c;
+  int first = TRUE;
+  for ( ; (c = *(pIn++)) != '\0'; ) {
+    if (first && (c == '.') && (*pIn == DIRSEPARATOR_CHAR)) {
+      pIn += 1; /* Eat up the / and continue */
+      continue;
+    }
+    *(pOut++) = c;
+    first = (   (c == DIRSEPARATOR_CHAR)
+#if OS_HAS_DRIVES
+	     || ((pIn == (path+2)) && (c == ':'))
+#endif
+            );
+  }
+  *(pOut++) = c;
+}
 
 char *NewPathName(const char *path, const char *name) {
   size_t lPath = path ? strlen(path) : 0;
@@ -549,6 +584,7 @@ char *NewPathName(const char *path, const char *name) {
   if (lPath) strcpy(buf, path);
   if (lPath && (buf[lPath-1] != DIRSEPARATOR_CHAR)) buf [lPath++] = DIRSEPARATOR_CHAR;
   strcpy(buf+lPath, name);
+  TrimDot(buf);
   return buf;
 }
 
