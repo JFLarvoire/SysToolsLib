@@ -4,11 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2020-01-29
+## [Unreleased] 2020-02-06
 ### Changed
 - C/SRC/zap.c: Added the ability to delete directories using wild cards.   
   Fixed and improved the error reporting.  
-  Make sure never to delete a root directory.
+  Make sure never to delete a root directory.  
+  Add support for / in Windows paths.  
+  Add support for C: bare drive names.  
+  Remove extra ./ components in paths.
 
 ## [Unreleased] 2020-01-30
 ### Fixed
