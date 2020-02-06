@@ -12,6 +12,7 @@ For more details about changes in a particular area, see the README.txt and/or N
   Add support for / in Windows paths.  
   Add support for C: bare drive names.  
   Remove extra ./ components in paths.
+- C/MsvcLibX/src/main: In BreakArgLine(), don't escape the final " in the last arg. Ex, allow: "C:\"
 
 ## [Unreleased] 2020-01-30
 ### Fixed
