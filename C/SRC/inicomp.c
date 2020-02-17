@@ -16,6 +16,12 @@
 *                                                                             *
 *                   To do:                                                    *
 *                   - Convert all file encodings to UTF8 data.		      *
+*                   - Use "natural" sort for keys, not ASCII sort.            *
+*                     (natural = consider numbers as 1-character values,      *
+*                      no matter how many actual characters are present.      *
+*                      Ex: "12" < "75" < "128" )                              *
+*                   - Add support for multiple homonym sections.              *
+*                     (Non-standard, but used in some real cases.)            *
 *                                                                             *
 *  History                                                                    *
 *    1993-09-28 JFL Created this program.                                     *
@@ -39,6 +45,10 @@
 *                   Version 2.0.                                              *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.0.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.0.2.      *
+*    2020-02-17 JFL Added option -f to allow free lines without an =value.    *
+*                   Removed the incorrect code handling homonym sections. The *
+*		    standard is to merge multiple parts into 1 single section.*
+*		    Version 2.1.                                              *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -46,8 +56,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare .ini files, section by section, and item by item"
 #define PROGRAM_NAME    "inicomp"
-#define PROGRAM_VERSION "2.0.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2020-02-17"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -132,6 +142,7 @@ typedef enum {EQUAL, FILE1, FILE2} outstate;
 int verbose = FALSE;
 int compBlanks = FALSE;
 int ignoreCase = TRUE;
+int allowNoValue = FALSE;	  /* TRUE = Allow non-standard data lines with a free string, without an =value */
 
 /* Define multimap dictionaries */
 
@@ -142,12 +153,22 @@ int cmpivalue(void *p1, void *p2) {
   return _stricmp(p1, p2);
 }
 
-dict_t *NewAdHocDict(void) { /* Actually create multimaps, as we may encounter duplicate item names */
+dict_t *NewIniDict(void) { /* Duplicate keys not allowed */
+  if (ignoreCase)
+    return NewIDict();
+  else
+    return NewDict();
+}
+
+dict_t *NewIniMMap(void) { /* Duplicate keys allowed */
   if (ignoreCase)
     return NewIMMap(cmpivalue);
   else
     return NewMMap(cmpvalue);
 }
+
+#define NewIniSectionDict() NewIniDict()  /* Duplicate keys not allowed */
+#define NewIniValueDict()   NewIniMMap()  /* Duplicate keys allowed */
 
 /* Function prototypes */
 
@@ -184,132 +205,134 @@ void usage(void);
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
-int main(int argc, char *argv[])
-    {
-    int i;
-    char *f1arg = NULL;         /* File 1 name provided */
-    char *f2arg = NULL;         /* File 2 name provided */
-    char *name1;                /* File 1 name found */
-    char *name2;                /* File 2 name found */
-    dict_t *dict1;		/* File 1 sections dictionary */
-    dict_t *dict2;		/* File 2 sections dictionary */
+int main(int argc, char *argv[]) {
+  int i;
+  char *f1arg = NULL;         /* File 1 name provided */
+  char *f2arg = NULL;         /* File 2 name provided */
+  char *name1;                /* File 1 name found */
+  char *name2;                /* File 2 name found */
+  dict_t *dict1;		/* File 1 sections dictionary */
+  dict_t *dict2;		/* File 2 sections dictionary */
 
-    for (i=1; i<argc; i++)
-        {
-        if (IsSwitch(argv[i])) /* It's a switch */
-            {
-            if (   streq(argv[i]+1, "help")
-                || streq(argv[i]+1, "h")
-                || streq(argv[i]+1, "?"))
-                {
-                usage();
-                }
-            if (streq(argv[i]+1, "b"))
-                {
-                compBlanks = TRUE;
-                continue;
-                }
-            if (streq(argv[i]+1, "c"))
-                {
-                ignoreCase = FALSE;
-                continue;
-                }
-            if (streq(argv[i]+1, "C"))
-                {
-                ignoreCase = TRUE;
-                continue;
-                }
-            DEBUG_CODE(
-            if (   streq(argv[i]+1, "debug")
-                || streq(argv[i]+1, "d"))
-                {
-                DEBUG_ON();
-                verbose = TRUE;
-                continue;
-                }
-                )
-            if (   streq(argv[i]+1, "verbose")
-                || streq(argv[i]+1, "v"))
-                {
-                verbose = TRUE;
-                continue;
-                }
-            if (   streq(argv[i]+1, "version")
-                || streq(argv[i]+1, "V"))
-                {
-		puts(DETAILED_VERSION);
-                exit(0);
-                }
-            printf("Unrecognized switch %s. Ignored.\n", argv[i]);
-            continue;
-            }
-        if (!f1arg)
-            {
-            f1arg = argv[i];
-            continue;
-            }
-        if (!f2arg)
-            {
-            f2arg = argv[i];
-            continue;
-            }
-        printf("Unexpected argument: %s\nIgnored.\n", argv[i]);
-        break;  /* Ignore other arguments */
-        }
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if (IsSwitch(arg)) { /* It's a switch */
+      char *opt = arg + 1;
+      if (   streq(opt, "help")
+	  || streq(opt, "h")
+	  || streq(opt, "?")) {
+	usage();
+      }
+      if (streq(opt, "b")) {
+	compBlanks = TRUE;
+	continue;
+      }
+      if (streq(opt, "c")) {
+	ignoreCase = FALSE;
+	continue;
+      }
+      if (streq(opt, "C")) {
+	ignoreCase = TRUE;
+	continue;
+      }
+      DEBUG_CODE(
+      if (   streq(opt, "debug")
+	  || streq(opt, "d")) {
+	DEBUG_ON();
+	verbose = TRUE;
+	continue;
+      }
+      )
+      if (streq(opt, "f")) {
+	allowNoValue = TRUE;
+	continue;
+      }
+      if (streq(opt, "F")) {
+	allowNoValue = FALSE;
+	continue;
+      }
+      if (   streq(opt, "verbose")
+	  || streq(opt, "v")) {
+	verbose = TRUE;
+	continue;
+      }
+      if (   streq(opt, "version")
+	  || streq(opt, "V")) {
+	puts(DETAILED_VERSION);
+	exit(0);
+      }
+      printf("Unrecognized switch %s. Ignored.\n", arg);
+      continue;
+    }
+    if (!f1arg) {
+      f1arg = arg;
+      continue;
+    }
+    if (!f2arg) {
+      f2arg = arg;
+      continue;
+    }
+    printf("Unexpected argument: %s\nIgnored.\n", arg);
+    break;  /* Ignore other arguments */
+  }
 
-    if (!f1arg)
-        {
-        usage();
-        }
+  if (!f1arg) {
+    usage();
+  }
 
-    dict1 = NewAdHocDict();	/* File 1 sections dictionary */
-    dict2 = NewAdHocDict();	/* File 2 sections dictionary */
+  dict1 = NewIniSectionDict();	/* File 1 sections dictionary */
+  dict2 = NewIniSectionDict();	/* File 2 sections dictionary */
 
-    /* Sort files */
+  /* Sort files */
 
-    name1 = processFile(f1arg, dict1);
-    name2 = processFile(f2arg, dict2);
+  name1 = processFile(f1arg, dict1);
+  name2 = processFile(f2arg, dict2);
 
 DEBUG_CODE(
-    /* Print all data gathered so far */
-    printf("***************************************************************\n");
-    ForeachDictValue(dict1, printSectCB, NULL);
-    printf("***************************************************************\n");
-    ForeachDictValue(dict2, printSectCB, NULL);
-    printf("***************************************************************\n");
+  /* Print all data gathered so far */
+  printf("***************************************************************\n");
+  ForeachDictValue(dict1, printSectCB, NULL);
+  printf("***************************************************************\n");
+  ForeachDictValue(dict2, printSectCB, NULL);
+  printf("***************************************************************\n");
 )
 
-    /* Display differences */
+  /* Display differences */
 
-    compare(name1, dict1, name2, dict2);
+  compare(name1, dict1, name2, dict2);
 
-    return 0;
-    }
+  return 0;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    return (   (*pszArg == '-')
-#ifndef __unix__
-            || (*pszArg == '/')
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
 #endif
-           ); /* It's a switch */
-    }
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
+}
 
 /*---------------------------------------------------------------------------*\
 |		    							      |
@@ -395,6 +418,7 @@ char *processFile(char *argname, dict_t *sections) {
   FILE *f = NULL;
   char *fname;
   dict_t *items;
+  dict_t *items0;
   size_t l;
   int iRegEdit = 0;	/* REGEDIT .reg file version */
   char bom[4];
@@ -444,7 +468,7 @@ bad_encoding:
   /* Read it & classify lines */
 
   nl = 0;
-  items = NewAdHocDict();
+  items0 = items = NewIniValueDict();
   NewDictValue(sections, "", items);	/* The initial unnamed section */
   while (getLine(&line, &lineSize, f, 0, &nl)) {
     l = strlen(line);
@@ -480,7 +504,7 @@ check_if_continuation_line:
       }
       *(pc2) = '\0';
       trimRight(pc);
-      items = NewAdHocDict();
+      items = NewIniValueDict();
       NewDictValue(sections, pc, items);
       continue;
     }
@@ -513,10 +537,15 @@ search_end_of_quoted_name:
       trimRight(pc);
     }
     if (!pc2) {
-      if (   sscanf(pc, "Windows Registry Editor Version %d", &iRegEdit)
-      	  || sscanf(pc, "REGEDIT%d", &iRegEdit)
+      if (allowNoValue) { /* If we allow non-standard .ini files with value-less lines */
+	NewDictValue(items, pc, NULL); /* Enter them without a value */
+      	continue;
+      }
+      if (   (items == items0)
+      	  && (   sscanf(pc, "Windows Registry Editor Version %d", &iRegEdit)
+	      || sscanf(pc, "REGEDIT%d", &iRegEdit))
       	  ) { /* regedit .reg files header. Version varies. */
-	NewDictValue(items, "", strdup(pc));
+	NewDictValue(items, pc, NULL); /* Enter it without a value */
       	continue;
       }
       fprintf(stderr, "Error in file %s line %ld: Unexpected (continuation?) line:\n%s\n", fname, nl, line);
@@ -917,6 +946,7 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 |                                                                             |
 |   Updates:                                                                  |
 |    1993-09-29 JFL Initial implementation                                    |
+|    2020-02-17 JFL No need to display the initial unnamed section [] name.   |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -926,13 +956,13 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 
 void *printSectNameCB(char *pszName, void *pValue, void *pRef)
     {
-    printf("\n[%s]\n", pszName);
+    if (pszName[0]) printf("\n[%s]\n", pszName);
     return NULL;
     }
 
 void *printSectCB(char *pszName, void *pValue, void *pRef)
     {
-    printf("\n[%s]\n", pszName);
+    if (pszName[0]) printf("\n[%s]\n", pszName);
     ForeachDictValue(pValue, printItemCB, pRef);
     return NULL;
     }
@@ -956,6 +986,7 @@ void printSectName(char *name)
 |    1993-09-29 JFL Initial implementation                                    |
 |    2017-01-01 JFL Rewritten to be usable as a dict_t enumeration callback.  |
 |    2017-01-05 JFL Quote names containing spaces or =.                       |
+|    2020-02-17 JFL Don't quote free-style lines without a value.             |
 |                                                                             |
 +----------------------------------------------------------------------------*/
 
@@ -966,8 +997,9 @@ void printSectName(char *name)
 void *printItemCB(char *pszName, void *pValue, void *pRef)
     {
     char *pszValue = pValue;
-    if (   *pszName				/* If the name is not empty */
-        && !pszName[strcspn(pszName, "= \t")]   /* and if there are no spaces or = in the name */
+    if (   *pszName				    /* If the name is not empty */
+        && (   (!pszName[strcspn(pszName, "= \t")]) /* and if there are no spaces or = in the name */
+            || (!pszValue))			    /*     or we don't have a value */
     ) {
       printf("    %s", pszName);
     } else {
@@ -1042,11 +1074,15 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 Usage: inicomp [switches] FILE1[.ini] FILE2[.ini]\n\
 \n\
 Switches:\n\
-  -b   Include spaces in item values comparisons. Default: Ignore them.\n\
-  -c   Use case sensitive comparisons for sections and items names.\n\
-  -C   Use case insensitive comparisons. (Default)\n\
-  -v   Verbose node. Display extra progress information.\n\
-  -V   Display this program version and exit.\n\
+  -b    Include spaces in item values comparisons. Default: Ignore them\n\
+  -c    Use case sensitive comparisons for sections and items names\n\
+  -C    Use case insensitive comparisons (Default)\n\
+  -f    Allow non-standard data lines with a free string, without an =value\n\
+  -F    Data lines must have a name=value format (Default)\n\
+  -v    Verbose node. Display extra progress information\n\
+  -V    Display this program version and exit\n\
+\n\
+Note: Also usable for .reg files, used by Windows' regedit.exe\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
