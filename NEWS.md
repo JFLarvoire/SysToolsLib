@@ -33,6 +33,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2020-02-17
 ### Changed
+- Batch/Library.bat: Added routines :is_empty_dir, :has_files, :has_dirs, :test_errorlevel.
 - C/SRC/inicomp.c: Added option -f to allow free lines without an =value.  
   Removed the incorrect code handling homonym sections. The standard is to merge multiple parts into one single section.
 
