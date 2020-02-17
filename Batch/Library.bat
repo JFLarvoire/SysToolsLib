@@ -216,6 +216,8 @@
 :#		    Added argument -tca and routine :test_CArg.               #
 :#		    Added macros %+INDENT% and %-INDENT%.                     #
 :#   2020-01-13 JFL Added routine :is_newer.                                  #
+:#   2020-02-14 JFL Added routines :is_empty_dir, :has_files, :has_dirs,      #
+:#		    :test_errorlevel                                          #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -3059,6 +3061,36 @@ if errorlevel 1 (
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        is_empty_dir					      #
+:#                                                                            #
+:#  Description     Check if a directory exists and is empty                  #
+:#                                                                            #
+:#  Arguments       %1	    pathname                                          #
+:#                                                                            #
+:#  Notes 	    Based on David Benham's answer in			      #
+:#                  https://stackoverflow.com/a/10818854/2215591              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2020-02-14 JFL Created these subroutines.                                #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Check if a directory exists and is empty
+:is_empty_dir %1=Directory name - Returns errorlevel 0 if it's an empty dir
+2>&1 dir /b /a "%~1\*" | >NUL findstr "^" && exit /b 1 || exit /b 0
+
+:# Check if a directory has files (subdirectories will not be counted)
+:has_files %1=Directory name - Returns errorlevel 0 if directory has files
+>NUL 2>NUL dir /a-d "%~1\*"
+exit /b
+
+:# Check if a directory has subdirectories (files will not be counted)
+:has_dirs %1=Directory name - Returns errorlevel 0 if directory has files
+2>NUL dir /b /ad "%~1\*" | >NUL findstr "^" 
+exit /b
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        is_newer						      #
 :#                                                                            #
 :#  Description     Check if FILE %1 is newer than FILE %2                    #
@@ -4666,6 +4698,13 @@ call :PopCArg S2
 %ECHOVARS.D% S2 'S2' ARGS
 call :strstr S1 S2 I
 echo I=%I%
+exit /b
+
+:#----------------------------------------------------------------------------#
+
+:test_errorlevel %1=label %2...=args
+call %*
+echo ERRORLEVEL=%ERRORLEVEL%
 exit /b
 
 :#----------------------------------------------------------------------------#
