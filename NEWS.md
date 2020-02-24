@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-02-24
+### Changed
+- C/SRC/cpuid.c: Decode cpuid(7, 0) output.  
+  Added option -m to experiment with reading MSRs.
+
 ## [Unreleased] 2020-02-06
 ### Changed
 - C/SRC/zap.c: Added the ability to delete directories using wild cards.   
