@@ -4,10 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2020-02-24
+## [Unreleased] 2020-02-26
 ### Changed
 - C/SRC/cpuid.c: Decode cpuid(7, 0) output.  
   Added option -m to experiment with reading MSRs.
+  Added option -w to experiment with reading WMI props.
+  Output a few WMI props, including SLAT, in Windows.
+  Skip head spaces in brand string, if any.
 
 ## [Unreleased] 2020-02-06
 ### Changed
