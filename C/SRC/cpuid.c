@@ -45,6 +45,9 @@
 *    2019-09-27 JFL Fixed a minor formating error in a debug message.	      *
 *    2020-02-23 JFL Decode cpuid(7, 0) output.		          	      *
 *    2020-02-24 JFL Added option -m to experiment with reading MSRs.	      *
+*    2020-02-26 JFL Added option -w to experiment with reading WMI props.     *
+*		    Output a few WMI props, including SLAT, in Windows.	      *
+*		    Skip head spaces in brand string, if any.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,7 +55,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2020-02-24"
+#define PROGRAM_VERSION "2020-02-26"
 
 /* Definitions */
 
@@ -66,49 +69,10 @@
 
 #define _CRT_SECURE_NO_WARNINGS // Don't warn about old unsecure functions.
 
+#define _WIN32_DCOM
+
 #include <stdio.h>
 #include <stdlib.h>
-
-// if defined, the following flags inhibit the definitions in windows.h
-#define NOGDICAPMASKS     // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
-#define NOVIRTUALKEYCODES // VK_*
-#define NOWINMESSAGES     // WM_*, EM_*, LB_*, CB_*
-#define NOWINSTYLES   // WS_*, CS_*, ES_*, LBS_*, SBS_*, CBS_*
-#define NOSYSMETRICS      // SM_*
-#define NOMENUS       // MF_*
-#define NOICONS       // IDI_*
-#define NOKEYSTATES   // MK_*
-#define NOSYSCOMMANDS     // SC_*
-#define NORASTEROPS   // Binary and Tertiary raster ops
-#define NOSHOWWINDOW      // SW_*
-// #define OEMRESOURCE       // OEM Resource values
-#define NOATOM        // Atom Manager routines
-#define NOCLIPBOARD   // Clipboard routines
-#define NOCOLOR       // Screen colors
-#define NOCTLMGR      // Control and Dialog routines
-#define NODRAWTEXT    // DrawText() and DT_*
-#define NOGDI         // All GDI defines and routines
-#define NOKERNEL      // All KERNEL defines and routines
-#define NOUSER        // All USER defines and routines
-#define NONLS         // All NLS defines and routines
-#define NOMB          // MB_* and MessageBox()
-#define NOMEMMGR      // GMEM_*, LMEM_*, GHND, LHND, associated routines
-#define NOMETAFILE    // typedef METAFILEPICT
-#define NOMINMAX      // Macros min(a,b) and max(a,b)
-#define NOMSG         // typedef MSG and associated routines
-#define NOOPENFILE    // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
-#define NOSCROLL      // SB_* and scrolling routines
-#define NOSERVICE     // All Service Controller routines, SERVICE_ equates, etc.
-#define NOSOUND       // Sound driver routines
-#define NOTEXTMETRIC      // typedef TEXTMETRIC and associated routines
-#define NOWH          // SetWindowsHook and WH_*
-#define NOWINOFFSETS      // GWL_*, GCL_*, associated routines
-#define NOCOMM        // COMM driver routines
-#define NOKANJI       // Kanji support stuff.
-#define NOHELP        // Help engine interface.
-#define NOPROFILER    // Profiler interface.
-#define NODEFERWINDOWPOS  // DeferWindowPos routines
-#define NOMCX         // Modem Configuration Extensions
 #include <windows.h>
 
 // Manipulate bytes, words and dwords. Can be used both as rvalue and as lvalue.
@@ -231,6 +195,10 @@ long getms(void);
 void DisplayProcInfo(void);
 DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx);
 void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]);
+#ifdef _WIN32
+int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf);
+void DisplayProcWmiInfo(void);
+#endif // defined(_WIN32)
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -299,6 +267,27 @@ int _cdecl main(int argc, char *argv[]) {
 	puts(DETAILED_VERSION);
 	return 0;
       }
+#if defined(_WIN32)
+      if (streq(opt, "w")) {		/* -w: Get WMI processor information */
+      	char buf[1024];
+      	char *pszPropName = argv[++i];
+	int iResult = GetWmiProcInfo(pszPropName, buf, sizeof(buf));
+	switch (iResult) {
+	case -1: {
+	  HRESULT hr = *(HRESULT *)buf;
+	  fprintf(stderr, "Failed to get WMI Win32_Processor property %s. HRESULT 0x%X", pszPropName, hr);
+	  break; }
+	case VT_BSTR:
+	  printf("%s = %s\n", pszPropName, buf);
+	  break;
+	default:
+	  printf("%s = %d\n", pszPropName, *(int *)buf);
+	  break;
+	}
+	return 0;
+      }
+#endif // defined(_WIN32)
+
     }
   }
 
@@ -369,7 +358,13 @@ int _cdecl main(int argc, char *argv[]) {
     /* On Pentium or better, compute the processor frequency using the TSC */
     /* Note: This algorithm is compatible with Windows 95 & NT */
 
-    if (iVerbose) DisplayProcInfo();
+    if (iVerbose) {
+      DisplayProcInfo();
+
+#ifdef _WIN32
+      DisplayProcWmiInfo();
+#endif // defined(_WIN32)
+    }
 
 #ifdef _MSDOS
     // Switch to protected mode since the time-stamp counter is NOT
@@ -994,12 +989,14 @@ void DisplayProcInfo(void) {
     if (dwMaxValueX >= 0x80000004) {
       char szBrand[48];
       DWORD *pdwBrand = (DWORD *)szBrand;
+      char *pszBrand = szBrand;
 
       // CPUID(0x80000002 - 0x80000004) : Get brand string.
       _cpuid(0x80000002, pdwBrand+0, pdwBrand+1, pdwBrand+2, pdwBrand+3);
       _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
       _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
-      printf("Brand string: \"%s\"\n", szBrand);
+      while (*pszBrand == ' ') pszBrand++; // Skip head spaces, if any
+      printf("Brand string: \"%s\"\n", pszBrand);
       printf("\n");
     }
 
@@ -1293,4 +1290,202 @@ int identify_processor(void) {
 
   return iFamily;
 }
+#endif // defined(_WIN32)
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetWmiProcInfo					      |
+|									      |
+|   Description	    Get processor information from WMI			      |
+|									      |
+|   Parameters	    							      |
+|									      |
+|   Returns	    -1: Error; Else if >= 0: VARTYPE of the result	      |
+|									      |
+|   Notes	    Based on samples in					      |
+|                   https://docs.microsoft.com/en-us/windows/win32/wmisdk/example--getting-wmi-data-from-the-local-computer
+|                   https://stackoverflow.com/questions/1431103/how-to-obtain-data-from-wmi-using-a-c-application
+|                                                                             |
+|   History	    							      |
+|    2020-02-25 JFL Created this routine.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifdef _WIN32
+
+// Note: #define _WIN32_DCOM before including windows.h above
+
+#include <wbemidl.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "wbemuuid.lib")
+
+int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf) {
+  HRESULT hr = 0;
+  int iResult = -1;
+  IWbemLocator         *pLoc  = NULL;
+  IWbemServices        *pSvc = NULL;
+  IEnumWbemClassObject *pEnum = NULL;
+  size_t lPropName = lstrlen(lpszPropName);
+  WCHAR *lpwszPropName = NULL;
+  WCHAR *lpwszBuf = NULL;
+  // BSTR strings we'll use (http://msdn.microsoft.com/en-us/library/ms221069.aspx)
+  BSTR resource = NULL;
+  BSTR language = NULL;
+  BSTR query    = NULL;
+
+  resource = SysAllocString(L"ROOT\\CIMV2");
+  language = SysAllocString(L"WQL");
+  lpwszPropName = (LPWSTR)malloc(sizeof(WCHAR)*(lPropName + 1));
+  if (lpwszPropName) {
+    MultiByteToWideChar(CP_ACP, 0, lpszPropName, lPropName + 1, lpwszPropName, lPropName + 1);
+  }
+  lpwszBuf = (LPWSTR)malloc(sizeof(WCHAR)*(lPropName + 30));
+  if (lpwszBuf) {
+    wsprintfW(lpwszBuf, L"SELECT %s FROM Win32_Processor", lpwszPropName);
+    query = SysAllocString(lpwszBuf);
+  }
+
+  // 1. Initialize COM
+  hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // 2. Set general COM security levels
+  hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // 3. Obtain the initial locator to WMI
+  hr = CoCreateInstance(&CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, &IID_IWbemLocator, (LPVOID *) &pLoc);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // 4. Connect to WMI
+  hr = pLoc->lpVtbl->ConnectServer(pLoc, resource, NULL, NULL, NULL, 0, NULL, NULL, &pSvc);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // 5. Set security levels on the proxy
+  // Apparently not needed here
+
+  // 6. Issue the WMI query
+  hr = pSvc->lpVtbl->ExecQuery(pSvc, language, query, WBEM_FLAG_BIDIRECTIONAL, NULL, &pEnum);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // 7. Get the data from the query
+  if (pEnum) {
+    IWbemClassObject *pObj = NULL;
+    ULONG nReturn = 0;
+
+    // Enumerate the retrieved objects
+    // https://docs.microsoft.com/en-us/windows/win32/api/oaidl/ns-oaidl-variant
+    // https://docs.microsoft.com/en-us/windows/win32/api/wtypes/ne-wtypes-varenum
+    while((hr = pEnum->lpVtbl->Next(pEnum, WBEM_INFINITE, 1, &pObj, &nReturn)) == S_OK) {
+      VARIANT vtProp;
+
+      hr = pObj->lpVtbl->Get(pObj, lpwszPropName, 0, &vtProp, 0, 0);
+      if (FAILED(hr)) goto cleanup_and_exit;
+      
+      // Copy the result to the caller's buffer
+      iResult = vtProp.vt;
+      memset(lpBuf, 0, lBuf);
+      switch (vtProp.vt) {
+      case VT_I1:
+      case VT_UI1:
+      	if (lBuf >= 1) *(CHAR *)lpBuf = vtProp.cVal;
+      	break;
+      case VT_I2:
+      case VT_UI2:
+      case VT_BOOL:
+      	if (lBuf >= 2) *(USHORT *)lpBuf = vtProp.uiVal;
+      	break;
+      case VT_I4:
+      case VT_UI4:
+      case VT_INT:
+      case VT_UINT:
+      	if (lBuf >= 4) *(ULONG *)lpBuf = vtProp.ulVal;
+      	break;
+      case VT_BSTR:
+      	WideCharToMultiByte(CP_ACP, 0, vtProp.bstrVal, -1, lpBuf, lBuf, "?", NULL);
+      	break;
+      default:
+	iResult = -1;
+      	fprintf(stderr, "Unsupported VARIANT type: %d\n", vtProp.vt);
+      }
+
+      // Release the current result object
+      pObj->lpVtbl->Release(pObj);
+
+      break; // Ignore the value for the other processors, assuming they'll all be the same.
+    }
+  }
+
+cleanup_and_exit:
+  // Release WMI COM interfaces
+  if (pEnum) pEnum->lpVtbl->Release(pEnum);
+  if (pSvc) pSvc->lpVtbl->Release(pSvc);
+  if (pLoc) pLoc->lpVtbl->Release(pLoc);
+  CoUninitialize();
+
+  // Free everything else we've allocated
+  free(lpwszBuf);
+  free(lpwszPropName);
+  SysFreeString(query);
+  SysFreeString(language);
+  SysFreeString(resource);
+
+  if ((iResult < 0) && (lBuf >= sizeof(HRESULT))) *(HRESULT *)lpBuf = hr;
+  return iResult;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    DisplayProcWmiInfo					      |
+|									      |
+|   Description	    Display a few WMI properties			      |
+|									      |
+|   Parameters	    None						      |
+|									      |
+|   Returns	    None						      |
+|                                                                             |
+|   Notes	    Displays SLAT (Second Level Address Translation),	      |
+|		    which would otherwise require reading MSRs,               |
+|		    which cannot be done in Ring 3.			      |
+|                                                                             |
+|   History								      |
+|    2020-02-26 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+void DisplayProcWmiInfo(void) {
+  char *pszProps[] = {
+    "L2CacheSize",
+    "L3CacheSize",
+    "SecondLevelAddressTranslationExtensions"
+  };
+  int i;
+
+  printf("WMI Win32_Processor information\n");
+  for (i=0; i<(sizeof(pszProps)/sizeof(char *)); i++) {
+    char *pszPropName;
+    int iRet;
+    char buf[256];
+    pszPropName = pszProps[i];
+    iRet = GetWmiProcInfo(pszPropName, buf, sizeof(buf));
+    switch (iRet) {
+    case -1: {
+      HRESULT hr = *(HRESULT *)buf;
+      printf(" %s = (WMI Error. HRESULT = 0x%X)\n", pszPropName, hr);
+      break; }
+    case VT_BOOL:
+      printf(" %s = %s\n", pszPropName, *(BOOL *)buf ? "True" : "False");
+      break;
+    case VT_BSTR:
+      printf(" %s = %s\n", pszPropName, buf);
+      break;
+    default:
+      printf(" %s = %d\n", pszPropName, *(int *)buf);
+      break;
+    }
+  }
+  printf("\n");
+}
+
 #endif // defined(_WIN32)
