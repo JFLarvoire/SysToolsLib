@@ -14,7 +14,7 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-# Global variables
+# Global variables 
 set version "2018-11-16"
 set script [file tail $::argv0]    ; # This script name.
 set verbosity 1                    ; # 0=quiet; 1=normal; 2=verbose; 3=debug
