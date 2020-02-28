@@ -7,7 +7,12 @@
 #                                                                             #
 #   Notes           Uses the twapi library, available at                      #
 #                   http://twapi.magicsplat.com/                              #
-#                                                                             #
+#		    							      #
+#		    TODO:						      #
+#		    - Find a more general way to eliminate child windows.     #
+#		    - Automatically adjust the start position and step,       #
+#		      based on the screen size and number of windows.	      #
+#		    							      #
 #   History                                                                   #
 #    2008-08-22 JFL Created this script.                                      #
 #    2008-10-27 JFL Adjust the steps to avoid going beyond the screen limits. #
@@ -20,13 +25,15 @@
 #                   Added a -V|--version option.                              #
 #    2019-12-05 JFL Added option -l|--list.                                   #
 #                   Added the ability to cascade Windows Explorer windows.    #
-#                                                                             #
+#    2020-02-28 JFL Improved the Windows Explorer management.                 #
+#                   List apps if -l is specified without an app.              #
+#		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set defaults
-set version "2019-12-05"
+set version "2020-02-28"
 
 set err [catch {
   set twapiVersion [package require twapi]
@@ -1440,7 +1447,8 @@ proc Cascade {app x y dx dy} {
       	# explorer.exe is the parent application for very different things,
       	# like the Task Bar, Program Manager, etc.
 	set class [get_window_class $hWnd]
-	if {$class != "CabinetWClass"} continue
+	if {$class != "CabinetWClass"} continue ;# Class name verified in Windows XP, 7, 10.
+	if {$title == "Windows Update"} continue ;# In Windows 7, wuapp.exe starts an explorer.exe window titled "Windows Update".
       }
       # OK, this window must be cascaded
       lappend hWnds $hWnd
@@ -1535,9 +1543,10 @@ proc ListWindows {app - - - -} {
     }
   }
   # Get Windows properties
-  set format "%-9s %5s %5s %5s %5s %6s  %-15s  %-20s  %s" 
+  # Note: Minimized window have left and top = -32000 => Need 6 characters
+  set format "%-9s %6s %6s %5s %5s %6s  %-15s  %-21s  %s" 
   puts [format $format hWnd left top width height pid name class title]
-  set format "%-9s %5s %5s %5s %5s  %6s  %-15s  %-20s  %s" 
+  set format "%-9s %6s %6s %5s %5s  %6s  %-15s  %-21s  %s" 
   foreach hWnd $hWnds {
     if {[catch {
       foreach {left top right bottom} [get_window_coordinates $hWnd] break
@@ -1555,10 +1564,54 @@ proc ListWindows {app - - - -} {
     tryset class [list get_window_class $hWnd]
     # tryset hParent [list get_parent_window $hWnd] ;# Always the desktop window for top-level windows
     # tryset created [list get_process_info $pid -createtime]
+    if {![Verbose]} {
+      if {$name == "explorer.exe"} { # Special case for Windows Explorer
+	# explorer.exe is the parent application for very different things,
+	# like the Task Bar, Program Manager, etc.
+	set class [get_window_class $hWnd]
+	if {$class != "CabinetWClass"} continue ;# Class name verified in Windows XP, 7, 10.
+	if {$title == "Windows Update"} continue ;# In Windows 7, wuapp.exe starts an explorer.exe window titled "Windows Update".
+      }
+    }
     regsub " HWND" $hWnd "" hWnd ;# Every such handle ends with " HWND"
     puts [format $format $hWnd $left $top $width $height $pid $name $class $title]
   }
   return $nWnds
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function	    ListApps                                        	      #
+#                                                                             #
+#   Description     Enumerate all application with windows		      #
+#                                                                             #
+#   Parameters      -                  Place holders for Cascade() arguments  #
+#                                                                             #
+#   Returns 	    Nothing						      #
+#                                                                             #
+#   Notes	                                                              #
+#                                                                             #
+#   History								      #
+#    2020-02-28 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+proc ListApps {- - - - -} {
+  set names ""
+  set pids [get_process_ids -glob]
+  foreach pid $pids {
+    set hWnd [find_windows -pids $pid -toplevel 1 -visible 1 -single]
+    if {$hWnd == ""} continue ;# The task does not have windows
+    tryset name [list get_process_name $pid]
+    if {[lsearch $names $name] == -1} {
+      lappend names $name
+      # Don't display the name now, as the list would be unsorted, and hard to read.
+    }
+  }
+  # Display the list of applications, sorted alphabetically
+  foreach name [lsort -dictionary $names] {
+    puts $name
+  }
 }
 
 #-----------------------------------------------------------------------------#
@@ -1579,7 +1632,7 @@ proc ListWindows {app - - - -} {
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
-set app putty.exe
+set app ""
 set x [get_system_parameters_info SPI_ICONHORIZONTALSPACING] ; # Leave 1 icon column
 set y 0
 set dx 0
@@ -1594,14 +1647,14 @@ Usage: $argv0 [OPTIONS] [PROGRAM]
 
 Options:
   -f, --from X Y    Start point. Default: $x $y
-  -h, --help, -?    Display this help screen.
-  -l, --list        List PROGRAM top-level windows
+  -h, --help, -?    Display this help screen
+  -l, --list        List PROGRAM top-level windows, or list apps if no PROGRAM
   -s, --step DX DY  Increment step. Default: $dx $dy
-  -v, --verbose     Verbose attributes
+  -v, --verbose     Verbose attributes. With -l, display unselected windows.
   -V, --version     Display this script version
   -x, --xindent     Horizontal indentation. Default: Width of the system button
 
-Program:            Program name. Default: putty.exe. Default extension: .exe
+Program:            Program name. Default extension: .exe
 }]
 
 # Scan all arguments.
@@ -1694,6 +1747,15 @@ if [Verbose] {
 
 if {$noexec} {
   exit 0
+}
+
+if {$app == ""} {
+  if {$action == "ListWindows"} {
+    set action ListApps
+  } else {
+    puts stderr "Error: No application specified"
+    exit 1
+  }
 }
 
 $action $app $x $y $dx $dy
