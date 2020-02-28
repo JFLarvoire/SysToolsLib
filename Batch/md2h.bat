@@ -19,13 +19,15 @@
 :#		    							      #
 :#  History:	    							      #
 :#   2019-11-30 JFL Created this script.				      #
+:#   2019-12-09 JFL Display which server was used.			      #
+:#   2019-12-13 JFL Display an error message if curl failed.		      #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2019-12-05"
+set "VERSION=2019-12-13"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -35,8 +37,38 @@ set ^"ARG0=%0^"			&:# Script invokation name
 set ^"ARGS=%*^"			&:# Argument line
 
 set "GITHUB=https://api.github.com"
+:# Within HPE, prefer HPE's corporate github server
+:# Also this avoids having to configure the http_proxy environment variable.
+nslookup github.hpe.com. 2>NUL | findstr /r /c:"[ 	]github.hpe.com$" >NUL
+if not errorlevel 1 set "GITHUB=https://github.hpe.com/api/v3"
 
 goto :main
+
+:#----------------------------------------------------------------------------#
+
+:# Quote file pathnames that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
+setlocal EnableExtensions Disabledelayedexpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+call set "P=%%%~1%%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs quoting
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="%P%"
+:condquote_ret
+:# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
+:# because this interferes with the quoting already added above. This would
+:# fail if the quoted string contained an & character.
+:# But because of this, do not leave any space around & separators.
+endlocal&set %RETVAR%=%P%&exit /b 0
 
 :#----------------------------------------------------------------------------#
 
@@ -73,11 +105,11 @@ exit /b 0
 set "MD="
 set "DEBUG=0"
 set "ECHO.D=if 0==1 echo"
-set "ECHO.V=if 0==1 echo"
 set "OPTS= -s"
 set "EXEC="
 set ">=>"
 set ">>=>>"
+set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
 
 goto :get_arg
 :next_arg
@@ -88,7 +120,7 @@ set "ARG=%~1"
 if "%ARG%"=="-?" goto :help
 if "%ARG%"=="/?" goto :help
 if "%ARG%"=="-d" set "DEBUG=1" & set "ECHO.D=echo" & goto :next_arg
-if "%ARG%"=="-v" set "OPTS=%OPTS: -s=%" & set "ECHO.V=echo" & goto :next_arg
+if "%ARG%"=="-v" set "OPTS=%OPTS: -s=%" & goto :next_arg
 if "%ARG%"=="-V" (echo %VERSION%) & exit /b
 if "%ARG%"=="-X" set "EXEC=echo" & set ">=^>" & set ">>=^>^>" & goto :next_arg
 if "%ARG:~0,1%"=="-" >&2 echo Error: Unexpected switch: %1 & exit /b 1
@@ -120,6 +152,12 @@ if not errorlevel 1 (
   %EXEC% copy /y "!SFULL!" "!CSS!" %>% NUL
 )
 
+:# Tell the user which of the possible github servers was used.
+for %%m in ("%MD%") do set "NXMD=%%~nxm" &:# Extract the .md file name and extension
+for /f "delims=/ tokens=2" %%u in ("%GITHUB%") do set "SERVER=%%u" &:# Extract the server DNS name
+call :condquote NXMD
+echo # Converting %NXMD% using %SERVER%
+
 set "LT=<"
 set "GT=>"
 
@@ -131,13 +169,17 @@ set "GT=>"
 >> "!HTML!" echo !LT!/head!GT!
 
 >> "!HTML!" echo !LT!body!GT!
+%TRUE.EXE% &:# Set ERRORLEVEL to 0. Useful in no-exec mode to avoid triggering error messages below.
 %EXEC% curl%OPTS% %GITHUB%/markdown/raw -X "POST" -H "Content-Type: text/plain" --data-binary "@!MD!" %>>% "!HTML!"
 if errorlevel 9009 (
   >&2 echo This program uses curl.exe. For old Windows versions that don't have it,
   >&2 echo curl.exe can be downloaded from https://curl.haxx.se/windows/
   exit /b 1
 )
-if errorlevel 1 exit /b &:# Any other error is curl's own. Leave it to curl's message to explain.
+if errorlevel 1 ( :# curl sometimes fails silently, so add our won message
+  >&2 echo curl.exe failed with error %ERRORLEVEL%. Aborting.
+  exit /b
+)
 >> "!HTML!" echo !LT!/body!GT!
 
 >> "!HTML!" echo !LT!/html!GT!
