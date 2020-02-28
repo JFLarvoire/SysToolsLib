@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-02-28
+### Changed
+- PowerShell/ShadowCopy.ps1: Performance improvement: Let -Previous skip shadow copies more recent than the last file found.  
+  Added switch -Exhaustive to revert to searching all previous shadow copies.
+- Python/p*.bat: Also search for Python instances in "%ProgramFiles%\Python\python*\\".
+
 ## [Unreleased] 2020-02-26
 ### Changed
 - C/SRC/cpuid.c: Decode cpuid(7, 0) output.  
