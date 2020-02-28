@@ -1,5 +1,5 @@
 <# :# PowerShell comment block protecting the batch section
-@echo off & goto :init_batch
+@echo off
 :#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  File name       PySetup.bat                                               #
@@ -23,14 +23,14 @@
 :#                  Accept start commands using copies of the default command.#
 :#                  Added a verification that there's no additional command   #
 :#		    associated with the class.				      #
+:#   2020-02-27 JFL Search python.exe in more locations.                      #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
-:init_batch
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-11-19"
+set "VERSION=2020-02-27"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1356,7 +1356,7 @@ if defined RETVAR %UPVAR% %RETVAR%
 
 for %%d in (%SEARCHDRIVES%) do (
   for %%p in ("" "\Program Files" "\Program Files (x86)") do (
-    for /d %%b in ("%%d:%%~p\Python%VER%") do (
+    for /d %%b in ("%%d:%%~p\Python%VER%" "%%d:%%~p\Python\Python%VER%") do (
       %ECHO.D% :# Looking in %%b
       if exist "%%~b\python.exe" (
       	set "EXE=%%~b\python.exe"

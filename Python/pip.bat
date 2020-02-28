@@ -15,13 +15,14 @@
 :#   2019-10-02 JFL Use DisableDelayedExpansion to avoid issues w. ! in args. #
 :#                  Added option -V.                                          #
 :#   2019-11-29 JFL Make the python instance number inheritable.              #
+:#   2020-02-27 JFL Search python.exe in more locations.                      #
 :#                                                                            #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2019-11-29"
+set "VERSION=2020-02-27"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -79,7 +80,7 @@ call :GetPythonExe PYTHON
 if defined PYTHON call :lappend LIST "%PYTHON%"
 :# Then look for other instances in well known places
 for %%b in ("C:" "%ProgramFiles%" "%ProgramFiles(x86)%") do (
-  for /d %%p in ("%%~b\Python*" "%%~b\Microsoft Visual Studio\Shared\Python*") do (
+  for /d %%p in ("%%~b\Python*" "%%~b\Python\Python*" "%%~b\Microsoft Visual Studio\Shared\Python*") do (
     for %%x in ("%%~p\python.exe") do if exist "%%~x" (
       set "FOUND=" &:# Avoid duplications, for example with the default instance
       for %%y in (!LIST!) do if not defined FOUND if /i "%%~fx"=="%%~y" set "FOUND=1"
