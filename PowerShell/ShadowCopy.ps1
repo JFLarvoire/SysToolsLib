@@ -44,6 +44,9 @@
 #    2018-09-16 JFL Added commands -Mount and -Dismount.                      #
 #    2018-10-15 JFL Added command -Previous.		                      #
 #    2018-10-16 JFL Added arguments -Pathname and -Restore.                   #
+#    2020-02-27 JFL Performance improvement: Let -Previous skip shadow copies #
+#                   more recent than the last file found.                     #
+#    2020-02-28 JFL Added switch -Exhaustive to search all previous sh.copies.#
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -168,6 +171,11 @@
   If one or more shadow copies are passed as InputObject, restore the newest 
   available in that set. 
 
+  .PARAMETER Exhaustive
+  For use with -Previous: Search every shadow copy for previous versions.
+  By default, improve performance by skipping shadow copies more recent than
+  the last file found. Should rarely be needed.
+
   .PARAMETER D
   Switch enabling the debug mode.
   Display messages helping the script author understand what code is running.
@@ -284,6 +292,9 @@ Param (
   [Parameter(ParameterSetName='Prune', Mandatory=$false)]
   [Switch]$Force,			# If true, do not display the confirmation prompts
 
+  [Parameter(ParameterSetName='Previous', Mandatory=$false)]
+  [Switch]$Exhaustive,			# If true, search every shadow copy for previous versions
+
   [Parameter(ParameterSetName='Previous', Mandatory=$false, Position=2)]
   [String]$Restore,			# Where to restore the previous version of a file
 
@@ -320,7 +331,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2018-10-16"
+$scriptVersion = "2020-02-28"
 if ($Version) {
   echo $scriptVersion
   exit 0
@@ -2052,7 +2063,7 @@ Function Dismount-ShadowCopy {
 	  if ($NoExec) {
 	    Write-Host "WhatIf: Would dismount '$Path'"
 	  } else {
-	    Write-Verbose "Deleting '$Path'"
+	    Write-Verbose "Dismounting '$Path'"
 	    try {
 	      $Path = Resolve-Path $Path
 	      [System.IO.Directory]::Delete($Path, $false) | Out-Null
@@ -2102,10 +2113,12 @@ Function Get-PreviousVersions {
     [String]$FileName,
     [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=1)]
     [Object[]]$ShadowCopies = $(),
+    [Switch]$Exhaustive,
     [Parameter(Mandatory=$false, Position=2)][AllowNull()]
     [String]$Restore
   )
   Write-Debug "Get-PreviousVersions `"$FileName`" list[$($ShadowCopies.Count)] `"$Restore`""
+  Write-DebugVars Exhaustive
   $File = Get-Item $FileName
   # TO DO: Support wildcards, and loop over multiple files
   if ($File.count -gt 1) {throw "Multiple files aren't supported yet"}
@@ -2142,6 +2155,9 @@ Function Get-PreviousVersions {
   Write-Debug "Mounting shadow copies at ${TempDir}"
   $MountPoints = @()
   foreach ($ShadowCopy in ($ShadowCopies | sort Date -Descending)) {
+    if ((!$Exhaustive) -and ($ShadowCopy.Date -gt $LastDate)) {
+      continue # No need to try this one, as we're going to find the same file version
+    }
     $MountPoint = Mount-ShadowCopy $ShadowCopy -MountPoint $TempDir -Force # Do it even in NoExec mode
     $MountPoints += $MountPoint
     $FullPath = Join-Path $MountPoint $RelPath
@@ -2260,7 +2276,7 @@ Process {
 
     # List previous versions. Must be done before converting $_ to a list of ShadowCopy objects
     if ($Previous) {
-      Get-PreviousVersions $Pathname $_ $Restore
+      Get-PreviousVersions $Pathname $_ $Restore -Exhaustive:$Exhaustive
       return
     }
 
@@ -2302,7 +2318,7 @@ End {
       Get-ShadowCopy
     }
     if ($Previous) {		# By default, list ALL previous versions, or restore the latest
-      Get-PreviousVersions $Pathname -Restore $Restore
+      Get-PreviousVersions $Pathname -Exhaustive:$Exhaustive -Restore $Restore
     }
 
     if ($Remove) {
