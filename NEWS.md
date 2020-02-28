@@ -9,6 +9,9 @@ For more details about changes in a particular area, see the README.txt and/or N
 - PowerShell/ShadowCopy.ps1: Performance improvement: Let -Previous skip shadow copies more recent than the last file found.  
   Added switch -Exhaustive to revert to searching all previous shadow copies.
 - Python/p*.bat: Also search for Python instances in "%ProgramFiles%\Python\python*\\".
+- Batch/AddPaths.bat: Use the new paths.bat, instead of the old addpath.bat.
+- Batch/md2h.bat: Display which server was used. Display an error message if curl failed.
+- Tcl/Cascade.tcl: Improved the Windows Explorer management. List apps if -l is specified without an app.
 
 ## [Unreleased] 2020-02-26
 ### Changed
