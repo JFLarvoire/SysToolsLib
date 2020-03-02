@@ -48,6 +48,8 @@
 *    2020-02-26 JFL Added option -w to experiment with reading WMI props.     *
 *		    Output a few WMI props, including SLAT, in Windows.	      *
 *		    Skip head spaces in brand string, if any.		      *
+*    2020-03-02 JFL Display the CPUID index for every set of feature flags.   *
+*		    Corrected typos and errors about MTRR registers.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,7 +57,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2020-02-26"
+#define PROGRAM_VERSION "2020-03-02"
 
 /* Definitions */
 
@@ -598,9 +600,9 @@ char *ppszFeatures[32] = { /* Intel Features Flags - EAX=1 -> EDX */
   /* 0x00000080  7 */ "Machine-check exception",
   /* 0x00000100  8 */ "CMPXCHG8B instruction",
   /* 0x00000200  9 */ "Integrated APIC",
-  /* 0x00000400 10 */ "MTTR registers",
+  /* 0x00000400 10 */ "(EDX bit 10 reserved)",
   /* 0x00000800 11 */ "SYSENTER/SYSEXIT instructions",
-  /* 0x00001000 12 */ "MTTR_CAP register",
+  /* 0x00001000 12 */ "MTRR registers, and the MTRR_CAP register",
   /* 0x00002000 13 */ "Page Global Enable bit in CR4",
   /* 0x00004000 14 */ "Machine check architecture",
   /* 0x00008000 15 */ "CMOV instructions",
@@ -658,7 +660,7 @@ char *ppszFeatures2[32] = { /* Intel Features Flags - EAX=1 -> ECX */
 };
 
 char *ppszFeatures70b[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=0 -> EBX */
-  /* 0x00000001  0 */ "FSGSBASE (RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE)",
+  /* 0x00000001  0 */ "FSGSBASE instructions (RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE)",
   /* 0x00000002  1 */ "IA32_TSC_ADJUST MSR is supported",
   /* 0x00000004  2 */ "SGX (Software Guard Extensions)",
   /* 0x00000008  3 */ "BMI1 (Bit Manipulation Instruction Set 1)",
@@ -925,7 +927,7 @@ void DisplayProcInfo(void) {
     printf("\n");
 
     /* Intel Feature Flags */
-    printf("Intel Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
+    printf("CPUID(1): Intel Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
     for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
       printf(" EDX %2d %-3s %s\n", i, YesNo(dwFeatures & dwMask), ppszFeatures[i]);
     }
@@ -940,7 +942,7 @@ void DisplayProcInfo(void) {
       /* Only display those that are documented in recent Intel's manuals */
       // CPUID(0x80000001) : Get extended feature flags.
       _cpuid(0x80000001, NULL, NULL, &dwFeatures4, &dwFeatures3);
-      printf("AMD Extended Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
+      printf("CPUID(0x80000001): AMD Extended Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
       for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
 	char *pszName = ppszExtFeatures[i];
 	if (pszName[0])
@@ -963,7 +965,7 @@ void DisplayProcInfo(void) {
       dwECX = 0;
       _cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
       nLeaves = (int)dwEAX; /* Max ECX input value for cpuid(7) */
-      printf("Structured Extended Feature Flags: EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEBX, dwECX, dwEDX);
+      printf("CPUID(7): Extended Features Flags: EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEBX, dwECX, dwEDX);
       for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
 	char *pszName = ppszFeatures70b[i];
 	printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
