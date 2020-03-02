@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-02-26
+### Changed
+- C/SRC/cpuid.c: Display the CPUID index for every set of feature flags.
+  Corrected typos and errors about MTRR registers.
+
 ## [1.17] 2020-02-29
 ### Changed
 - PowerShell/ShadowCopy.ps1: Performance improvement: Let -Previous skip shadow copies more recent than the last file found.  
