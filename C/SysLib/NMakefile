@@ -26,6 +26,7 @@
 #    2016-11-16 JFL Removed the rule for copying INCDIR, not used anymore.    #
 #    2017-02-24 JFL Renamed the special "goal_name" as "module_name".	      #
 #    2019-02-08 JFL Added support for ARM and ARM64.			      #
+#    2020-03-11 JFL Don't attempt to build for IA64 or ARM by default.        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -86,6 +87,12 @@ REQS_ARM64=1
 REQS_ARM64=0
 !ENDIF
 
+# $(OS) = List of target operating systems to build for, separated by spaces
+# Note: The OS variable here conflicts with Windows' %OS%, defaulting to Windows_NT
+!IF "$(OS)"=="all"
+OS_ALL=1 # Note: Don't attempt to build IA64 or ARM versions by default, unless OS=all
+OS=
+!ENDIF
 !IF !DEFINED(OS) || "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
 OS=
 !IF $(REQS_BIOS)
@@ -100,16 +107,16 @@ OS=$(OS) WIN95
 !IF $(REQS_WIN32)
 OS=$(OS) WIN32
 !ENDIF
-!IF $(REQS_IA64)
+!IF $(REQS_IA64) && DEFINED(OS_ALL)
 OS=$(OS) IA64
 !ENDIF
 !IF $(REQS_WIN64)
 OS=$(OS) WIN64
 !ENDIF
-!IF $(REQS_ARM)
+!IF $(REQS_ARM) && DEFINED(OS_ALL)
 OS=$(OS) ARM
 !ENDIF
-!IF $(REQS_ARM64)
+!IF $(REQS_ARM64) && DEFINED(OS_ALL)
 OS=$(OS) ARM64
 !ENDIF
 !ENDIF
