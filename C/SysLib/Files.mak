@@ -11,6 +11,7 @@
 #   History:								      #
 #    2015-11-04 JFL Split the old MultiOS.mak into NMakeFile and Files.mak.   #
 #    2016-10-11 JFL moved debugm.h to SysToolsLib global C include dir.       #
+#    2020-03-11 JFL Added Unix-specific object modules.                       #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -44,9 +45,13 @@ COMMON_OBJECTS = \
 #     ...
 # !ENDIF
 
+# Unix-specific objects
+UNIX_OBJECTS = \
+    $(O)/dirx.o			\
+
 # Objects usable in Unix
 OBJECTS1 = $(COMMON_OBJECTS:+=)
-OBJECTS = $(OBJECTS1:.obj=.o)
+OBJECTS = $(OBJECTS1:.obj=.o) $(UNIX_OBJECTS)
 
 #-----------------------------------------------------------------------------#
 #			Include files dependancies			      #
