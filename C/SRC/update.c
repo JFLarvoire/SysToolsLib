@@ -157,6 +157,8 @@
 *                   progress counts on slow networks. V3.8.3.                 *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.8.4.      *
 *    2020-01-28 JFL Fixed issue with D:myFile input files. Version 3.8.5.     *
+*    2020-03-11 JFL Fixed issue w. Linux readdir() not always setting d_type. *
+*		    Version 3.8.6.  					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -164,8 +166,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.8.5"
-#define PROGRAM_DATE    "2020-01-28"
+#define PROGRAM_VERSION "3.8.6"
+#define PROGRAM_DATE    "2020-03-11"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -198,6 +200,8 @@
 #include <fnmatch.h>
 #include <iconv.h>
 #include <inttypes.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debugging macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -859,13 +863,13 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
        the source, even if the command-line argument has a different case. */
 
     /* Scan all files that match the wild cards */
-    pDir = opendir(path0);
+    pDir = opendirx(path0);
     if (!pDir) {
       printError("Error: can't open directory \"%s\": %s", path0, strerror(errno));
       nErrors += 1;
       goto cleanup_and_return;
     }
-    while ((pDE = readdir(pDir)) != NULL) {
+    while ((pDE = readdirx(pDir)) != NULL) {
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
       if (   (pDE->d_type != DT_REG)
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
@@ -893,14 +897,14 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       	/* Continue the directory scan, looking for other files to update */
       }
     }
-    closedir(pDir);
+    closedirx(pDir);
 
     /* Scan target files that might be erased */
     if (iErase) {
       fullpath(path2, p2, PATHNAME_SIZE); /* Build absolute pathname of source */
-      pDir = opendir(p2);
+      pDir = opendirx(p2);
       if (pDir) {
-	while ((pDE = readdir(pDir)) != NULL) {
+	while ((pDE = readdirx(pDir)) != NULL) {
 	  struct stat sStat;
 	  if (streq(pDE->d_name, ".")) continue;    /* Skip the . directory */
 	  if (streq(pDE->d_name, "..")) continue;   /* Skip the .. directory */
@@ -946,16 +950,17 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	  }
 	}
       }
+      closedirx(pDir);
     }
 
     if (iRecur) { /* Parse the directory again, looking for actual directories (not junctions nor symlinkds) */
-      pDir = opendir(path0);
+      pDir = opendirx(path0);
       if (!pDir) {
 	printError("Error: Can't open directory \"%s\": %s", path0, strerror(errno));
       	nErrors += 1;
         goto cleanup_and_return;
       }
-      while ((pDE = readdir(pDir)) != NULL) {
+      while ((pDE = readdirx(pDir)) != NULL) {
       	int p2_exists, p2_is_dir;
 
 	DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
@@ -1012,7 +1017,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	  copydate(path2, path3); /* Make sure the directory date matches too */
 	}
       }
-      closedir(pDir);
+      closedirx(pDir);
     }
 
     if ((!iTargetDirExisted) && is_directory(ppath)) { /* If we did create the target dir */
@@ -1713,6 +1718,7 @@ void stcgfp(char *path, const char *pathname)	    /* Get file path */
     return;
     }
 
+/* 2020-03-11 JFL Fixed ':' issue in Unix, and improved performance */
 void strmfp(char *pathname, const char *path, const char *name)   /* Make file pathname */
     {
     size_t l;
@@ -1722,12 +1728,11 @@ void strmfp(char *pathname, const char *path, const char *name)   /* Make file p
     l = strlen(path);
     if (   (l > 0)
 	&& (path[l-1] != DIRSEPARATOR_CHAR)
+#if DIRSEPARATOR_CHAR == '\\'
 	&& (path[l-1] != ':')
-       )
-	{
-	  strcat(pathname, DIRSEPARATOR_STRING);
-	}
-    strcat(pathname, name);
+#endif
+       ) pathname[l++] = DIRSEPARATOR_CHAR;
+    strcpy(pathname+l, name);
     RETURN_COMMENT(("\"%s\"\n", pathname));
     }
 
@@ -2271,9 +2276,9 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     RETURN_INT(1);
   }
 
-  pDir = opendir(path);
+  pDir = opendirx(path);
   if (!pDir) RETURN_INT(1);
-  while ((pDE = readdir(pDir)) != NULL) {
+  while ((pDE = readdirx(pDir)) != NULL) {
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
     pPath = NewPathName(path, pDE->d_name);
     pszSuffix = "";
@@ -2314,7 +2319,7 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     }
     free(pPath);
   }
-  closedir(pDir);
+  closedirx(pDir);
 
   iErr = 0;
   pszSuffix = DIRSEPARATOR_STRING;
