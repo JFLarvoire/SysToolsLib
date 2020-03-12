@@ -23,6 +23,7 @@ Batch\ERRORLEV.BAT
 Batch\flvcache.bat
 Batch\gccache.bat
 Batch\Get-Console.bat
+Batch\halve.bat
 Batch\hosts.bat
 Batch\ie.bat
 Batch\iecache.bat

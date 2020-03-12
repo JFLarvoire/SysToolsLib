@@ -82,6 +82,7 @@ conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.tx
 deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
 dump.exe	| DWL	| Hexadecimal dump.									| `1clip \| dump`
+halve.bat	| -W-	| Halve the number of new lines. (To cleanup text with double interline.)		| `12 halve`
 lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
 lower.tcl	| -WL	| Convert text to lower case.								| `12 lower`
 md2h.bat        | -W-   | Convert MarkDown to HTML, and display it in a Web browser.                            | `md2h catalog.md` &:# Display this catalog
