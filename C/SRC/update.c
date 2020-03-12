@@ -158,6 +158,8 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.8.4.      *
 *    2020-01-28 JFL Fixed issue with D:myFile input files. Version 3.8.5.     *
 *    2020-03-11 JFL Fixed issue w. Linux readdir() not always setting d_type. *
+*                   Fixed a memory leak in updateall().                       *
+*                   Fixed serious issue when Linux target is a link to a dir. *
 *		    Version 3.8.6.  					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -366,6 +368,7 @@ int exist_file(char *); 		/* Does this file exist? (TRUE/FALSE) */
 int file_empty(char *); 		/* Is this file empty? (TRUE/FALSE). */
 					/* File must exist (else return FALSE)  */
 int is_directory(char *);		/* Is name a directory? -> TRUE/FALSE */
+int is_effective_directory(char *name); /* Is name a directory, or a link to a directory? */
 int older(char *, char *);		/* Is file 1 older than file 2? */
 time_t getmodified(char *);		/* Get time of file modification */
 int copydate(char *to, char *from);	/* Copy the file date & time */
@@ -846,17 +849,20 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     }
 
     /* Check if the target is a file or directory name */
+    /* Important: We must accept both real directories, and links to directories.
+		  Else, there's a risk to delete links in Linux. (This happened!)
+		  Ex: `./update update /bin` must not overwrite /bin if it's a link to /usr/bin */
     ppath = p2;
     pname = NULL; /* Implies using pDE->d_name */
     strsfp(p2, path, name);
-    if (name[0] && is_directory(path) && (!is_directory(p2)) && (!strpbrk(p1, "*?"))) {
+    if (name[0] && is_effective_directory(path) && (!is_effective_directory(p2)) && (!strpbrk(p1, "*?"))) {
       ppath = path;
       pname = name;
       DEBUG_PRINTF(("// The target is file %s in directory %s\n", pname, ppath));
     } else {
       DEBUG_PRINTF(("// The target is directory %s\n", ppath));
     }
-    iTargetDirExisted = is_directory(ppath);
+    iTargetDirExisted = is_effective_directory(ppath);
 
     /* Note: Scan the source directory even in the absence of wildcards.
        In Windows, this makes sure that the copy has the same case as
@@ -1523,26 +1529,33 @@ int file_empty(char *name)	/* Is this file empty? (TRUE/FALSE) */
     RETURN_BOOL_COMMENT(FALSE, ("File %s does not exist\n", name));
     }
 
-int is_directory(char *name)	/* Is name a directory? -> TRUE/FALSE */
-    {				/* Les carateres * et ? ne sont pas acceptes */
-    int result;
-    int err;
-    struct stat sstat;
+int is_directory(char *name){ /* Is name a directory? -> TRUE/FALSE */
+  int result;
+  int err;
+  struct stat sstat;
 
-    DEBUG_ENTER(("is_directory(\"%s\");\n", name));
+  DEBUG_ENTER(("is_directory(\"%s\");\n", name));
 
-    if (strchr(name, '?') || strchr(name, '*'))
-	{ /* Wild cards not allowed */
-	RETURN_CONST_COMMENT(FALSE, ("Directory %s does not exist\n", name));
-	}
+  if (strchr(name, '?') || strchr(name, '*')) { /* Wild cards not allowed */
+    RETURN_CONST_COMMENT(FALSE, ("%s is not a directory\n", name));
+  }
 
-    err = lstat(name, &sstat); // Use lstat, as stat does not detect SYMLINKDs.
+  err = lstat(name, &sstat); // Use lstat, as stat does not detect SYMLINKDs.
+  result = ((err == 0) && (S_ISDIR(sstat.st_mode)));
+  RETURN_BOOL_COMMENT(result, ("%s %s a directory\n", name, result ? "is" : "is not"));
+}
 
-    result = ((err == 0) && (sstat.st_mode & S_IFDIR));
+int is_effective_directory(char *name){ /* Is name a directory, or a link to a directory */
+  int result;
+  int err;
+  struct stat sstat;
 
-    RETURN_BOOL_COMMENT(result, ("Directory %s %s\n", name, result ? "exists"
-								   : "does not exist"));
-    }
+  DEBUG_ENTER(("is_effective_directory(\"%s\");\n", name));
+
+  err = stat(name, &sstat); // Use lstat, as stat does not detect SYMLINKDs.
+  result = ((err == 0) && (S_ISDIR(sstat.st_mode)));
+  RETURN_BOOL_COMMENT(result, ("%s %s a directory\n", name, result ? "is" : "is not"));
+}
 
 int older(char *p1, char *p2)	/* Is file p1 older than file p2? */
     {
