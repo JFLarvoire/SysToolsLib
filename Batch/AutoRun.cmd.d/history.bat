@@ -16,7 +16,7 @@
 :#                  has an empty history.                                     #
 :#                                                                            #
 :#		    To avoid that, it's necessary to define a doskey macro.   #
-:#                  Contraty to a batch file, a macro is execucted in the     #
+:#                  Contrary to a batch file, a macro is executed in the      #
 :#                  context of the current shell, and so reports the correct  #
 :#                  history.                                                  #
 :#                                                                            #
