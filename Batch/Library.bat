@@ -218,6 +218,7 @@
 :#   2020-01-13 JFL Added routine :is_newer.                                  #
 :#   2020-02-14 JFL Added routines :is_empty_dir, :has_files, :has_dirs,      #
 :#		    :test_errorlevel                                          #
+:#   2020-03-13 JFL Added routines :EchoVal[.Debug] and macros %ECHOVAL[.D]%. #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -667,9 +668,16 @@ goto :eof
 :#                  Debug.Return    Log exit from a routine		      #
 :#                  Verbose.Off	    Disable the verbose mode                  #
 :#                  Verbose.On	    Enable the verbose mode		      #
+:#                                                                            #
 :#                  Echo	    Echo and log strings, indented            #
-:#                  EchoVars	    Display the values of a set of variables  #
-:#                  EchoArgs	    Display the values of all arguments       #
+:#                  EchoVars	    Display a set of variables name=value     #
+:#                  EchoStringVars  Display a string, then a set of variables #
+:#                  EchoArgs	    Display all arguments name=value          #
+:#                  EchoVal	    Display the value of one variable         #
+:#		    All functions in that series have two other derivatives,  #
+:#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
+:#                  These display only in debug and verbose mode respectively,#
+:#                  but always log the string (if a log file is defined).     #
 :#                                                                            #
 :#  Macros          %FUNCTION%	    Define and trace the entry in a function. #
 :#                  %UPVAR%         Declare a var. to pass back to the caller.#
@@ -704,6 +712,9 @@ goto :eof
 :#                  %ECHOSVARS%	    Echo ARG1 before each variable.           #
 :#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
 :#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOVAL%       Echo the value of variable ARG1           #
+:#                  %ECHOVAL.D%     Idem, but display it in debug mode only   #
 :#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
@@ -865,6 +876,8 @@ set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
 set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "ECHOVAL=%LCALL% :EchoVal"
+set "ECHOVAL.D=%LCALL% :EchoVal.Debug"
 set "+INDENT=%LCALL% :Debug.IncIndent"
 set "-INDENT=%LCALL% :Debug.DecIndent"
 :# Variables inherited from the caller...
@@ -1103,6 +1116,29 @@ set /a N=N+1
 %>DEBUGOUT% echo %INDENT%set "ARG%N%=%1"
 shift
 goto EchoArgs.loop
+
+:# Echo the value of a variable
+:EchoVal	%1=VARNAME
+setlocal EnableExtensions EnableDelayedExpansion
+%>DEBUGOUT% echo.%INDENT%!%~1!
+if defined LOGFILE %>>LOGFILE% echo %INDENT%!%~1!
+endlocal & exit /b
+
+:EchoVal.Debug
+%IF_DEBUG% (
+  call :EchoVal %*
+) else ( :# Make sure the variables are logged
+  call :EchoVal %* >NUL 2>NUL
+)
+exit /b
+
+:EchoVal.Verbose
+%IF_VERBOSE% (
+  call :EchoVal %*
+) else ( :# Make sure the variables are logged
+  call :EchoVal %* >NUL 2>NUL
+)
+exit /b
 
 :Debug.End
 
