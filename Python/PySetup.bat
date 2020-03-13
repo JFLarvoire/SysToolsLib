@@ -24,13 +24,16 @@
 :#                  Added a verification that there's no additional command   #
 :#		    associated with the class.				      #
 :#   2020-02-27 JFL Search python.exe in more locations.                      #
+:#   2020-03-12 JFL Search python.exe in more locations.                      #
+:#   2020-03-13 JFL Added the update of the local and global system PATH.     #
+:#                  Merged in Batch debug library updates.                    #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-02-27"
+set "VERSION=2020-03-13"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -125,6 +128,9 @@ goto :eof
 :#                  But call itself has a quirk, which requires a convoluted  #
 :#                  workaround to process the /? argument.                    #
 :#                                                                            #
+:#                  Known limitation: Special character ^ is preserved within #
+:#                  "quoted" arguments, but not within unquoted arguments.    #
+:#                                                                            #
 :#                  Known limitation: After using :PopArg, all consecutive    #
 :#                  argument separators in %ARGS% are replaced by one space.  #
 :#                  For example: "A==B" becomes "A B"                         #
@@ -156,13 +162,18 @@ goto :eof
 call :Call.Init
 goto Call.end
 
+:Sub.Init # Create a SUB variable containing a SUB (Ctrl-Z) character
+>NUL copy /y NUL + NUL /a "%TEMP%\1A.chr" /a
+for /f %%c in (%TEMP%\1A.chr) do set "SUB=%%c"
+exit /b
+
 :Call.Init
 if not defined LCALL set "LCALL=call"	&:# Macro to call functions in this library
 set "POPARG=%LCALL% :PopArg"
 set "POPSARG=%LCALL% :PopSimpleArg"
 
 :# Mechanism for calling subroutines in a second external instance of the top script.
-set ^"XCALL=call "!ARG0!" -call^"	&:# This is the top script's (or this lib's if called directly) ARG0
+set ^"XCALL=call "!SFULL!" -call^"	&:# This is the full path to the top script's (or this lib's if called directly) ARG0
 set ^"XCALL@=!XCALL! :CallVar^"		&:# Indirect call, with the label and arguments in a variable
 
 :# Define a LF variable containing a Line Feed ('\x0A')
@@ -222,6 +233,9 @@ if defined ARGS (
   setlocal EnableDelayedExpansion
   for /f "delims=" %%a in ("!ARGS:%%=%%%%!") do endlocal & set ^"PopArg.ARGS=%%a^"
 )
+:# Note: The following call doubles ^ within "quotes", but not those outside of quotes.
+:# So :PopArg.Helper will correctly record ^ within quotes, but miss those outside. (Unless quadrupled!)
+:# The only way to fix this would be to completely rewrite :PopArg as a full fledged batch parser written in batch!
 call :PopArg.Helper %PopArg.ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
 :# Finding that impossible combination now is proof that the call was not executed.
 :# In this case, try again with the /? quoted, to prevent the call parser from processing it.
@@ -247,7 +261,7 @@ goto :PopArg.GetNext
 
 :PopArg.Eon
 setlocal DisableDelayedExpansion
-call :PopArg
+call :PopArg.Eoff
 call :Prep2ExpandVars ARG ^""ARG"^" ARGS
 setlocal EnableDelayedExpansion
 for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS!") do (
@@ -433,9 +447,16 @@ goto :eof
 :#                  Debug.Return    Log exit from a routine		      #
 :#                  Verbose.Off	    Disable the verbose mode                  #
 :#                  Verbose.On	    Enable the verbose mode		      #
+:#                                                                            #
 :#                  Echo	    Echo and log strings, indented            #
-:#                  EchoVars	    Display the values of a set of variables  #
-:#                  EchoArgs	    Display the values of all arguments       #
+:#                  EchoVars	    Display a set of variables name=value     #
+:#                  EchoStringVars  Display a string, then a set of variables #
+:#                  EchoArgs	    Display all arguments name=value          #
+:#                  EchoVal	    Display the value of one variable         #
+:#		    All functions in that series have two other derivatives,  #
+:#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
+:#                  These display only in debug and verbose mode respectively,#
+:#                  but always log the string (if a log file is defined).     #
 :#                                                                            #
 :#  Macros          %FUNCTION%	    Define and trace the entry in a function. #
 :#                  %UPVAR%         Declare a var. to pass back to the caller.#
@@ -467,12 +488,22 @@ goto :eof
 :#                  %ECHOVARS.V%    Idem, but display them in verb. mode only #
 :#                  %ECHOVARS.D%    Idem, but display them in debug mode only #
 :#                                                                            #
+:#                  %ECHOSVARS%	    Echo ARG1 before each variable.           #
+:#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
+:#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOVAL%       Echo the value of variable ARG1           #
+:#                  %ECHOVAL.D%     Idem, but display it in debug mode only   #
+:#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
 :#                                                                            #
 :#                  %FUNCTION0%	    Weak functions with no local variables.   #
 :#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
 :#                  %RETURN#%       Idem, with comments after the return      #
+:#                                                                            #
+:#                  %+INDENT%       Manually increase the debug INDENT        #
+:#                  %-INDENT%       Manually decrease the debug INDENT        #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
@@ -551,6 +582,7 @@ if exist echo >&2 echo WARNING: The file "echo" in the current directory will ca
 :# Initialize other debug variables
 set "ECHO=%LCALL% :Echo"
 set "ECHOVARS=%LCALL% :EchoVars"
+set "ECHOSVARS=%LCALL% :EchoStringVars"
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -621,6 +653,12 @@ set "ECHO.V=%LCALL% :Echo.Verbose"
 set "ECHO.D=%LCALL% :Echo.Debug"
 set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
+set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
+set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "ECHOVAL=%LCALL% :EchoVal"
+set "ECHOVAL.D=%LCALL% :EchoVal.Debug"
+set "+INDENT=%LCALL% :Debug.IncIndent"
+set "-INDENT=%LCALL% :Debug.DecIndent"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -708,6 +746,7 @@ setlocal DisableDelayedExpansion
 %>DEBUGOUT% echo %INDENT%call %*
 if defined LOGFILE %>>LOGFILE% echo %INDENT%call %*
 endlocal
+:Debug.IncIndent
 set "INDENT=%INDENT%  "
 goto :eof
 
@@ -722,7 +761,8 @@ goto :eof
 :Debug.Return0 %1=Exit code
 %>DEBUGOUT% echo %INDENT%return %1
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %1
-set "INDENT=%INDENT:~0,-2%"
+:Debug.DecIndent
+if defined INDENT set "INDENT=%INDENT:~2%"
 exit /b %1
 
 :Debug.Return# :# %RETURN.ERR% %MACRO.ARGS%
@@ -799,7 +839,12 @@ setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
-:EchoVars
+:EchoStringVars %1=string %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+set "INDENT=%INDENT%%~1 "
+shift
+goto :EchoVars.loop
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
 setlocal EnableExtensions EnableDelayedExpansion
 :EchoVars.loop
 if "%~1"=="" endlocal & goto :eof
@@ -824,6 +869,22 @@ goto :eof
 )
 goto :eof
 
+:EchoStringVars.Verbose
+%IF_VERBOSE% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
+:EchoStringVars.Debug
+%IF_DEBUG% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
 :# Echo a list of arguments.
 :EchoArgs
 setlocal EnableExtensions DisableDelayedExpansion
@@ -834,6 +895,29 @@ set /a N=N+1
 %>DEBUGOUT% echo %INDENT%set "ARG%N%=%1"
 shift
 goto EchoArgs.loop
+
+:# Echo the value of a variable
+:EchoVal	%1=VARNAME
+setlocal EnableExtensions EnableDelayedExpansion
+%>DEBUGOUT% echo.%INDENT%!%~1!
+if defined LOGFILE %>>LOGFILE% echo %INDENT%!%~1!
+endlocal & exit /b
+
+:EchoVal.Debug
+%IF_DEBUG% (
+  call :EchoVal %*
+) else ( :# Make sure the variables are logged
+  call :EchoVal %* >NUL 2>NUL
+)
+exit /b
+
+:EchoVal.Verbose
+%IF_VERBOSE% (
+  call :EchoVal %*
+) else ( :# Make sure the variables are logged
+  call :EchoVal %* >NUL 2>NUL
+)
+exit /b
 
 :Debug.End
 
@@ -966,7 +1050,8 @@ set "XEXEC@=%XCALL% :Exec.ExecVar"
 for %%t in (tee.exe) do set "Exec.tee=%%~$PATH:t"
 :# Initialize ERRORLEVEL with known values
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE0.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE.EXE=((for /f %%i in () do .)||rem.)" &:# Faster macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -1328,6 +1413,212 @@ set "%VARNAME%=!%VARNAME%:::=!"
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        LocalPath.Add/LocalPath.Remove                            #
+:#                  MasterPath.Get/MasterPath.Add/MasterPath.Remove           #
+:#                                                                            #
+:#  Description     Path management routines			              #
+:#                                                                            #
+:#  Note                                                                      #
+:#                                                                            #
+:#  History                                                                   #
+:#   2020-03-12 JFL Copied from paths.bat.                                    #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:LocalPath.Echo %1=Optional variable name. Default=PATHVAR
+setlocal EnableExtensions EnableDelayedExpansion
+if not "%~1"=="" set "PATHVAR=%~1"
+if "%VERBOSE%"=="1" echo :# Local cmd.exe %PATHVAR% list items
+:# Display path list items, one per line
+set "VALUE=!%PATHVAR%!"
+echo.%VALUE:;=&echo.%
+endlocal
+exit /b
+
+:LocalPath.Add1 %1=path to add to %PATHVAR%
+setlocal EnableExtensions EnableDelayedExpansion
+%ECHO.D% call %0 %*
+:# First check if the path to add was already there
+set "VALUE=!%PATHVAR%:;;=;!"	&:# The initial paths list value
+set "VALUE2=;!VALUE!;"		&:# Make sure all paths have a ; on both sides
+set "VALUE2=!VALUE2:;%~1;=;!"	&:# Remove the requested value
+set "VALUE2=!VALUE2:~1,-1!"	&:# Remove the extra ; we added above
+:# If the path was not already there, add it now.
+if "!VALUE2!"=="!VALUE!" (
+  if "%WHERE%"=="tail" ( :# Append the requested value at the end
+    if defined VALUE set "VALUE=!VALUE!;"
+    set "VALUE=!VALUE!%~1"	&:# Append the requested value at the end
+    set "VALUE=!VALUE:;;=;!"	&:# Work around a common problem: A trailing ';'
+    rem
+  ) else (		  :# Insert it before the specified entry
+    set "VALUE=;!VALUE:;;=;!;"	&:# Make sure all paths have one ; on both sides
+    set "VALUE=!VALUE:;%BEFORE%;=;%~1;%BEFORE%;!" &:# Insert the requested value
+    set "VALUE=!VALUE:~1,-1!"	&:# Remove the extra ; we added above
+    rem
+  )
+)
+endlocal & set "%PATHVAR%=%VALUE%"
+exit /b
+
+:# Change WHERE==head to WHERE=before to preserve multiple paths ordering
+:UpdateWhere %1=PATHS value
+if "%WHERE%"=="head" (
+  if not "%~1"=="" (
+    for /f "tokens=1 delims=;" %%p in ("%~1") do (
+      set "BEFORE=%%~p"
+      set "WHERE=before"
+    )
+  ) else ( :# The PATH is empty, so head==tail
+      set "WHERE=tail"
+  )
+)
+exit /b
+
+:LocalPath.Add
+if not defined VALUE goto :LocalPath.Echo
+call :UpdateWhere "!%PATHVAR%!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to add
+  call :LocalPath.Add1 "%%~p"
+)
+:# goto :LocalPath.Set
+
+:LocalPath.Set
+:# endlocal is necessary for returning the modified value back to the caller
+set "VALUE=!%PATHVAR%!"
+endlocal & %EXEC% set "%PATHVAR%=%VALUE%" & if "%NOEXEC%"=="0" if "%QUIET%"=="0" call :LocalPath.Echo %PATHVAR%
+exit /b
+
+:LocalPath.Remove1 %1=path to remove from %PATHVAR%
+setlocal EnableExtensions EnableDelayedExpansion
+%ECHO.D% call %0 %*
+set "VALUE=;!%PATHVAR%:;;=;!;"	&:# Make sure all paths have one ; on both sides
+set "VALUE=!VALUE:;%~1;=;!"	&:# Remove the requested value
+set "VALUE=!VALUE:~1,-1!"	&:# Remove the extra ; we added above
+endlocal & set "%PATHVAR%=%VALUE%"
+exit /b
+
+:LocalPath.Remove
+if not defined VALUE goto :LocalPath.Echo
+call :UpdateWhere "!%PATHVAR%!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to remove
+  call :LocalPath.Remove1 "%%~p"
+)
+goto :LocalPath.Set
+
+:LocalPath.Move
+if not defined VALUE goto :LocalPath.Echo
+call :UpdateWhere "!%PATHVAR%!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to move
+  call :LocalPath.Remove1 "%%~p"
+  call :LocalPath.Add1 "%%~p"
+)
+goto :LocalPath.Set
+
+:#----------------------------------------------------------------------------#
+
+:MasterPath.Get
+setlocal EnableExtensions DisableDelayedExpansion
+:# Note: The Path is usuallly in a REG_EXPAND_SZ, but sometimes in a REG_SZ. 
+set MCMD=reg query "%MKEY%" /v "%PATHVAR%" 2^>NUL ^| findstr REG_
+%ECHOVAL.D% MCMD
+for /f "tokens=1,2,*" %%a in ('"%MCMD%"') do set "MPATH=%%c"
+:MasterPath.Get.TrimR
+if "%MPATH:~-1%"==";" set "MPATH=%MPATH:~0,-1%" & goto :MasterPath.Get.TrimR
+endlocal & set "MPATH=%MPATH%" & exit /b
+
+:MasterPath.Echo
+if "%VERBOSE%"=="1" echo :# Global %OWNER% PATH list items
+call :MasterPath.Get
+:# Display path list items, one per line
+if defined MPATH echo.%MPATH:;=&echo.%
+exit /b
+
+:MasterPath.Add1 %1=path to add to MPATH
+:# First check if the path to add was already there
+set "MPATH2=;!MPATH!;"		&:# Make sure all paths have a ; on both sides
+set "MPATH2=!MPATH2:;%~1;=;!"	&:# Remove the requested value
+set "MPATH2=!MPATH2:~1,-1!"	&:# Remove the extra ; we added above
+:# If the path was not already there, add it now.
+if "!MPATH2!"=="!MPATH!" (
+  if "%WHERE%"=="tail" ( :# Append the requested value at the end
+    if defined MPATH set "MPATH=!MPATH!;"
+    set "MPATH=!MPATH!%~1"	&:# Append the requested value at the end
+    set "MPATH=!MPATH:;;=;!"	&:# Work around a common problem: A trailing ';'
+    rem
+  ) else (		  :# Insert it before the specified entry
+    set "MPATH=;!MPATH!;"	&:# Make sure all paths have a ; on both sides
+    set "MPATH=!MPATH:;%BEFORE%;=;%~1;%BEFORE%;!" &:# Insert the requested value
+    set "MPATH=!MPATH:~1,-1!"	&:# Remove the extra ; we added above
+    rem
+  )
+)
+exit /b
+
+:MasterPath.Add
+if not defined VALUE goto :MasterPath.Echo
+call :MasterPath.Get
+call :UpdateWhere "!MPATH!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to add
+  call :MasterPath.Add1 "%%~p"
+)
+:# goto :MasterPath.Set
+
+:MasterPath.Set
+set "SETX="
+for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred)
+  :# Gotcha: regex.exe does interpret a trailing \" as escaping the "
+  if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
+  :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
+:# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+  set CMD=setx %PATHVAR% "!MPATH!" %SETXOPT%
+) else ( :# Fallback to updating the registry value manually using reg.exe.
+  :# reg.exe updates the %PATHVAR%, but does _not_ broadcast a WM_SETTINGCHANGE to all apps
+  :# Note: On XP, /f does not work if it is the last option.
+  set CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"
+  echo Warning: setx.exe is not available on this system.
+  echo The %OWNER%'s default PATH update will only be visible after a reboot.
+  echo Note: setx.exe is standard in Windows Vista and later versions.
+  echo       A version for Windows XP is available in the XP Resource Kit.
+)
+if "%NOEXEC%"=="0" (	:# Normal execution mode
+  :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+  :# Errors, if any, will still be output on stderr.
+  if "%VERBOSE%"=="1" echo :# %CMD%
+  %CMD% >NUL
+) else (		:# NoExec mode. Just echo the command to execute.
+  echo %CMD%
+)
+if "%NOEXEC%"=="0" if "%QUIET%"=="0" goto :MasterPath.Echo
+exit /b
+
+:MasterPath.Remove1 %1=path to remove from MPATH
+set "MPATH=;!MPATH:;;=;!;"	&:# Make sure all paths have one ; on both sides
+set "MPATH=!MPATH:;%~1;=;!"	&:# Remove the requested value
+set "MPATH=!MPATH:~1,-1!"	&:# Remove the extra ; we added above
+exit /b
+
+:MasterPath.Remove
+if not defined VALUE goto :MasterPath.Echo
+call :MasterPath.Get
+call :UpdateWhere "!MPATH!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to remove
+  call :MasterPath.Remove1 "%%~p"
+)
+goto :MasterPath.Set
+
+:MasterPath.Move
+if not defined VALUE goto :MasterPath.Echo
+call :MasterPath.Get
+call :UpdateWhere "!MPATH!" &:# Change WHERE=head to WHERE=before to preserve multiple paths ordering
+for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to move
+  call :MasterPath.Remove1 "%%~p"
+  call :MasterPath.Add1 "%%~p"
+)
+goto :MasterPath.Set
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        FindPython                                                #
 :#                                                                            #
 :#  Description     Find the latest python.exe in %SEARCHDRIVES%              #
@@ -1356,7 +1647,7 @@ if defined RETVAR %UPVAR% %RETVAR%
 
 for %%d in (%SEARCHDRIVES%) do (
   for %%p in ("" "\Program Files" "\Program Files (x86)") do (
-    for /d %%b in ("%%d:%%~p\Python%VER%" "%%d:%%~p\Python\Python%VER%") do (
+    for /d %%b in ("%%d:%%~p\Python%VER%" "%%d:%%~p\Python\Python%VER%" "%%d:%%~p\Microsoft Visual Studio\Shared\Python%VER%") do (
       %ECHO.D% :# Looking in %%b
       if exist "%%~b\python.exe" (
       	set "EXE=%%~b\python.exe"
@@ -1535,6 +1826,7 @@ if !QEXE!==!EXE! ( :# If no quote needed
 %ECHOVARS.D% CMD ALTCMD
 
 :# Declare output variables
+%UPVAR% PATH
 %UPVAR% PATHEXT
 %UPVAR% NEEDSETUP
 
@@ -1790,6 +2082,140 @@ if not "%PythonPath%"=="%PythonPath2%" (
     :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
     %EXEC% reg add "%KEY%" /d "!PythonPath2!\" /f
   )
+)
+
+:# Check the local PATH
+set "PATHVAR=PATH" &:# The LocalPath.Xxx and GlobalPath.Xxx routines operate on this variable.
+set "WHERE=tail"   &:# And they put new variables at this location
+for %%e in ("!PYTHONBIN!") do set "PYDIRNAME=%%~nxe" &:# Directory name of the interpretor
+set "SCRIPTSDIR=%PYTHONBIN%\scripts"
+set "CONTAINS_P=does not contain"
+set "CONTAINS_S=does not contain"
+set "OTHERS="
+for /f "delims=" %%p in ('"echo.%PATH:;=&echo.%"') do (
+  set "P=%%~p"
+  if /i "!P!"=="!PYTHONBIN!" (
+    set "CONTAINS_P=contains"
+  ) else if /i "!P!"=="!SCRIPTSDIR!" (
+    set "CONTAINS_S=contains"
+  ) else if not "!P:\scripts=!"=="!P!" (
+    if exist "!P!\pip.exe" set OTHERS=!OTHERS! "!P!"
+  ) else if not "!P:\python=!"=="!P!" (
+    if exist "!P!\python.exe" set OTHERS=!OTHERS! "!P!"
+  )
+)
+%ECHO% The PATH !CONTAINS_P! !PYTHONBIN!
+if "!CONTAINS_P!"=="contains" (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=The Python directory is present the PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  call :Echo.Wrong " "
+  %ECHO% The Python directory is missing from the PATH
+  if %MODE%==setup (
+    %ECHO% :# Adding the Python directory "%PYTHONBIN%" to the PATH
+    %IF_EXEC% call :LocalPath.Add1 "%PYTHONBIN%"
+  )
+)
+%ECHO% The PATH !CONTAINS_S! !SCRIPTSDIR!
+if "%CONTAINS_S%"=="contains" (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=The Python scripts directory is present in the PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  call :Echo.Wrong " "
+  %ECHO% The Python scripts directory is missing from the PATH
+  if %MODE%==setup (
+    %ECHO% :# Adding the Python scripts directory "%SCRIPTSDIR%" to the PATH
+    %IF_EXEC% call :LocalPath.Add1 "%SCRIPTSDIR%"
+  )
+)
+%ECHO% Other Python directories in the PATH:
+if not defined OTHERS (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=There are no other Python instance directories in the PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  for %%o in (!OTHERS!) do echo.%%o
+  call :Echo.Wrong " "
+  %ECHO% There are other Python instance directories in the PATH
+  for %%o in (!OTHERS!) do (
+    %ECHO% :# Removing the "%%~o" directory from the PATH
+    %IF_EXEC% call :LocalPath.Remove1 "%%~o"
+  )
+)
+
+:# Check the global system PATH
+set "MENVKEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
+set "OBJECT=MasterPath" & set "SETXOPT=-M" & set "MKEY=%MENVKEY%" & set "OWNER=system"
+:# set "UENVKEY=HKCU\Environment"
+:# set "OBJECT=MasterPath" & set "SETXOPT=" & set "MKEY=%UENVKEY%" & set "OWNER=user"
+call :MasterPath.get &:# Stores it in variable MPATH
+set "MPATH0=!MPATH!"
+set "CONTAINS_P=does not contain"
+set "CONTAINS_S=does not contain"
+set "OTHERS="
+for /f "delims=" %%p in ('"echo.%MPATH:;=&echo.%"') do (
+  set "P=%%~p"
+  if /i "!P!"=="!PYTHONBIN!" (
+    set "CONTAINS_P=contains"
+  ) else if /i "!P!"=="!SCRIPTSDIR!" (
+    set "CONTAINS_S=contains"
+  ) else if not "!P:\scripts=!"=="!P!" (
+    if exist "!P!\pip.exe" set OTHERS=!OTHERS! "!P!"
+  ) else if not "!P:\python=!"=="!P!" (
+    if exist "!P!\python.exe" set OTHERS=!OTHERS! "!P!"
+  )
+)
+%ECHO% The global %OWNER% PATH !CONTAINS_P! !PYTHONBIN!
+if "!CONTAINS_P!"=="contains" (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=The Python directory is present the %OWNER% PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  call :Echo.Wrong " "
+  %ECHO% The Python directory is missing from the %OWNER% PATH
+  if %MODE%==setup (
+    %ECHO% :# Adding the Python directory "%PYTHONBIN%" to the %OWNER% PATH
+    call :MasterPath.Add1 "%PYTHONBIN%"
+  )
+)
+%ECHO% The global %OWNER% PATH !CONTAINS_S! !SCRIPTSDIR!
+if "%CONTAINS_S%"=="contains" (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=The Python scripts directory is present in the %OWNER% PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  call :Echo.Wrong " "
+  %ECHO% The Python scripts directory is missing from the %OWNER% PATH
+  if %MODE%==setup (
+    %ECHO% :# Adding the Python scripts directory "%SCRIPTSDIR%" to the %OWNER% PATH
+    call :MasterPath.Add1 "%SCRIPTSDIR%"
+  )
+)
+%ECHO% Other Python directories in the global %OWNER% PATH:
+if not defined OTHERS (
+  set "MSG="
+  %IF_VERBOSE% set "MSG=There are no other Python instance directories in the %OWNER% PATH"
+  call :Echo.OK " "
+  %ECHO% !MSG!
+) else (
+  for %%o in (!OTHERS!) do echo.%%o
+  call :Echo.Wrong " "
+  %ECHO% There are other Python instance directories in the %OWNER% PATH
+  for %%o in (!OTHERS!) do (
+    %ECHO% :# Removing the "%%~o" directory from the %OWNER% PATH
+    call :MasterPath.Remove1 "%%~o"
+  )
+)
+if not "!MPATH!"=="!MPATH0!" (
+  set "QUIET=1"
+  %IF_EXEC% call :MasterPath.Set
 )
 
 :# Check the PATHEXT variable
