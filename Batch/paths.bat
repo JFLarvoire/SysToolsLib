@@ -43,13 +43,14 @@
 :#                  Avoid duplications when adding multiple paths.	      #
 :#                  Added support for moving and removing multiple paths.     #
 :#   2019-12-11 JFL Avoid displaying empty lines when PATH ends with a ;      #
+:#   2020-03-13 JFL Corrected one message and two comments.                   #
 :#                  							      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-12-11"
+set "VERSION=2020-03-13"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "SNAME=%~n0"
@@ -294,7 +295,7 @@ call :MasterPath.Get
 if defined MPATH echo.%MPATH:;=&echo.%
 exit /b
 
-:MasterPath.Add1 %1=path to add to %PATHVAR%
+:MasterPath.Add1 %1=path to add to MPATH
 :# First check if the path to add was already there
 set "MPATH2=;!MPATH!;"		&:# Make sure all paths have a ; on both sides
 set "MPATH2=!MPATH2:;%~1;=;!"	&:# Remove the requested value
@@ -338,7 +339,7 @@ if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred)
   :# Note: On XP, /f does not work if it is the last option.
   set CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"
   echo Warning: setx.exe is not available on this system.
-  echo The %OWNER%'s default %PATHVAR% update will only be visible after a reboot.
+  echo The %OWNER%'s default PATH update will only be visible after a reboot.
   echo Note: setx.exe is standard in Windows Vista and later versions.
   echo       A version for Windows XP is available in the XP Resource Kit.
 )
@@ -353,7 +354,7 @@ if "%NOEXEC%"=="0" (	:# Normal execution mode
 if "%NOEXEC%"=="0" if "%QUIET%"=="0" goto :MasterPath.Echo
 exit /b
 
-:MasterPath.Remove1 %1=path to remove from %PATHVAR%
+:MasterPath.Remove1 %1=path to remove from MPATH
 set "MPATH=;!MPATH:;;=;!;"	&:# Make sure all paths have one ; on both sides
 set "MPATH=!MPATH:;%~1;=;!"	&:# Remove the requested value
 set "MPATH=!MPATH:~1,-1!"	&:# Remove the extra ; we added above
