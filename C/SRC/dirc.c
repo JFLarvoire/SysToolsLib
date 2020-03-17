@@ -222,6 +222,8 @@
 *		    Version 3.2.    					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.2.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.2.2.      *
+*    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 3.2.3.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -229,8 +231,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.2.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "3.2.3"
+#define PROGRAM_DATE    "2020-03-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -267,6 +269,8 @@
 #include <fnmatch.h>
 #include <iconv.h>
 #include <stdarg.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -1239,9 +1243,9 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
   }
 
   /* start looking for all files */
-  pDir = opendir(path);
+  pDir = opendirx(path);
   if (pDir) {
-    while ((pDirent = readdir(pDir)) != NULL) {
+    while ((pDirent = readdirx(pDir)) != NULL) { /* readdirx() ensures d_type is set */
       struct stat st;
       DEBUG_CODE(
 	char *reason;
@@ -1252,26 +1256,6 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
       makepathname(pathname, path, pDirent->d_name);
 #if !_DIRENT2STAT_DEFINED
       pStat(pathname, &st);
-      if (!pDirent->d_type) { /* Some filesystems don't set this field */
-	/* Since we've called stat anyway, copy the type from there */
-	if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
-	if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-	if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
-#endif
-#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
-	if (S_ISBLK(st.st_mode)) pDirent->d_type = DT_BLK;
-#endif
-#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* In DOS it's defined, but always returns 0 */
-	if (S_ISCHR(st.st_mode)) pDirent->d_type = DT_CHR;
-#endif
-#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* In DOS it's defined, but always returns 0 */
-	if (S_ISFIFO(st.st_mode)) pDirent->d_type = DT_FIFO;
-#endif
-#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
-	if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
-#endif
-      }
 #else
       if (pStat == lstat) {
 	dirent2stat(pDirent, &st);
@@ -1308,7 +1292,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	pfif = (fif *)malloc(sizeof(fif));
 	pname = strdup(pDirent->d_name);
 	if (!pfif || !pname) {
-	  closedir(pDir);
+	  closedirx(pDir);
 	  finis(RETCODE_NO_MEMORY, "Out of memory for directory access");
 	}
 	pfif->name = pname;
@@ -1317,13 +1301,13 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
 	DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
 #endif /* _MSVCLIBX_STAT_DEFINED */
-#ifndef _MSDOS
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* If the OS has links (For some OSs which don't, macros are defined, but always returns 0) */
 	pfif->target = NULL;
 	if (pDirent->d_type == DT_LNK) {
 	  char *pTarget = malloc(PATHNAME_SIZE);
 	  int lTarget;
 	  if (!pTarget) {
-	    closedir(pDir);
+	    closedirx(pDir);
 	    finis(RETCODE_NO_MEMORY, "Out of memory");
 	  }
 	  lTarget = (int)readlink(pathname, pTarget, PATHNAME_SIZE);
@@ -1346,7 +1330,7 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
       }
     }
 
-    closedir(pDir);
+    closedirx(pDir);
   }
 #if !HAS_MSVCLIBX
   DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));

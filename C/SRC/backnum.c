@@ -53,6 +53,8 @@
 *		    Version 2.1.3.  					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.4.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.5.      *
+*    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 2.1.6.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,8 +62,8 @@
 
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.1.5"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2.1.6"
+#define PROGRAM_DATE    "2020-03-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -92,6 +94,8 @@ typedef unsigned long uintmax_t;
 #endif
 #include <unistd.h>		/* For chdir() */
 #include <errno.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -323,7 +327,7 @@ int main(int argc, char *argv[]) {
     struct dirent *pDE;
     char szPattern[_MAX_PATH];
 
-    pDir = opendir(szPath);
+    pDir = opendirx(szPath);
     if (!pDir) {
       fprintf(stderr, "Error: Directory %s: %s\n", szPath, strerror(errno));
       exit(1);
@@ -331,7 +335,7 @@ int main(int argc, char *argv[]) {
 
     _makepath(szPattern, NULL, NULL, szFname, "*");
 
-    while ((pDE = readdir(pDir))) {
+    while ((pDE = readdirx(pDir))) { /* readdirx() ensures d_type is set */
       if (pDE->d_type != DT_REG) continue;	/* We want only files */
 
       /* Check the case of the base file */
@@ -355,7 +359,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    closedir(pDir);
+    closedirx(pDir);
   }
 
   /* Correct the file name case if needed */

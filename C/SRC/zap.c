@@ -29,13 +29,15 @@
 *    2020-02-04 JFL Added the ability to delete directories using wild cards. *
 *    2020-02-05 JFL Fixed and improved the error reporting.		      *
 *    2020-02-06 JFL Make sure never to delete a root directory. Version 1.3.  *
+*    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 1.3.1.					      *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2020-02-06"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2020-03-16"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -50,6 +52,8 @@
 #include <fnmatch.h>
 #include <libgen.h>
 #include <sys/stat.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -119,7 +123,7 @@ char *szHalRefusal = "I'm sorry Dave, I'm afraid I can't do that";
 /* Forward declarations */
 void usage(void);
 int IsSwitch(char *pszArg);
-int isdir(const char *pszPath);
+int isEffectiveDir(const char *pszPath);
 char *NewPathName(const char *path, const char *name);
 /* zap functions options */
 typedef struct zapOpts {
@@ -267,7 +271,7 @@ int main(int argc, char *argv[]) {
       nErr += zapDirs(arg, &zo);		/* Remove whole directories */
       continue;
     }
-    if (isdir(arg)) { /* If the pathname refers to an existing directory */
+    if (isEffectiveDir(arg)) { /* If the pathname refers to an existing directory */
       nErr += zapDir(arg, &zo);   /* Remove a whole directory */
       continue;
     }
@@ -464,7 +468,7 @@ int IsSwitch(char *pszArg) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    isdir						      |
+|   Function	    isEffectiveDir					      |
 |									      |
 |   Description     Check if pathname refers to an existing directory	      |
 |									      |
@@ -476,22 +480,15 @@ int IsSwitch(char *pszArg) {
 |		    							      |
 |   History								      |
 |    2017-10-05 JFL Created this routine				      |
+|    2020-03-16 JFL Use stat instead of lstat, it faster and simpler!         |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int isdir(const char *pszPath) {
-  struct stat sstat;
-  int iErr = lstat(pszPath, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
+int isEffectiveDir(const char *pszPath) {
+  struct stat sStat;
+  int iErr = stat(pszPath, &sStat);
   if (iErr) return 0;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-  if (S_ISLNK(sstat.st_mode)) {
-    char *pszReal = realpath(pszPath, NULL);
-    int iRet = 0; /* If realpath failed, this is a dangling link, so not a directory */
-    if (pszReal) iRet = isdir(pszReal);
-    return iRet;
-  }
-#endif
-  return S_ISDIR(sstat.st_mode);
+  return S_ISDIR(sStat.st_mode);
 }
 
 /*---------------------------------------------------------------------------*\
@@ -655,13 +652,13 @@ fail:
     goto fail;
   }
 
-  pDir = opendir(pPath);
+  pDir = opendirx(pPath);
   if (!pDir) {
     printError("Error: Can't access \"%s\": %s", pPath, strerror(errno));
     goto fail;
   }
   if (streq(pPath, ".")) pPath = NULL;	/* Hide the . path in the output */
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdirx(pDir))) { /* readdirx() ensures d_type is set */
     char *pPathname = NewPathName(pPath, pDE->d_name);
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
     if (!pPathname) goto out_of_memory;
@@ -691,7 +688,7 @@ fail:
     }
     free(pPathname);
   }
-  closedir(pDir);
+  closedirx(pDir);
 
 cleanup_and_return:
   free(pPath2);
@@ -832,12 +829,15 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   }
 
   if (iFlags & FLAG_RECURSE) { /* If in recursive mode, delete everything inside */
-    pDir = opendir(path);
+    pDir = opendirx(path);
     if (!pDir) goto fail;
-    while ((pDE = readdir(pDir))) {
+    while ((pDE = readdirx(pDir))) { /* readdirx() ensures d_type is set */
       DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
       pPath = NewPathName(path, pDE->d_name);
-      if (!pPath) goto fail; /* Will report out of memory */
+      if (!pPath) {
+      	closedirx(pDir);
+      	goto fail; /* Will report out of memory */
+      }
       pszSuffix = "";
 #if _DIRENT2STAT_DEFINED /* MsvcLibX return DOS/Windows stat info in the dirent structure */
       iErr = dirent2stat(pDE, &sStat);
@@ -878,7 +878,7 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
       }
       free(pPath);
     }
-    closedir(pDir);
+    closedirx(pDir);
   }
 
   /* Skip the directory deletion if the directory is . or PATH\. or  D:. */
@@ -977,16 +977,19 @@ out_of_memory:
     goto cleanup_and_return;
   }
 
-  pDir = opendir(pPath);
+  pDir = opendirx(pPath);
   if (!pDir) {
     printError("Error deleting \"%s\": %s", pPath, strerror(errno));
     goto cleanup_and_return;
   }
   if (streq(pPath, ".")) pPath = NULL;	/* Hide the . path in the output */
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdirx(pDir))) { /* readdirx() ensures d_type is set */
     char *pPathname = NewPathName(pPath, pDE->d_name);
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
-    if (!pPathname) goto out_of_memory;
+    if (!pPathname) {
+      closedirx(pDir);
+      goto out_of_memory;
+    }
     switch (pDE->d_type) {
       case DT_DIR:
       	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
@@ -999,7 +1002,7 @@ out_of_memory:
     }
     free(pPathname);
   }
-  closedir(pDir);
+  closedirx(pDir);
 
 cleanup_and_return:
   free(pPath2);

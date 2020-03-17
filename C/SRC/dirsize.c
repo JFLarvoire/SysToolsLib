@@ -64,6 +64,8 @@
 *		    Version 3.3.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.3.2.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.3.3.      *
+*    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 3.3.4.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -71,8 +73,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.3.3"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "3.3.4"
+#define PROGRAM_DATE    "2020-03-16"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 /* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
@@ -93,6 +95,8 @@
 #include <unistd.h>		/* For chdir() */
 #include <errno.h>
 #include <stdarg.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -1235,42 +1239,13 @@ int scandirX(const char *pszName,
 
   DEBUG_ENTER(("scandirX(\"%s\", %p, %p, %p, %p);\n", pszName, resultList, cbSelect, cbCompare, pRef));
 
-  pDir = opendir(pszName);
+  pDir = opendirx(pszName);
   if (!pDir) {
     DEBUG_LEAVE(("return -1; // errno=%d\n", errno));
     return -1;
   }
 
-  while ((pDirent = readdir(pDir))) {
-    if (!pDirent->d_type) { /* Some filesystems don't set this field */
-      struct stat st;
-      NEW_PATHNAME_BUF(szName);
-#if PATHNAME_BUFS_IN_HEAP
-      if (!szName) {
-	finis(RETCODE_NO_MEMORY, "Out of memory");
-      }
-#endif
-      sprintf(szName, "%s/%s", pszName, pDirent->d_name);
-      lstat(szName, &st);
-      if (S_ISREG(st.st_mode)) pDirent->d_type = DT_REG;
-      if (S_ISDIR(st.st_mode)) pDirent->d_type = DT_DIR;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-      if (S_ISLNK(st.st_mode)) pDirent->d_type = DT_LNK;
-#endif
-#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* In DOS it's defined, but always returns 0 */
-      if (S_ISBLK(st.st_mode)) pDirent->d_type = DT_BLK;
-#endif
-#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* In DOS it's defined, but always returns 0 */
-      if (S_ISCHR(st.st_mode)) pDirent->d_type = DT_CHR;
-#endif
-#if defined(S_ISFIFO) && S_ISFIFO(S_IFIFO) /* In DOS it's defined, but always returns 0 */
-      if (S_ISFIFO(st.st_mode)) pDirent->d_type = DT_FIFO;
-#endif
-#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* In DOS it's defined, but always returns 0 */
-      if (S_ISSOCK(st.st_mode)) pDirent->d_type = DT_SOCK;
-#endif
-      FREE_PATHNAME_BUF(szName);
-    }
+  while ((pDirent = readdirx(pDir))) { /* readdirx() ensures d_type is set */
     if (cbSelect && !cbSelect(pDirent, pRef)) continue; /* We don't want this one. Continue search. */
     /* OK, we've selected this one. So append a copy of this dirent to the list. */
     n += 1;
@@ -1288,7 +1263,7 @@ int scandirX(const char *pszName,
     pList[n-1] = pDirent2;
   }
 
-  closedir(pDir);
+  closedirx(pDir);
 
   if (cbCompare) qsort(pList, n, sizeof(struct dirent *), (pCompareProc)cbCompare);
   *resultList = pList;

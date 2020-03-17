@@ -4,7 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2020-02-26
+## [Unreleased] 2020-03-17
+### Fixed
+- C/SRC/backnum.c, dirc.c, dirsize.c, rd.c, redo.c, update.c, zap.c:
+  Fixed serious issues with the use of the Unix readdir() function, which sometimes caused failures in Unix.
+
+## [Unreleased] 2020-03-12
+### New
+- Batch/halve.bat: New filtering function for use with 12.bat.
+- C/SysLib/dirx.c, dirx.h: Unix-specific directory access routines eXtensions.
+
+### Fixed
+- C/SRC/update.c: Fixed a serious usability issue when the target is a link to a directory.
+
+## [Unreleased] 2020-03-02
 ### Changed
 - C/SRC/cpuid.c: Display the CPUID index for every set of feature flags.
   Corrected typos and errors about MTRR registers.

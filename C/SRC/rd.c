@@ -23,13 +23,17 @@
 *		    Version 1.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
+*    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 1.1.3.					      *
 *		    							      *
+*         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
+* Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Remove a directory"
 #define PROGRAM_NAME    "rd"
-#define PROGRAM_VERSION "1.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.1.3"
+#define PROGRAM_DATE    "2020-03-17"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -43,6 +47,8 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>	/* For mkdir() */
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -522,9 +528,9 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     RETURN_INT(1);
   }
 
-  pDir = opendir(path);
+  pDir = opendirx(path);
   if (!pDir) RETURN_INT(1);
-  while ((pDE = readdir(pDir))) {
+  while ((pDE = readdirx(pDir))) { /* readdirx() ensures d_type is set */
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
     pPath = NewPathName(path, pDE->d_name);
     pszSuffix = "";
@@ -565,7 +571,7 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
     }
     free(pPath);
   }
-  closedir(pDir);
+  closedirx(pDir);
 
   iErr = 0;
   pszSuffix = DIRSEPARATOR_STRING;

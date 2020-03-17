@@ -45,6 +45,8 @@
 *		    Version 3.1.  					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.1.2.      *
+*    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
+*                   Version 3.1.3.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,8 +54,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "3.1.3"
+#define PROGRAM_DATE    "2020-03-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -73,6 +75,8 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <stdarg.h>
+/* SysLib include files */
+#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -946,9 +950,9 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
   DoPerPath();
 
   /* start looking for all files */
-  pDir = opendir(path);
+  pDir = opendirx(path);
   if (pDir) {
-    while (pDir && (pDirent = readdir(pDir))) {
+    while (pDir && (pDirent = readdirx(pDir))) { /* readdirx() ensures d_type is set */
       struct stat st;
       DEBUG_CODE(
 	char *reason;
@@ -985,7 +989,7 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
 	pfif = (fif *)malloc(sizeof(fif));
 	pname = strdup(pDirent->d_name);
 	if (!pfif || !pname) {
-	  closedir(pDir);
+	  closedirx(pDir);
 	  finis(RETCODE_NO_MEMORY, "Out of memory for directory access");
 	}
 	pfif->name = pname;
@@ -1003,7 +1007,7 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
       }
     }
 
-    closedir(pDir);
+    closedirx(pDir);
   }
 #if !HAS_MSVCLIBX
   DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
