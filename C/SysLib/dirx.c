@@ -92,19 +92,19 @@ struct dirent *readdirx(DIR *pDir) {
   /* Convert the stat mode to a directory entry d_type */
   if      (S_ISREG(sStat.st_mode))  pDE->d_type = DT_REG;
   else if (S_ISDIR(sStat.st_mode))  pDE->d_type = DT_DIR;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* Sometimes it's defined, but always returns 0 */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* If the OS has links (For some OSs which don't, macros are defined, but always returns 0) */
   else if (S_ISLNK(sStat.st_mode))  pDE->d_type = DT_LNK;
 #endif
-#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* Sometimes it's defined, but always returns 0 */
+#if defined(S_ISCHR) && S_ISCHR(S_IFCHR) /* If the OS has character devices (For some OSs which don't, macros are defined, but always returns 0) */
   else if (S_ISCHR(sStat.st_mode))  pDE->d_type = DT_CHR;
 #endif
-#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* Sometimes it's defined, but always returns 0 */
+#if defined(S_ISBLK) && S_ISBLK(S_IFBLK) /* If the OS has block devices (For some OSs which don't, macros are defined, but always returns 0) */
   else if (S_ISBLK(sStat.st_mode))  pDE->d_type = DT_BLK;
 #endif
-#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* Sometimes it's defined, but always returns 0 */
+#if defined(S_ISFIFO) && S_ISFIFO(S_IFFIFO) /* If the OS has fifos (For some OSs which don't, macros are defined, but always returns 0) */
   else if (S_ISFIFO(sStat.st_mode)) pDE->d_type = DT_FIFO;
 #endif
-#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* Sometimes it's defined, but always returns 0 */
+#if defined(S_ISSOCK) && S_ISSOCK(S_IFSOCK) /* If the OS has sockets (For some OSs which don't, macros are defined, but always returns 0) */
   else if (S_ISSOCK(sStat.st_mode)) pDE->d_type = DT_SOCK;
 #endif
   return pDE;
