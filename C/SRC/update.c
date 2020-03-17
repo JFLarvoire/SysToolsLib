@@ -157,9 +157,10 @@
 *                   progress counts on slow networks. V3.8.3.                 *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.8.4.      *
 *    2020-01-28 JFL Fixed issue with D:myFile input files. Version 3.8.5.     *
-*    2020-03-11 JFL Fixed issue w. Linux readdir() not always setting d_type. *
+*    2020-03-11 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Fixed a memory leak in updateall().                       *
 *                   Fixed serious issue when Linux target is a link to a dir. *
+*    2020-03-17 JFL Removed isdir(), and use is_effective_directory() instead.*
 *		    Version 3.8.6.  					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -169,7 +170,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.8.6"
-#define PROGRAM_DATE    "2020-03-11"
+#define PROGRAM_DATE    "2020-03-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -1177,7 +1178,7 @@ int exists(char *name) {
 
     DEBUG_ENTER(("exists(\"%s\");\n", name));
 
-    result = !lstat(name, &sstat); // Use lstat, as stat does not detect SYMLINKDs.
+    result = !lstat(name, &sstat); // Use lstat, to detect even dangling links
 
     RETURN_BOOL(result);
 }
@@ -1552,7 +1553,7 @@ int is_effective_directory(char *name){ /* Is name a directory, or a link to a d
 
   DEBUG_ENTER(("is_effective_directory(\"%s\");\n", name));
 
-  err = stat(name, &sstat); // Use lstat, as stat does not detect SYMLINKDs.
+  err = stat(name, &sstat); // Use stat, as lstat sees SYMLINKDs as links.
   result = ((err == 0) && (S_ISDIR(sstat.st_mode)));
   RETURN_BOOL_COMMENT(result, ("%s %s a directory\n", name, result ? "is" : "is not"));
 }
@@ -1620,21 +1621,6 @@ time_t getmodified(char *name) {
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 #endif
 
-int isdir(const char *pszPath) {
-  struct stat sstat;
-  int iErr = lstat(pszPath, &sstat); /* Use lstat, as stat does not detect SYMLINKDs. */
-  if (iErr) return 0;
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
-  if (S_ISLNK(sstat.st_mode)) {
-    char *pszReal = realpath(pszPath, NULL);
-    int iRet = 0; /* If realpath failed, this is a dangling link, so not a directory */
-    if (pszReal) iRet = isdir(pszReal);
-    return iRet;
-  }
-#endif
-  return S_ISDIR(sstat.st_mode);
-}
-
 /* Create one directory */
 int mkdir1(const char *pszPath, mode_t pszMode) {
 #ifndef HAS_MSVCLIBX
@@ -1658,7 +1644,7 @@ int mkdirp(const char *pszPath0, mode_t pszMode) {
       while (*pc && (*pc != DIRSEPARATOR_CHAR)) pc++; /* Skip the file or dir name */
       c = *pc; /* Either NUL or / or \ */
       *pc = '\0'; /* Trim pszPath */
-      if (iSkipTest || !isdir(pszPath)) { /* If the intermediate path does not exist */
+      if (iSkipTest || !is_effective_directory(pszPath)) { /* If the intermediate path does not exist */
 	iErr = mkdir1(pszPath, pszMode); /* Then create it. */
 	if (iErr) break; /* No need to go further if this failed */
 	iSkipTest = TRUE; /* We know future existence tests will fail */
