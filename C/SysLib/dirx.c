@@ -6,19 +6,31 @@
 *                                                                             *
 *   Notes:	    Work around the problem of readdir() not always setting   *
 *		    d_type for some file systems in Unix		      *
-*									      *
+*		    							      *
+*		    TO DO: Have two distinct readdirx and readdirx64 functions,
+*		    and a readdirx macro in dirx.h pointing to the right      *
+*		    function depending on the _FILE_OFFSET_BITS value.	      *
+*		    							      *
 *   History:								      *
 *    2020-03-11 JFL Created this file.					      *
+*    2020-03-19 JFL Use 64-bits file sizes even in 32-bits OSs, like that in  *
+*		    the Raspberry Pi 2.					      *
 *									      *
 *         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define _GNU_SOURCE		/* for strdup */
+#define _BSD_SOURCE    		/* Define BSD extensions. Ex: S_IFREG in sys/stat.h */
+#define _DEFAULT_SOURCE		/* glibc >= 2.19 will complain about _BSD_SOURCE if it doesn't see this */
+#define _LARGEFILE_SOURCE	/* Define LFS extensions. Ex: type off_t, and functions fseeko and ftello */
+#define _GNU_SOURCE		/* Implies all the above */
+#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes by default, if possible */
+
 #include <malloc.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #include "dirx.h"		/* Directory eXtensions definitions */
 
