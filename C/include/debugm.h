@@ -134,6 +134,8 @@
 *		    which does not implicitely outputs an \n in the end.      *
 *		    Likewise, renamed SET_DEBUG_PUTS() as SET_DEBUG_PUT().    *
 *    2019-09-24 JFL Fixed bug in debug_vsprintf() using new try_vsnprintf().  *
+*    2020-03-19 JFL Fixed DEBUG_PRINT_MACRO() which sometimes failed in DOS   *
+*		    and WIN95 when used with undefined macros.		      *
 *		    							      *
 *        (C) Copyright 2016 Hewlett Packard Enterprise Development LP         *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -414,7 +416,7 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 /* Display a macro name and value. */
 #define DEBUG_PRINT_MACRO(name) DEBUG_DO( \
   const char *pszName = #name; /* Don't use STRINGIZE because we're already inside a macro */ \
-  const char *pszValue = STRINGIZE(name); /* Don't use VALUEIZE because we're already inside a macro */ \
+  const char *pszValue = "" STRINGIZE(name); /* Don't use VALUEIZE because we're already inside a macro */ \
   DEBUG_PRINT_INDENT(); \
   if (strcmp(pszName, pszValue)) { \
     printf("#define %s %s\n", pszName, pszValue); \
