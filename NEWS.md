@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-03-19
+### New
+- Makefile: New Unix makefile in the project root, to allow running make from the root.
+
+### Fixed
+- C/Makefile: Fixed recursion; Changed the default install dir to /usr/bin if /usr/local/bin is not in the PATH.
+- C/SysLib/dirx.c, dirx.h: Fixed operation in a 32-bits OS, like Raspbian on a Raspberry Pi 2.
+
 ## [Unreleased] 2020-03-17
 ### Fixed
 - C/SRC/backnum.c, dirc.c, dirsize.c, rd.c, redo.c, update.c, zap.c:
