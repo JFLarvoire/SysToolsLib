@@ -232,21 +232,12 @@
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
 #define PROGRAM_VERSION "3.2.3"
-#define PROGRAM_DATE    "2020-03-16"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
-
-#define _ISOC99_SOURCE      /* Tell the GNU library that we support C99 syntax */
-#define __STDC_LIMIT_MACROS /* Make sure C99 macros are defined in C++ */
-#define __STDC_CONSTANT_MACROS
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #define FALSE 0
 #define TRUE 1
-
-#define _BSD_SOURCE    		/* Include extra BSD-specific functions. Implied by _GNU_SOURCE. */
-#define _LARGEFILE_SOURCE	/* Force using 64-bits file sizes if possible */
-#define _GNU_SOURCE		/* Replaces nicely all the above */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 
 #ifndef USE_TERMCAP
 #define USE_TERMCAP 0		/* 1=Use termcap lib; 0=Don't */

@@ -32,11 +32,9 @@
 #define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
 #define PROGRAM_VERSION "1.1.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
-
-#define _GNU_SOURCE	/* Include extra GNU-specific functions */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>

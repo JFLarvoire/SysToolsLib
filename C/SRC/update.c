@@ -161,7 +161,7 @@
 *                   Fixed a memory leak in updateall().                       *
 *                   Fixed serious issue when Linux target is a link to a dir. *
 *    2020-03-17 JFL Removed isdir(), and use is_effective_directory() instead.*
-*		    Version 3.8.6.  					      *
+*    2020-03-19 JFL Fixed warnings and issues on 32-bit OSs. Version 3.8.6.   *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -170,21 +170,12 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.8.6"
-#define PROGRAM_DATE    "2020-03-17"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
-
-#define _ISOC99_SOURCE      /* Tell the GNU library that we support C99 syntax */
-#define __STDC_LIMIT_MACROS /* Make sure C99 macros are defined in C++ */
-#define __STDC_CONSTANT_MACROS
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #define FALSE 0
 #define TRUE 1
-
-#define _BSD_SOURCE    		/* Include extra BSD-specific functions. Implied by _GNU_SOURCE. */
-#define _LARGEFILE_SOURCE	/* Force using 64-bits file sizes if possible */
-#define _GNU_SOURCE		/* Replaces nicely all the above */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -609,6 +600,24 @@ int main(int argc, char *argv[]) {
 
   DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
   DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
+  DEBUG_PRINTF(("Size of dirent = %d bytes\n", (int)(sizeof(struct dirent))));
+#if defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
+  DEBUG_PRINTF(("Size of dirent64 = %d bytes\n", (int)(sizeof(struct dirent64))));
+#endif
+#if defined(_MSC_VER)
+#pragma warning(disable:4003) /* Ignore the "not enough actual parameters for macro" warning */
+#endif
+  DEBUG_CODE_IF_ON(
+    DEBUG_PRINT_MACRO(__USE_FILE_OFFSET64);		/* Set by GNU LIBC */
+    DEBUG_PRINT_MACRO(__USE_LARGEFILE64);		/* Set by GNU LIBC */
+    DEBUG_PRINT_MACRO(_DIRENT_MATCHES_DIRENT64);	/* Set by GNU LIBC */
+    DEBUG_PRINT_MACRO(_DIRENT_HAVE_D_TYPE);		/* Set by GNU LIBC */
+    DEBUG_PRINT_MACRO(_DIRENT_HAVE_D_OFF);		/* Set by GNU LIBC */
+    DEBUG_PRINT_MACRO(readdir);				/* May be redefined as readdir64, etc */
+  )
+#if defined(_MSC_VER)
+#pragma warning(default:4003) /* Restore the "not enough actual parameters for macro" warning */
+#endif
 
   target = argv[--argc];	/* The last argument is the target */
   DEBUG_PRINTF(("Target = %s\n", target));
@@ -1383,7 +1392,7 @@ retry_open_targetfile:
     }
     /* hdest = fileno(pfd); */
 
-    if (iShowCopying) printf(" : %"PRIdPTR" bytes\n", filelen);
+    if (iShowCopying) printf(" : %llu bytes\n", (uintmax_t)filelen);
 
     if (iProgress) {
       if (filelen > (100*1024L*1024L)) {
@@ -1401,7 +1410,7 @@ retry_open_targetfile:
       
       if (iProgress) {
       	int pc = (int)((offset * 100) / filelen);
-      	iWidth = printf("%3d%% (%"PRIdPTR"%s/%"PRIdPTR"%s)\r", pc, (offset/lUnit), pszUnit, (filelen/lUnit), pszUnit);
+      	iWidth = printf("%3d%% (%llu%s/%llu%s)\r", pc, (uintmax_t)(offset/lUnit), pszUnit, (uintmax_t)(filelen/lUnit), pszUnit);
       }
       
       XDEBUG_PRINTF(("fread(%p, %"PRIuPTR", 1, %p);\n", buffer, tocopy, pfs));

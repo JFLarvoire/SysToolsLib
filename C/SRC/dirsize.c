@@ -74,14 +74,10 @@
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
 #define PROGRAM_VERSION "3.3.4"
-#define PROGRAM_DATE    "2020-03-16"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
-/* #define __USE_BSD	    */	/* Use BSD extensions (DT_xxx types in dirent.h) */
-/* #define _POSIX_SOURCE 2  */	/* Use Posix 2 extensions (FNM_xxx flags in fnmatch.h) */
-#define _GNU_SOURCE		/* Replaces nicely the above two */
-#define _LARGEFILE_SOURCE 1	/* Force using 64-bits file sizes if possible */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
+#include "predefine.h" /* Define optional features we need in the C libraries */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

@@ -37,11 +37,9 @@
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
 #define PROGRAM_VERSION "1.3.1"
-#define PROGRAM_DATE    "2020-03-16"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
-
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>

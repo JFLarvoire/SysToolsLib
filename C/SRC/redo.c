@@ -55,14 +55,9 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "3.1.3"
-#define PROGRAM_DATE    "2020-03-17"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
-
-#define _BSD_SOURCE    		/* Include extra BSD-specific functions. Implied by _GNU_SOURCE. */
-#define _LARGEFILE_SOURCE	/* Force using 64-bits file sizes if possible */
-#define _GNU_SOURCE		/* Replaces nicely all the above */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <string.h>

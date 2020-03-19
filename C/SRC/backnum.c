@@ -63,16 +63,10 @@
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
 #define PROGRAM_VERSION "2.1.6"
-#define PROGRAM_DATE    "2020-03-16"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
-#define __STDC_LIMIT_MACROS /* Make sure C99 macros are defined in C++ */
-#define __STDC_CONSTANT_MACROS
-
-#define _GNU_SOURCE
-#define _LARGEFILE_SOURCE 1	/* Force using 64-bits file sizes if possible */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>

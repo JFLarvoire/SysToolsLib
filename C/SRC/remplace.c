@@ -149,16 +149,10 @@
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
 #define PROGRAM_VERSION "2.6.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
-#define _POSIX_SOURCE /* Force Linux to define fileno in stdio.h */
-#define _XOPEN_SOURCE /* Force Linux to define tempnam in stdio.h */
-#define _BSD_SOURCE   /* Force Linux to define S_IFREG in sys/stat.h */
-#define _LARGEFILE_SOURCE64 1   /* Force using 64-bits file sizes if possible */
-#define _GNU_SOURCE		/* Replaces nicely all the above */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>

@@ -99,12 +99,10 @@
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "which"
 #define PROGRAM_VERSION "1.14"
-#define PROGRAM_DATE    "2019-09-25"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS 1
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
-#define _GNU_SOURCE		/* Force MsvcLibX.lib to use UTF-8 strings,
-				   and Unix to define lots of extras */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

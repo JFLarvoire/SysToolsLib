@@ -44,15 +44,10 @@
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "lessive"
 #define PROGRAM_VERSION "1.4.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_DATE    "2020-03-19"
 
-#define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
-#define _POSIX_SOURCE /* Force Linux to define fileno in stdio.h */
-#define _XOPEN_SOURCE /* Force Linux to define tempnam in stdio.h */
-#define _BSD_SOURCE /* Force Linux to define S_IFREG in sys/stat.h */
-#define _LARGEFILE_SOURCE64 1 /* Force using 64-bits file sizes if possible */
-#define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes if possible */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
