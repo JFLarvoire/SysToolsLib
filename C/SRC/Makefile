@@ -24,14 +24,28 @@
 #    2018-03-23 JFL Install which as Which, to avoid conflicts with Unix's.   #
 #    2020-01-06 JFL Do not actually install files if NOEXEC=1.                #
 #    2020-01-09 JFL Use PWD instead of CURDIR, unless PWD missing or wrong.   #
+#    2020-03-18 JFL Fixed PROC for the Raspberry Pi, and define EXE_PROC_NAME.#
+#                   Install to /usr/bin if /usr/local/bin is not in the PATH. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-# Standard installation directories.
-# NOTE: This directory must exist when you start the install.
-prefix = /usr/local
+# Standard installation directory macros, based on
+# https://www.gnu.org/prep/standards/html_node/Directory-Variables.html
+ifeq "$(prefix)" ""
+  ifeq "$(bindir)" ""
+    ifneq "$(findstring :/usr/local/bin:,:$(PATH):)" ""
+      prefix := /usr/local	# If /usr/local/bin is in the PATH, use it
+    else
+      prefix := /usr		# Else use /usr/bin
+    endif
+  else # Extract the prefix from the bindir provided
+    prefix := $(dir $(bindir))
+  endif
+endif
+# Remove the trailing / from prefix, if any
+prefix := $(patsubst %/,%,$(strip $(prefix)))
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
 exec_prefix = $(prefix)
@@ -39,8 +53,6 @@ exec_prefix = $(prefix)
 bindir = $(exec_prefix)/bin
 # Where to put the libraries.
 libdir = $(exec_prefix)/lib
-# Where to put the info files.
-infodir = $(datarootdir)/info
 
 # Prefer using PWD instead of CURDIR, as PWD does not expand links
 ifeq "$(PWD)" ""  # But some old shells don't define PWD
@@ -61,6 +73,9 @@ ifeq "$(OS)" ""    # If $(OS) is undefined or empty
   endif
   ifeq "$(OS)" "WindowsNT"
     OS := WIN32
+  endif
+  ifeq "$(PROC)" "unknown" # On a Raspberry Pi, it's unknown, and MACHINE = armv7
+    PROC := $(MACHINE)
   endif
   # Define the output base directory
   OSP := $(OS).$(PROC)
@@ -127,6 +142,7 @@ CFLAGS = -std=c99 -pthread -Wall
 CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap
+CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
 
 # Add the path to SysToolsLib global include files
 ifdef STINCLUDE
@@ -191,6 +207,7 @@ $(OSPD)/%: %.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
+# Pattern rules for Building the normal and debug versions of a C or C++ program.
 QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory
 
 %: %.c

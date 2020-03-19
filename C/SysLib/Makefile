@@ -16,14 +16,30 @@
 #    2016-10-10 JFL jf.larvoire@hpe.com created this file.                    #
 #    2016-10-12 JFL Search global includes in $(STINCLUDE).                   #
 #    2017-10-26 JFL Changed the default OUTDIR to bin.			      #
+#    2020-01-06 JFL Do not actually install files if NOEXEC=1.                #
+#    2020-01-09 JFL Use PWD instead of CURDIR, unless PWD missing or wrong.   #
+#    2020-03-18 JFL Fixed PROC for the Raspberry Pi, and define EXE_PROC_NAME.#
+#                   Install to /usr/bin if /usr/local/bin is not in the PATH. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-# Standard installation directories.
-# NOTE: This directory must exist when you start the install.
-prefix = /usr/local
+# Standard installation directory macros, based on
+# https://www.gnu.org/prep/standards/html_node/Directory-Variables.html
+ifeq "$(prefix)" ""
+  ifeq "$(bindir)" ""
+    ifneq "$(findstring :/usr/local/bin:,:$(PATH):)" ""
+      prefix := /usr/local	# If /usr/local/bin is in the PATH, use it
+    else
+      prefix := /usr		# Else use /usr/bin
+    endif
+  else # Extract the prefix from the bindir provided
+    prefix := $(dir $(bindir))
+  endif
+endif
+# Remove the trailing / from prefix, if any
+prefix := $(patsubst %/,%,$(strip $(prefix)))
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
 exec_prefix = $(prefix)
@@ -31,8 +47,13 @@ exec_prefix = $(prefix)
 bindir = $(exec_prefix)/bin
 # Where to put the libraries.
 libdir = $(exec_prefix)/lib
-# Where to put the info files.
-infodir = $(datarootdir)/info
+
+# Prefer using PWD instead of CURDIR, as PWD does not expand links
+ifeq "$(PWD)" ""  # But some old shells don't define PWD
+  PWD := $(CURDIR)# If it's not defined, fall back to using CURDIR
+else ifneq ($(shell realpath "$(PWD)"), $(shell realpath "$(CURDIR)"))
+  PWD := $(CURDIR)# If it's ill defined, fall back to using CURDIR
+endif
 
 # Identify the OS and processor, and generate an output base directory name from that
 ifeq "$(OS)" ""    # If $(OS) is undefined or empty
@@ -46,6 +67,9 @@ ifeq "$(OS)" ""    # If $(OS) is undefined or empty
   endif
   ifeq "$(OS)" "WindowsNT"
     OS := WIN32
+  endif
+  ifeq "$(PROC)" "unknown" # On a Raspberry Pi, it's unknown, and MACHINE = armv7
+    PROC := $(MACHINE)
   endif
   # Define the output base directory
   OSP := $(OS).$(PROC)
@@ -115,6 +139,7 @@ CFLAGS = -std=c99 -pthread -Wall
 CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap
+CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
 
 # Add the path to SysToolsLib global include files
 ifdef STINCLUDE
@@ -187,21 +212,23 @@ $(OSPD)/%: %.cpp
 	echo " ... done"
 
 # Pattern rules for Building the normal and debug versions of a C or C++ program.
+QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory
+
 %: %.c
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.c
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %: %.cpp
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.cpp
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(MAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
 
 .SILENT:
 
@@ -216,10 +243,16 @@ testmak:
 	echo "PROC = $(PROC)"
 	echo "MACHINE = $(MACHINE)"
 	echo "OSP = $(OSP)"
+
 	echo "O = $(O)"
 	echo "L = $(L)"
 	echo "B = $(B)"
 	echo "OBJECTS = $(OBJECTS)"
+	echo "PROGRAMS = $(PROGRAMS)"
+	echo "MAKEFLAGS = $(MAKEFLAGS)"
+	echo "CURDIR = $(CURDIR)"
+	echo "exec_prefix = $(exec_prefix)"
+	echo "bindir = $(bindir)"
 
 # Load $(PROGRAM).mak or Files.mak if possible 
 ifdef PROGRAM
@@ -292,7 +325,12 @@ $(OSP)/libSysLib.a: $(OBJECTS)
 # How to install all programs built above
 .PHONY: install
 install:
-	for exe in $(PROGRAMS) ; do cp -p $(XP)/$$exe $(bindir) ; done
+	@for exe in $(PROGRAMS) ; do \
+	  dest=$$exe ; \
+	   echo cp -p $$PWD/$(XP)/$$exe $(bindir)/$$dest ; \
+	  $(DO) cp -p $$PWD/$(XP)/$$exe $(bindir)/$$dest ; \
+	done
+
 
 # Cleanup all
 .PHONY: clean
@@ -315,6 +353,8 @@ define HELP
 Usage: make [MAKEOPTS] [MAKEDEFS] [TARGETS]
 
 MakeDefs:
+  bindir=PATH       With install: Where to install files. Default: $(bindir)
+  NOEXEC=1          With install: Show what files would be copied, but don't do it.
   STINCLUDE=PATH    SysToolsLib global include dir. Default: $(STINCLUDE)
 
 Targets:
@@ -322,10 +362,10 @@ Targets:
   checkenv  Check if all necessary definitions are set for the build to succeed
   clean     Delete all files generated by this Makefile
   help      Display this help message
+  install   Copy the programs built to $$bindir
 
 endef
 
 export HELP
 help:
-	echo "$$HELP"
-
+	@echo "$$HELP"

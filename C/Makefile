@@ -18,15 +18,28 @@
 #                   includes macro definitions, and the -C coming afterwards  #
 #                   is interpreted as a target.                               #
 #                   Use PWD instead of CURDIR, unless PWD missing or wrong.   #
+#    2020-03-19 JFL Install to /usr/bin if /usr/local/bin is not in the PATH. #
+#                   Fixed recursion with command-line VAR=VALUE definitions.  #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-# Standard installation directories, based on
+# Standard installation directory macros, based on
 # https://www.gnu.org/prep/standards/html_node/Directory-Variables.html
-# NOTE: This directory must exist when you start the install.
-prefix = /usr/local
+ifeq "$(prefix)" ""
+  ifeq "$(bindir)" ""
+    ifneq "$(findstring :/usr/local/bin:,:$(PATH):)" ""
+      prefix := /usr/local	# If /usr/local/bin is in the PATH, use it
+    else
+      prefix := /usr		# Else use /usr/bin
+    endif
+  else # Extract the prefix from the bindir provided
+    prefix := $(dir $(bindir))
+  endif
+endif
+# Remove the trailing / from prefix, if any
+prefix := $(patsubst %/,%,$(strip $(prefix)))
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
 exec_prefix = $(prefix)
@@ -67,7 +80,7 @@ SYSLIB := $(PWD)/SysLib
 MAKEDEFS="STINCLUDE=$(STINCLUDE)" "SYSLIB=$(SYSLIB)"
 
 $(DIRS): force
-	$(MAKE) -C $@ -$(MAKEFLAGS) $(MAKEDEFS)
+	$(MAKE) -C $@ $(MAKEFLAGS) $(MAKEDEFS)
 
 # Force building dependent targets
 force: ; 
@@ -92,12 +105,12 @@ install:
 	  $(DO) cp -p $$PWD/$$f.tcl $(bindir)/$$f ; \
 	done
 	# Recurse into SRC to install C executables
-	@$(MAKE) -s -C SRC -$(MAKEFLAGS) $(MAKEDEFS) PWD="$(PWD)/SRC" install
+	@$(MAKE) -s -C SRC $(MAKEFLAGS) $(MAKEDEFS) PWD="$(PWD)/SRC" install
 
 # Cleanup all
 .PHONY: clean
 clean:
-	for dir in $(DIRS) ; do $(MAKE) -C $$dir -$(MAKEFLAGS) $(MAKEDEFS) clean ; done
+	for dir in $(DIRS) ; do $(MAKE) -C $$dir $(MAKEFLAGS) $(MAKEDEFS) clean ; done
 	-$(RM) *.log    >/dev/null 2>&1
 
 define HELP
