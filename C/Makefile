@@ -80,7 +80,7 @@ SYSLIB := $(PWD)/SysLib
 MAKEDEFS="STINCLUDE=$(STINCLUDE)" "SYSLIB=$(SYSLIB)"
 
 $(DIRS): force
-	$(MAKE) -C $@ $(MAKEFLAGS) $(MAKEDEFS)
+	$(MAKE) -C $@ $(MFLAGS) $(MAKEDEFS)
 
 # Force building dependent targets
 force: ; 
@@ -92,25 +92,25 @@ ifeq "$(NOEXEC)" "1"    # Set $(NOEXEC) to 1 to avoid actually running the insta
 endif
 .PHONY: install
 install:
-	# Install Bash scripts
+	@echo "# Install Bash scripts"
 	@cd ../Bash && for f in `cat ../Scripts.lst | sed "s/\r//" | grep '^Bash' | sed -r 's/^Bash.(.*)/\1/'` ; do \
 	  if [ ! -x $$f ] ; then chmod +x $$f ; fi ; \
 	   echo cp -p $$PWD/$$f $(bindir)/$$f ; \
 	  $(DO) cp -p $$PWD/$$f $(bindir)/$$f ; \
 	done
-	# Install Tcl scripts, renaming them without the .tcl extension
+	@echo "# Install Tcl scripts, renaming them without the .tcl extension"
 	@cd ../Tcl && for f in `cat ../Scripts.lst | sed "s/\r//" | grep '^Tcl.*tcl$$' | sed -r 's/^Tcl.(.*).tcl$$/\1/'` ; do \
 	  if [ ! -x $$f.tcl ] ; then chmod +x $$f.tcl ; fi ; \
 	   echo cp -p $$PWD/$$f.tcl $(bindir)/$$f ; \
 	  $(DO) cp -p $$PWD/$$f.tcl $(bindir)/$$f ; \
 	done
-	# Recurse into SRC to install C executables
-	@$(MAKE) -s -C SRC $(MAKEFLAGS) $(MAKEDEFS) PWD="$(PWD)/SRC" install
+	@echo "# Install C executables"
+	@$(MAKE) -s -C SRC $(MFLAGS) $(MAKEDEFS) PWD="$(PWD)/SRC" install
 
 # Cleanup all
 .PHONY: clean
 clean:
-	for dir in $(DIRS) ; do $(MAKE) -C $$dir $(MAKEFLAGS) $(MAKEDEFS) clean ; done
+	for dir in $(DIRS) ; do $(MAKE) -C $$dir $(MFLAGS) $(MAKEDEFS) clean ; done
 	-$(RM) *.log    >/dev/null 2>&1
 
 define HELP
