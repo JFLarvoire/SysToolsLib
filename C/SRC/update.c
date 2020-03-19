@@ -1392,7 +1392,7 @@ retry_open_targetfile:
     }
     /* hdest = fileno(pfd); */
 
-    if (iShowCopying) printf(" : %llu bytes\n", (uintmax_t)filelen);
+    if (iShowCopying) printf(" : %"PRIuMAX" bytes\n", (uintmax_t)filelen);
 
     if (iProgress) {
       if (filelen > (100*1024L*1024L)) {
@@ -1410,7 +1410,7 @@ retry_open_targetfile:
       
       if (iProgress) {
       	int pc = (int)((offset * 100) / filelen);
-      	iWidth = printf("%3d%% (%llu%s/%llu%s)\r", pc, (uintmax_t)(offset/lUnit), pszUnit, (uintmax_t)(filelen/lUnit), pszUnit);
+      	iWidth = printf("%3d%% (%"PRIuMAX"%s/%"PRIuMAX"%s)\r", pc, (uintmax_t)(offset/lUnit), pszUnit, (uintmax_t)(filelen/lUnit), pszUnit);
       }
       
       XDEBUG_PRINTF(("fread(%p, %"PRIuPTR", 1, %p);\n", buffer, tocopy, pfs));
