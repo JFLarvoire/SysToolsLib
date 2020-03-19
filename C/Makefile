@@ -23,7 +23,8 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-# Standard installation directories.
+# Standard installation directories, based on
+# https://www.gnu.org/prep/standards/html_node/Directory-Variables.html
 # NOTE: This directory must exist when you start the install.
 prefix = /usr/local
 datarootdir = $(prefix)/share
@@ -33,8 +34,6 @@ exec_prefix = $(prefix)
 bindir = $(exec_prefix)/bin
 # Where to put the libraries.
 libdir = $(exec_prefix)/lib
-# Where to put the info files.
-infodir = $(datarootdir)/info
 
 # Prefer using PWD instead of CURDIR, as PWD does not expand links
 ifeq "$(PWD)" ""  # But some old shells don't define PWD
