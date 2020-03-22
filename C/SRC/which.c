@@ -91,6 +91,7 @@
 *    2019-09-23 JFL Added the ability to search names with wildcards.	      *
 *    2019-09-25 JFL Added a verbose msg about case-independent matches in Unix.
 *		    Version 1.14.					      *
+*    2020-03-22 JFL Fixed wildcards search in Unix. Version 1.14.1.           *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -98,8 +99,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "which"
-#define PROGRAM_VERSION "1.14"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "1.14.1"
+#define PROGRAM_DATE    "2020-03-22"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -213,7 +214,7 @@ int iMatchFlags = 0;	/* Case-dependant search in Unix */
 #define _strnicmp strncasecmp
 
 /* Partial implementation of Microsoft's _makepath() for Unix */ 
-#define _makepath(buf, d, p, n, x) do {strcpy(buf,p?p:""); strcat(buf,"/"); strcat(buf,n);} while (0)
+#define _makepath(buf, d, p, n, x) do {strcpy(buf,p?p:""); if (p) strcat(buf,"/"); strcat(buf,n);} while (0)
 
 #endif
 
@@ -1022,6 +1023,8 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
   int nFound = 0;
   int i;
 
+  DEBUG_ENTER(("SearchProgramWithAnyExt(\"%s\", \"%s\", 0x%X);\n", pszPath, pszCommand, iFlags));
+
 #ifndef __unix__
   if (strchr(pszCommand, '.')) {
 #endif
@@ -1032,10 +1035,10 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
   if (!initExtListDone) initExtList();
   for (i=0; ppszExt[i]; i++) {
     nFound += SearchProgramWithOneExt(pszPath, pszCommand, ppszExt[i], iFlags);
-    if (nFound && !(iFlags & WHICH_ALL)) return nFound;
+    if (nFound && !(iFlags & WHICH_ALL)) RETURN_INT(nFound);
   }
 
-  return nFound;
+  RETURN_INT(nFound);
 }
 
 int CheckProgram(char *pszName, int iFlags) {
@@ -1123,6 +1126,8 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
   int nFound = 0;
   char szPathName[PATH_MAX];
 
+  DEBUG_ENTER(("SearchProgramWithOneExt(\"%s\", \"%s\", \"%s\", 0x%X);\n", pszPath, pszCommand, pszExt, iFlags));
+
   if (!strpbrk(pszCommand, "*?")) { /* If no wildcards */
     _makepath(szPathName, NULL, pszPath, pszCommand, pszExt);
     nFound = CheckProgram(szPathName, iFlags);
@@ -1138,9 +1143,10 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
     struct dirent *pDE;
 
     pDir = opendir(pszPath);
-    if (!pDir) return 0;	/* No match */
+    if (!pDir) RETURN_INT_COMMENT(0, ("Can't open directory %s\n", pszPath));	/* No match */
     _makepath(szName, NULL, NULL, pszCommand, pszExt);
     while ((pDE = readdir(pDir)) != NULL) {
+      /* DEBUG_PRINTF(("fnmatch(%s, %s, 0x%X);\n", szName, pDE->d_name, iMatchFlags)); */
       if (fnmatch(szName, pDE->d_name, iMatchFlags)) { /* That name does not match */
 #if defined(__unix__)
 	if ((iFlags & WHICH_VERBOSE) && !(iMatchFlags & FNM_CASEFOLD)) { /* But if we tested this in a case-sensitive OS */
@@ -1159,7 +1165,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
     closedir(pDir);
   }
 
-  return nFound;
+  RETURN_INT(nFound);
 }
 
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
