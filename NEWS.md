@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-03-22
+### Fixed
+- C/SRC/which.c: Fixed wildcards search in Unix.
+
 ## [Unreleased] 2020-03-19
 ### New
 - Makefile: New Unix makefile in the project root, to allow running make from the root.
