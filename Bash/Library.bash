@@ -14,13 +14,14 @@
 #    2013-12-09 JFL Added the -c option, and the fact function for testing.   #
 #                   Renamed a few functions for consistency with other langs. #
 #    2013-12-16 JFL One minor tweak in test routine fact().		      #
+#    2020-03-23 JFL Updated the help screen.               		      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2016-11-05"
+VERSION="2020-03-23"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -639,12 +640,12 @@ Usage: $(basename ${0}) [OPTIONS] [COMMANDS]
 
 Options:
   -c CMD ...        Evaluate each argument as a separate command
-  -d                Debug mode. Trace functions entry and exit, etc
+  -d, --debug       Debug mode. Trace functions entry and exit, etc
   -h, --help, -?    Display this help screen and exit.
   -l LOGFILE        Set the log file name. Use -l /dev/null to disable.
   -v, --verbose     Enable verbose output.
-  -V                Display the script version and exit
-  -X                Display commands to execute, but don't execute them
+  -V, --version     Display the script version and exit
+  -X, --noexec      Display the commands to execute, but don't execute them
 
 Commands:
   start             Start the daemon
@@ -687,7 +688,7 @@ while (( $# > 0 )) ; do
       echo $VERSION
       exit 0
     ;;
-    -x|--noexec)
+    -X|--noexec)
       EXEC=0
     ;;
     start)
