@@ -1,0 +1,504 @@
+#!/bin/bash
+###############################################################################
+#                                                                             #
+#  Filename        install                                                    #
+#                                                                             #
+#  Description     Install select SysToolsLib tools                           #
+#                                                                             #
+#  Notes 	   Front end to Unix install, which finds SysToolsLib tools   #
+#                  without having to specify their exact subdirectory, and    #
+#                  chooses a default destination bin dir, if none is given.   #
+#                                                                             #
+#  History                                                                    #
+#   2020-03-23 JFL jf.larvoire@hpe.com created this script.                   #
+#                                                                             #
+###############################################################################
+
+# Global variables
+VERSION="2020-03-23"
+ARGV=("$0" "$@")		# All arguments, as an array of strings
+ARGV0="$0"                      # Full script pathname
+SCRIPT="${ARGV0##*/}"           # Extract the script base name...
+SCRIPTDIR="$(cd $(dirname "$0") ; /bin/pwd)" # ... and its absolute path
+SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
+
+###############################################################################
+#                                                                             #
+#                              Debugging library                              #
+#                                                                             #
+###############################################################################
+
+VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+EXEC=1				# 1=Execute commands; 0=Don't
+
+# LOGDIR=/var/log		# Preferred log file location with root rights
+# LOGDIR=~/log			# Alternate location for non-root users
+# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Where to log what was done and results
+LOGFILE=/dev/null		# Default: Do not write to an actual log file
+LOGDIR=$(dirname "$LOGFILE")
+
+# Helper routines to test verbosity levels
+Quiet() {
+  [[ $VERBOSITY == 0 ]]
+}
+Normal() {
+  [[ $VERBOSITY > 0 ]]
+}
+Verbose() {
+  [[ $VERBOSITY > 1 ]]
+}
+Debug() {
+  [[ $VERBOSITY > 2 ]]
+}
+NoExec() {
+  [[ $EXEC == 0 ]]
+}
+
+# Log a message into the log file
+Log() { # $last=string to log
+  if [[ ! -d $LOGDIR ]] ; then
+    mkdir -p $LOGDIR
+  fi
+  echo "$@" >> $LOGFILE
+}
+
+# Display a message and log it in the log file
+Echo() { # $last=string to display and log
+  Log "$@"
+  echo "$@"
+}
+
+# Display a string in verbose mode
+EchoV() { # $*=echo arguments
+  Log "$@"
+  if Verbose ; then
+    echo "$@"
+  fi
+}
+
+CALL_DEPTH=0
+CallIndent() {
+  printf '%*s' $CALL_DEPTH ''
+}
+
+# Display a string in debug mode
+EchoD() { # $*=echo arguments
+  Log "$@"
+  if Debug ; then
+    >&2 echo "$(CallIndent)$*"
+  fi
+}
+
+# Display a string in NoExec mode
+EchoX() { # $*=echo arguments
+  if NoExec ; then
+    Echo "$(CallIndent)$*"
+  fi
+}
+
+# Debug routines. Display the values of a series of global variables.
+VarsValue() { # $*=Variables names. Display always.
+  local var
+  for var in "$@" ; do
+    declare | grep "^$var="
+  done
+}
+EchoVars() { # $*=Variables names. Display and log always.
+  Echo "$(VarsValue "$@")"
+}
+EchoSVars() { # $1=String; $2...=Variables names. Display and log always.
+  local text="$1"
+  shift
+  Echo "$text $(VarsValue "$@")"
+}
+EchoVVars() { # $*=Variables names. Display in debug mode only and log always.
+  EchoV "$(VarsValue "$@")"
+}
+EchoDVars() { # $*=Variables names. Display in debug mode only and log always.
+  EchoD "$(VarsValue "$@")"
+}
+EchoDSVars() { # $1=String; $2...=Variables names. Display in debug mode only...
+  local text="$1"
+  shift
+  EchoD "$text $(VarsValue "$@")"
+}
+
+# Echo arguments with quotes, so that they can be reentered in bash verbatim.
+# User friendly output using the minimal number of quotes needed.
+# Makes sure control characters ('\x00' to '\x1F') are visible.
+# Note: I've not found how to display the NUL character. (Can it actually occur?)
+QuoteArg() { # $1=Argument to quote
+  local char=($'\x00' $'\x01' $'\x02' $'\x03' $'\x04' $'\x05' $'\x06' $'\x07' \
+              $'\x08' $'\x09' $'\x0A' $'\x0B' $'\x0C' $'\x0D' $'\x0E' $'\x0F' \
+              $'\x10' $'\x11' $'\x12' $'\x13' $'\x14' $'\x15' $'\x16' $'\x17' \
+              $'\x18' $'\x19' $'\x1A' $'\x1B' $'\x1C' $'\x1D' $'\x1E' $'\x1F' )
+  local text=( '\x00'  '\x01'  '\x02'  '\x03'  '\x04'  '\x05'  '\x06'  '\x07' \
+               '\b'    '\t'    '\n'    '\x0B'  '\x0C'  '\d'    '\x0E'  '\x0F' \
+               '\x10'  '\x11'  '\x12'  '\x13'  '\x14'  '\x15'  '\x16'  '\x17' \
+               '\x18'  '\x19'  '\x1A'  '\e'    '\x1C'  '\x1D'  '\x1E'  '\x1F' )
+  local s="$1"
+  local rx=$'[ \x27"`\$&|#;[:cntrl:]]'
+  if [[ $s =~ $rx ]] ; then # This needs some form of quoting
+    local rx2=$'[[:cntrl:]]'
+    if [[ $s =~ $rx2 ]] ; then # If there are hidden characters
+      # echo "there are hidden characters"
+      s=${s//\\/\\\\} # Escape anti-slashes
+      local i
+      for (( i=1 ; $i<32 ; i=$i+1 )) ; do
+	local c="${char[$i]}"
+	local t="${text[$i]}"
+	s=${s//$c/$t} # Replace hidden characters by their C-style encoding
+      done
+      s="\$'${s//\'/\\x27}'" # Quote with dollar quotes
+    elif [[ ! $s =~ "'" ]] ; then # If there are no single quotes
+      # echo "there are no single quotes"
+      s="'$s'" # Quote with single quotes (simple and fast)
+    else # Quote everything that may be interpreted by the shell
+      # echo "else case"
+      s=${s//\\/\\\\} # Escape anti-slashes
+      s=${s//\$/\\\$} # Escape dollars
+      s=${s//\"/\\\"} # Escape double quotes
+      s=${s//\`/\\\`} # Escape back quotes
+      s="\"${s}\"" # Quote with double quotes
+    fi
+  fi
+  if [[ "$s" == "" ]] ; then # Special case for the empty string
+    s="''"
+  fi
+  printf "%s\n" "$s" # Do not use echo, with breaks on -n, -e, etc, arguments
+}
+
+if false ; then # Begin section with alternative QuoteArg() versions
+
+# Echo arguments with quotes, so that they can be reentered in bash verbatim.
+# User friendly output using the minimal number of quotes needed.
+# Does NOT handle control characters in args. ('\x00' to '\x1F')
+QuoteArg() { # $1=Argument to quote
+  local s="$1"
+  if [[ $s =~ $'[ \x27"`\$&|#;]' ]] ; then # This needs some form of quoting
+    if [[ ! $s =~ "'" ]] ; then # If there are no single quotes
+      s="'$s'" # Quote with single quotes (simple and fast)
+    else # Quote everything that may be interpreted by the shell
+      s=${s//\\/\\\\} # Escape anti-slashes
+      s=${s//\$/\\\$} # Escape dollars
+      s=${s//\"/\\\"} # Escape double quotes
+      s=${s//\`/\\\`} # Escape back quotes
+      s="\"${s}\"" # Quote with double quotes
+    fi
+  fi
+  if [[ "$s" == "" ]] ; then # Special case for the empty string
+    s="''"
+  fi
+  printf "%s\n" "$s" # Do not use echo, with breaks on -n, -e, etc, arguments
+}
+
+# Echo arguments with quotes, so that they can be reentered in bash verbatim.
+# The quoting is done by Bash's "local" function itself.
+# Simple and guarantied correct, but the output is not always user-friendy.
+QuoteArg() { # $1=Argument to quote
+  local arg="$1"
+  arg=$(local)       # Name=Value for the only local variable arg
+  arg=${arg/arg=/}   # Remove the Name= field
+  if [[ "$arg" == "" ]] ; then
+    arg="''"         # Make sure empty strings are visible
+  fi
+  printf "%s\n" "$s" # Do not use echo, with breaks on -n, -e, etc, arguments
+}
+
+fi # End of alternative QuoteArg() versions
+
+# Echo multiple arguments with quotes, so that they can be reviewed easily
+QuoteArgs() { # $*=Arguments to quote
+  local sep=""
+  for arg in "$@" ; do
+    printf "%s" "$sep$(QuoteArg "$arg")" # Do not use echo, with breaks on -n, -e, etc, arguments
+    sep=" "
+  done
+  echo ""
+}
+
+# Call a subroutine, logging the arguments and return value
+# Usage: Call [OPTIONS] [-U] FUNCTION ARGUMENTS
+# Options:
+#   -U             Do not log the underscore ahead of the function name (Must be last)
+#   -v VARNAME     Log variable VARNAME name and value when returning
+Call() {
+  # Get the list of variables to log upon return
+  local lVars="" # List of variables to log
+  while [[ "$1" == "-v" ]] ; do
+    shift
+    lVars="$lVars $1"
+    shift
+  done
+  # Get the function name, and remove the underscore if needed.
+  local func="$1"
+  if [[ "$1" == "-U" ]] ; then
+    shift
+    func="${1#_}"
+  fi
+  local _func="$1"
+  shift
+  # Log the function name and arguments
+  EchoD "$(QuoteArgs $func "$@")"
+  CALL_DEPTH=$(( $CALL_DEPTH + 2 ))
+  $_func "$@"
+  local ret=$?
+  # Log global variables that are set by the function
+  local var
+  for var in $lVars ; do
+    EchoD "$(VarsValue $var)"
+  done
+  # Cleanup and return
+  CALL_DEPTH=$(( $CALL_DEPTH - 2 ))
+  EchoD "  return $ret"
+  return $ret
+}
+
+# Redefine a function to log call arguments and return values
+TraceProc() { # $1=Function name; $2...=Additional options to pass to Call
+  local name=$1
+  local _name=_$1
+  shift
+  # Duplicate function name as _name
+  eval "${_name}() $(declare -f $name | tail -n +2)"
+  # Redefine function name to call _name and log debug information
+  eval "${name}() {
+    Call $* -U ${_name} \"\$@\"
+  }"
+}
+
+# Execute a command and log results.
+Exec() { # $1=command $2=argument1 [...] [>|>>output_file]
+  # Check if the last argument is a redirection
+  local cmd=("$@")
+  local last="${cmd[$#-1]}"
+  if [[ "$last" == ">>"* ]] ; then # Redirected command. Extract the redirection.
+    local redirect=">>"
+    local outfile="${last:2}" # Drop the leading >> characters.
+    unset cmd[$#-1]
+    local cmdline="$(QuoteArgs "${cmd[@]}") >>$(QuoteArgs "$outfile")"
+  elif [[ "$last" == ">"* ]] ; then # Redirected command. Extract the redirection.
+    local redirect=">"
+    local outfile="${last:1}" # Drop the leading > character.
+    unset cmd[$#-1]
+    local cmdline="$(QuoteArgs "${cmd[@]}") >$(QuoteArgs "$outfile")"
+  else # It's not redirected. Use all arguments.
+    local redirect=""
+    local cmdline="$(QuoteArgs "$@")"
+  fi
+  if Verbose || [[ $EXEC == 0 ]] ; then
+    echo "$cmdline"
+  fi
+  Log ""
+  EchoD "$cmdline"
+  local ERR=0
+  case "$1" in
+    cd|export)
+      # Do not pipe output, as this creates a sub-shell, and thus the command
+      # has no effect on the current shell.
+      "$@" 2>&1
+      ERR=$?
+    ;;
+    *)
+      if [[ $EXEC != 0 ]] ; then
+      	if [[ "$redirect" == ">>" ]] ; then
+	  "${cmd[@]}" 2>&1 | tee -a $LOGFILE >>"$outfile"
+      	elif [[ "$redirect" == ">" ]] ; then
+	  "${cmd[@]}" 2>&1 | tee -a $LOGFILE >"$outfile"
+	else
+	  "${cmd[@]}" 2>&1 | tee -a $LOGFILE
+	fi
+	ERR=${PIPESTATUS[0]} # Get the exit code from the _first_ command.
+      fi
+    ;;
+  esac
+  EchoD "  return $ERR"
+  return $ERR
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#                         End of Debugging functions                          #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+# Get the name of the C compiler output directory
+# This closely duplicates the algorithm in C/SRC/Makefile
+GetCOutputDir() {
+  OS=$(uname -s)
+  PROC=$(uname -p)
+  MACHINE=$(uname -m)
+  if [ "$OS" == "OSF1" ] ; then
+    if [ "$MACHINE" == "alpha" ] ; then
+      OS=Tru64
+    fi
+  fi
+  if [ "$O)" == "WindowsNT" ] ; then
+    OS=WIN32
+  fi
+  if [ "$PROC" == "unknown" ] ; then # On a Raspberry Pi 2, it's unknown, and MACHINE = armv7
+    PROC=$MACHINE
+  fi
+  # Define the output base directory
+  OSP=$OS.$PROC
+  # Now handle the special case of Unix-compatible shells for Windows
+  if [[ "$OS" == "*MINGW32*" ]] ; then # Ex: "MINGW32_NT-6.1"
+    # MigGW shell if NOT case sensitive, so use a well readable camelcase spelling
+    OSP=MinGW32
+    # 2013-12-16 Actually, the 64-bits tool chain also reports MINGW32_NT-6.1
+    # So distinguish the two by whether /mingw is mounted on C:\MinGW or C:\MinGW64
+    if mount | grep -i /mingw64 ; then
+      # MigGW shell if NOT case sensitive, so use a well readable camelcase spelling
+      OSP=MinGW64
+    fi
+  fi
+  if [[ "$OS" == "*MINGW64*" ]] ; then # Ex: ?
+    OSP=MinGW64
+  fi
+  if [[ "$OS" == "*CYGWIN*" ]] ; then # Ex: "CYGWIN_NT-6.1-WOW64"
+    # Cygwin shell if case sensitive, so use lower case
+    OSP=cygwin
+  fi
+  echo $OSP
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Main                                                      #
+#                                                                             #
+#   Description     Process command line arguments                            #
+#                                                                             #
+#   Arguments       $*      Command line arguments                            #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+# Default directory where to install SysToolsLib tools
+if [ -z ${bindir+_} ] ; then  # bindir isn't set
+  if echo ":$PATH:" | grep -q ":/usr/local/bin:" ; then
+    bindir=/usr/local/bin	# If /usr/local/bin is in the PATH, use it
+  else
+    bindir=/usr/bin		# Else use /usr/bin
+  fi
+fi
+
+# Directories where we're likely to find SysToolsLib tools
+stldir=$(realpath --relative-to=. "$SCRIPTDIR")
+cdir=$(realpath --relative-to=. "$SCRIPTDIR/C/SRC/bin/$(GetCOutputDir)")
+tcldir=$(realpath --relative-to=. "$SCRIPTDIR/Tcl")
+bashdir=$(realpath --relative-to=. "$SCRIPTDIR/Bash")
+
+Help() {
+  cat <<EOF
+
+$(basename ${0}) - Install select SysToolsLib tools
+
+Usage: sudo [SysToolsLib_DIR]/$(basename ${0}) [OPTIONS] TOOL [TOOL ...] [DIR]
+
+Options:
+  -h, --help, -?    Display this help screen and exit
+  -v, --verbose     Enable verbose output
+  -V, --version     Display the script version and exit
+  -X, --noexec      Display the install commands to eXecute, but don't do it
+Any other option will be passed through to the system's install command.
+
+Tool: One or more SysToolsLib tools. Their path is optional.
+      Default paths: $stldir, $cdir, $tcldir, $bashdir
+
+Dir:  The installation directory. Default: $bindir
+      (Default from \$bindir, else /usr/local/bin if in the PATH, else /usr/bin)
+
+Notes:
+* Running 'make install' installs all SysToolsLib tools into the default DIR.
+
+EOF
+}
+
+# Main routine
+# Process command line arguments
+err=0
+TOOLS=()
+INSTALL_OPTS=-p
+while (( $# > 0 )) ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -d|--debug)
+      VERBOSITY=$(expr $VERBOSITY + 2)
+    ;;
+    -h|--help|"-?")
+      Help
+      exit 0
+    ;;
+    -p|--preserve-timestamps)
+      # Ignore these as we have -p in the INSTALL_OPTS list by default
+    ;;
+    -v|--verbose)
+      VERBOSITY=$(expr $VERBOSITY + 1)
+    ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -X|--noexec)
+      EXEC=0
+    ;;
+    -*)
+      INSTALL_OPTS="$INSTALL_OPTS $arg"
+    ;;
+    *)
+      TOOLS+=("$arg")
+    ;;
+  esac
+done
+
+if [ $err -ne 0 ]; then
+  exit $err
+fi
+
+if [ ${#TOOLS[@]} -eq 0 ]; then
+  >&2 echo 'Error: No tool specified'
+  exit 1
+fi
+
+last=${TOOLS[-1]}
+if [[ -d "$last" ]] ; then
+  bindir=$last
+  unset 'TOOLS[${#TOOLS[@]}-1]'
+fi
+
+for tool in "${TOOLS[@]}" ; do
+  # Make sure we don't overwrite Unix which
+  copy=$(basename -- "$tool")
+  if [ "$copy" == "Which" ]; then
+    tool=${tool/Which/which}
+  fi
+  if [ "$copy" == "which" ]; then
+    copy=Which
+  fi
+  # Look for alternate source locations if needed
+  if [ ! -f "$tool" ] ; then
+    for dir in "$cdir" "$tcldir" "$bashdir" ; do
+      if [ -f "$dir/$tool" ] ; then
+      	tool=$dir/$tool
+      	break
+      fi
+    done
+  fi
+  # Remove the .tcl extension
+  extension=${copy##*.}
+  if [ "$extension" == "tcl" ]; then
+    copy=${copy::-4}
+  fi
+  # Do the actual installation
+  Exec install $INSTALL_OPTS "$tool" "$bindir/$copy"
+  if [ $? -ne 0 ]; then
+    exit $?
+  fi
+done
+
+exit 0
