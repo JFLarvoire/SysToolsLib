@@ -137,7 +137,7 @@
 *    2018-05-31 JFL Use the new zapFile() and zapDir() from zap.c.            *
 *		    Added option -e to erase target files not in the source.  *
 *                   Bug fix: The force option did corrupt the mode flag.      *
-*                   Copy empty directories if the copyempty flag is set.      *
+*                   Copy empty directories if the iCopyEmptyFiles flag is set.      *
 *                   Bug fix: Avoid a crash in update_link() on invalid links. *
 *                   Prefix all error messages with the program name.          *
 *                   Bug fix: mkdirp() worked, but returned an error, if the   *
@@ -162,6 +162,9 @@
 *                   Fixed serious issue when Linux target is a link to a dir. *
 *    2020-03-17 JFL Removed isdir(), and use is_effective_directory() instead.*
 *    2020-03-19 JFL Fixed warnings and issues on 32-bit OSs. Version 3.8.6.   *
+*    2020-03-23 JFL Renamed switches -e|--erase as -c|--clean.                *
+*                   Added switches -D|--makedirs, independent of -E|--noempty.*
+*                   Version 3.9.                                              *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -169,8 +172,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.8.6"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.9"
+#define PROGRAM_DATE    "2020-03-23"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -326,7 +329,8 @@ static int show = 0;			/* 0=Show source; 1=Show dest */
 static int fresh = 0;			/* Flag indicating freshen mode */
 static int force = 0;			/* Flag indicating force mode */
 static int iVerbose = FALSE;		/* Flag for displaying verbose information */
-static int copyempty = TRUE;		/* Flag for copying empty file */
+static int iCopyEmptyFiles = TRUE;	/* Flag for copying empty files */
+static int iCopyEmptyDirs = FALSE;	/* Flag for copying empty directories */
 static int iPause = 0;			/* Flag for stop before exit */
 static int iProgress = 0;		/* Flag for showing a progress bar */
 #ifdef __unix__
@@ -339,7 +343,7 @@ static int iRecur = 0;			/* Recursive update */
 // UINT cp = 0;				/* Initial console code page */
 #define cp codePage			/* Initial console code page in iconv.c */
 #endif
-static int iErase = 0;			/* Flag indicating Erase mode */
+static int iClean = 0;			/* Flag indicating Clean mode */
 static int iResetTime = 0;		/* Reset time of identical files */
 
 /* Forward references */
@@ -458,6 +462,12 @@ int main(int argc, char *argv[]) {
 	continue;
       }
 #endif
+      if (   streq(opt, "c")	    /* Clean mode on */
+	  || streq(opt, "-clean")) {
+	iClean = TRUE;
+	if (iVerbose) printf("Clean mode on.\n");
+	continue;
+      }
       DEBUG_CODE(
       if (   streq(opt, "d")	    /* Debug mode on */
 	  || streq(opt, "debug")	    /* The historical name of that switch */
@@ -468,17 +478,17 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       )
-      if (   streq(opt, "e")	    /* Erase mode on */
-	  || streq(opt, "-erase")) {
-	iErase = TRUE;
-	if (iVerbose) printf("Erase mode on.\n");
+      if (   streq(opt, "D")	    /* Make empty directories mode on */
+	  || streq(opt, "-makedirs")) {
+	iCopyEmptyDirs = TRUE;
+	if (iVerbose) printf("Make empty dirs mode on.\n");
 	continue;
       }
-      if (   streq(opt, "E")	    /* NoEmpty mode on */
+      if (   streq(opt, "E")	    /* NoEmpty files mode on */
 	  || streq(opt, "noempty")    /* The historical name of that switch */
 	  || streq(opt, "-noempty")) {
-	copyempty = FALSE;
-	if (iVerbose) printf("NoEmpty mode on.\n");
+	iCopyEmptyFiles = FALSE;
+	if (iVerbose) printf("NoEmpty files mode on.\n");
 	continue;
       }
       if (   streq(opt, "f")	    /* Freshen mode on */
@@ -666,49 +676,51 @@ Usage: update [SWITCHES] FILES DIRECTORY\n\
        update [SWITCHES] FILE  DIRECTORY[" DIRSEPARATOR_STRING "NEWNAME]\n\
 \n\
 Files:          FILE1 [FILE2 ...]\n\
-                Wildcards are allowed in source files pathnames.\n\
+                Wildcards are allowed in source files pathnames\n\
 \n\
 Switches:\n\
   --            End of switches\n"
 #ifdef _WIN32
 "\
-  -A|--ansi     Force encoding the output using the ANSI character set.\n"
+  -A|--ansi     Force encoding the output using the ANSI character set\n\
+  -c|--clean    Clean mode: Delete destination files not in the source\n\
+"
 #endif
 #ifdef _DEBUG
 "\
-  -d|--debug    Output debug information.\n"
+  -d|--debug    Output debug information\n"
 #endif
 "\
-  -e|--erase    Erase mode. Delete destination files not in the source.\n\
-  -E|--noempty  Noempty mode. Don't copy empty file.\n\
+  -D|--makedirs Create directories, even if no file needs to be copied inside\n\
+  -E|--noempty  Noempty file mode: Don't copy empty files\n\
 ");
 
     printf("\
-  -f|--freshen  Freshen mode. Update only files that exist in both directories.\n\
-  -F|--force    Force mode. Overwrite read-only files.\n\
-  -h|--help|-?  Display this help screen.\n\
-  -i|--ignorecase    Case-insensitive pattern matching. Default for DOS/Windows.\n\
-  -k|--casesensitive Case-sensitive pattern matching. Default for Unix.\n"
+  -f|--freshen  Freshen mode: Update only files that exist in both directories\n\
+  -F|--force    Force mode: Overwrite read-only files\n\
+  -h|--help|-?  Display this help screen\n\
+  -i|--ignorecase    Case-insensitive pattern matching. Default for DOS/Windows\n\
+  -k|--casesensitive Case-sensitive pattern matching. Default for Unix\n"
 #ifdef _WIN32
 "\
-  -O|--oem      Force encoding the output using the OEM character set.\n"
+  -O|--oem      Force encoding the output using the OEM character set\n"
 #endif
 "\
-  -p|--pause    Pause before exit.\n\
-  -P|--progress Display the file copy progress. Useful with very large files.\n\
-  -q|--nologo   Quiet mode. Don't display anything.\n\
-  -r|--recurse  Recursively update all subdirectories.\n\
-  -S|--showdest Show the destination files names. Default: The sources names.\n\
-  -T|--resettime Reset time of identical files.\n"
+  -p|--pause    Pause before exit\n\
+  -P|--progress Display the file copy progress. Useful with very large files\n\
+  -q|--nologo   Quiet mode: Don't display anything\n\
+  -r|--recurse  Recursively update all subdirectories\n\
+  -S|--showdest Show the destination files names. Default: The sources names\n\
+  -T|--resettime Reset time of identical files\n"
 
 #ifdef _WIN32
 "\
-  -U|--utf8     Force encoding the output using the UTF-8 character encoding.\n"
+  -U|--utf8     Force encoding the output using the UTF-8 character encoding\n"
 #endif
 "\
-  -v|--verbose  Verbose node. Display extra status information.\n\
-  -V|--version  Display this program version and exit.\n\
-  -X|-t         Noexec mode. Display the files that need to be copied.\n\
+  -v|--verbose  Verbose mode: Display extra status information\n\
+  -V|--version  Display this program version and exit\n\
+  -X|-t         Noexec/test mode: Display the files that need to be copied\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
@@ -916,7 +928,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     closedirx(pDir);
 
     /* Scan target files that might be erased */
-    if (iErase) {
+    if (iClean) {
       fullpath(path2, p2, PATHNAME_SIZE); /* Build absolute pathname of source */
       pDir = opendirx(p2);
       if (pDir) {
@@ -954,7 +966,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	      case DT_REG:
 	      	err = zapFileM(path3, sStat.st_mode, &zo);
 		if (err) {
-		  printError("Error: Failed to remove %s \"%s\"", pszType, path3);
+		  printError("Error: Can't delete %s \"%s\"", pszType, path3);
 		  nErrors += 1;
 		}
 		break;
@@ -1011,8 +1023,9 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	    }
 	    /* 2015-01-12 JFL Don't create the directory now, as it may never be needed,
 				if there are no files that match the input pattern */
-	    /* 2018-05-31 JFL Actually do it, but only if the copyempty flag is set */
-	    if (copyempty && !p2_exists) { /* Create the missing target directory */
+	    /* 2018-05-31 JFL Actually do it, but only if the iCopyEmptyFiles flag is set */
+	    /* 2020-03-23 JFL Create a new iCopyEmptyDirs flag, to control this independently of the iCopyEmptyFiles flag */
+	    if (iCopyEmptyDirs && !p2_exists) { /* Create the missing target directory */
 	      printf("%s\\\n", fullpathname);
 	      if (!test) {
 	      	err = mkdirp(path2, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -1084,7 +1097,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     if (fresh && !exist_file(p2)) RETURN_CONST(0);
 
     /* In Noempty mode, don't copy empty file */
-    if ( (copyempty == FALSE) && (file_empty(p1)) ) RETURN_CONST(0);
+    if ( (iCopyEmptyFiles == FALSE) && (file_empty(p1)) ) RETURN_CONST(0);
 
     /* If the target exists, make sure it's a file */
     e = lstat(p2, &sP2stat); /* Use lstat to avoid following links */
@@ -1789,8 +1802,8 @@ void strsfp(const char *pathname, char *path, char *name)   /* Split file pathna
 |									      |
 |   History:								      |
 |									      |
-|    1996-10-14 JFL Made a clean, application-independant, version.	      |
-|    2011-05-12 JFL Rewrote in an OS-independant way.			      |
+|    1996-10-14 JFL Made a clean, application-independent, version.	      |
+|    2011-05-12 JFL Rewrote in an OS-independent way.			      |
 |    2015-01-08 JFL Fallback to using chmod and utimes if lchmod and lutimes  |
 |                   are not implemented. This will cause minor problems if the|
 |                   target is a link, but will work well in all other cases.  |
@@ -2092,7 +2105,7 @@ fail:
 |   Returns	    0							      |
 |									      |
 |   Notes	    Sets global variables program and progcmd.		      |
-|		    Designed to work independantly of MsvcLibX.		      |
+|		    Designed to work independently of MsvcLibX.		      |
 |		    							      |
 |   History								      |
 |    2018-03-23 JFL Created this routine				      |
@@ -2382,7 +2395,7 @@ int zapDir(const char *path, zapOpts *pzo) {
 *       Notes:                                                                *
 *                                                                             *
 *       Updates:                                                              *
-*        1995-06-12 JFL Made this routine generic (Independant of DIRC)       *
+*        1995-06-12 JFL Made this routine generic (Independent of DIRC)       *
 *        2014-01-21 JFL Use a much larger buffer for 32-bits apps, to improve *
 *                       performance.                                          *
 *                                                                             *
