@@ -162,10 +162,12 @@
 *                   Fixed serious issue when Linux target is a link to a dir. *
 *    2020-03-17 JFL Removed isdir(), and use is_effective_directory() instead.*
 *    2020-03-19 JFL Fixed warnings and issues on 32-bit OSs. Version 3.8.6.   *
-*    2020-03-23 JFL Renamed switches -e|--erase as -c|--clean.                *
-*                   Added switches -D|--makedirs, independent of -E|--noempty.*
+*    2020-03-23 JFL Renamed options -e|--erase as -c|--clean.                 *
+*                   Added options -D|--makedirs, independent of -E|--noempty. *
 *                   Version 3.9.                                              *
-*                   Changed -v to display the equivalent shell commands.      *
+*    2020-03-24 JFL Renamed options -T|-resettime as -R|-resettime, -D|	      *
+*		    --makedirs as -T|--tree, and -S|--showdest as -D|--dest.  *
+*                   Added options -C|--command, and -S|--source.              *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -174,7 +176,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.9"
-#define PROGRAM_DATE    "2020-03-23"
+#define PROGRAM_DATE    "2020-03-24"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -220,7 +222,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 /* Shell command names, for verbose output */
-#define REMARK    ":#"
+#define COMMENT   ":# "
 #define COPY_FILE "copy"
 #define COPY_LINK "xcopy /b"
 #define MAKE_DIR  "md"
@@ -246,7 +248,7 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 /* Shell command names, for verbose output */
-#define REMARK    ":#"
+#define COMMENT   ":# "
 #define COPY_FILE "copy"
 #define COPY_LINK "rem"
 #define MAKE_DIR  "md"
@@ -267,7 +269,7 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
 /* Shell command names, for verbose output */
-#define REMARK    ":#"
+#define COMMENT   ":# "
 #define COPY_FILE "copy"
 #define COPY_LINK "rem"
 #define MAKE_DIR  "md"
@@ -288,7 +290,7 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 
 /* Shell command names, for verbose output */
-#define REMARK    "#"
+#define COMMENT   "# "
 #define COPY_FILE "cp -p"
 #define COPY_LINK "cp -p -P"
 #define MAKE_DIR  "mkdir"
@@ -358,7 +360,11 @@ char *buffer;       /* Pointer on the intermediate copy buffer */
 #define isConsole(iFile) isatty(iFile)
 
 static int test = 0;			/* Flag indicating Test mode */
-static int show = 0;			/* 0=Show source; 1=Show dest */
+#define SHOW_NONE    0
+#define SHOW_SOURCE  1
+#define SHOW_DEST    2
+#define SHOW_COMMAND 3
+static int show = SHOW_SOURCE;		/* Display 0=Nothing; 1=Source; 2=Dest; 3=Command */
 static int fresh = 0;			/* Flag indicating freshen mode */
 static int force = 0;			/* Flag indicating force mode */
 static int iVerbose = FALSE;		/* Flag for displaying verbose information */
@@ -384,9 +390,9 @@ static int iResetTime = 0;		/* Reset time of identical files */
 void usage(void);			/* Display usage */
 int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
-int update(char *, char *);		/* Copy a file if newer */
+int update(char *, char *, int);	/* Copy a file if newer */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK)/* In DOS it's defined, but always returns 0 */
-int update_link(char *, char *);	/* Copy a link if newer */
+int update_link(char *, char *, int);	/* Copy a link if newer */
 #endif
 int copyf(char *, char *);		/* Copy a file silently */
 int copy(char *, char *);		/* Copy a file and display messages */
@@ -421,6 +427,7 @@ typedef struct zapOpts {
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
 #define FLAG_COMMAND	0x0020		/* Force operation on read-only files */
+#define FLAG_SKIP_MD	0x0040		/* Optimization if it's been done already */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
@@ -499,7 +506,13 @@ int main(int argc, char *argv[]) {
       if (   streq(opt, "c")	    /* Clean mode on */
 	  || streq(opt, "-clean")) {
 	iClean = TRUE;
-	if (iVerbose) printf("Clean mode on.\n");
+	if (iVerbose) printf(COMMENT "Clean mode = on\n");
+	continue;
+      }
+      if (   streq(opt, "C")     /* Show the equivalent shell command */
+	  || streq(opt, "-command")) {
+	show = SHOW_COMMAND;
+	if (iVerbose) printf(COMMENT "Show mode = Equivalent shell command\n");
 	continue;
       }
       DEBUG_CODE(
@@ -507,46 +520,45 @@ int main(int argc, char *argv[]) {
 	  || streq(opt, "debug")	    /* The historical name of that switch */
 	  || streq(opt, "-debug")) {
 	DEBUG_MORE();
-	iVerbose = TRUE;
-	if (iVerbose) printf("Debug mode on.\n");
+	if (iVerbose) printf(COMMENT "Debug mode = on\n");
 	continue;
       }
       )
-      if (   streq(opt, "D")	    /* Make empty directories mode on */
-	  || streq(opt, "-makedirs")) {
-	iCopyEmptyDirs = TRUE;
-	if (iVerbose) printf("Make empty dirs mode on.\n");
+      if (   streq(opt, "D")     /* Show dest instead of source */
+	  || streq(opt, "-dest")) {
+	show = SHOW_DEST;
+	if (iVerbose) printf(COMMENT "Show mode = Destination files names\n");
 	continue;
       }
       if (   streq(opt, "E")	    /* NoEmpty files mode on */
 	  || streq(opt, "noempty")    /* The historical name of that switch */
 	  || streq(opt, "-noempty")) {
 	iCopyEmptyFiles = FALSE;
-	if (iVerbose) printf("NoEmpty files mode on.\n");
+	if (iVerbose) printf(COMMENT "No empty files mode = on\n");
 	continue;
       }
       if (   streq(opt, "f")	    /* Freshen mode on */
 	  || streq(opt, "-freshen")) {
 	fresh = 1;
-	if (iVerbose) printf("Freshen mode on.\n");
+	if (iVerbose) printf(COMMENT "Freshen mode = on\n");
 	continue;
       }
       if (   streq(opt, "F")	    /* Force mode on */
 	  || streq(opt, "-force")) {
 	force = 1;
-	if (iVerbose) printf("Force mode on.\n");
+	if (iVerbose) printf(COMMENT "Force mode = on\n");
 	continue;
       }
       if (   streq(opt, "i")	    /* Case-insensitive pattern matching */
 	  || streq(opt, "-ignorecase")) {
 	iFnmFlag |= FNM_CASEFOLD;
-	if (iVerbose) printf("Case-insensitive pattern matching.\n");
+	if (iVerbose) printf(COMMENT "Pattern matching = Case-insensitive \n");
 	continue;
       }
       if (   streq(opt, "k")	    /* Case-sensitive pattern matching */
 	  || streq(opt, "-casesensitive")) {
 	iFnmFlag &= ~FNM_CASEFOLD;
-	if (iVerbose) printf("Case-sensitive pattern matching.\n");
+	if (iVerbose) printf(COMMENT "Pattern matching = Case-sensitive\n");
 	continue;
       }
 #ifdef _WIN32
@@ -559,44 +571,50 @@ int main(int argc, char *argv[]) {
       if (   streq(opt, "p")	    /* Final Pause on */
 	  || streq(opt, "-pause")) {
 	iPause = 1;
-	if (iVerbose) printf("Final Pause on.\n");
+	if (iVerbose) printf(COMMENT "Final Pause = on\n");
 	continue;
       }
       if (   streq(opt, "P")	    /* Show file copy progress */
 	  || streq(opt, "-progress")) {
 	if (isConsole(fileno(stdout))) { /* Only do it when outputing to the console */
 	  iProgress = 1;
-	  if (iVerbose) printf("Show file copy progress.\n");
+	  if (iVerbose) printf(COMMENT "Show file copy progress\n");
 	}
 	continue;
       }
       if (   streq(opt, "q")	    /* Quiet/Nologo mode on */
-	  || streq(opt, "-quiet")
-	  || streq(opt, "nologo")) {  /* The historical name of that switch */
+	  || streq(opt, "-quiet")) {
 	iVerbose = FALSE;
+	show = SHOW_NONE;
 	continue;
       }
       if (   streq(opt, "r")	    /* Recursive update */
 	  || streq(opt, "-recurse")) {
 	iRecur = 1;
-	if (iVerbose) printf("Recursive update.\n");
+	if (iVerbose) printf(COMMENT "Recursive update\n");
 	continue;
       }
-      if (   streq(opt, "S")     /* Show dest instead of source */
-	  || streq(opt, "-showdest")) {
-	show = 1;
-	if (iVerbose) printf("Show destination files names.\n");
+      if (   streq(opt, "R")	    /* Reset time of identical files */
+	  || streq(opt, "-resettime")) {
+	iResetTime = 1;
+	if (iVerbose) printf(COMMENT "Reset time of equal files\n");
+	continue;
+      }
+      if (   streq(opt, "S")     /* Show source files */
+	  || streq(opt, "-source")) {
+	show = SHOW_SOURCE;
+	if (iVerbose) printf(COMMENT "Show mode = Source files names\n");
 	continue;
       }
       /* Note:     opt  "t"  is already used, as a synonym for -X */
-      if (   streq(opt, "T")	    /* Reset time of identical files */
-	  || streq(opt, "-resettime")) {
-	iResetTime = 1;
-	if (iVerbose) printf("Reset time of equal files.\n");
+      if (   streq(opt, "T")	    /* Make empty directories mode on */
+	  || streq(opt, "-tree")) {
+	iCopyEmptyDirs = TRUE;
+	if (iVerbose) printf(COMMENT "Make empty dirs mode = on\n");
 	continue;
       }
       if (   streq(opt, "tf")) {    /* Test the fullpath() routine */
-	if (iVerbose) printf("Test the fullpath() routine.\n");
+	if (iVerbose) printf(COMMENT "Test the fullpath() routine\n");
 	printf("%s\n", fullpath(NULL, argv[++iArg], 0));
 	exit(0);
       }
@@ -610,6 +628,7 @@ int main(int argc, char *argv[]) {
       if (   streq(opt, "v")	    /* Verbose mode on */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
+	printf(COMMENT "Verbose mode = on\n");
 	continue;
       }
       if (   streq(opt, "V")	    /* -V: Display the version */
@@ -621,7 +640,7 @@ int main(int argc, char *argv[]) {
 	  || streq(opt, "-noexec")
 	  || streq(opt, "t")) {	    /* The historical name of that switch */
 	test = 1;
-	if (iVerbose) printf("NoExec mode on.\n");
+	if (iVerbose) printf(COMMENT "NoExec/Test mode = on\n");
 	continue;
       }
       fprintf(stderr, "Warning: Unrecognized switch %s ignored.\n", arg);
@@ -717,7 +736,8 @@ Switches:\n\
 #ifdef _WIN32
 "\
   -A|--ansi     Force encoding the output using the ANSI character set\n\
-  -c|--clean    Clean mode: Delete destination files not in the source\n\
+  -c|--clean    Clean mode: Delete destination files not in the source set\n\
+  -C|--command  Display the equivalent shell commands. Overrides -D|-q|-S\n\
 "
 #endif
 #ifdef _DEBUG
@@ -725,14 +745,14 @@ Switches:\n\
   -d|--debug    Output debug information\n"
 #endif
 "\
-  -D|--makedirs Create directories, even if no file needs to be copied inside\n\
-  -E|--noempty  Noempty file mode: Don't copy empty files\n\
+  -D|--dest     Display destination files copied. Overrides -C|-q|-S\n\
+  -E|--noempty  Don't copy empty files\n\
 ");
 
     printf("\
-  -f|--freshen  Freshen mode: Update only files that exist in both directories\n\
-  -F|--force    Force mode: Overwrite read-only files\n\
-  -h|--help|-?  Display this help screen\n\
+  -f|--freshen  Update only files that exist in both directories\n\
+  -F|--force    Overwrite read-only files\n\
+  -h|--help|-?  Display this help screen and exit\n\
   -i|--ignorecase    Case-insensitive pattern matching. Default for DOS/Windows\n\
   -k|--casesensitive Case-sensitive pattern matching. Default for Unix\n"
 #ifdef _WIN32
@@ -742,19 +762,19 @@ Switches:\n\
 "\
   -p|--pause    Pause before exit\n\
   -P|--progress Display the file copy progress. Useful with very large files\n\
-  -q|--nologo   Quiet mode: Don't display anything\n\
+  -q|--quiet    Don't display anything\n\
   -r|--recurse  Recursively update all subdirectories\n\
-  -S|--showdest Show the destination files names. Default: The sources names\n\
-  -T|--resettime Reset time of identical files\n"
-
+  -R|--resettime Reset time of identical files\n\
+  -S|--source   Display source files copied (Default). Overrides -C|-D|-q\n\
+"
 #ifdef _WIN32
 "\
   -U|--utf8     Force encoding the output using the UTF-8 character encoding\n"
 #endif
 "\
-  -v|--verbose  Verbose mode: Display extra status information\n\
+  -v|--verbose  Display extra status information\n\
   -V|--version  Display this program version and exit\n\
-  -X|-t         Noexec/test mode: Display the files that need to be copied\n\
+  -X|-t         Noexec/test mode: Display what would be done, but don't do it\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
@@ -837,12 +857,14 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     int err;
     int nErrors = 0;
     int iTargetDirExisted;
-    int iTargetDirExists;
     zapOpts zo = {FLAG_VERBOSE, "- "};
-    if (iRecur) zo.iFlags |= FLAG_RECURSE;
-    if (test) zo.iFlags |= FLAG_NOEXEC;
-    if (force) zo.iFlags |= FLAG_FORCE;
-    if (iVerbose) zo.iFlags |= FLAG_COMMAND;
+    int iFlags = 0;
+
+    if (iRecur) iFlags |= FLAG_RECURSE;
+    if (test) iFlags |= FLAG_NOEXEC;
+    if (force) iFlags |= FLAG_FORCE;
+    if (show == SHOW_COMMAND) iFlags |= FLAG_COMMAND;
+    zo.iFlags |= iFlags;
 
     DEBUG_ENTER(("updateall(\"%s\", \"%s\");\n", p1, p2));
 
@@ -902,7 +924,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     }
 
     if (iVerbose) {
-      printf(REMARK " Update %s from %s to %s\n", pattern, path0, p2);
+      printf(COMMENT "Update %s from %s to %s\n", pattern, path0, p2);
     }
 
     /* Check if the target is a file or directory name */
@@ -919,7 +941,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     } else {
       DEBUG_PRINTF(("// The target is directory %s\n", ppath));
     }
-    iTargetDirExisted = iTargetDirExists = is_effective_directory(ppath);
+    iTargetDirExisted = is_effective_directory(ppath);
 
     /* Note: Scan the source directory even in the absence of wildcards.
        In Windows, this makes sure that the copy has the same case as
@@ -945,12 +967,12 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       if (pDE->d_type == DT_LNK) {
-	err = update_link(path1, path2); /* Displays error messages on stderr */
+	err = update_link(path1, path2, iFlags); /* Displays error messages on stderr */
       }
       else
 #endif
       {
-      	err = update(path1, path2); /* Does not display error messages on stderr */
+      	err = update(path1, path2, iFlags); /* Does not display error messages on stderr */
 	if (err) {
 	  printError("Error: Failed to create \"%s\". %s", path2, strerror(errno));
 	}
@@ -959,6 +981,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       	nErrors += 1;
       	/* Continue the directory scan, looking for other files to update */
       }
+      iFlags |= FLAG_SKIP_MD;
     }
     closedirx(pDir);
 
@@ -1053,9 +1076,9 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	  /* 2018-05-31 JFL Actually do it, but only if the iCopyEmptyFiles flag is set */
 	  /* 2020-03-23 JFL Create a new iCopyEmptyDirs flag, to control this independently of the iCopyEmptyFiles flag */
 	  if (iCopyEmptyDirs && !p2_exists) { /* Create the missing target directory */
-	    if (iVerbose) {
+	    if (show == SHOW_COMMAND) {
 	      printf(MAKE_DIR " \"%s\"\n", path2);
-	    } else {
+	    } else if (show) {
 	      printf("%s\\\n", fullpathname);
 	    }
 	    if (!test) {
@@ -1110,7 +1133,8 @@ cleanup_and_return:
 \*---------------------------------------------------------------------------*/
 
 int update(char *p1,	/* Both names must be complete, without wildcards */
-           char *p2)
+           char *p2,
+           int iFlags)
     {
     int e;
     struct stat sP2stat = {0};
@@ -1119,8 +1143,8 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     DEBUG_ENTER(("update(\"%s\", \"%s\");\n", p1, p2));
 
     /* Get the pathname to display, before p2 is possibly modified by the test mode */
-    p = p1;		/* By default, show the source file name */
-    if (show) p = p2;	/* But in showdest mode, show the destination file name */
+    p = p1;				/* By default, show the source file name */
+    if (show == SHOW_DEST) p = p2;	/* But in showdest mode, show the destination file name */
 
     /* In freshen mode, don't copy if the destination does not exist. */
     if (fresh && !exist_file(p2)) RETURN_CONST(0);
@@ -1134,7 +1158,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
       if (force) zo.iFlags |= FLAG_FORCE;
-      if (iVerbose) zo.iFlags |= FLAG_COMMAND;
+      if (show == SHOW_COMMAND) zo.iFlags |= FLAG_COMMAND;
       if (S_ISDIR(sP2stat.st_mode)) {	/* If the target is a directory */
       	zo.iFlags |= FLAG_VERBOSE; /* Show what's deleted, beyond the obvious target itself */
       	e = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
@@ -1166,11 +1190,13 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 	  jour = pTime->tm_mday;
 	  mois = pTime->tm_mon + 1;
 	  an = pTime->tm_year + 1900;
-	  if (iVerbose) printf("cfdt ");
-	  printf("%04d-%02d-%02d %02d:%02d:%02d", an, mois, jour, heure, minute, seconde);
-	  printf(iVerbose ? " \"" : " -> ");
-	  printf("%s", p2);
-	  printf(iVerbose ? "\"\n" : "\n");
+	  if (iVerbose) {
+	    if (show == SHOW_COMMAND) printf("cfdt ");
+	    printf("%04d-%02d-%02d %02d:%02d:%02d", an, mois, jour, heure, minute, seconde);
+	    printf(show == SHOW_COMMAND ? " \"" : " -> ");
+	    printf("%s", p2);
+	    printf(show == SHOW_COMMAND ? "\"\n" : "\n");
+	  }
 	  if (test) RETURN_CONST(0);
 	  e = copydate(p2, p1);
 	  if (e) {
@@ -1185,20 +1211,30 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (older(p1, p2)) RETURN_CONST(0);
 
-    if (iVerbose) {
-      char name1[PATHNAME_SIZE];
-      char name2[PATHNAME_SIZE];
-      char path2[PATHNAME_SIZE];
-      fullpath(name1, p1, PATHNAME_SIZE); /* Build absolute pathname of source */
-      fullpath(name2, p2, PATHNAME_SIZE); /* Build absolute pathname of destination */
-      strsfp(name2, path2, NULL);
-      if (!exists(path2)) printf(MAKE_DIR " \"%s\"\n", path2);
-      printf(COPY_FILE " \"%s\" \"%s\"\n", name1, name2);
-    } else {
-      char name[PATHNAME_SIZE];
+    if (show == SHOW_COMMAND) {
+      char *name1 = malloc(PATHNAME_SIZE);
+      char *name2 = malloc(PATHNAME_SIZE);
+      if (name1 && name2) {
+	fullpath(name1, p1, PATHNAME_SIZE); /* Build absolute pathname of source */
+	fullpath(name2, p2, PATHNAME_SIZE); /* Build absolute pathname of destination */
+	if (!(iFlags & FLAG_SKIP_MD)) {
+	  char *path2 = malloc(PATHNAME_SIZE);
+	  if (path2) {
+	    strsfp(name2, path2, NULL);
+	    if (!exists(path2)) printf(MAKE_DIR " \"%s\"\n", path2);
+	  }
+	  free(path2);
+	}
+	printf(COPY_FILE " \"%s\" \"%s\"\n", name1, name2);
+      }
+      free(name1);
+      free(name2);
+    } else if (show) {
+      char *name = malloc(PATHNAME_SIZE);
       fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of file */
       printf("%s\n", name);
     }
+
     if (test == 1) RETURN_CONST(0);
 
     e = copy(p1, p2);
@@ -1252,7 +1288,8 @@ int is_link(char *name) {
 
 /* Copy link p1 onto link p2, if and only if p1 is newer. */
 int update_link(char *p1,	/* Both names must be complete, without wildcards */
-                char *p2)
+                char *p2,
+	        int iFlags)
     {
     int err;
     char name[PATHNAME_SIZE];
@@ -1279,23 +1316,21 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (bP2IsLink && older(p1, p2)) RETURN_CONST(0);
 
-    p = p1;		/* By default, show the source file name */
-    if (show) p = p2;	/* But in showdest mode, show the destination file name */
+    p = p1;				/* By default, show the source file name */
+    if (show == SHOW_DEST) p = p2;	/* But in showdest mode, show the destination file name */
     fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
-    if (iVerbose) {
+    if (show == SHOW_COMMAND) {
       printf(COPY_LINK " \"%s\" \"%s\"\n", p1, p2);
-    } else {
+    } else if (show) {
       printf("%s\n", name);
     }
     if (test == 1) RETURN_CONST(0);
-
-    printf("%s\n", name);
 
     if (bP2Exists) { // Then the target has to be removed, even if it's a link
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
       if (force) zo.iFlags |= FLAG_FORCE;
-      if (iVerbose) zo.iFlags |= FLAG_COMMAND;
+      if (show == SHOW_COMMAND) zo.iFlags |= FLAG_COMMAND;
       // First, in force mode, prevent failures if the target is read-only
       if (force && !(sP2stat.st_mode & S_IWRITE)) {
       	int iMode = sP2stat.st_mode | S_IWRITE;
@@ -1316,9 +1351,9 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 
     strsfp(p2, path, NULL);
     if (!exists(path)) {
-      if (iVerbose) {
-	printf(MAKE_DIR " \"%s\"\n", path);
-      } else {
+      if (show == SHOW_COMMAND) {
+	if (!(iFlags & FLAG_SKIP_MD)) printf(MAKE_DIR " \"%s\"\n", path);
+      } else if (show) {
       	char *pc = strrchr(name, DIRSEPARATOR_CHAR);
       	*pc = '\0';
 	printf("%s\\\n", name);
