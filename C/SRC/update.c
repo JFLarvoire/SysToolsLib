@@ -165,6 +165,7 @@
 *    2020-03-23 JFL Renamed switches -e|--erase as -c|--clean.                *
 *                   Added switches -D|--makedirs, independent of -E|--noempty.*
 *                   Version 3.9.                                              *
+*                   Changed -v to display the equivalent shell commands.      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -218,6 +219,14 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
+/* Shell command names, for verbose output */
+#define REMARK    ":#"
+#define COPY_FILE "copy"
+#define COPY_LINK "xcopy /b"
+#define MAKE_DIR  "md"
+#define DEL_FILE  "del"
+#define DEL_DIR   "rd"
+
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
 #define _filelength(hFile) _filelengthi64(hFile)
@@ -236,6 +245,14 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
+/* Shell command names, for verbose output */
+#define REMARK    ":#"
+#define COPY_FILE "copy"
+#define COPY_LINK "rem"
+#define MAKE_DIR  "md"
+#define DEL_FILE  "del"
+#define DEL_DIR   "rd"
+
 #define fullpath _fullpath
 
 #endif /* _MSDOS */
@@ -249,6 +266,14 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 
+/* Shell command names, for verbose output */
+#define REMARK    ":#"
+#define COPY_FILE "copy"
+#define COPY_LINK "rem"
+#define MAKE_DIR  "md"
+#define DEL_FILE  "del"
+#define DEL_DIR   "rd"
+
 #define fullpath _fullpath
 
 #endif /* _OS2 */
@@ -261,6 +286,14 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define DIRSEPARATOR_STRING "/"
 
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
+
+/* Shell command names, for verbose output */
+#define REMARK    "#"
+#define COPY_FILE "cp -p"
+#define COPY_LINK "cp -p -P"
+#define MAKE_DIR  "mkdir"
+#define DEL_FILE  "rm"
+#define DEL_DIR   "rmdir"
 
 /*
 #define _MAX_PATH  FILENAME_MAX
@@ -387,6 +420,7 @@ typedef struct zapOpts {
 #define FLAG_RECURSE	0x0004		/* Recursive operation */
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
+#define FLAG_COMMAND	0x0020		/* Force operation on read-only files */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
@@ -803,10 +837,12 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     int err;
     int nErrors = 0;
     int iTargetDirExisted;
+    int iTargetDirExists;
     zapOpts zo = {FLAG_VERBOSE, "- "};
     if (iRecur) zo.iFlags |= FLAG_RECURSE;
     if (test) zo.iFlags |= FLAG_NOEXEC;
     if (force) zo.iFlags |= FLAG_FORCE;
+    if (iVerbose) zo.iFlags |= FLAG_COMMAND;
 
     DEBUG_ENTER(("updateall(\"%s\", \"%s\");\n", p1, p2));
 
@@ -866,8 +902,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     }
 
     if (iVerbose) {
-      DEBUG_PRINTF(("// ")); /* If debug is on, print the debug indent, then a comment marker without a linefeed */
-      printf("Update %s from %s to %s\n", pattern, path0, p2);
+      printf(REMARK " Update %s from %s to %s\n", pattern, path0, p2);
     }
 
     /* Check if the target is a file or directory name */
@@ -884,7 +919,7 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     } else {
       DEBUG_PRINTF(("// The target is directory %s\n", ppath));
     }
-    iTargetDirExisted = is_effective_directory(ppath);
+    iTargetDirExisted = iTargetDirExists = is_effective_directory(ppath);
 
     /* Note: Scan the source directory even in the absence of wildcards.
        In Windows, this makes sure that the copy has the same case as
@@ -1004,36 +1039,31 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	p2_exists = exists(path2);
 	p2_is_dir = is_directory(path2);
 	if ((!p2_exists) || (!p2_is_dir)) {
-	  if (test == 1) {
-	    if (iVerbose) {
-	      DEBUG_PRINTF(("// "));
-	      printf("Would copy directory %s\\\n", fullpathname);
+	  if (p2_exists && !p2_is_dir) {
+	    err = zapFile(path2, &zo); /* Delete the conflicting file/link */
+	    if (err) {
+	      printError("Error: Failed to remove \"%s\"", path2);
+	      nErrors += 1;
+	      continue;	/* Try updating something else */
 	    }
-	    /* printf("%s\\\n", fullpathname); // 2015-01-12 JFL Don't display the directory name,
-		    as we're interested only in its inner files, and there may be none to copy */
-	  } else {
-	    if (p2_exists && !p2_is_dir) {
-	      err = zapFile(path2, &zo); /* Delete the conflicting file/link */
+	    p2_exists = FALSE;
+	  }
+	  /* 2015-01-12 JFL Don't create the directory now, as it may never be needed,
+			      if there are no files that match the input pattern */
+	  /* 2018-05-31 JFL Actually do it, but only if the iCopyEmptyFiles flag is set */
+	  /* 2020-03-23 JFL Create a new iCopyEmptyDirs flag, to control this independently of the iCopyEmptyFiles flag */
+	  if (iCopyEmptyDirs && !p2_exists) { /* Create the missing target directory */
+	    if (iVerbose) {
+	      printf(MAKE_DIR " \"%s\"\n", path2);
+	    } else {
+	      printf("%s\\\n", fullpathname);
+	    }
+	    if (!test) {
+	      err = mkdirp(path2, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	      if (err) {
-		printError("Error: Failed to remove \"%s\"", path2);
+		printError("Error: Failed to create directory \"%s\". %s", path2, strerror(errno));
 		nErrors += 1;
 		continue;	/* Try updating something else */
-	      }
-	      p2_exists = FALSE;
-	    }
-	    /* 2015-01-12 JFL Don't create the directory now, as it may never be needed,
-				if there are no files that match the input pattern */
-	    /* 2018-05-31 JFL Actually do it, but only if the iCopyEmptyFiles flag is set */
-	    /* 2020-03-23 JFL Create a new iCopyEmptyDirs flag, to control this independently of the iCopyEmptyFiles flag */
-	    if (iCopyEmptyDirs && !p2_exists) { /* Create the missing target directory */
-	      printf("%s\\\n", fullpathname);
-	      if (!test) {
-	      	err = mkdirp(path2, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-		if (err) {
-		  printError("Error: Failed to create directory \"%s\". %s", path2, strerror(errno));
-		  nErrors += 1;
-		  continue;	/* Try updating something else */
-		}
 	      }
 	    }
 	  }
@@ -1083,7 +1113,6 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
            char *p2)
     {
     int e;
-    char name[PATHNAME_SIZE];
     struct stat sP2stat = {0};
     char *p;
 
@@ -1105,6 +1134,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
       if (force) zo.iFlags |= FLAG_FORCE;
+      if (iVerbose) zo.iFlags |= FLAG_COMMAND;
       if (S_ISDIR(sP2stat.st_mode)) {	/* If the target is a directory */
       	zo.iFlags |= FLAG_VERBOSE; /* Show what's deleted, beyond the obvious target itself */
       	e = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
@@ -1136,15 +1166,12 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 	  jour = pTime->tm_mday;
 	  mois = pTime->tm_mon + 1;
 	  an = pTime->tm_year + 1900;
-	  if (test && iVerbose) {
-	    DEBUG_PRINTF(("// "));
-	    printf("Would copy date ");
-	  }
+	  if (iVerbose) printf("cfdt ");
 	  printf("%04d-%02d-%02d %02d:%02d:%02d", an, mois, jour, heure, minute, seconde);
-	  printf(" -> %s\n", p2);
-	  if (test) {
-	    RETURN_CONST(0);
-	  }
+	  printf(iVerbose ? " \"" : " -> ");
+	  printf("%s", p2);
+	  printf(iVerbose ? "\"\n" : "\n");
+	  if (test) RETURN_CONST(0);
 	  e = copydate(p2, p1);
 	  if (e) {
 	    printError("Failed to set time for \"%s\"", p2);
@@ -1158,18 +1185,21 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (older(p1, p2)) RETURN_CONST(0);
 
-    fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
-    if (test == 1)
-        {
-	if (iVerbose) {
-	  DEBUG_PRINTF(("// "));
-	  printf("Would copy file ");
-	}
-	printf("%s\n", name);
-        RETURN_CONST(0);
-        }
-
-    if (!iVerbose) printf("%s\n", name);
+    if (iVerbose) {
+      char name1[PATHNAME_SIZE];
+      char name2[PATHNAME_SIZE];
+      char path2[PATHNAME_SIZE];
+      fullpath(name1, p1, PATHNAME_SIZE); /* Build absolute pathname of source */
+      fullpath(name2, p2, PATHNAME_SIZE); /* Build absolute pathname of destination */
+      strsfp(name2, path2, NULL);
+      if (!exists(path2)) printf(MAKE_DIR " \"%s\"\n", path2);
+      printf(COPY_FILE " \"%s\" \"%s\"\n", name1, name2);
+    } else {
+      char name[PATHNAME_SIZE];
+      fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of file */
+      printf("%s\n", name);
+    }
+    if (test == 1) RETURN_CONST(0);
 
     e = copy(p1, p2);
 
@@ -1252,15 +1282,12 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     p = p1;		/* By default, show the source file name */
     if (show) p = p2;	/* But in showdest mode, show the destination file name */
     fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
-    if (test == 1)
-        {
-	if (iVerbose) {
-	  DEBUG_PRINTF(("// "));
-	  printf("Would copy link ");
-	}
-	printf("%s\n", name);
-        RETURN_CONST(0);
-        }
+    if (iVerbose) {
+      printf(COPY_LINK " \"%s\" \"%s\"\n", p1, p2);
+    } else {
+      printf("%s\n", name);
+    }
+    if (test == 1) RETURN_CONST(0);
 
     printf("%s\n", name);
 
@@ -1268,6 +1295,7 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
       if (force) zo.iFlags |= FLAG_FORCE;
+      if (iVerbose) zo.iFlags |= FLAG_COMMAND;
       // First, in force mode, prevent failures if the target is read-only
       if (force && !(sP2stat.st_mode & S_IWRITE)) {
       	int iMode = sP2stat.st_mode | S_IWRITE;
@@ -1288,6 +1316,14 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 
     strsfp(p2, path, NULL);
     if (!exists(path)) {
+      if (iVerbose) {
+	printf(MAKE_DIR " \"%s\"\n", path);
+      } else {
+      	char *pc = strrchr(name, DIRSEPARATOR_CHAR);
+      	*pc = '\0';
+	printf("%s\\\n", name);
+      	*pc = DIRSEPARATOR_CHAR;
+      }
       err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       if (err) {
       	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
@@ -1476,38 +1512,36 @@ retry_open_targetfile:
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int copy(char *name1, char *name2)
-    {
-    int e;
-    char path[PATHNAME_SIZE];
+int copy(char *name1, char *name2) {
+  int e;
+  char path[PATHNAME_SIZE];
 
-    strsfp(name2, path, NULL);
-    if (!exists(path)) {
-      e = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-      if (e) {
-      	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
-      	return e;
-      }
+  strsfp(name2, path, NULL);
+  if (!exists(path)) {
+    e = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    if (e) {
+      printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
+      return e;
     }
+  }
 
-    e = copyf(name1, name2);
+  e = copyf(name1, name2);
 #if NEEDED
-    switch (e)
-        {
-        case 0:
-            break;
-        case 1:
-	    printError("Error reading from file \"%s\"", name1);
-            break;
-        case 2:
-	    printError("Error writing to file \"%s\"", name2);
-            break;
-        default:
-            break;
-        }
+  switch (e) {
+    case 0:
+      break;
+    case 1:
+      printError("Error reading from file \"%s\"", name1);
+      break;
+    case 2:
+      printError("Error writing to file \"%s\"", name2);
+      break;
+    default:
+      break;
+  }
 #endif
-    return(e);
-    }
+  return(e);
+}
 
 /******************************************************************************
 *									      *
@@ -2248,7 +2282,11 @@ int zapFileM(const char *path, int iMode, zapOpts *pzo) {
   }
 #endif
 
-  if (iFlags & FLAG_VERBOSE) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  if (iFlags & FLAG_COMMAND) {
+    printf(DEL_FILE " \"%s\"\n", path);
+  } else if (iFlags & FLAG_VERBOSE) {
+    printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  }
   if (iFlags & FLAG_NOEXEC) RETURN_INT(0);
   if (iFlags & FLAG_FORCE) {
     if (!(iMode & S_IWRITE)) {
@@ -2286,7 +2324,6 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   struct dirent *pDE;
   int nErr = 0;
   int iFlags = pzo->iFlags;
-  int iVerbose = iFlags & FLAG_VERBOSE;
   int iNoExec = iFlags & FLAG_NOEXEC;
   char *pszSuffix;
 
@@ -2345,7 +2382,11 @@ int zapDirM(const char *path, int iMode, zapOpts *pzo) {
   iErr = 0;
   pszSuffix = DIRSEPARATOR_STRING;
   if (path[strlen(path) - 1] == DIRSEPARATOR_CHAR) pszSuffix = ""; /* There's already a trailing separator */
-  if (iVerbose) printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  if (iFlags & FLAG_COMMAND) {
+    printf(DEL_FILE " \"%s\"\n", path);
+  } else if (iFlags & FLAG_VERBOSE){
+    printf("%s%s%s\n", pzo->pszPrefix, path, pszSuffix);
+  }
   if (!iNoExec) iErr = rmdir(path);
   if (iErr) {
     printError("Error deleting \"%s%s\": %s", path, pszSuffix, strerror(errno));
