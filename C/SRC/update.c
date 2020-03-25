@@ -169,6 +169,7 @@
 *		    --makedirs as -T|--tree, and -S|--showdest as -D|--dest.  *
 *                   Added options -C|--command, and -S|--source.              *
 *    2020-03-25 JFL Fixed issues with copying a link on a file, or vice-versa.*
+*                   Added an updOpts argument to update() & update_link().    *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -180,9 +181,6 @@
 #define PROGRAM_DATE    "2020-03-25"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
-
-#define FALSE 0
-#define TRUE 1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -206,6 +204,9 @@
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debugging macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
+
+#define FALSE 0
+#define TRUE 1
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -386,14 +387,20 @@ static int iRecur = 0;			/* Recursive update */
 static int iClean = 0;			/* Flag indicating Clean mode */
 static int iResetTime = 0;		/* Reset time of identical files */
 
+/* update() and update_link() functions options */
+typedef struct updOpts {
+  int iFlags;				/* Same FLAG_xxx as zapOpts below */
+  int *pmdDone;				/* Optional pointer to a flag that records if the target directory has already be created */
+} updOpts;
+
 /* Forward references */
 
 void usage(void);			/* Display usage */
 int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
-int update(char *, char *, int);	/* Copy a file if newer */
+int update(char *, char *, updOpts *);	/* Copy a file if newer */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK)/* In DOS it's defined, but always returns 0 */
-int update_link(char *, char *, int);	/* Copy a link if newer */
+int update_link(char *, char *, updOpts *);	/* Copy a link if newer */
 #endif
 int copyf(char *, char *);		/* Copy a file silently */
 int copy(char *, char *);		/* Copy a file and display messages */
@@ -428,7 +435,6 @@ typedef struct zapOpts {
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
 #define FLAG_COMMAND	0x0020		/* Force operation on read-only files */
-#define FLAG_SKIP_MD	0x0040		/* Optimization if it's been done already */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
@@ -860,12 +866,16 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
     int iTargetDirExisted;
     zapOpts zo = {FLAG_VERBOSE, "- "};
     int iFlags = 0;
+    int mdDone = FALSE;
+    updOpts uo = {0};
 
     if (iRecur) iFlags |= FLAG_RECURSE;
     if (test) iFlags |= FLAG_NOEXEC;
     if (force) iFlags |= FLAG_FORCE;
     if (show == SHOW_COMMAND) iFlags |= FLAG_COMMAND;
     zo.iFlags |= iFlags;
+    uo.iFlags |= iFlags;
+    uo.pmdDone = &mdDone;
 
     DEBUG_ENTER(("updateall(\"%s\", \"%s\");\n", p1, p2));
 
@@ -968,12 +978,12 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       if (pDE->d_type == DT_LNK) {
-	err = update_link(path1, path2, iFlags); /* Displays error messages on stderr */
+	err = update_link(path1, path2, &uo); /* Displays error messages on stderr */
       }
       else
 #endif
       {
-      	err = update(path1, path2, iFlags); /* Does not display error messages on stderr */
+      	err = update(path1, path2, &uo); /* Does not display error messages on stderr */
 	if (err) {
 	  printError("Error: Failed to create \"%s\". %s", path2, strerror(errno));
 	}
@@ -982,7 +992,6 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
       	nErrors += 1;
       	/* Continue the directory scan, looking for other files to update */
       }
-      iFlags |= FLAG_SKIP_MD;
     }
     closedirx(pDir);
 
@@ -1135,12 +1144,13 @@ cleanup_and_return:
 
 int update(char *p1,	/* Both names must be complete, without wildcards */
            char *p2,
-           int iFlags)
+           updOpts *puo)
     {
-    int e;
+    int err;
     struct stat sP2stat = {0};
     char *p;
     int iCheckOlder = TRUE;
+    char path[PATHNAME_SIZE];
 
     DEBUG_ENTER(("update(\"%s\", \"%s\");\n", p1, p2));
 
@@ -1155,37 +1165,37 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     if ( (iCopyEmptyFiles == FALSE) && (file_empty(p1)) ) RETURN_CONST(0);
 
     /* If the target exists, make sure it's a file */
-    e = lstat(p2, &sP2stat); /* Use lstat to avoid following links */
-    if (e == 0) {
+    err = lstat(p2, &sP2stat); /* Use lstat to avoid following links */
+    if (err == 0) {
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
       if (force) zo.iFlags |= FLAG_FORCE;
       if (show == SHOW_COMMAND) zo.iFlags |= FLAG_COMMAND;
       if (S_ISDIR(sP2stat.st_mode)) {	/* If the target is a directory */
       	zo.iFlags |= FLAG_VERBOSE; /* Show what's deleted, beyond the obvious target itself */
-      	e = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
+      	err = zapDirM(p2, sP2stat.st_mode, &zo);	/* Then remove it */
 	if (test) p2 = ""; /* Trick older() to think the target is deleted */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
       } else if (S_ISLNK(sP2stat.st_mode)) { /* Else if it's a link */
       	zo.iFlags &= ~FLAG_VERBOSE; /* No need to show that that target is deleted */
-	e = zapFileM(p2, sP2stat.st_mode, &zo);	/* Deletes the link, not its target. */
+	err = zapFileM(p2, sP2stat.st_mode, &zo);	/* Deletes the link, not its target. */
 	if (test) iCheckOlder = FALSE; /* Skip older() to do as if the target had been deleted */
 #endif /* defined(S_ISLNK) */
       } else if (!S_ISREG(sP2stat.st_mode)) { /* If it's anything else but a file */
       	printError("Can't replace \"%s\" with a file", p2);
       	RETURN_INT(EBADF);
       } /* Else the target is a plain file */
-      if (e) {
+      if (err) {
       	printError("Failed to remove \"%s\"", p2);
-      	RETURN_INT(e);
+      	RETURN_INT(err);
       }
     }
 
     /* In ResetTime mode, check if the files are identical, but dates have changed */
     if (iResetTime) {
       struct stat sP1stat = {0};
-      e = lstat(p1, &sP1stat); /* Use lstat to avoid following links */
-      if ((e == 0) && (sP1stat.st_size == sP2stat.st_size) && (sP1stat.st_mtime < sP2stat.st_mtime)) {
+      err = lstat(p1, &sP1stat); /* Use lstat to avoid following links */
+      if ((err == 0) && (sP1stat.st_size == sP2stat.st_size) && (sP1stat.st_mtime < sP2stat.st_mtime)) {
       	if (!filecompare(p1, p2)) {
 	  int seconde, minute, heure, jour, mois, an;
 	  struct tm *pTime = LocalFileTime(&(sP1stat.st_mtime)); // Time of last data modification
@@ -1203,10 +1213,10 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 	    printf(show == SHOW_COMMAND ? "\"\n" : "\n");
 	  }
 	  if (test) RETURN_CONST(0);
-	  e = copydate(p2, p1);
-	  if (e) {
+	  err = copydate(p2, p1);
+	  if (err) {
 	    printError("Failed to set time for \"%s\"", p2);
-	    RETURN_INT(e);
+	    RETURN_INT(err);
 	  }
       	}
       }
@@ -1216,20 +1226,35 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (iCheckOlder && older(p1, p2)) RETURN_CONST(0);
 
+    /* Create the destination directory if needed */
+    strsfp(p2, path, NULL);
+    if (!exists(path)) {
+      if (!(puo && puo->pmdDone && *(puo->pmdDone))) { /* Avoid displaying this multiple times in test mode */
+	if (show == SHOW_COMMAND) {
+	  char *fullname = malloc(PATHNAME_SIZE);
+	  if (fullname) {
+	    fullpath(fullname, path, PATHNAME_SIZE); /* Build the absolute pathname of directory */
+	    printf(MAKE_DIR " \"%s\"\n", fullname);
+	    free(fullname);
+	  }
+	}
+      }
+      err = 0;
+      if (!test) err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+      if (err) {
+      	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
+	RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
+      }
+      if (puo && puo->pmdDone) *(puo->pmdDone) = TRUE; /* Avoid displaying this multiple times in test mode */
+    }
+
+    /* Display what is being copied */
     if (show == SHOW_COMMAND) {
       char *name1 = malloc(PATHNAME_SIZE);
       char *name2 = malloc(PATHNAME_SIZE);
       if (name1 && name2) {
 	fullpath(name1, p1, PATHNAME_SIZE); /* Build absolute pathname of source */
 	fullpath(name2, p2, PATHNAME_SIZE); /* Build absolute pathname of destination */
-	if (!(iFlags & FLAG_SKIP_MD)) {
-	  char *path2 = malloc(PATHNAME_SIZE);
-	  if (path2) {
-	    strsfp(name2, path2, NULL);
-	    if (!exists(path2)) printf(MAKE_DIR " \"%s\"\n", path2);
-	  }
-	  free(path2);
-	}
 	printf(COPY_FILE " \"%s\" \"%s\"\n", name1, name2);
       }
       free(name1);
@@ -1242,9 +1267,9 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 
     if (test == 1) RETURN_CONST(0);
 
-    e = copy(p1, p2);
+    err = copy(p1, p2);
 
-    RETURN_INT_COMMENT(e, (e?"Error\n":"Success\n"));
+    RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
     }
 
 /*---------------------------------------------------------------------------*\
@@ -1294,7 +1319,7 @@ int is_link(char *name) {
 /* Copy link p1 onto link p2, if and only if p1 is newer. */
 int update_link(char *p1,	/* Both names must be complete, without wildcards */
                 char *p2,
-	        int iFlags)
+	        updOpts *puo)
     {
     int err;
     char name[PATHNAME_SIZE];
@@ -1321,14 +1346,6 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (bP2IsLink && older(p1, p2)) RETURN_CONST(0);
 
-    /* Get the link target, and give up if we can't read it */
-    iSize = (int)readlink(p1, target1, sizeof(target1));
-    if (iSize < 0) { /* This may fail for Linux Sub-System Symbolic Links on Windows */
-      printError("Error: Failed to read link \"%s\"", p1);
-      RETURN_INT(1);
-    }
-    DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
-
     if (bP2Exists) { // Then the target has to be removed, even if it's a link
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
       if (test) zo.iFlags |= FLAG_NOEXEC;
@@ -1352,23 +1369,29 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
       if (err) RETURN_INT(err);
     }
 
+    /* Create the destination directory if needed */
     strsfp(p2, path, NULL);
     if (!exists(path)) {
-      if (show == SHOW_COMMAND) {
-	if (!(iFlags & FLAG_SKIP_MD)) printf(MAKE_DIR " \"%s\"\n", path);
-      } else if (show) {
-      	char *pc = strrchr(name, DIRSEPARATOR_CHAR);
-      	*pc = '\0';
-	printf("%s\\\n", name);
-      	*pc = DIRSEPARATOR_CHAR;
+      if (!(puo && puo->pmdDone && *(puo->pmdDone))) { /* Avoid displaying this multiple times in test mode */
+	if (show == SHOW_COMMAND) {
+	  char *fullname = malloc(PATHNAME_SIZE);
+	  if (fullname) {
+	    fullpath(fullname, path, PATHNAME_SIZE); /* Build the absolute pathname of directory */
+	    printf(MAKE_DIR " \"%s\"\n", fullname);
+	    free(fullname);
+	  }
+	}
       }
+      err = 0;
       if (!test) err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       if (err) {
       	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
 	RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
       }
+      if (puo && puo->pmdDone) *(puo->pmdDone) = TRUE; /* Avoid displaying this multiple times in test mode */
     }
 
+    /* Display what is being copied */
     p = p1;				/* By default, show the source file name */
     if (show == SHOW_DEST) p = p2;	/* But in showdest mode, show the destination file name */
     fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
@@ -1379,7 +1402,16 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     }
     if (test == 1) RETURN_CONST(0);
 
-    // e = copy(p1, p2);
+    /* Get the link target, and give up if we can't read it */
+    iSize = (int)readlink(p1, target1, sizeof(target1));
+    if (iSize < 0) { /* This may fail for Linux Sub-System Symbolic Links on Windows */
+      err = errno;
+      printError("Error: Failed to read link \"%s\"", p1);
+      RETURN_INT(err);
+    }
+    DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
+
+    /* Create the link copy */
 #if _MSVCLIBX_STAT_DEFINED
     err = lstat(p1, &sP1stat); // Use lstat to avoid following links
     if (sP1stat.st_ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
