@@ -168,6 +168,7 @@
 *    2020-03-24 JFL Renamed options -T|-resettime as -R|-resettime, -D|	      *
 *		    --makedirs as -T|--tree, and -S|--showdest as -D|--dest.  *
 *                   Added options -C|--command, and -S|--source.              *
+*    2020-03-25 JFL Fixed issues with copying a link on a file, or vice-versa.*
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -176,7 +177,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.9"
-#define PROGRAM_DATE    "2020-03-24"
+#define PROGRAM_DATE    "2020-03-25"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1139,6 +1140,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     int e;
     struct stat sP2stat = {0};
     char *p;
+    int iCheckOlder = TRUE;
 
     DEBUG_ENTER(("update(\"%s\", \"%s\");\n", p1, p2));
 
@@ -1167,8 +1169,11 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
       } else if (S_ISLNK(sP2stat.st_mode)) { /* Else if it's a link */
       	zo.iFlags &= ~FLAG_VERBOSE; /* No need to show that that target is deleted */
 	e = zapFileM(p2, sP2stat.st_mode, &zo);	/* Deletes the link, not its target. */
-	if (test) p2 = ""; /* Trick older() to think the target is deleted */
+	if (test) iCheckOlder = FALSE; /* Skip older() to do as if the target had been deleted */
 #endif /* defined(S_ISLNK) */
+      } else if (!S_ISREG(sP2stat.st_mode)) { /* If it's anything else but a file */
+      	printError("Can't replace \"%s\" with a file", p2);
+      	RETURN_INT(EBADF);
       } /* Else the target is a plain file */
       if (e) {
       	printError("Failed to remove \"%s\"", p2);
@@ -1209,7 +1214,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
     }
 
     /* In any mode, don't copy if the destination is newer than the source. */
-    if (older(p1, p2)) RETURN_CONST(0);
+    if (iCheckOlder && older(p1, p2)) RETURN_CONST(0);
 
     if (show == SHOW_COMMAND) {
       char *name1 = malloc(PATHNAME_SIZE);
@@ -1316,15 +1321,13 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
     /* In any mode, don't copy if the destination is newer than the source. */
     if (bP2IsLink && older(p1, p2)) RETURN_CONST(0);
 
-    p = p1;				/* By default, show the source file name */
-    if (show == SHOW_DEST) p = p2;	/* But in showdest mode, show the destination file name */
-    fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
-    if (show == SHOW_COMMAND) {
-      printf(COPY_LINK " \"%s\" \"%s\"\n", p1, p2);
-    } else if (show) {
-      printf("%s\n", name);
+    /* Get the link target, and give up if we can't read it */
+    iSize = (int)readlink(p1, target1, sizeof(target1));
+    if (iSize < 0) { /* This may fail for Linux Sub-System Symbolic Links on Windows */
+      printError("Error: Failed to read link \"%s\"", p1);
+      RETURN_INT(1);
     }
-    if (test == 1) RETURN_CONST(0);
+    DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
 
     if (bP2Exists) { // Then the target has to be removed, even if it's a link
       zapOpts zo = {FLAG_VERBOSE | FLAG_RECURSE, "- "};
@@ -1359,19 +1362,22 @@ int update_link(char *p1,	/* Both names must be complete, without wildcards */
 	printf("%s\\\n", name);
       	*pc = DIRSEPARATOR_CHAR;
       }
-      err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+      if (!test) err = mkdirp(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       if (err) {
       	printError("Error: Failed to create directory \"%s\". %s", path, strerror(errno));
 	RETURN_INT_COMMENT(err, (err?"Error\n":"Success\n"));
       }
     }
 
-    iSize = (int)readlink(p1, target1, sizeof(target1));
-    if (iSize < 0) { /* This may fail for Linux Sub-System Symbolic Links */
-      printError("Error: Failed to read link \"%s\"", p1);
-      RETURN_INT(1);
+    p = p1;				/* By default, show the source file name */
+    if (show == SHOW_DEST) p = p2;	/* But in showdest mode, show the destination file name */
+    fullpath(name, p, PATHNAME_SIZE); /* Build absolute pathname of source */
+    if (show == SHOW_COMMAND) {
+      printf(COPY_LINK " \"%s\" \"%s\"\n", p1, p2);
+    } else if (show) {
+      printf("%s\n", name);
     }
-    DEBUG_PRINTF(("// Target1=\"%s\", iSize=%d\n", target1, iSize));
+    if (test == 1) RETURN_CONST(0);
 
     // e = copy(p1, p2);
 #if _MSVCLIBX_STAT_DEFINED
