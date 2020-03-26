@@ -170,6 +170,7 @@
 *                   Added options -C|--command, and -S|--source.              *
 *    2020-03-25 JFL Fixed issues with copying a link on a file, or vice-versa.*
 *                   Added an updOpts argument to update() & update_link().    *
+*    2020-03-26 JFL Added option -B|--nobak to skip backup and temp. files.   *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -178,7 +179,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.9"
-#define PROGRAM_DATE    "2020-03-25"
+#define PROGRAM_DATE    "2020-03-26"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -386,6 +387,7 @@ static int iRecur = 0;			/* Recursive update */
 #endif
 static int iClean = 0;			/* Flag indicating Clean mode */
 static int iResetTime = 0;		/* Reset time of identical files */
+static int nobak = FALSE;		/* Flag for skipping backup files */
 
 /* update() and update_link() functions options */
 typedef struct updOpts {
@@ -510,6 +512,12 @@ int main(int argc, char *argv[]) {
 	continue;
       }
 #endif
+      if (   streq(opt, "B")	    /* Skip backup files */
+	  || streq(opt, "-nobak")) {
+	nobak = TRUE;
+	if (iVerbose) printf(COMMENT "Skip backup files mode = on\n");
+	continue;
+      }
       if (   streq(opt, "c")	    /* Clean mode on */
 	  || streq(opt, "-clean")) {
 	iClean = TRUE;
@@ -743,16 +751,19 @@ Switches:\n\
 #ifdef _WIN32
 "\
   -A|--ansi     Force encoding the output using the ANSI character set\n\
-  -c|--clean    Clean mode: Delete destination files not in the source set\n\
-  -C|--command  Display the equivalent shell commands. Overrides -D|-q|-S\n\
 "
 #endif
+"\
+  -B|--nobak    Skip backup and temporary files *.bak|*~|#*#\n\
+  -c|--clean    Clean mode: Delete destination files not in the source set\n\
+  -C|--command  Display the equivalent shell commands\n\
+"
 #ifdef _DEBUG
 "\
   -d|--debug    Output debug information\n"
 #endif
 "\
-  -D|--dest     Display destination files copied. Overrides -C|-q|-S\n\
+  -D|--dest     Display destination files copied\n\
   -E|--noempty  Don't copy empty files\n\
 ");
 
@@ -772,7 +783,7 @@ Switches:\n\
   -q|--quiet    Don't display anything\n\
   -r|--recurse  Recursively update all subdirectories\n\
   -R|--resettime Reset time of identical files\n\
-  -S|--source   Display source files copied (Default). Overrides -C|-D|-q\n\
+  -S|--source   Display source files copied (Default)\n\
 "
 #ifdef _WIN32
 "\
@@ -782,7 +793,10 @@ Switches:\n\
   -v|--verbose  Display extra status information\n\
   -V|--version  Display this program version and exit\n\
   -X|-t         Noexec/test mode: Display what would be done, but don't do it\n\
-\n"
+\n\
+Note: Options -C -D -q -S override each other. The last one provided wins.\n\
+\n\
+"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
 #else
@@ -973,6 +987,14 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 #endif
       	 ) continue;	/* We want only files or links */
       if (fnmatch(pattern, pDE->d_name, iFnmFlag) == FNM_NOMATCH) continue;
+      if (nobak) {
+	static char *patterns[] = {"*.bak", "*~", "#*#", NULL};
+	char **ppPattern;
+	for (ppPattern = patterns; *ppPattern; ppPattern++) {
+	  if (fnmatch(*ppPattern, pDE->d_name, iFnmFlag) == 0) break; /* Match */
+	}
+	if (*ppPattern) continue; /* There was a match, so skip this backup file */
+      }
       strmfp(path1, path0, pDE->d_name);  /* Compute source path */
       DEBUG_PRINTF(("// Found %s\n", path1));
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
