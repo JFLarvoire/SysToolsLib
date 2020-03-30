@@ -4,6 +4,31 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-03-30
+### Changed
+- C/SRC/detab.c: Use mkstemp() instead of tempnam() to avoid security warnings in Unix.    
+  Fixed a bug when the backup file does not exist initially.  
+  Copy the input file mode flags to the output file.
+
+### New
+- C/MsvcLibX/src/mkstemp.c: Implemented mkstemp() for WIN32.
+- C/MsvcLibX/include/stdlib.h: Export the DOS and WIN32 versions of mkstemp().
+
+## [Unreleased] 2020-03-26
+### Changed
+- C/SRC/update.c: Numerous improvements, including some incompatible switch name changes. => Version 4.0.  
+  Renamed switches -e|--erase as -c|--clean. (By analogy with `make clean`.)  
+  Added switches -D|--makedirs, independent of -E|--noempty. (As the 2018-05-31 change linking the two did more harm than good.)  
+  Renamed options -T|-resettime as -R|-resettime, -D|--makedirs as -T|--tree.
+  Renamed options -S|--showdest as -D|--dest, and added -S|--source to explicit the default behaviour.  
+  Added options -C|--command to display the equivalent shell commands. (And thus display both the source and dest. files.)  
+  Fixed issues with copying a link on a file, or vice-versa.  
+  Added option -B|--nobak to skip backup and temporary files.
+
+## [Unreleased] 2020-03-23
+### New
+- install: New Unix script for installing select tools. (Contrary to `make install`, which installs everything.)
+
 ## [Unreleased] 2020-03-22
 ### Fixed
 - C/SRC/which.c: Fixed wildcards search in Unix.
