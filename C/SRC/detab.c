@@ -36,6 +36,9 @@
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 3.0.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.3.0.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.0.4.      *
+*    2020-03-29 JFL Use mkstemp() instead of tempnam() to avoid sec. warnings.*
+*    2020-03-30 JFL Fixed a bug when the backup file does not exist initially.*
+*                   Copy the input file mode flags to the output file.        *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -43,8 +46,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert tabs to spaces"
 #define PROGRAM_NAME    "detab"
-#define PROGRAM_VERSION "3.0.4"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.1"
+#define PROGRAM_DATE    "2020-03-30"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -91,6 +94,7 @@ DEBUG_GLOBALS		/* Define global variables used by our debugging macros */
 
 /*  Avoid deprecation warnings */
 #define stricmp	_stricmp	/* This one is not standard */
+#define chmod	_chmod		/* This one is, but MSVC thinks it's not */
 
 #endif /* defined(_WIN32) */
 
@@ -283,12 +287,25 @@ int main(int argc, char *argv[])
     iSameFile = IsSameFile(pszInName, pszOutName);
   }
   if (iSameFile) {
+    int iFile;
+    /* Test the write rights before wasting time on the conversion */
+    df = fopen(pszInName, "r+");
+    if (!df) goto open_df_failed;
+    fclose(df);
+    df = NULL;
+    /* OK, we have write rights, so go ahead with the conversion */
     DEBUG_FPRINTF((mf, "// In and out files are the same. Writing to a temp file.\n"));
     pszPathCopy = strdup(pszInName);
     if (!pszPathCopy) goto fail_no_mem;
     pszDirName = dirname(pszPathCopy);
-    pszOutName = tempnam(pszDirName, "conv.");
-    DEBUG_FPRINTF((mf, "tempnam(\"%s\", \"conv.\"); // \"%s\"\n", pszDirName, pszOutName));
+    pszOutName = strdup(pszDirName);
+    if (pszOutName) pszOutName = realloc(pszOutName, strlen(pszOutName)+10);
+    if (!pszOutName) goto fail_no_mem;
+    strcat(pszOutName, DIRSEPARATOR_STRING "dtXXXXXX");
+    iFile = mkstemp(pszOutName);
+    if (iFile == -1) fail("Can't create temporary file %s. %s\n", pszOutName, strerror(errno));
+    df = fdopen(iFile, "wb+");
+    if (!df) goto open_df_failed;
     if (iBackup) {	/* Create an *.bak file in the same directory */
       char *pszNameCopy = strdup(pszInName);
       char *pszBaseName = basename(pszNameCopy);
@@ -313,9 +330,9 @@ int main(int argc, char *argv[])
   if (!df) {
     df = fopen(pszOutName, "wb");
     if (!df) {
+open_df_failed:
       if (sf != stdout) fclose(sf);
-      fail("Can't open file %s\n", pszOutName);
-
+      fail("Can't write to file %s. %s\n", pszOutName, strerror(errno));
     }
   }
 
@@ -346,7 +363,7 @@ int main(int argc, char *argv[])
   if (iSameFile) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
       iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if (iErr == -1) {
+      if ((iErr == -1) && (errno != ENOENT)) {
 	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
       }
       DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
@@ -369,6 +386,15 @@ int main(int argc, char *argv[])
     pszOutName = pszInName;
   }
 
+  /* Copy the file mode flags */
+  if (df != stdout) {
+    int iMode = sInTime.st_mode;
+    DEBUG_PRINTF(("chmod(%p, 0x%X);\n", pszOutName, iMode));
+    iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+    DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+  }
+
+  /* Optionally copy the timestamp */
   if ((sf != stdin) && (df != stdout) && iCopyTime) {
     struct utimbuf sOutTime = {0};
     sOutTime.actime = sInTime.st_atime;
