@@ -20,14 +20,15 @@
 :#   2018-09-03 JFL Undid the 08-22 change, and changed option -t to display  #
 :#                  the start and end times. (Which was the 08-22 intent.)    #
 :#                  Removed the SetTime routine, which was useless.           #
-:#                                                                            #
+:#   2020-04-01 JFL Changed the default to displaying start and end times,    #
+:#                  and added option -T to revert to the old behaviour.       #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2018-09-03"
+set "VERSION=2020-04-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0"				&:# Script path
 set "SPATH=%SPATH:~0,-1%"			&:# Script path, without the trailing \
@@ -1244,7 +1245,8 @@ echo   -?       Display this help
 echo   --       End of options
 echo   -2       Output the result to stderr
 echo   -n N     Run the command N times. Implies -t. Default: 1 time
-echo   -t       Display the start and end times
+echo   -t       Display the start and end times (Default)
+echo   -T       No not display the start and end times
 echo   -v       Verbose mode. Display commands executed
 echo   -V       Display the script version and exit
 echo   -X       Display commands to execute, but don't execute them
@@ -1258,7 +1260,7 @@ exit /b
 
 :Main
 set "NLOOPS=1"
-set "SHOWTIME=0"
+set "SHOWTIME=1"
 
 :next_arg
 %POPARG%
@@ -1270,6 +1272,7 @@ if .!ARG!.==.-2. set ">DEBUGOUT=>&2" & goto next_arg
 if .!ARG!.==.-d. call :Debug.On & goto next_arg
 if .!ARG!.==.-n. %POPARG% & set "NLOOPS=!ARG!" & goto next_arg
 if .!ARG!.==.-t. set "SHOWTIME=1" & goto next_arg
+if .!ARG!.==.-T. set "SHOWTIME=0" & goto next_arg
 if .!ARG!.==./t. goto :ShowTime &:# Emulate 'time /t'
 if .!ARG!.==./T. goto :ShowTime &:# Emulate 'time /t'
 if .!ARG!.==.-v. call :Verbose.On & goto next_arg
