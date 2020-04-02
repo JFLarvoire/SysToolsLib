@@ -15,13 +15,14 @@
 #                   Renamed a few functions for consistency with other langs. #
 #    2013-12-16 JFL One minor tweak in test routine fact().		      #
 #    2020-03-23 JFL Updated the help screen.               		      #
+#    2020-04-01 JFL Fixed cd & export in Exec().           		      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2020-03-23"
+VERSION="2020-04-01"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -298,15 +299,15 @@ Exec() { # $1=command $2=argument1 [...] [>|>>output_file]
   Log ""
   EchoD "$cmdline"
   local ERR=0
-  case "$1" in
-    cd|export)
-      # Do not pipe output, as this creates a sub-shell, and thus the command
-      # has no effect on the current shell.
-      "$@" 2>&1
-      ERR=$?
-    ;;
-    *)
-      if [[ $EXEC != 0 ]] ; then
+  if [[ $EXEC != 0 ]] ; then
+    case "$1" in
+      cd|export)
+	# Do not pipe output, as this creates a sub-shell, and thus the command
+	# has no effect on the current shell.
+	"$@"
+	ERR=$?
+      ;;
+      *)
       	if [[ "$redirect" == ">>" ]] ; then
 	  "${cmd[@]}" 2>&1 | tee -a $LOGFILE >>"$outfile"
       	elif [[ "$redirect" == ">" ]] ; then
@@ -315,9 +316,9 @@ Exec() { # $1=command $2=argument1 [...] [>|>>output_file]
 	  "${cmd[@]}" 2>&1 | tee -a $LOGFILE
 	fi
 	ERR=${PIPESTATUS[0]} # Get the exit code from the _first_ command.
-      fi
-    ;;
-  esac
+      ;;
+    esac
+  fi
   EchoD "  return $ERR"
   return $ERR
 }
