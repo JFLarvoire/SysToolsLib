@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-04-02
+### Changed
+- Batch/TimeX.bat: Changed the default to displaying start and end times, and added option -T to revert to the old behaviour.
+
+### Fixed
+- Bash/Library.bash: Fixed cd & export in Exec().
+- install: Fixed cd & export in Exec(). (No impact on this script though.)
+
 ## [Unreleased] 2020-03-30
 ### Changed
 - C/SRC/detab.c: Use mkstemp() instead of tempnam() to avoid security warnings in Unix.    
