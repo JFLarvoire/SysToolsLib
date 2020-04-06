@@ -141,6 +141,14 @@
 *    2017-08-25 JFL Use strerror() for portability to Unix. Version 2.6.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.6.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.6.4.      *
+*    2020-04-06 JFL Use mkstemp() instead of tempnam() to avoid sec. warnings.*
+*                   Fixed a bug when the backup file does not exist initially.*
+*                   Copy the input file mode flags to the output file.        *
+*                   Generalized -bak to backup any existing output file.      *
+*                   Added options -b|--bak as synonyms for -bak.              *
+*                   Changed option -= to -@. (Mime =XX codes decoding)        *
+*                   Added options -=|--same as synonyms for -same.            *
+*                   Version 3.0.                                              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -148,8 +156,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "2.6.4"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.0"
+#define PROGRAM_DATE    "2020-04-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -195,6 +203,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define SAMENAME strieq		/* File name comparison routine */
 
 #define stricmp	_stricmp	/* This one is not standard */
+#define chmod	_chmod		/* This one is, but MSVC thinks it's not */
 
 /* Do not use MsvcLibX encoding conversion for the output */
 #if 0
@@ -304,6 +313,7 @@ int PrintEscapeString(FILE *f, char *pc);
 void MakeRoom(char **ppOut, int *piSize, int iNeeded);
 int MergeMatches(char *new, int iNewSize, char *match, int nMatch, char **ppOut);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
+int file_exists(const char *); 	/* Does this file exist? (TRUE/FALSE) */
 
 /*****************************************************************************/
 
@@ -340,6 +350,7 @@ int main(int argc, char *argv[]) {
   int i;
   char *pszInName = NULL;
   char *pszOutName = NULL;
+  char *pszTmpName = NULL;
   char szBakName[FILENAME_MAX+1];
   int iSameFile = FALSE;    /*  Backup the input file, and modify it in place. */
   int iCopyTime = FALSE;    /*  If true, set the out file time = in file time. */
@@ -394,7 +405,7 @@ int main(int argc, char *argv[]) {
 	newDone = TRUE;
 	continue;
       }
-      if (streq(pszOpt, "=")) {		/* Decode Mime =XX codes */
+      if (streq(pszOpt, "@")) {		/* Decode Mime =XX codes */
 	demime = '=';
 	oldDone = TRUE;
 	newDone = TRUE;
@@ -410,7 +421,9 @@ int main(int argc, char *argv[]) {
 	/* Useful for adding comments in a Windows pipe */
 	break;
       }
-      if (strieq(pszOpt, "bak")) {
+      if (   strieq(pszOpt, "b")
+	  || strieq(pszOpt, "bak")
+	  || strieq(pszOpt, "-bak")) {
 	iBackup = TRUE;
 	continue;
       }
@@ -447,7 +460,9 @@ fail_no_mem:
 	iQuiet = TRUE;
 	continue;
       }
-      if (strieq(pszOpt, "same")) {
+      if (   streq(pszOpt, "=")
+	  || strieq(pszOpt, "same")
+	  || strieq(pszOpt, "-same")) {
 	iSameFile = TRUE;
 	continue;
       }
@@ -518,19 +533,39 @@ fail_no_mem:
     stat(pszInName, &sInTime);
   }
   if ((!pszOutName) || streq(pszOutName, "-")) {
-    if (!iSameFile) df = stdout;
+    if (pszOutName) iSameFile = FALSE;	/* If pszOutName is "-", iSameFile is meaningless */
+    if (!iSameFile) {
+      df = stdout;
+    } else {
+      pszOutName = pszInName;
+    }
   } else { /*  Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
     iSameFile = IsSameFile(pszInName, pszOutName);
+    if (iBackup && !file_exists(pszOutName)) iBackup = FALSE; /* There's nothing to backup */
   }
-  if (iSameFile) {
-    DEBUG_FPRINTF((mf, "// In and out files are the same. Writing to a temp file.\n"));
-    pszPathCopy = strdup(pszInName);
+  if (iSameFile || iBackup) { /* Then write to a temporary file */
+    int iFile;
+    /* But do as if we were writing directly to the target file.
+       Test the write rights before wasting time on the conversion */
+    df = fopen(pszOutName, "r+");
+    if (!df) goto open_df_failed;
+    fclose(df);
+    df = NULL;
+    /* OK, we have write rights, so go ahead with the conversion */
+    DEBUG_FPRINTF((mf, "// %s. Writing to a temp file.\n", iSameFile ? "In and out files are the same" : "Backup requested"));
+    pszPathCopy = strdup(pszOutName);
     if (!pszPathCopy) goto fail_no_mem;
     pszDirName = dirname(pszPathCopy);
-    pszOutName = tempnam(pszDirName, "conv.");
-    DEBUG_FPRINTF((mf, "tempnam(\"%s\", \"conv.\"); // \"%s\"\n", pszDirName, pszOutName));
-    if (iBackup) {	/* Create an *.bak file in the same directory */
-      char *pszNameCopy = strdup(pszInName);
+    pszTmpName = strdup(pszDirName);
+    if (pszTmpName) pszTmpName = realloc(pszTmpName, strlen(pszTmpName)+10);
+    if (!pszTmpName) goto fail_no_mem;
+    strcat(pszTmpName, DIRSEPARATOR_STRING "dtXXXXXX");
+    iFile = mkstemp(pszTmpName);
+    if (iFile == -1) fail("Can't create temporary file %s. %s\n", pszTmpName, strerror(errno));
+    df = fdopen(iFile, "wb+");
+    if (!df) goto open_df_failed;
+    if (iBackup) { /* Create the name of an *.bak file in the same directory */
+      char *pszNameCopy = strdup(pszOutName);
       char *pszBaseName = basename(pszNameCopy);
       char *pc;
       if (!pszNameCopy) goto fail_no_mem;
@@ -539,7 +574,7 @@ fail_no_mem:
       pc = strrchr(pszBaseName, '.');
       if (pc) {
 	if (SAMENAME(pc, ".bak")) {
-	  fail("Can't backup file %s\n", pszInName);
+	  fail("Can't backup file %s\n", pszOutName);
 	}
 	*pc = '\0';			/* Remove the extension */
       }
@@ -548,13 +583,14 @@ fail_no_mem:
       free(pszNameCopy);		/* We don't need that copy anymore */
     }
   } else {
-    DEBUG_FPRINTF((mf, "// In and out files are distinct. Writing directly to the out file.\n"));
+    DEBUG_FPRINTF((mf, "// Writing directly to the out file.\n"));
   }
   if (!df) {
     df = fopen(pszOutName, "wb");
     if (!df) {
+open_df_failed:
       if (sf != stdout) fclose(sf);
-      fail("Can't open file %s\n", pszOutName);
+      fail("Can't write to file %s. %s\n", pszOutName, strerror(errno));
     }
   }
 
@@ -727,33 +763,47 @@ try_next_set:
 
   if (sf != stdin) fclose(sf);
   if (df != stdout) fclose(df);
+  DEBUG_FPRINTF((mf, "// Writing done\n"));
 
-  if (iSameFile) {
+  if (iSameFile || iBackup) {
     if (iBackup) {	/* Create an *.bak file in the same directory */
+#if !defined(_MSVCLIBX_H_)
+      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
+#endif
       iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if (iErr == -1) {
+      if ((iErr == -1) && (errno != ENOENT)) {
 	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
       }
-      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
+      iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
       if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszInName, strerror(errno));
+	fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
       }
-    } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
+    } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
+#if !defined(_MSVCLIBX_H_)
+      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
+#endif
       iErr = unlink(pszInName); 	/* Remove the original file */
       if (iErr == -1) {
 	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
       }
     }
-    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
+    DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
+    iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
     if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszInName, strerror(errno));
+      fail("Can't create %s. %s\n", pszOutName, strerror(errno));
     }
-    pszOutName = pszInName;
   }
 
+  /* Copy the file mode flags */
+  if (df != stdout) {
+    int iMode = sInTime.st_mode;
+    DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
+    iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+    DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+  }
+
+  /* Optionally copy the timestamp */
   if ((sf != stdin) && (df != stdout) && iCopyTime) {
     struct utimbuf sOutTime = {0};
     sOutTime.actime = sInTime.st_atime;
@@ -861,34 +911,35 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 Usage: remplace [SWITCHES] OPERATIONS [FILES_SPEC]\n\
 \n\
 files_spec: [INFILE [OUTFILE|-same]]\n\
-  INFILE  Input file pathname. Default or \"-\": stdin\n\
-  OUTFILE Output file pathname. Default or \"-\": stdout\n");
+  INFILE   Input file pathname. Default or \"-\": stdin\n\
+  OUTFILE  Output file pathname. Default or \"-\": stdout\n");
     fprintf(f, "%s", "\
 \n\
-operation: {old_string new_string}|-=|-%|-.\n\
-  -=      Decode Mime =XX codes.\n\
-  -%      Decode URL %XX codes.\n\
-  -.      No change.\n\
+operation: {old_string new_string}|-@|-%|-.\n\
+  -@       Decode Mime =XX codes.\n\
+  -%       Decode URL %XX codes.\n\
+  -.       No change.\n\
 \n\
 Note that the input is byte-oriented, not line oriented. So both the old\n\
 string and new string can span multiple lines.\n\
 \n\
 switches:\n\
-  -#      Ignore all further arguments.\n\
-  -?      Display this brief help screen.\n\
-  --      End of switches.\n\
-  -bak    When used with -same, create a backup file of the input file\n"
+  -#       Ignore all further arguments.\n\
+  -?       Display this brief help screen.\n\
+  --       End of switches.\n\
+  -b|-bak  Create an *.bak backup file of existing output files\n"
 #ifdef _DEBUG
-"  -d      Output debug information\n"
+"\
+  -d       Output debug information\n"
 #endif
 "\
-  -f      Fixed old string = Disable the regular expression subset supported.\n\
-  -i TEXT Input text to use before input file, if any. (Use - for force stdin)\n\
-  -q      Quiet mode. No status message.\n\
-  -same   Modify the input file in place. (Default: Automatically detected)\n\
-  -st     Set the output file time to the same time as the input file.\n\
-  -v      Verbose mode.\n\
-  -V      Display this program version\n\
+  -f       Fixed old string = Disable the regular expression subset supported.\n\
+  -i TEXT  Input text to use before input file, if any. (Use - for force stdin)\n\
+  -q       Quiet mode. No status message.\n\
+  -=|-same Modify the input file in place. (Default: Automatically detected)\n\
+  -st      Set the output file time to the same time as the input file.\n\
+  -v       Verbose mode.\n\
+  -V       Display this program version\n\
 \n\
 Examples:\n"
 );
@@ -1550,5 +1601,34 @@ IsSameFile_done:
   free(pszBuf1);
   free(pszBuf2);
   return iSameFile; 
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    file_exists						      |
+|									      |
+|   Description     Check if a pathname refers to an existing file	      |
+|									      |
+|   Parameters:     char *pszPathname	    The pathname to check	      |
+|                   							      |
+|   Returns	    1 = It's a file; 0 = It does not exist, or it's not a file|
+|									      |
+|   Notes	    Uses stat, to check what's really behind links	      |
+|		    							      |
+|   History								      |
+|    2020-04-04 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int file_exists(const char *pszName) {	/* Does this file exist? (TRUE/FALSE) */
+  struct stat st;
+  int iErr;
+
+  DEBUG_ENTER(("file_exists(\"%s\");\n", pszName));
+
+  iErr = stat(pszName, &st);		/* Get the status of that file */
+  if (iErr) RETURN_CONST(FALSE);	/* It does not exist, or is inaccessible anyway */
+
+  RETURN_INT(S_ISREG(st.st_mode));
 }
 
