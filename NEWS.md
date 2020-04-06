@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-04-04
+### Changed
+- C/SRC/detab.c: Generalized -bak to backup any existing output file.  
+  Added options -b|--bak as synonyms for -bak.  
+  Added options -=|--same as synonyms for -same.
+
 ## [Unreleased] 2020-04-02
 ### Changed
 - Batch/TimeX.bat: Changed the default to displaying start and end times, and added option -T to revert to the old behaviour.
