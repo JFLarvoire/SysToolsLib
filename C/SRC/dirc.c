@@ -224,6 +224,8 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.2.2.      *
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 3.2.3.					      *
+*    2020-04-06 JFL Added option -B|--nobak to skip backup and temp. files.   *
+*                   Version 3.3.					      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -231,8 +233,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.2.3"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.3"
+#define PROGRAM_DATE    "2020-04-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -494,6 +496,7 @@ typedef struct {
   int upper:1;		/* Display names in upper case */
   int cont:1;		/* Continue after errors */
   int dtime:1;		/* Report equal files with != times */
+  int nobak:1;		/* Skip backup files */
   /* Caution: If more than 16 flags are defined, t_opts becomes a long in MS-DOS
               This would force to change DEBUG_ENTER() format strings for MS-DOS! */
 } t_opts;
@@ -525,7 +528,6 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 // UINT cp = 0;			    /* Initial console code page */
 #define cp codePage		    /* Initial console code page in iconv.c */
 #endif
-
 
 /* Function prototypes */
 
@@ -628,6 +630,11 @@ int main(int argc, char *argv[]) {
 	continue;
       }
 #endif
+      if (   streq(opt, "B")	    /* Skip backup files */
+	  || streq(opt, "-nobak")) {
+	opts.nobak = 1;
+	continue;
+      }
       if (streq(opt, "b")) {
 	opts.both = 1;
 	continue;
@@ -957,6 +964,7 @@ Switches:\n\
 #endif
 "\
   -b          Display only the files present in both directories.\n\
+  -B          Skip backup and temporary files *.bak|*~|#*#\n\
   -d          Display only files which are different.\n\
   -bd         Both.\n\
   -c          Compare the actual data of the files. May take a long time!\n\
@@ -972,6 +980,8 @@ Switches:\n\
 "\
   -env VAR    Store the first file name found into environment variable VAR.\n"
 #endif
+); /* Split the help in two halves, else it's too large for the DOS version */
+  printf(
 "\
   -f          List files only, but not subdirectories.\n\
   -i          Ignore integer number of hours differences, up to +/- 23 hours.\n\
@@ -1113,6 +1123,16 @@ int IsSwitch(char *pszArg) {
 *       Updates:                                                              *
 *                                                                             *
 ******************************************************************************/
+
+/* Check is a file name if a backup file name */
+int isBackupFile(char *pszName) {
+  static char *patterns[] = {"*.bak", "*~", "#*#", NULL};
+  char **ppPattern;
+  for (ppPattern = patterns; *ppPattern; ppPattern++) {
+    if (fnmatch(*ppPattern, pszName, FNM_CASEFOLD) == 0) return TRUE; /* Match */
+  }
+  return FALSE;
+}
 
 int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	    time_t datemin, time_t datemax, t_opts opts) {
@@ -1276,6 +1296,8 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	   && (st.st_mtime <= datemax)
 	      DEBUG_CODE(&& ((reason = "the pattern does not match") != NULL))
 	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
+	      DEBUG_CODE(&& ((reason = "it's a backup file") != NULL))
+	   && (!(opts.nobak && isBackupFile(pDirent->d_name)))
 	 ) {
 	fif *pfif;
 
