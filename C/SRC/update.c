@@ -164,13 +164,13 @@
 *    2020-03-19 JFL Fixed warnings and issues on 32-bit OSs. Version 3.8.6.   *
 *    2020-03-23 JFL Renamed options -e|--erase as -c|--clean.                 *
 *                   Added options -D|--makedirs, independent of -E|--noempty. *
-*                   Version 3.9.                                              *
 *    2020-03-24 JFL Renamed options -T|-resettime as -R|-resettime, -D|	      *
 *		    --makedirs as -T|--tree, and -S|--showdest as -D|--dest.  *
 *                   Added options -C|--command, and -S|--source.              *
 *    2020-03-25 JFL Fixed issues with copying a link on a file, or vice-versa.*
 *                   Added an updOpts argument to update() & update_link().    *
 *    2020-03-26 JFL Added option -B|--nobak to skip backup and temp. files.   *
+*                   Version 3.9.                                              *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
