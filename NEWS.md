@@ -4,9 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2020-04-04
+## [Unreleased] 2020-04-11
+### New
+- C/MsvcLibX/src/mkstemp.c: Implemented mkdtemp() for WIN32.
+- C/MsvcLibX/include/stdlib.h: Export the DOS and WIN32 versions of mkdtemp().
+
+## [Unreleased] 2020-04-07
 ### Changed
-- C/SRC/detab.c: Generalized -bak to backup any existing output file.  
+- C/SRC/dirc.c: Added option -B|--nobak to skip backup and temporary files.
+
+## [Unreleased] 2020-04-06
+### Changed
+- C/SRC/detab.c, lessive.c, remplace.c: Generalized -bak to backup any existing output file.  
   Added options -b|--bak as synonyms for -bak.  
   Added options -=|--same as synonyms for -same.
 

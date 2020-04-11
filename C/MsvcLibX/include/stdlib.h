@@ -29,7 +29,8 @@ extern "C" {
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-extern int mkstemp(char *pszName);	/* Create a temporary file */
+extern char *mkdtemp(char *pszTemplate); /* Create a temporary directory */
+extern int mkstemp(char *pszTemplate);	 /* Create a temporary file */
 
 #endif /* defined(_MSDOS) */
 
@@ -43,15 +44,22 @@ extern char *_fullpathU(char *absPath, const char *relPath, size_t maxLength);
 #define _fullpath _fullpathU		/* For processing UTF-8 pathnames */
 #endif
 
+/* Create a temporary directory */
+extern char *mkdtempM(char *pszTemplate, UINT cp); /* Multi-encoding version */
+extern char *mkdtempA(char *pszTemplate);	   /* ANSI version */
+extern char *mkdtempU(char *pszTemplate);	   /* UTF-8 version */
+
 /* Create a temporary file */
-extern int mkstempM(char *pszName, UINT cp);	/* Multi-encoding version */
-extern int mkstempA(char *pszName);		/* ANSI version */
-extern int mkstempU(char *pszName);		/* UTF-8 version */
+extern int mkstempM(char *pszTemplate, UINT cp);   /* Multi-encoding version */
+extern int mkstempA(char *pszTemplate);		   /* ANSI version */
+extern int mkstempU(char *pszTemplate);		   /* UTF-8 version */
 
 #if defined(_UTF8_SOURCE)
+#define mkdtemp mkdtempU		/* For processing UTF-8 pathnames */
 #define mkstemp mkstempU		/* For processing UTF-8 pathnames */
 #else
-#define mkstemp mkstempA		/* For processing UTF-8 pathnames */
+#define mkdtemp mkdtempA		/* For processing ANSI pathnames */
+#define mkstemp mkstempA		/* For processing ANSI pathnames */
 #endif
 
 #endif /* defined(_WIN32) */
