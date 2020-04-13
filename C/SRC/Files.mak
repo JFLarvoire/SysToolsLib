@@ -68,7 +68,7 @@ UNIX_PROGRAMS = \
   redo            \
   remplace        \
   update          \
-  which		  \
+  Which		  \
   zap             \
 
 UNIX_REQS = MsvcLibX_debug_macros
@@ -142,7 +142,7 @@ ZIPSOURCES =		 \
   update.manifest        \
   update.rc              \
   uuid.c		 \
-  which.c                \
+  Which.c                \
   whichinc.c             \
   zap.c                  \
 
