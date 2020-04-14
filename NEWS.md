@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-04-13
+### Changed
+- */Makefile: Redesigned the `make install` command to use inference rules. This allows using `make -n install` to dry-run it.  
+  Moved the scripts installation to the root Makefile.  
+  Added a `make uninstall` command, also using inference rules.
+
 ## [Unreleased] 2020-04-11
 ### New
 - C/MsvcLibX/src/mkstemp.c: Implemented mkdtemp() for WIN32.
