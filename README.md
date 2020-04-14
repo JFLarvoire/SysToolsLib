@@ -13,7 +13,7 @@ Some of these tools have unique capabilities, that I hope Windows and Linux powe
 Major highlights:
 
 - Directory management tools, to search, compare, weight, update, recurse, etc.  
-  They all support Unicode names in any code page, paths > 260 characters, junctions, file & directory symlinks.
+  In Windows, they all support Unicode names in any code page, paths > 260 characters, junctions, file & directory symlinks.
 - Windows clipboard content filtering tools. They bring the power of the command line to all GUI apps!
 - System management tools. Manage the hardware, BIOS, disks, drivers, etc.
 
@@ -21,7 +21,7 @@ For a list of available tools and their description, see [Catalog.md](Docs/Catal
 
 ### Development Libraries
 
-This Library also contains several software libraries that developers should find useful:  
+This Library also contains several software libraries that developers could find useful:  
 As many tools shared common features, I've refactored them many times.  
 The common code is now in libraries, which can be reused in new programs and scripts.  
 
@@ -31,7 +31,7 @@ Major highlights:
   They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts.  
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
-  with commands familiar to Unix developers. Targets: BIOS, DOS, WIN95, WIN32, IA64, WIN64, ARM.
+  with commands familiar to Unix developers. Target environments: BIOS, DOS, WIN95, WIN32, IA64, WIN64, ARM, ARM64.
   More details in the [MsvcLibX documentation](C/MsvcLibX/README.md).
 - A set of debugging macros for C programs, similar in use and effect to those for scripting languages. [debugm.h](C/include/debugm.h)  
 - MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
@@ -40,7 +40,7 @@ Major highlights:
 - SysLib.lib - A set of system management functions, with versions for DOS, Windows, and Linux.
 - Bios.lib - A library for writing C or C++ programs using only the legacy BIOS: Option ROMs, OS boot loaders, MS-DOS drivers, or TSRs.
 - LoDos.lib - A library for the specific needs of MS-DOS drivers and TSRs.
-- PMode.lib - A libray of switching BIOS, DOS or Windows 95 programs to the 80x86 protected mode.
+- PMode.lib - A libray for switching BIOS, DOS or Windows 95 programs to the 80x86 protected mode.
 
 For more details on these C libraries, see [C/README.md](C/README.md), and the README.md files in the C/ subdirectories.
 
@@ -51,7 +51,7 @@ Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Li
 
 Jean-François Larvoire  
 jf.larvoire@hpe.com  
-2017-08-30
+2020-04-14
 
 
 Installation
@@ -69,12 +69,14 @@ You can use the WIN32 release files on all versions of Windows.
 ### Scripts and programs in Linux
 
 The C programs need to be rebuilt from source.  
-As for scripts, only the Tcl directory contains useful scripts for Linux.
+As for scripts, only the Bash and Tcl directories contain useful scripts for Linux.
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
-* Go to the C subdirectory, and run `make` to rebuild the C programs,
-  then `make install` to install them and the Tcl scripts.
+* Run `make` in that work directory to rebuild the C programs. (There's no ./configure script.)
+* Then run `sudo make install` to install them and the Tcl and Bash scripts.  
+  If you're on the cautious side, you can first dry-run the installation using `sudo make -n install`.  
+  Individual scripts and programs can also be installed separately by running `sudo ./install PROGNAME`.
 
 ### Development environment
 
@@ -83,7 +85,7 @@ can share the same sources, and output executables in distinct target-OS-specifi
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
-* See the [C/README.md](C/README.md) file on how to rebuild C programs for each OS.
+* See the [C/README.md](C/README.md) file for more information on how to rebuild C programs for each OS.
 
 #### Files description
 
@@ -97,6 +99,7 @@ Bash/		| Scripts and libraries in the Bash language
 Batch/		| Scripts and libraries in the Batch language
 Docs/		| Project documentation
 PowerShell/	| Scripts and libraries in the PowerShell language
+Python/		| Scripts and libraries in the Python language
 Tcl/		| Scripts and libraries in the Tcl language
 
 Particular files:
@@ -127,12 +130,14 @@ Option  | Description
   -O    | Force OEM encoding output. (Windows only)
   -U    | Force UTF8 encoding output. (Windows only)
 
+All make files support a `make help` target, which displays a help screen with available make variables and targets.
+
 
 Contributing
 ------------
 
 Most of the development work was done by Jean-François Larvoire during work hours at HP then HPE.
-It's thus HPE that is the copyright owner of this code.  
+It is thus now HPE that is the copyright owner of this code.  
 HPE legal authorized in March 2016 for a first part, October 2016 for a second part, and February 2017 for the last part,
 the open-source release of this code, provided that future contributors agree with the following conditions:
 
@@ -144,7 +149,7 @@ the open-source release of this code, provided that future contributors agree wi
 License
 -------
 
-Copyright 2016-2017 Hewlett Packard Enterprise
+Copyright 2016-2020 Hewlett Packard Enterprise
 
 All files in this distribution are licensed under the Apache License version 2.0.
 You may not use any of these files except in compliance with this License.
