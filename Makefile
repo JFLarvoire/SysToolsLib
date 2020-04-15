@@ -12,6 +12,7 @@
 #    2020-04-13 JFL Moved the scripts installation here from C/Makefile.      #
 #		    Rewrote it using an inference rule.			      #
 #                   Added an uninstall target rule, also using inferences.    #
+#    2020-04-15 JFL Updated scripts enumeration for compatibility w. MacOS.   #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -49,10 +50,12 @@ endif
 .PHONY: default
 default: all
 
-# How to install all SysToolsLib scripts and programs
-BASH_SCRIPTS = $(shell cat Scripts.lst | sed "s/\r//" | grep '^Bash' | sed -r 's/^Bash.(.*)/\1/')
-TCL_SCRIPTS = $(shell cat Scripts.lst | sed "s/\r//" | grep '^Tcl.*tcl$$' | sed -r 's/^Tcl.(.*).tcl$$/\1/' | sed 's/.tcl//')
+# Enumerate the scripts to be installed
+# Avoid using `sed -r` because this option does not exist in FreeBSD's sed.
+BASH_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Bash' | sed 's/^Bash.\(.*\)/\1/')
+TCL_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Tcl.*tcl$$' | sed 's/^Tcl.\(.*\).tcl$$/\1/')
 
+# How to install all SysToolsLib scripts and programs
 $(DESTDIR)$(bindir)/: # Create the $(bindir) directory if it does not yet exist
 	install -d $(DESTDIR)$(bindir)/
 
