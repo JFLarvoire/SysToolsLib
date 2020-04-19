@@ -24,6 +24,7 @@
 *                   							      *
 *   History:								      *
 *    2019-11-19 JFL Split off of SysToolsLib's include/stversion.h.	      *
+*    2020-04-19 JFL Added support for MacOS.                                  *
 *		    							      *
 *        (C) Copyright 2016 Hewlett Packard Enterprise Development LP         *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -128,6 +129,15 @@
 #  endif
 #  define EXE_SUFFIX ""
 #endif /* __unix__ */
+
+#ifdef __MACH__		/* Automatically defined when targeting a Mach app. */
+#  if defined(__APPLE__)
+#    define EXE_OS_NAME "MacOS"
+#  else
+#    define EXE_OS_NAME "Mach"
+#  endif
+#  define EXE_SUFFIX ""
+#endif /* __MACH__ */
 
 /**************** End of OS identification string definition *****************/
 
