@@ -12,11 +12,12 @@
 #  History                                                                    #
 #   2020-03-23 JFL jf.larvoire@hpe.com created this script.                   #
 #   2020-04-01 JFL Fixed cd & export in Exec(). (No impact on this install.)  #
+#   2020-04-19 JFL Fixed compatibility with bash 3.2.                         #
 #                                                                             #
 ###############################################################################
 
 # Global variables
-VERSION="2020-04-01"
+VERSION="2020-04-19"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -466,7 +467,7 @@ if [ ${#TOOLS[@]} -eq 0 ]; then
   exit 1
 fi
 
-last=${TOOLS[-1]}
+last=${TOOLS[${#TOOLS[@]}-1]}
 if [[ -d "$last" ]] ; then
   bindir=$last
   unset 'TOOLS[${#TOOLS[@]}-1]'
