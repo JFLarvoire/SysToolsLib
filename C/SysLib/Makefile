@@ -20,6 +20,7 @@
 #    2020-01-09 JFL Use PWD instead of CURDIR, unless PWD missing or wrong.   #
 #    2020-03-18 JFL Fixed PROC for the Raspberry Pi, and define EXE_PROC_NAME.#
 #                   Install to /usr/bin if /usr/local/bin is not in the PATH. #
+#    2020-04-19 JFL Corrected the C/C++ "Compiling xxxx.c" message.	      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -164,25 +165,25 @@ REPORT_FAILURE = (ERR=$$? ; echo " ... FAILED" ; exit $$ERR)
 # Pattern rules for compiling a C or C++ source.
 $(OPN)/%.o: %.c
 	$(MAKE) -$(MAKEFLAGS) dirs
-	echo "Compiling $@ ..."
+	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.c
 	$(MAKE) -$(MAKEFLAGS) ddirs
-	echo "Compiling $@ ..."
+	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPN)/%.o: %.cpp
 	$(MAKE) -$(MAKEFLAGS) dirs
-	echo "Compiling $@ ..."
+	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.cpp
 	$(MAKE) -$(MAKEFLAGS) ddirs
-	echo "Compiling $@ ..."
+	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
