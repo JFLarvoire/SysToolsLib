@@ -147,7 +147,7 @@
 #include <stdio.h>	/* Macros use printf */
 #include <stdarg.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>	/* Macros use malloc */
 
 #ifdef __cplusplus
 extern "C" {
