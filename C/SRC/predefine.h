@@ -12,6 +12,7 @@
 *                                                                             *
 *   History								      *
 *    2020-03-19 JFL jf.larvoire@hpe.com created this file.                    *
+*    2020-04-19 JFL Added support for MacOS.                                  *
 *		                                                              *
 *         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -35,5 +36,7 @@
 #define _ISOC99_SOURCE		/* Tell the GNU library that we want C99 extensions */
 #define __STDC_LIMIT_MACROS	/* Make sure C99 macros are defined in C++ */
 #define __STDC_CONSTANT_MACROS
+
+#define _DARWIN_C_SOURCE    	/* On a Mac, define MacOS extensions */
 
 #endif  /* _CLIBX_PREDEFINE_H_ */

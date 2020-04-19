@@ -22,6 +22,7 @@
 *		    Version 1.4.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.4.2.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.3.      *
+*    2020-04-19 JFL Added support for MacOS. Version 1.5.                     *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -29,8 +30,8 @@
 
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.4.3"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.5"
+#define PROGRAM_DATE    "2020-04-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -78,7 +79,9 @@
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define EOL "\n"
 
@@ -99,6 +102,7 @@
 char spaces[] = "            ";
 
 void usage(void);
+int IsSwitch(char *pszArg);
 #if SUPPORTS_UTF8
 int ToUtf8(unsigned int c, char *b);
 #endif /* SUPPORTS_UTF8 */
@@ -118,7 +122,7 @@ int main(int argc, char *argv[]) {
 #if SUPPORTS_UTF8
   int isUTF8 = FALSE;
 #endif /* SUPPORTS_UTF8 */
-#ifdef __unix__
+#ifdef _UNIX
   char *pszLang = getenv("LANG");
 #endif
 
@@ -126,7 +130,7 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
   if (uCP0 == 65001) isUTF8 = TRUE;
 #endif
-#ifdef __unix__
+#ifdef _UNIX
   if (pszLang && strstr(pszLang, "UTF-8")) isUTF8 = TRUE;
   /* Note that Unix XTerm considers bytes \x80-\x9F as control sequences
      equivalent to ESC @, ESC A, ESC B, ..., ESC _ . 
@@ -138,11 +142,7 @@ int main(int argc, char *argv[]) {
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
-    if (   (arg[0]=='-')
-#ifndef __unix__
-	|| (arg[0]=='/')
-#endif
-      ) {
+    if (IsSwitch(arg)) {
       char *opt = arg+1;
       if (   streq(opt, "a")     /* -a: Display all characters */
 	  || streq(opt, "-all")) {
@@ -258,7 +258,7 @@ int main(int argc, char *argv[]) {
 	  continue;
 	}
 	switch (k) {
-#ifndef __unix__
+#ifndef _UNIX
 	  case 0x07:
 	  case 0x08:
 	  case 0x09:
@@ -269,7 +269,7 @@ int main(int argc, char *argv[]) {
 	    break;
 #endif
 	  default:
-#ifdef __unix__
+#ifdef _UNIX
 	    if (k < 0x20) {
 	      if (!iAll) l = ' ';
 	      break;
@@ -344,7 +344,7 @@ Switches:\n\
 "Author: Jean-Francois Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -354,6 +354,18 @@ Switches:\n\
 #endif
 
   exit(0);
+}
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
 }
 
 #if SUPPORTS_UTF8

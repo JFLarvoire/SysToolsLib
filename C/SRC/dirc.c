@@ -226,6 +226,7 @@
 *                   Version 3.2.3.					      *
 *    2020-04-06 JFL Added option -B|--nobak to skip backup and temp. files.   *
 *                   Version 3.3.					      *
+*    2020-04-19 JFL Added support for MacOS. Version 3.4.                     *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -233,8 +234,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.3"
-#define PROGRAM_DATE    "2020-04-06"
+#define PROGRAM_VERSION "3.4"
+#define PROGRAM_DATE    "2020-04-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -287,7 +288,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR '/'
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
@@ -560,7 +563,7 @@ int parse_date(char *token, time_t *pdate);
 
 char *getdir(char *, int);          /* Get the current drive directory */
 
-#ifndef __unix__
+#ifndef _UNIX
 int FixNameCase(char *pszPathname); /* Correct the case of an existing pathname */
 #endif
 
@@ -590,7 +593,7 @@ int main(int argc, char *argv[]) {
   int i;
   int nfif = 0;
   /* File attributes to search, ie. all but disk labels. */
-#if defined(__unix__)
+#if defined(_UNIX)
   int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK | _A_DEVICE);
 #elif defined(_WIN32)
   int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN | _A_LINK);
@@ -863,10 +866,10 @@ int main(int argc, char *argv[]) {
   getdir(path, PATHNAME_SIZE);    /* Get current directory full pathname */
   if (!from) from = path;
 
-#ifndef __unix__
+#ifndef _UNIX
   FixNameCase(from);
   if (to) FixNameCase(to);
-#endif // !defined(__unix__)
+#endif // !defined(_UNIX)
 
   nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax, opts);
   if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax, opts);
@@ -1023,7 +1026,7 @@ Switches:\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -1092,7 +1095,7 @@ void finis(int retcode, ...) {
 
 int IsSwitch(char *pszArg) {
   return (   (*pszArg == '-')
-#ifndef __unix__
+#ifndef _UNIX
 	  || (*pszArg == '/')
 #endif
 	 ); /* It's a switch */
@@ -1637,20 +1640,20 @@ int affiche1(fif *pfif, int col, t_opts opts) {
   /* Output the name */
   if (S_ISDIR(pfif->st.st_mode)) {
 #if 1
-#if defined(__unix__)
+#if defined(_UNIX)
     { /* Append an OS-dependant directory separator */
       int n = (int)strlen(pNicename);
       pNicename[n++] = DIRSEPARATOR;
       pNicename[n] = '\0';
     }
-#endif /* defined(__unix__) */
+#endif /* defined(_UNIX) */
 #else  /* Experiment with [brackets] around the directory name for Windows */
-#if defined(__unix__)
+#if defined(_UNIX)
     strcat(pNicename, "/");
 #else
     *(--pNicename) = '[';
     strcat(pNicename, "]");
-#endif /* defined(__unix__) */
+#endif /* defined(_UNIX) */
 #endif /* 1 */
     iShowSize = 0;
   }
@@ -1697,7 +1700,7 @@ int affiche1(fif *pfif, int col, t_opts opts) {
     char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
     nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
   } else {         /* This is a special file, do not display a size */
-#if !defined(__unix__)
+#if !defined(_UNIX)
     if (S_ISDIR(pfif->st.st_mode)) { // This is a directory
 #if defined(_WIN32)
       nSize = sprintf(szSize, "<DIR>     "); // Add 5 spaces to align with <JUNCTION> and <SYMLINKD>
@@ -2404,7 +2407,7 @@ int GetScreenColumns(void) {
 
 /* Requires linking with the  -ltermcap option */
 
-#ifdef __unix__
+#ifdef _UNIX
 
 #if defined(USE_TERMCAP) && USE_TERMCAP
 
@@ -2750,7 +2753,7 @@ int SetMasterEnv(char *pszName, char *pszValue) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef __unix__
+#ifndef _UNIX
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;
@@ -2822,5 +2825,5 @@ int FixNameCase(char *pszPathname) {
   RETURN_BOOL_COMMENT(iModified, ("\"%s\"\n", pszPathname));
 }
 
-#endif // !defined(__unix__)
+#endif // !defined(_UNIX)
 

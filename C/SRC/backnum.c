@@ -55,6 +55,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.5.      *
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 2.1.6.					      *
+*    2020-04-19 JFL Added support for MacOS. Version 2.2.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -62,14 +63,13 @@
 
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.1.6"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "2.2"
+#define PROGRAM_DATE    "2020-04-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <string.h>
 #include <limits.h>
 #include <stdint.h> /* Actually we just need stdint.h, but Tru64 doesn't have it */
@@ -138,7 +138,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR '/'
 #define PATHNAME_SIZE FILENAME_MAX
@@ -158,6 +160,13 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /* Redefine Microsoft-specific _splitpath() and _makepath() */
 void _splitpath(const char *path, char *d, char *p, char *n, char *x);
 void _makepath(char *buf, const char *d, const char *p, const char *n, const char *x);
+
+/* In MacOS, these struct stat fields have different names */
+#if defined(__MACH__)
+#define st_atim st_atimespec
+#define st_mtim st_mtimespec
+#define st_ctim st_ctimespec
+#endif
 
 #endif /* __unix__ */
 
@@ -460,7 +469,7 @@ Switches:\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -484,7 +493,7 @@ Switches:\n\
 
 int IsSwitch(char *pszArg) {
   return (   (*pszArg == '-')
-#ifndef __unix__
+#ifndef _UNIX
             || (*pszArg == '/')
 #endif
   ); /* It's a switch */
@@ -698,7 +707,7 @@ int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
 }
 #endif /* !defined(_STRUCT_TIMEVAL) */
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#ifdef _UNIX		/* Defined when targeting a Unix app. */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

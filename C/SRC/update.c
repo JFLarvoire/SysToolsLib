@@ -171,6 +171,7 @@
 *                   Added an updOpts argument to update() & update_link().    *
 *    2020-03-26 JFL Added option -B|--nobak to skip backup and temp. files.   *
 *                   Version 3.9.                                              *
+*    2020-04-19 JFL Added support for MacOS. Version 3.10.                    *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -178,19 +179,19 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.9"
-#define PROGRAM_DATE    "2020-03-26"
+#define PROGRAM_VERSION "3.10"
+#define PROGRAM_DATE    "2020-04-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <limits.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use JFL's MsvcLibX library extensions if needed */
 #include <sys/time.h>		/* For lutimes() */
@@ -285,7 +286,9 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
@@ -300,24 +303,6 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define DEL_FILE  "rm"
 #define DEL_DIR   "rmdir"
 
-/*
-#define _MAX_PATH  FILENAME_MAX
-#define _MAX_DRIVE 3
-#define _MAX_DIR   FILENAME_MAX
-#define _MAX_FNAME FILENAME_MAX
-#define _MAX_EXT   FILENAME_MAX
-*/
-
-#ifndef _S_IREAD
-#define _S_IREAD __S_IREAD
-#endif
-#ifndef _S_IWRITE
-#define _S_IWRITE __S_IWRITE
-#endif
-#ifndef _S_IEXEC
-#define _S_IEXEC __S_IEXEC
-#endif
-
 #define _stricmp strcasecmp
 
 /* Redefine Microsoft-specific routines */
@@ -326,6 +311,13 @@ off_t _filelength(int hFile);
 // #define fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
 char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define LocalFileTime localtime
+
+/* In MacOS, these struct stat fields have different names */
+#if defined(__MACH__)
+#define st_atim st_atimespec
+#define st_mtim st_mtimespec
+#define st_ctim st_ctimespec
+#endif
 
 #endif /* __unix__ */
 
@@ -375,7 +367,7 @@ static int iCopyEmptyFiles = TRUE;	/* Flag for copying empty files */
 static int iCopyEmptyDirs = FALSE;	/* Flag for copying empty directories */
 static int iPause = 0;			/* Flag for stop before exit */
 static int iProgress = 0;		/* Flag for showing a progress bar */
-#ifdef __unix__
+#ifdef _UNIX
 static int iFnmFlag = 0;		/* Case-sensitive pattern matching */
 #else
 static int iFnmFlag = FNM_CASEFOLD;	/* Case-insensitive pattern matching */
@@ -679,7 +671,7 @@ int main(int argc, char *argv[]) {
   DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
   DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
   DEBUG_PRINTF(("Size of dirent = %d bytes\n", (int)(sizeof(struct dirent))));
-#if defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
+#if  defined(__unix__) && defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
   DEBUG_PRINTF(("Size of dirent64 = %d bytes\n", (int)(sizeof(struct dirent64))));
 #endif
 #if defined(_MSC_VER)
@@ -803,7 +795,7 @@ Note: Options -C -D -q -S override each other. The last one provided wins.\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -1521,7 +1513,7 @@ retry_open_targetfile:
       if ((errno == EACCES) && (nAttempt == 1) && force) {
       	struct stat sStat = {0};
       	int iErr = stat(name2, &sStat);
-      	int iMode = sStat.st_mode | _S_IWRITE;
+      	int iMode = sStat.st_mode | S_IWUSR;
       	DEBUG_PRINTF(("chmod(%p, 0x%X);\n", name2, iMode));
       	iErr = chmod(name2, iMode); /* Try making the target file writable */
       	DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
@@ -2053,7 +2045,7 @@ int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifdef __unix__
+#ifdef _UNIX
 
 #define _tell(hFile) lseek(hFile, 0, SEEK_CUR);
 
@@ -2064,7 +2056,7 @@ off_t _filelength(int hFile) {
   return length;
 }
 
-#endif /* defined(__unix__) */
+#endif /* defined(_UNIX) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -2121,7 +2113,7 @@ char *fullpath(char *absPath, const char *relPath, size_t maxLength) {
 
 #endif /* _WIN32 */
 
-#ifdef __unix__
+#ifdef _UNIX
 
 /* Reimplementation of Microsoft's _fullpath() for Unix, as realpath() resolves links, which we don't want */
 /* References:
@@ -2221,7 +2213,7 @@ fail:
   return NULL;
 }
 
-#endif /* __unix__ */
+#endif /* _UNIX */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
