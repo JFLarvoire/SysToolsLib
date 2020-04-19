@@ -47,7 +47,7 @@ int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, O
     const OPFARG **poaList;
     poaList = (const OPFARG **)((&pszForm)+1);
 #else
-    const OPFARG *poaList[5];
+    const OPFARG *poaList[8];
     poaList[0] = &oa0;
     poaList[1] = &oa1;
     poaList[2] = &oa2;
@@ -87,7 +87,7 @@ int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, O
     const OPFARG **poaList;
     poaList = (const OPFARG **)((&pszForm)+1);
 #else
-    const OPFARG *poaList[5];
+    const OPFARG *poaList[8];
     poaList[0] = &oa0;
     poaList[1] = &oa1;
     poaList[2] = &oa2;
