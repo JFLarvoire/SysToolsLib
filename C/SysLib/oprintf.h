@@ -11,6 +11,7 @@
 *    2000-03-21 JFL Created this module.				      *
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
+*    2020-04-19 JFL Added support for MacOS.                                  *
 *									      *
 \*****************************************************************************/
 
@@ -79,6 +80,29 @@ int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
 int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
 
 #endif // defined(__linux__)
+
+/************************ MacOS-specific definitions *************************/
+
+#if defined(__MACH__) && defined(__APPLE__)
+#define _MACOS	    // Define an identification constant similar to the ones for DOS and Windows.
+
+#define CDECL
+
+#define SNPRINTF_DEFINED 0	// We have to define _snprintf() ourselves.
+int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
+
+#endif // defined(__MACH__) && defined(__APPLE__)
+
+/************************** Unknown OS definitions ***************************/
+
+#if !defined(CDECL)
+
+#define CDECL
+
+#define SNPRINTF_DEFINED 0	// We have to define _snprintf() ourselves.
+int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
+
+#endif // not defined(CDECL)
 
 /******************** End of OS-specific definitions *************************/
 
