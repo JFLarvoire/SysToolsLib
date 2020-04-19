@@ -248,6 +248,9 @@ int main(int argc, char *argv[])
 
   PRINTVAL(=__VERSION__);
 
+  /* CLANG compiler */
+  PRINTVAL(=__clang__);
+
   /* GCC compiler */
   PRINTVAL(=__GNUC__);
   PRINTVAL(=__GNUC_MINOR__);
@@ -392,6 +395,12 @@ int main(int argc, char *argv[])
   PRINTVAL(=__CYGWIN64__);
 
   PRINTVAL(=__INTERIX);		/* aka. Unix subsystem for Windows */
+
+  PRINTVAL(=__MACH__);		/* MacOS */
+  PRINTVAL(=__APPLE__);
+  PRINTVAL(=__APPLE_CC__);
+  PRINTVAL(=__BSD__);
+  PRINTVAL(=__STRICT_BSD__);
 
   /* Processor type */
   PRINTVAL(=_X86_);
