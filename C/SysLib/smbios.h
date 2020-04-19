@@ -15,6 +15,7 @@
 *		    Added support for use of 32-bits tables in WIN64.         *
 *		    Added preliminary support for SMBIOS 3.0 64-bits tables.  *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
+*    2020-04-19 JFL Define and use consistently DWORD_DEFINED & QWORD_DEFINED.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -30,18 +31,13 @@
 
 #else  /* !HAS_SYSLIB */
 
+#ifndef DWORD_DEFINED
+#define DWORD_DEFINED
+
 /* Define basic types */
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned long DWORD;
-#ifdef _WIN32
-#define QWORD_DEFINED
-typedef unsigned __int64 QWORD;
-#endif
-#ifdef _MSDOS
-#define QWORD_DEFINED
-typedef struct {DWORD dw0; DWORD dw1;} QWORD;
-#endif
 
 /* Reference the Nth BYTE in a structure. (That is the BYTE at offset N) */
 #define BYTE0(qw) (((BYTE *)(&(qw)))[0])
@@ -67,9 +63,28 @@ typedef struct {DWORD dw0; DWORD dw1;} QWORD;
 #define BYTE_AT(p, n) (*(BYTE *)((BYTE *)(p)+(int)(n)))
 #define WORD_AT(p, n) (*(WORD *)((BYTE *)(p)+(int)(n)))
 #define DWORD_AT(p, n) (*(DWORD *)((BYTE *)(p)+(int)(n)))
-#ifdef QWORD_DEFINED
-#define QWORD_AT(p, n) (*(QWORD *)((BYTE *)(p)+(int)(n)))
+
+#endif /* !defined(DWORD_DEFINED) */
+
+#ifndef QWORD_DEFINED
+
+#ifdef _WIN32
+#define QWORD_DEFINED
+typedef unsigned __int64 QWORD;
 #endif
+#ifdef _MSDOS
+#define QWORD_DEFINED
+typedef struct {DWORD dw0; DWORD dw1;} QWORD;
+#endif
+#ifndef QWORD_DEFINED /* Any other operating system */
+#define QWORD_DEFINED
+#include <stdint.h>
+typedef uint64_t QWORD;
+#endif
+
+#define QWORD_AT(p, n) (*(QWORD *)((BYTE *)(p)+(int)(n)))
+
+#endif /* !defined(QWORD_DEFINED) */
 
 #endif /* HAS_SYSLIB */
 

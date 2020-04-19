@@ -55,6 +55,7 @@
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2017-06-28 JFL Disable warning "function 'QWORD::operator=' not expanded"*
+*    2020-04-19 JFL Define and use consistently DWORD_DEFINED & QWORD_DEFINED.*
 *									      *
 \*****************************************************************************/
 
@@ -64,6 +65,11 @@
 #ifdef HAS_SYSLIB
 #include "SysLib.h"	/* SysLib Library core definitions */
 #endif
+
+/* There are 3 possible types of QWORD definitions */
+#define QWORD_UINT64 0	/* Native compiler type */
+#define QWORD_CLASS  1	/* A C++ class */
+#define QWORD_STRUCT 2	/* A C structure */
 
 /* Define x86 register types */
 #ifndef DWORD_DEFINED
@@ -80,13 +86,11 @@ typedef unsigned long	DWORD;	/* 32-bits unsigned integer */
 #ifndef FAR
   #ifdef _MSDOS
     #define FAR far
-  #endif /* _MSDOS */
-  #ifdef _WIN32
+  #elif defined(_WIN32)
     #define FAR
-  #endif /* _WIN32 */
-  #ifdef __unix__
+  #else /* Anything else, for example Unix, has no notion of NEAR or FAR */
     #define FAR
-  #endif /* __unix__ */
+  #endif
 #endif /* FAR */
 
 /* Common far pointers based on these types */
@@ -139,7 +143,7 @@ typedef DWORD FAR *	LPDWORD;
 #ifdef _MSDOS	/* 16-bits program */
 
 #pragma message("Using QWORD C++ class definition.")
-#define QWORD_CLASS 1
+#define QWORD_DEFINED QWORD_CLASS
 
 class QWORD
     {
@@ -281,23 +285,23 @@ public:
 
 #pragma message("Using QWORD WIN32 unsigned __int64 C++ definition.")
 typedef unsigned __int64 QWORD;
-#define QWORD_CLASS 0
+#define QWORD_DEFINED QWORD_UINT64
 
 #endif /* defined(_WIN32) */
 
 
-#ifdef __unix__	/* Unix program */
+#ifndef QWORD_DEFINED	/* Anything else, for example Unix programs */
 
 #include <stdint.h>
 
 /* #pragma message("Using <stdint.h> uint64_t definition.") */
 typedef uint64_t QWORD;
-#define QWORD_CLASS 0
+#define QWORD_DEFINED QWORD_UINT64
 
-#endif /* defined(__unix__) */
+#endif /* !defined(QWORD_DEFINED) */
 
 
-#if !QWORD_CLASS 
+#if QWORD_DEFINED != QWORD_CLASS
 
 char *qwtox(const QWORD &qw, char *pBuf);
 int printfx(char *pszFormat, const QWORD &qw);
@@ -314,7 +318,7 @@ inline QWORD& _QWORD(unsigned long dw0, unsigned long dw1) { QWORD *pqw = new QW
 inline double Qword2Double(QWORD qw)
     { return ((2*((double)(QWORD)((qw)/2)))+((int)(qw)&1)); }	/* Unsigned __qword conversion not implemented! */
 
-#endif /* !QWORD_CLASS */
+#endif /* QWORD_DEFINED != QWORD_CLASS */
 
 #define Qword2Dword(qw) ((DWORD)(QWORD)(qw))
 #define Dword2Qword(dw) _QWORD(dw)
@@ -332,6 +336,8 @@ int strtoqw(const char *pszString, QWORD &qw, int iBase);
 #ifdef _MSDOS /* 16-bits version */
 
 #pragma message("Using QWORD MSDOS 2 * 32-bits C structure definition.")
+
+#define QWORD_DEFINED QWORD_STRUCT
 
 #ifdef _H2INC	/* MASM h2inc.exe converter */
 /*XLATOFF*/
@@ -359,17 +365,20 @@ char *qwtox(const QWORD qw, char *pBuf);
 #pragma message("Using QWORD WIN32 unsigned __int64 C definition.")
 typedef unsigned __int64 QWORD;
 
+#define QWORD_DEFINED QWORD_UINT64
+
 #endif /* _WIN32 */
 
 
-#ifdef __unix__	/* Unix version */
+#ifndef QWORD_DEFINED	/* Anything else, for example Unix programs */
 
 #include <stdint.h>
 
 /* #pragma message("Using <stdint.h> uint64_t definition.") */
 typedef uint64_t QWORD;
+#define QWORD_DEFINED QWORD_UINT64
 
-#endif /* __unix__ */
+#endif /* !defined(QWORD_DEFINED) */
 
 
 #if defined(_WIN32) || defined(__unix__) /* All 32 or 64 bits compilers support 64-bits integers */
