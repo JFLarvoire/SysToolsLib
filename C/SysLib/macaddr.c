@@ -35,7 +35,6 @@ extern int iDebug;	/* Defined in main module. If TRUE, display debug information
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#include <malloc.h>
 
 #include "smbios.h"	/* SmBios access, to get system info, including MAC@ */
 

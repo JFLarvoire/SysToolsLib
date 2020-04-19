@@ -26,7 +26,7 @@
 #define _GNU_SOURCE		/* Implies all the above */
 #define _FILE_OFFSET_BITS 64	/* Force using 64-bits file sizes by default, if possible */
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
