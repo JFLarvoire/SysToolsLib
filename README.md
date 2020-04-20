@@ -6,16 +6,16 @@ Project Description
 
 ### System Tools
 
-This Library contains many command-line tools for managing Windows and Linux systems.  
+This Library contains many command-line tools for managing Windows and Unix (Ex: Linux, MacOS) systems.  
 I've built them over 30 years, both for work and for home projects.  
-Some of these tools have unique capabilities, that I hope Windows and Linux power users will find useful.
+Some of these tools have unique capabilities, that I hope Windows and Unix power users will find useful.
 
 Major highlights:
 
 - Directory management tools, to search, compare, weight, update, recurse, etc.  
   In Windows, they all support Unicode names in any code page, paths > 260 characters, junctions, file & directory symlinks.
 - Windows clipboard content filtering tools. They bring the power of the command line to all GUI apps!
-- System management tools. Manage the hardware, BIOS, disks, drivers, etc.
+- DOS and Windows system management tools. Manage the hardware, BIOS, disks, drivers, etc.
 
 For a list of available tools and their description, see [Catalog.md](Docs/Catalog.md).
 
@@ -34,10 +34,10 @@ Major highlights:
   with commands familiar to Unix developers. Target environments: BIOS, DOS, WIN95, WIN32, IA64, WIN64, ARM, ARM64.
   More details in the [MsvcLibX documentation](C/MsvcLibX/README.md).
 - A set of debugging macros for C programs, similar in use and effect to those for scripting languages. [debugm.h](C/include/debugm.h)  
-- MsvcLibX.lib - A Microsoft C library eXtension, implementing many Unix C Library functions that Microsoft never provided.  
+- MsvcLibX.lib - A Microsoft C library eXtension, implementing many modern Unix C Library functions that Microsoft never provided.  
   It supports UTF-8 sources that work in any code page, paths > 260 characters, junctions, file & directory symlinks.  
   This makes it easy to write C system management tools that build in both Unix and Windows. More info [here](C/MsvcLibX/README.md).
-- SysLib.lib - A set of system management functions, with versions for DOS, Windows, and Linux.
+- SysLib.lib - A set of system management functions, with versions for DOS, Windows, and Unix.
 - Bios.lib - A library for writing C or C++ programs using only the legacy BIOS: Option ROMs, OS boot loaders, MS-DOS drivers, or TSRs.
 - LoDos.lib - A library for the specific needs of MS-DOS drivers and TSRs.
 - PMode.lib - A libray for switching BIOS, DOS or Windows 95 programs to the 80x86 protected mode.
@@ -47,11 +47,11 @@ For more details on these C libraries, see [C/README.md](C/README.md), and the R
 Programming languages:
 
 Old tools were mostly written in C/C++. Then I started using scripting languages more often:  
-Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Linux-only tools.
+Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Unix-only tools.
 
 Jean-François Larvoire  
 jf.larvoire@hpe.com  
-2020-04-14
+2020-04-20
 
 
 Installation
@@ -66,10 +66,12 @@ You can use the WIN32 release files on all versions of Windows.
 * Extract files from that zip file, and put them in a directory in your PATH. For example in C:\Windows.
 * The Tcl scripts require installing a Tcl interpreter. See [Tcl/README.md](Tcl/README.md) for details on how to do that.
 
-### Scripts and programs in Linux
+You can also rebuild all C programs from sources. More details about this further down.
+
+### Scripts and programs in Unix
 
 The C programs need to be rebuilt from source.  
-As for scripts, only the Bash and Tcl directories contain useful scripts for Linux.
+As for scripts, only the Bash and Tcl directories contain useful scripts in Unix.
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
@@ -80,7 +82,7 @@ As for scripts, only the Bash and Tcl directories contain useful scripts for Lin
 
 ### Development environment
 
-The C development environment is designed so that a Windows and a Linux system (possibly one a VM inside the other) 
+The C development environment is designed so that a Windows and a Unix system (possibly one a VM inside the other) 
 can share the same sources, and output executables in distinct target-OS-specific subdirectories.
 
 * Download the project sources archive.
@@ -119,7 +121,7 @@ All tools (both scripts and C programs) support the -? option for help, and most
 
 Option  | Description
 ------- | -----------------------------------------------------------------------------
-  -?    | Display a help screen.
+  -?    | Display a help screen. (In Unix shells that swallow ? characters, use the -h alias)
         |    
   -d    | Display debug information: Help the author understand what code is running.
   -v    | Display verbose information: Help users understand what the program is doing.

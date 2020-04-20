@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-04-20
+### New
+- C/*: Added support for building, installing, and running tools in MacOS.
+
 ## [Unreleased] 2020-04-13
 ### Changed
 - */Makefile: Redesigned the `make install` command to use inference rules. This allows using `make -n install` to dry-run it.  
