@@ -43,6 +43,7 @@
 *                   Added options -b|--bak as synonyms for -bak.              *
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 3.1.                                              *
+*    2020-04-20 JFL Added support for MacOS. Version 3.2.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -50,8 +51,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert tabs to spaces"
 #define PROGRAM_NAME    "detab"
-#define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2020-04-04"
+#define PROGRAM_VERSION "3.2"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -102,7 +103,9 @@ DEBUG_GLOBALS		/* Define global variables used by our debugging macros */
 
 #endif /* defined(_WIN32) */
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define stricmp strcasecmp
 
@@ -166,7 +169,7 @@ Arguments:\n\
   N        Number of columns between tab stops. Default: 8\n\
 \n\
 Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 ;

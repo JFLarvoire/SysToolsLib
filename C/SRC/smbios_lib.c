@@ -49,7 +49,7 @@
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
-#include <malloc.h>
+#include <stdlib.h>
 
 #define FALSE 0
 #define TRUE 1

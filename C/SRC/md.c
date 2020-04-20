@@ -19,13 +19,14 @@
 *		     path contained a trailing [back]slash. Version 1.0.2.    *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.4.      *
+*    2020-04-20 JFL Added support for MacOS. Version 1.1.                     *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Create a directory"
 #define PROGRAM_NAME    "md"
-#define PROGRAM_VERSION "1.0.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.1"
+#define PROGRAM_DATE    "2020-04-20"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -34,7 +35,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <malloc.h>
 #include <unistd.h>
 #include <sys/stat.h>	/* For mkdir() */
 /* SysToolsLib include files */
@@ -50,7 +50,9 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
@@ -188,7 +190,7 @@ int main(int argc, char *argv[]) {
   } else {
     iRet = 0;
   }
-#ifdef __unix__
+#ifdef _UNIX
   printf("\n");
 #endif
 
@@ -217,7 +219,7 @@ Usage:\n\
   %s [SWITCHES] DIRNAME\n\
 \n\
 Switches:\n\
-  -?          Display this help message and exit\n"
+  -?|-h       Display this help message and exit\n"
 #ifdef _DEBUG
 "\
   -d          Output debug information\n"
@@ -230,11 +232,11 @@ Switches:\n\
   -V          Display this program version and exit\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 , 
-#ifdef __unix__
+#ifdef _UNIX
   "md"
 #else
   "\"md.exe\""

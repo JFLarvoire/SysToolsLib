@@ -92,15 +92,16 @@
 *    2019-09-25 JFL Added a verbose msg about case-independent matches in Unix.
 *		    Version 1.14.					      *
 *    2020-03-22 JFL Fixed wildcards search in Unix. Version 1.14.1.           *
+*    2020-04-20 JFL Added support for MacOS. Version 1.15.                    *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
-#define PROGRAM_NAME    "which"
-#define PROGRAM_VERSION "1.14.1"
-#define PROGRAM_DATE    "2020-03-22"
+#define PROGRAM_NAME    "Which"
+#define PROGRAM_VERSION "1.15"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -108,6 +109,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use MinGW, or JFL's MsvcLibX library extensions for MS Visual C++ */
 #include <unistd.h>		/* For the access function */
@@ -198,7 +200,9 @@ int iMatchFlags = FNM_CASEFOLD;
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__	/* Automatically defined when targeting a Unix application */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 char *pszExtUnix[] = {NULL};
 char **ppszExt = pszExtUnix;
@@ -275,7 +279,7 @@ size_t strnirepl(char *pszResultBuffer, size_t lResultBuffer, const char *pszStr
 #if defined(_WIN32)
 int GetProcessName(pid_t pid, char *name, size_t lname);
 #endif
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 int FixNameCase(char *pszPathname);
 #endif
 #if defined(_MSDOS) || defined(_WIN32)
@@ -287,7 +291,7 @@ int SearchCmdInternal(char *pszCommand, int iSearchFlags);
 int SearchCmdAliases(char *pszCommand, int iSearchFlags);
 int SearchPowerShellAliases(char *pszCommand, int iSearchFlags);
 #endif
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 int SearchPowerShellInternal(char *pszCommand, int iSearchFlags);
 int SearchBashInternal(char *pszCommand, int iSearchFlags);
 #endif
@@ -461,7 +465,7 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-#if defined(__unix__)
+#if defined(_UNIX)
   if (iVerbose) iVerbose = 1; /* Stupid trick to avoid a warning */
 #endif
 
@@ -470,7 +474,7 @@ int main(int argc, char *argv[]) {
     pathList = realloc(pathList, (sizeof(char *))*(++nPaths));
     pathList[nPaths-1] = ".";		/* Start with the current directory */
   }
-#ifdef __unix__
+#ifdef _UNIX
 #define PATH_SEP ":"
 #else
 #define PATH_SEP ";"
@@ -525,7 +529,7 @@ int main(int argc, char *argv[]) {
 	  iFound = SearchCmdInternal(pszCommand, iFlags);
 	  break;
 #endif
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 	case SHELL_POWERSHELL:
 	  iFound = SearchPowerShellInternal(pszCommand, iFlags);
 	  break;
@@ -575,23 +579,23 @@ void usage(void) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: which [OPTIONS] [COMMAND[.EXT] ...]\n\
+Usage: " PROGRAM_NAME " [OPTIONS] [COMMAND[.EXT] ...]\n\
 \n\
 Options:\n\
-  --    Stop processing switches.\n\
-  -?    Display this help message and exit.\n\
-  -a    Display all matches. Default: Display only the first one.\n"
+  --      Stop processing switches.\n\
+  -?|-h   Display this help message and exit.\n\
+  -a      Display all matches. Default: Display only the first one.\n"
 #if defined(_WIN32)
 "\
-  -i    Read shell internal commands, functions, and aliases on stdin (1)\n\
-  -I    Do not read shell internal commands and aliases on stdin (Default)\n"
+  -i      Read shell internal commands, functions, and aliases on stdin (1)\n\
+  -I      Do not read shell internal commands and aliases on stdin (Default)\n"
 #endif
 "\
-  -l    Long mode. Also display programs time, and links target.\n\
-  -s    Search for the shell internal commands first. (Deprecated, prefer -i)\n\
-  -S    Do not search for the shell internal commands. (Faster, default)\n\
-  -v    Verbose mode. Like -l, plus comments about non-eligible programs.\n\
-  -V    Display this program version and exit.\n\
+  -l      Long mode. Also display programs time, and links target.\n\
+  -s      Search for the shell internal commands first. (Deprecated, prefer -i)\n\
+  -S      Do not search for the shell internal commands. (Faster, default)\n\
+  -v      Verbose mode. Like -l, plus comments about non-eligible programs.\n\
+  -V      Display this program version and exit.\n\
 \n"
 #if defined(_WIN32)
 "\
@@ -624,7 +628,7 @@ Notes:\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -847,7 +851,7 @@ int SearchCmdInternal(char *pszCommand, int iFlags) {
 
 #endif /* defined(_WIN32) */
 
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 
 int SearchPowerShellInternal(char *pszCommand, int iFlags) {
   char szCmd[1024];
@@ -861,11 +865,11 @@ int SearchPowerShellInternal(char *pszCommand, int iFlags) {
   return (iRet == 0);
 }
 
-#endif /* defined(_WIN32) || defined(__unix__) */
+#endif /* defined(_WIN32) || defined(_UNIX) */
 
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 
-#if defined(__unix__)
+#if defined(_UNIX)
 /* The Unix version of system() runs sh, not bash, even if environment variable SHELL=/bin/bash.
    So we need to start the real bash, and pass it our internal command detection script */
 #define BASH "$SHELL"
@@ -883,7 +887,7 @@ int SearchBashInternal(char *pszCommand, int iFlags) {
   int iMargin = (iFlags & WHICH_LONG) ? 20 : 0; /* Margin to align with matches that display a file time */
   int n;
   /* Generate a bash command that gets help about internal commands, and displays which.exe output directly */
-#if defined(__unix__)	/* This is a Unix app running on Unix */
+#if defined(_UNIX)	/* This is a Unix app running on Unix */
   n = sprintf(szCmd, "%s", BASH);
 #elif defined(_WIN64)	/* This is a WIN64 app running on WIN64 */
   n = sprintf(szCmd, "%s", BASH);
@@ -905,7 +909,7 @@ int SearchBashInternal(char *pszCommand, int iFlags) {
   return (iRet == 0);
 }
 
-#endif /* defined(_WIN32) || defined(__unix__) */
+#endif /* defined(_WIN32) || defined(_UNIX) */
 
 #if defined(_MSDOS) || defined(_WIN32)
 
@@ -1025,11 +1029,11 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
 
   DEBUG_ENTER(("SearchProgramWithAnyExt(\"%s\", \"%s\", 0x%X);\n", pszPath, pszCommand, iFlags));
 
-#ifndef __unix__
+#ifndef _UNIX
   if (strchr(pszCommand, '.')) {
 #endif
     nFound += SearchProgramWithOneExt(pszPath, pszCommand, NULL, iFlags);
-#ifndef __unix__
+#ifndef _UNIX
   }
 #endif
   if (!initExtListDone) initExtList();
@@ -1131,7 +1135,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
   if (!strpbrk(pszCommand, "*?")) { /* If no wildcards */
     _makepath(szPathName, NULL, pszPath, pszCommand, pszExt);
     nFound = CheckProgram(szPathName, iFlags);
-#if defined(__unix__)
+#if defined(_UNIX)
     if ((!nFound) && (iFlags & WHICH_VERBOSE) && !(iMatchFlags & FNM_CASEFOLD)) { /* But if we tested this in a case-sensitive OS */
       FixNameCase(szPathName);
       CheckProgram(szPathName, iFlags | WHICH_XCASE); /* Test it it would match with another case */
@@ -1148,7 +1152,7 @@ int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int i
     while ((pDE = readdir(pDir)) != NULL) {
       /* DEBUG_PRINTF(("fnmatch(%s, %s, 0x%X);\n", szName, pDE->d_name, iMatchFlags)); */
       if (fnmatch(szName, pDE->d_name, iMatchFlags)) { /* That name does not match */
-#if defined(__unix__)
+#if defined(_UNIX)
 	if ((iFlags & WHICH_VERBOSE) && !(iMatchFlags & FNM_CASEFOLD)) { /* But if we tested this in a case-sensitive OS */
 	  if (!fnmatch(szName, pDE->d_name, iMatchFlags | FNM_CASEFOLD)) { /* And the name matches with another case */
 	    _makepath(szPathName, NULL, pszPath, pDE->d_name, NULL);
@@ -1284,7 +1288,7 @@ int GetProcessName(pid_t pid, char *name, size_t lname) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#if defined(_WIN32) || defined(__unix__)
+#if defined(_WIN32) || defined(_UNIX)
 
 int FixNameCase(char *pszPathname) {
   char *pszPath = pszPathname;

@@ -26,6 +26,7 @@
 *    2017-01-04 JFL Added case-independant NewIDict().			      *
 *    2017-01-06 JFL Added an optional data compatison routine for multimaps.  *
 *		    Create with NewMMap(datacmp) or NewIMMap(datacmp).	      *
+*    2020-04-20 JFL Added support for MacOS.				      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,7 +43,7 @@
 #define snprintf _snprintf
 #endif /* _WIN32 */
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
 #include <strings.h>
 #define _stricmp strcasecmp
 #endif /* __unix__ */

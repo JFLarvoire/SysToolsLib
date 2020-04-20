@@ -328,8 +328,8 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 #endif
 "\n\
 Switches:\n\
-  -a|--all            Output all characters, even control chars like CR LF, etc\n\
-  -h|--help|-?        Display this help screen\n"
+  -?|-h|--help        Display this help screen\n\
+  -a|--all            Output all characters, even control chars like CR LF, etc\n"
 #if SUPPORTS_UTF8
 "\
   -u|--unicode X[-Y]  Display a Unicode character, or a range of characters\n"

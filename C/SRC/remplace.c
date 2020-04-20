@@ -149,6 +149,7 @@
 *                   Changed option -= to -@. (Mime =XX codes decoding)        *
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 3.0.                                              *
+*    2020-04-20 JFL Added support for MacOS. Version 3.1.                     *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -156,8 +157,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "3.0"
-#define PROGRAM_DATE    "2020-04-06"
+#define PROGRAM_VERSION "3.1"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -240,7 +241,9 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define getch getchar
 #define stricmp strcasecmp
@@ -925,7 +928,7 @@ string and new string can span multiple lines.\n\
 \n\
 switches:\n\
   -#       Ignore all further arguments.\n\
-  -?       Display this brief help screen.\n\
+  -?|-h    Display this brief help screen.\n\
   --       End of switches.\n\
   -b|-bak  Create an *.bak backup file of existing output files\n"
 #ifdef _DEBUG
@@ -957,7 +960,7 @@ In that case, the \\s and \" are treated as by a C compiler.\n\
 Special characters: Use \\r for CR, \\n for LF, \\x3C for <, \\x3E for >.\n\
 Use the verbose mode to see how quotes and backslashes went through.\n"
 #endif
-#if defined __unix__
+#if defined _UNIX
 "  remplace \\\\n \\\\r\\\\n <unixfile >dosfile\n\
   remplace -t \\\\n \\\\r\\\\n unixfile -same\n\
   remplace -= unreadable_mime_file\n\
@@ -988,7 +991,7 @@ The new string may contain the following special sequences\n\
 Return code: 0=Success; 1=No change done; 2=Error.\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );

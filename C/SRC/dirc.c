@@ -960,7 +960,7 @@ If no pathname2 is entered, list only one directory, sorted.\n\
 If no pathname1 is entered, list the current directory.\n\
 \n\
 Switches:\n\
-  -?          Display this help message and exit.\n"
+  -?|-h       Display this help message and exit.\n"
 #ifdef _WIN32
 "\
   -A          Force encoding the output using the ANSI character set.\n"

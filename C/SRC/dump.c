@@ -35,6 +35,7 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.9.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.10.     *
 *    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.2.     *
+*    2020-04-20 JFL Added support for MacOS. Version 1.3.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,8 +43,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2019-10-31"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2020-04-20"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -57,7 +58,9 @@
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define SUPPORTED_OS 1
 
@@ -180,7 +183,7 @@ int main(int argc, char *argv[])
     FILE *f;
     int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
 
-#ifndef __unix__
+#ifndef _UNIX
     /* Force stdin and stdout to untranslated */
     _setmode( _fileno( stdin ), _O_BINARY );
 #endif
@@ -297,7 +300,7 @@ Offset    00           04           08           0C           0   4    8   C   \
 	for (u=0; u<nRead; u++)
 	    {
 	    if (!(u&7)) printf(" ");
-#ifdef __unix__
+#ifdef _UNIX
 	    if ( (table[u] & 0x7F) < 0x20) table[u] = ' ';
 #else
 	    switch (table[u])
@@ -327,7 +330,7 @@ Offset    00           04           08           0C           0   4    8   C   \
 	if (iCtrlZ && (nRead < 16)) break;
 	}
 
-#ifdef __unix__
+#ifdef _UNIX
     printflf();
 #endif
 
@@ -359,9 +362,9 @@ Usage: dump [switches] [filename] [address] [length]\n\
 \n\
 Switches:\n\
 \n\
-  -?	Display this help screen\n\
-  -p	Pause for each screen-full of information.\n\
-  -z    Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
+  -?|-h   Display this help screen\n\
+  -p	  Pause for each screen-full of information.\n\
+  -z      Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"
@@ -369,7 +372,7 @@ Switches:\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -403,7 +406,7 @@ int between(DWORD floor, DWORD u, DWORD ceiling)
 int IsSwitch(char *pszArg)
     {
     return (   (*pszArg == '-')
-#ifndef __unix__
+#ifndef _UNIX
             || (*pszArg == '/')
 #endif
            ); /* It's a switch */
@@ -575,7 +578,7 @@ int GetScreenRows(void)
 
 /* Requires linking with the  -ltermcap option */
 
-#ifdef __unix__
+#ifdef _UNIX
 
 #if defined(USE_TERMCAP) && USE_TERMCAP
 

@@ -25,6 +25,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
 *    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 1.1.3.					      *
+*    2020-04-20 JFL Added support for MacOS. Version 1.2.                     *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,15 +33,14 @@
 
 #define PROGRAM_DESCRIPTION "Remove a directory"
 #define PROGRAM_NAME    "rd"
-#define PROGRAM_VERSION "1.1.3"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <malloc.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -60,7 +60,9 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
@@ -237,7 +239,7 @@ int main(int argc, char *argv[]) {
   } else {
     iRet = 0;
   }
-#ifdef __unix__
+#ifdef _UNIX
   printf("\n");
 #endif
 
@@ -266,7 +268,7 @@ Usage:\n\
   %s [SWITCHES] DIRNAME\n\
 \n\
 Switches:\n\
-  -?          Display this help message and exit\n"
+  -?|-h       Display this help message and exit\n"
 #ifdef _DEBUG
 "\
   -d          Output debug information\n"
@@ -280,11 +282,11 @@ Switches:\n\
   -X          NoExec mode: Display what would be deleted, but don't do it\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 ,
-#ifdef __unix__
+#ifdef _UNIX
   progcmd
 #else
   "\"rd.exe\""

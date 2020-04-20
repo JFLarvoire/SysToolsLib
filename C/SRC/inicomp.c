@@ -49,6 +49,7 @@
 *                   Removed the incorrect code handling homonym sections. The *
 *		    standard is to merge multiple parts into 1 single section.*
 *		    Version 2.1.                                              *
+*    2020-04-20 JFL Added support for MacOS. Version 2.2.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -56,8 +57,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare .ini files, section by section, and item by item"
 #define PROGRAM_NAME    "inicomp"
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2020-02-17"
+#define PROGRAM_VERSION "2.2"
+#define PROGRAM_DATE    "2020-04-20"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -119,7 +120,9 @@ DICT_DEFINE_PROCS();
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__		/* Automatically defined when targeting a Unix app. */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define PATHNAME_SIZE FILENAME_MAX
 
@@ -1090,7 +1093,7 @@ Note: Also usable for .reg files, used by Windows' regedit.exe\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );

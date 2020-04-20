@@ -47,6 +47,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.1.2.      *
 *    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 3.1.3.					      *
+*    2020-04-20 JFL Added support for MacOS. Version 3.2.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,8 +55,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.1.3"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.2"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -70,6 +71,7 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <stdarg.h>
+#include <limits.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
@@ -144,7 +146,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__     /* Unix */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR '/'
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
@@ -329,7 +333,7 @@ char *internes[] = {            /* Internal commands */
     "vol",
 };
 
-#elif defined(__unix__)
+#elif defined(_UNIX)
 
 char *internes[] = {            /* Internal commands. (Only those not duplicated in /bin) */
     "alias",
@@ -493,7 +497,7 @@ int main(int argc, char *argv[]) {
 #if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
     command[0] = getenv("COMSPEC"); /* If yes, run a secondary command  */
     command[1] = "/C";		/* processor.			    */
-#elif defined(__unix__)
+#elif defined(_UNIX)
     command[0] = getenv("SHELL");  /* If yes, run a secondary command  */
     command[1] = "-c";		/* processor.			    */
 #endif
@@ -595,7 +599,7 @@ And of course, use a command that is compatible with paths > 260 bytes.\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -1258,7 +1262,7 @@ char *getdir(char *buf, int len) { /* Get current directory without the drive */
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifdef __unix__
+#ifdef _UNIX
 
 #include <sys/wait.h>
 
@@ -1294,5 +1298,5 @@ intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv) {
   return iRet;
 }
 
-#endif /* defined(__unix__) */
+#endif /* defined(_UNIX) */
 

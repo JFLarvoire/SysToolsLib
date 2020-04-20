@@ -66,6 +66,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 3.3.3.      *
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 3.3.4.					      *
+*    2020-04-20 JFL Added support for MacOS. Version 3.4.                     *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -73,8 +74,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.3.4"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "3.4"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -91,6 +92,7 @@
 #include <unistd.h>		/* For chdir() */
 #include <errno.h>
 #include <stdarg.h>
+#include <limits.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
@@ -150,7 +152,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__	/* Automatically defined when targeting a Unix application */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #define DIRSEPARATOR_CHAR '/'		/* Directory separator character */
 #define DIRSEPARATOR_STRING "/"
@@ -240,6 +244,7 @@ char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
 /* Function prototypes */
 
 void usage(void);                   /* Display a brief help and exit */
+int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
 void finis(int retcode, ...);       /* Return to the initial drive & exit */
 int parse_date(char *token, time_t *pdate); /* Convert the argument to a time_t */
 int Size2String(char *pBuf, total_t ll); /* Convert size to a decimal, with a comma every 3 digits */
@@ -286,11 +291,7 @@ int main(int argc, char *argv[]) {
   /* Parse command line arguments */
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
-    if (   (arg[0] == '-')
-#ifndef __unix__
-        || (arg[0] == '/')
-#endif
-       ) { /* It's a switch */
+    if (IsSwitch(arg)) { /* It's a switch */
       char *opt = arg+1;
       if (streq(opt, "b")) {
 	band = TRUE;
@@ -323,7 +324,7 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
-      if (   streq(opt, "help")
+      if (   streq(opt, "-help")
 	  || streq(opt, "h")
 	  || streq(opt, "?")) {
 	usage();
@@ -509,7 +510,7 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 Usage: dirsize [SWITCHES] [TARGET]\n\
 \n\
 Switches:\n\
-  -?          Display this help message and exit.\n\
+  -?|-h       Display this help message and exit.\n\
   -b	      Skip a line every 5 lines, to improve readability.\n\
   -c	      Use the actual cluster size to compute the total size.\n\
   -c size     Use the specified cluster size to compute the total size.\n\
@@ -543,7 +544,7 @@ Pattern:      Wildcards pattern. Default: " PATTERN_ALL "\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
@@ -592,6 +593,36 @@ void finis(int retcode, ...) {
 #endif
 
   exit(retcode);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
 }
 
 /******************************************************************************
@@ -1162,7 +1193,7 @@ long GetClusterSize(char drive)	       /* Get cluster size */
 *                                                                             *
 ******************************************************************************/
 
-#ifdef __unix__
+#ifdef _UNIX
 
 long GetClusterSize(char drive)	{       /* Get cluster size */
   NEW_PATHNAME_BUF(path);

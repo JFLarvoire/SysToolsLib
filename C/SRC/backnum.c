@@ -452,16 +452,19 @@ Usage:\n\
 Switches:\n\
 \n"
 #ifndef _MSDOS
-"  -a    Append the backup number to the file name. (Default)\n\
-  -A    Replace the extension with the backup number\n"
+"\
+  -?|-h   Display this help message and exit.\n\
+  -a      Append the backup number to the file name. (Default)\n\
+  -A      Replace the extension with the backup number\n"
 #endif
 #ifdef _DEBUG
 "\
-  -d    Output debug information.\n"
+  -d      Output debug information.\n"
 #endif
-"  -q    Be quiet\n\
-  -v    Display verbose information\n\
-  -X    Display the backup file name, but don't create it.\n\
+"\
+  -q      Be quiet\n\
+  -v      Display verbose information\n\
+  -X      Display the backup file name, but don't create it.\n\
 \n"
 #ifdef _MSDOS
 "Author: Jean-Francois Larvoire"

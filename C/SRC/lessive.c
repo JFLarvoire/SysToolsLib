@@ -43,6 +43,7 @@
 *                   Added options -b|--bak as synonyms for -bak.              *
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 1.5.                                              *
+*    2020-04-20 JFL Added support for MacOS. Version 1.6.                     *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -50,8 +51,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "lessive"
-#define PROGRAM_VERSION "1.5"
-#define PROGRAM_DATE    "2020-04-06"
+#define PROGRAM_VERSION "1.6"
+#define PROGRAM_DATE    "2020-04-20"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -115,7 +116,9 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__		/* Defined for Unix applications */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
 
 #include <unistd.h>
 #include <ctype.h>
@@ -485,7 +488,7 @@ Arguments:\n\
   OUTFILE  Output file pathname. Default or \"-\": stdout\n\
 \n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );

@@ -32,6 +32,7 @@
 *		    Version 2.2.2.  					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.2.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.2.4.      *
+*    2020-04-20 JFL Added support for MacOS. Version 2.3.                     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -39,8 +40,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove Form Feeds from a text"
 #define PROGRAM_NAME    "deffeed"
-#define PROGRAM_VERSION "2.2.4"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2.3"
+#define PROGRAM_DATE    "2020-04-20"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -89,7 +90,7 @@
 
 /************************* Unix-specific definitions *************************/
 
-#ifdef __unix__         /* Automatically defined in all Unix variants */
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
 
 #define TARGET_UNIX
 
