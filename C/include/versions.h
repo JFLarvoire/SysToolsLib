@@ -25,6 +25,7 @@
 *   History:								      *
 *    2019-11-19 JFL Split off of SysToolsLib's include/stversion.h.	      *
 *    2020-04-19 JFL Added support for MacOS.                                  *
+*    2020-04-20 JFL Moved the debug qualifier right after the date/version.   *
 *		    							      *
 *        (C) Copyright 2016 Hewlett Packard Enterprise Development LP         *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -143,7 +144,7 @@
 
 #if defined(_DEBUG)
 #define AND_DEBUG " Debug"
-#define AND_DEBUG_VERSION " debug version"
+#define AND_DEBUG_VERSION " debug"
 #else
 #define AND_DEBUG ""	/* Non debug version: Simply don't say it */
 #define AND_DEBUG_VERSION ""
@@ -224,10 +225,10 @@
 /* Detailed version, for use by the -V option. */
 #define DETAILED_VERSION							     \
 	PROGRAM_VERSION_AND_DATE /* Version and/or Date of last change */            \
+        AND_DEBUG_VERSION   	 /* If defined(_DEBUG) */			     \
 	AND_EXE_OS_NAME     	 /* MsvcLibX target OS name (DOS|WIN32|WIN64|...) */ \
 	AND_MIN_OS_NAME     	 /* Minimum OS version */                            \
 	AND_EXE_PROC_NAME   	 /* Processor name */                                \
-        AND_DEBUG_VERSION   	 /* If defined(_DEBUG) */			     \
 	AND_BIOSLIB_VERSION 	 /* If used BiosLib */                               \
 	AND_LODOSLIB_VERSION	 /* If used LoDosLib */                              \
 	AND_PMODELIB_VERSION	 /* If used PModeLib */                              \
