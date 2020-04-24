@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-04-02
+### Fixed
+- C/SRC/2clip.c: Fixed incorrectly formatted error messages.
+
 ## [Unreleased] 2020-04-20
 ### New
 - C/*: Added support for building, installing, and running tools in MacOS.
