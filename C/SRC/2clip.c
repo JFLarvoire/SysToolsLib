@@ -35,6 +35,7 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.4.      *
 *    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.5.     *
+*    2020-04-24 JFL Use ReportWin32Error() instead of COMPLAIN(). Version 1.6.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,8 +43,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.5"
-#define PROGRAM_DATE    "2019-10-31"
+#define PROGRAM_VERSION "1.6"
+#define PROGRAM_DATE    "2020-04-24"
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -54,8 +55,6 @@
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings and routine. Include last. */
-
-#define COMPLAIN(s) fprintf(stderr, "Error %d: %s", GetLastError(), s)
 
 // My favorite string comparison routines.
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
@@ -76,6 +75,7 @@ DEBUG_GLOBALS
 
 void usage(void);
 int IsSwitch(char *pszArg);
+int _cdecl ReportWin32Error(char *pszExplanation, ...);
 int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
 int ToClipW(const WCHAR* pwBuffer, size_t nWChars);
 
@@ -108,6 +108,7 @@ int main(int argc, char *argv[]) {
   UINT codepage;
   UINT type = 0;
   int iDone;
+  int iRet;
   int isHTML = FALSE;
   int isRTF = FALSE;
   int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
@@ -179,7 +180,7 @@ int main(int argc, char *argv[]) {
   while (!feof(stdin)) {
     pBuffer = realloc(pBuffer, nTotal + BLOCKSIZE);
     if (!pBuffer) {
-      COMPLAIN("Insufficient memory!");
+      ReportWin32Error("Can't read all input!");
       exit(1);
     }
     if (!iCtrlZ) {
@@ -227,7 +228,7 @@ int main(int argc, char *argv[]) {
       if (codepage != CP_NULL) {
 	pwUnicodeBuf = (WCHAR *)malloc(2*(nTotal));
 	if (!pwUnicodeBuf) {
-	  COMPLAIN("Insufficient memory!");
+	  ReportWin32Error("Can't convert the intput to Unicode!");
 	  exit(1);
 	}
 	nTotal = MultiByteToWideChar(codepage,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
@@ -238,7 +239,7 @@ int main(int argc, char *argv[]) {
 				     (int)nTotal		/* cchWideChar, */
 				     );
 	if (!nTotal) {
-	  COMPLAIN("Can't convert the intput to Unicode!");
+	  ReportWin32Error("Can't convert the intput to Unicode!");
 	  exit(1);
 	}
       } else {
@@ -246,15 +247,13 @@ int main(int argc, char *argv[]) {
       }
       iDone = ToClipW(pwUnicodeBuf, nTotal);
     }
-    if (!iDone) {
-      COMPLAIN("Failed to write to the clipboard!");
-      exit(1);
-    }
+    iRet = !iDone; /* Return exit code 0 is the copy was done; 1 if it was not */
   } else {
     /* This is actually not a bug: The input CAN be empty */
+    iRet = 0;
   }
 
-  return 0;
+  return iRet;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -347,6 +346,69 @@ int IsSwitch(char *pszArg)
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
+|   Function:	    ReportWin32Error					      |
+|                                                                             |
+|   Description:    Display a message with the last error.		      |
+|                   							      |
+|   Parameters:     char *pszExplanation    Why we think this occured, or NULL|
+|                   ...			    Optional arguments to format      |
+|                   							      |
+|   Returns:	    The number of characters written.        		      |
+|                   							      |
+|   Notes:	    Danger: Known issue: We use a fixed 4KB buffer for the    |
+|		    error message, and do not check for overflows. This is    |
+|		    more than enough for all actual error message, but be     |
+|		    cautious anyway when using optional formatted arguments.  |
+|                   							      |
+|   History:								      |
+|    1998-11-19 jfl Created this routine.				      |
+|    2005-06-10 JFL Added the message description, as formatted by the OS.    |
+|    2010-10-08 JFL Adapted to a console application, output to stderr.       |
+|    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
+|                   Make sure WIN32 msg and explanation are on the same line. |
+|    2019-09-27 JFL Fixed a formatting error.                                 |
+|                   Prepend the program name to the output.		      |
+*                                                                             *
+\*---------------------------------------------------------------------------*/
+
+int _cdecl ReportWin32Error(char *pszExplanation, ...) {
+  char szErrorMsg[4096];
+  va_list pArgs;
+  int n;
+  LPVOID lpMsgBuf;
+  DWORD dwErr = GetLastError();
+
+  if (FormatMessage( 
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+      FORMAT_MESSAGE_FROM_SYSTEM | 
+      FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL,
+      dwErr,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+      (LPTSTR) &lpMsgBuf,
+      0,
+      NULL )) { // Display both the error code and the description string.
+    n = wsprintf(szErrorMsg, "Error %lu: %s", dwErr, lpMsgBuf);
+    LocalFree(lpMsgBuf); // Free the buffer.
+    // Remove the trailing new line
+    if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
+    if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
+  } else { // Error, we did not find a description string for this error code.
+    n = wsprintf(szErrorMsg, "Error %lu.", dwErr);
+  }
+
+  if (pszExplanation) {
+    szErrorMsg[n++] = ' '; // Add a blank separator
+    va_start(pArgs, pszExplanation);
+    n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
+    va_end(pArgs);
+  }
+
+  return fprintf(stderr, PROGRAM_NAME ".exe: %s\n", szErrorMsg);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
 |   Function:	    ToClip						      |
 |									      |
 |   Description:    Copy a buffer of text to the clipboard		      |
@@ -388,16 +450,18 @@ int ToClip(const char* pBuffer, size_t lBuf, UINT cf)
                 GlobalUnlock(hClipData);
                 if (SetClipboardData(cf, hClipData))
 		    iResult = TRUE; /* finally, success! */
+		else
+		    ReportWin32Error("Failed to write to the clipboard!");
                 CloseClipboard();
                 }
             else
-                COMPLAIN("Insufficient memory for clipboard!");
+                ReportWin32Error("Insufficient memory for the clipboard!");
             }
         else
-            COMPLAIN("Could not empty clipboard!");
+            ReportWin32Error("Could not empty the clipboard!");
         }
     else
-        COMPLAIN("Could not open clipboard!");
+        ReportWin32Error("Could not open the clipboard!");
 
     return iResult;
     }
@@ -441,16 +505,18 @@ int ToClipW(const WCHAR* pwBuffer, size_t nWChars)
                 GlobalUnlock(hClipData);
                 if (SetClipboardData(CF_UNICODETEXT, hClipData))
 		    iResult = TRUE; /* finally, success! */
+		else
+		    ReportWin32Error("Failed to write to the clipboard!");
                 CloseClipboard();
                 }
             else
-                COMPLAIN("Insufficient memory for clipboard!");
+                ReportWin32Error("Insufficient memory for the clipboard!");
             }
         else
-            COMPLAIN("Could not empty clipboard!");
+            ReportWin32Error("Could not empty the clipboard!");
         }
     else
-        COMPLAIN("Could not open clipboard!");
+        ReportWin32Error("Could not open the clipboard!");
 
     return iResult;
     }
