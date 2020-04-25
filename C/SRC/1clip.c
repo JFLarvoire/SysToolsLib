@@ -45,6 +45,8 @@
 *    2019-11-01 JFL Added option -Z to append a Ctrl-Z (EOF) to the output.   *
 *		    Version 2.1.					      *
 *    2020-01-19 JFL Fixed the default HTML output to be UTF8 in any console CP.
+*    2020-04-25 JFL Rewrote ReportWin32Error as PrintWin32Error(); Added new  *
+*		    PrintCError(), and use them instead of PUTERR(). V 2.1.2. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,8 +54,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2020-01-19"
+#define PROGRAM_VERSION "2.1.2"
+#define PROGRAM_DATE    "2020-04-25"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -76,8 +78,6 @@
 #define strcat lstrcat
 #define strlen lstrlen
 #define _tell(hf) _llseek(hf, 0, FILE_CURRENT)
-
-#define PUTERR(s) fprintf(stderr, "%s\n", s)
 
 // My favorite string comparison routines.
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
@@ -113,7 +113,8 @@ void usage(void);
 int IsSwitch(char *pszArg);
 int CopyClip(UINT type, UINT codepage);
 int EnumClip(void);
-int _cdecl ReportWin32Error(char *pszExplanation, ...);
+int _cdecl PrintCError(char *pszExplanation, ...);
+int _cdecl PrintWin32Error(char *pszExplanation, ...);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -227,7 +228,7 @@ int main(int argc, char *argv[]) {
       EnumClip();
       break;
     default:
-      PUTERR("Unexpected action requested.");
+      fprintf(stderr, "Unexpected action requested.\n");
       break;
   }
 
@@ -299,27 +300,29 @@ Default output encoding: The current console code page (Code page %u)\n\
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    IsSwitch						      |
+|   Function	    IsSwitch						      |
 |									      |
-|   Description:    Test if a command line argument is a switch.	      |
+|   Description     Test if a command line argument is a switch.	      |
 |									      |
-|   Parameters:     char *pszArg					      |
+|   Parameters      char *pszArg					      |
 |									      |
-|   Returns:	    TRUE or FALSE					      |
+|   Returns	    TRUE or FALSE					      |
 |									      |
-|   Notes:								      |
+|   Notes								      |
 |									      |
-|   History:								      |
-|									      |
+|   History								      |
 |    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 int IsSwitch(char *pszArg) {
   switch (*pszArg) {
     case '-':
+#if defined(_WIN32) || defined(_MSDOS)
     case '/':
-      return TRUE;
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
     default:
       return FALSE;
   }
@@ -327,37 +330,90 @@ int IsSwitch(char *pszArg) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    ReportWin32Error					      |
+|   Function	    PrintCError						      |
+|									      |
+|   Description     Print C library error messages with a consistent format   |
+|									      |
+|   Parameters      char *pszFormat	The error context, or NULL            |
+|		    ...			Optional arguments		      |
+|		    							      |
+|   Returns	    The number of characters written			      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2020-04-25 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int _cdecl PrintCError(char *pszFormat, ...) {
+  va_list vl;
+  int n;
+  int e = errno; /* The initial C errno when this routine starts */
+
+  n = fprintf(stderr, PROGRAM_NAME
+#if defined(_MSDOS) || defined(_WIN32)
+		      ".exe"
+#endif
+		      ": ");
+
+  if (pszFormat) {
+    va_start(vl, pszFormat);
+    n += vfprintf(stderr, pszFormat, vl);
+    n += fprintf(stderr, ". ");
+    va_end(vl);
+  }
+
+  n += fprintf(stderr, "%s.\n", strerror(e));
+
+  return n;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    PrintWin32Error					      |
 |                                                                             |
 |   Description:    Display a message with the last error.		      |
 |                   							      |
-|   Parameters:     char *pszExplanation    Why we think this occured, or NULL|
-|                   ...			    Optional arguments to format      |
+|   Parameters      char *pszFormat	The error context, or NULL            |
+|		    ...			Optional arguments		      |
 |                   							      |
 |   Returns:	    The number of characters written.        		      |
 |                   							      |
-|   Notes:	    Danger: Known issue: We use a fixed 4KB buffer for the    |
-|		    error message, and do not check for overflows. This is    |
-|		    more than enough for all actual error message, but be     |
-|		    cautious anyway when using optional formatted arguments.  |
+|   Notes:	    							      |
 |                   							      |
 |   History:								      |
-|    1998-11-19 jfl Created this routine.				      |
+|    1998-11-19 JFL Created routine ReportWin32Error.			      |
 |    2005-06-10 JFL Added the message description, as formatted by the OS.    |
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
 |    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
 |                   Make sure WIN32 msg and explanation are on the same line. |
 |    2019-09-27 JFL Fixed a formatting error.                                 |
 |                   Prepend the program name to the output.		      |
+|    2020-04-25 JFL Redesigned to avoid using a fixed size buffer.	      |
+|                   Reordered the output so that it sounds more natural.      |
+|                   Renamed as PrintWin32Error.				      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl ReportWin32Error(char *pszExplanation, ...) {
-  char szErrorMsg[4096];
-  va_list pArgs;
+int _cdecl PrintWin32Error(char *pszFormat, ...) {
+  va_list vl;
   int n;
-  LPVOID lpMsgBuf;
-  DWORD dwErr = GetLastError();
+  char FAR *lpMsgBuf;
+  DWORD dwErr = GetLastError(); /* The initial WIN32 error when this routine starts */
+
+  n = fprintf(stderr, PROGRAM_NAME
+#if defined(_MSDOS) || defined(_WIN32)
+		      ".exe"
+#endif
+		      ": ");
+
+  if (pszFormat) {
+    va_start(vl, pszFormat);
+    n += vfprintf(stderr, pszFormat, vl);
+    n += fprintf(stderr, ". ");
+    va_end(vl);
+  }
 
   if (FormatMessage( 
       FORMAT_MESSAGE_ALLOCATE_BUFFER | 
@@ -369,23 +425,18 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
       (LPTSTR) &lpMsgBuf,
       0,
       NULL )) { // Display both the error code and the description string.
-    n = wsprintf(szErrorMsg, "Error %lu: %s", dwErr, lpMsgBuf);
+    int l = lstrlen(lpMsgBuf);
+    // Remove the trailing new line and dot, if any.
+    if (l && (lpMsgBuf[l-1] == '\n')) lpMsgBuf[--l] = '\0';
+    if (l && (lpMsgBuf[l-1] == '\r')) lpMsgBuf[--l] = '\0';
+    if (l && (lpMsgBuf[l-1] == '.')) lpMsgBuf[--l] = '\0';
+    n += fprintf(stderr, "%s.\n", lpMsgBuf);
     LocalFree(lpMsgBuf); // Free the buffer.
-    // Remove the trailing new line
-    if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
-    if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
   } else { // Error, we did not find a description string for this error code.
-    n = wsprintf(szErrorMsg, "Error %lu.", dwErr);
+    n += fprintf(stderr, "Win32 error %lu.\n", dwErr);
   }
 
-  if (pszExplanation) {
-    szErrorMsg[n++] = ' '; // Add a blank separator
-    va_start(pArgs, pszExplanation);
-    n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
-    va_end(pArgs);
-  }
-
-  return fprintf(stderr, PROGRAM_NAME ".exe: %s\n", szErrorMsg);
+  return n;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -434,7 +485,8 @@ int CopyClip(UINT type, UINT codepage) {
 
   if (OpenClipboard(NULL)) {
     HANDLE hCBData;
-    LPSTR lpString; 
+    LPSTR lpString;
+    int errno0;
 
     hCBData = GetClipboardData(type);
     if (hCBData) {
@@ -508,7 +560,7 @@ int CopyClip(UINT type, UINT codepage) {
       	WCHAR *pwszBuf = (WCHAR *)malloc(2 * nChars); /* Worst case for Unicode encoding */
       	char *pszBuf = malloc(4 * nChars); /* Worst case for UTF-8 encoding */
       	if (!pwszBuf || !pszBuf) {
-	  PUTERR("Not enough memory.");
+	  PrintCError("Can't convert the data to Unicode");
 	  exit(1);
       	}
       	/* First, convert multi-byte formats to Unicode */
@@ -533,7 +585,7 @@ int CopyClip(UINT type, UINT codepage) {
 				        nChars		/* cchWideChar, */
 				        );
 	  if (!nWChars) {
-	    PUTERR("Cannot convert the data to Unicode.");
+	    PrintWin32Error("Can't convert the data to Unicode");
 	    goto cleanup;
 	  }
 	  DEBUG_PRINTF(("Converted %d chars in CP %u to %d WCHARs\n", nChars, ActualCP(codepage0), nWChars));
@@ -552,7 +604,7 @@ int CopyClip(UINT type, UINT codepage) {
 				     NULL		/* lpUsedDefaultChar */
 				     );
 	if (!nChars) {
-	  PUTERR("Cannot convert the data to the output code page.");
+	  PrintWin32Error("Cannot convert the data to the output code page.");
 	  goto cleanup;
 	}
 	DEBUG_PRINTF(("Converted %d WCHARs to %d chars in CP %u\n", nWChars, nChars, ActualCP(codepage)));
@@ -566,12 +618,14 @@ int CopyClip(UINT type, UINT codepage) {
       	_setmode(_fileno(stdout), _O_BINARY);
       }
       iDone = (int)fwrite(lpString, nChars, 1, stdout);
+      errno0 = errno;
       if (!utf16) {
 	fflush(stdout); // Necessary, else the following _setmode() reverses it _before_ the conversion is done. 
 	_setmode(_fileno(stdout), _O_TEXT);
       }
       if (!iDone) {
-	PUTERR("Cannot write to the output file.");
+	errno = errno0;
+	PrintCError("Cannot write to the output file");
       } else {
 	DEBUG_PRINTF(("Wrote %d bytes.\n", nChars));
       }
@@ -581,7 +635,7 @@ cleanup:
 
     CloseClipboard();
   } else {
-    ReportWin32Error("Could not open clipboard!");
+    PrintWin32Error("Could not open the clipboard");
   }
 
   return nChars;
@@ -685,7 +739,7 @@ int EnumClip(void) {
 
     CloseClipboard();
   } else {
-    ReportWin32Error("Could not open clipboard!");
+    PrintWin32Error("Could not open the clipboard");
   }
 
   return nChars;
