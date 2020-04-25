@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename	    2clip.c						      *
 *									      *
@@ -35,16 +35,25 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.4.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.4.      *
 *    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.5.     *
-*    2020-04-24 JFL Use ReportWin32Error() instead of COMPLAIN(). Version 1.6.*
-*									      *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*    2020-04-25 JFL Rewrote ReportWin32Error as PrintWin32Error(); Added new  *
+*		    PrintCError(), and use them instead of COMPLAIN().        *
+*		    Converted the source to UTF-8 and output help as Unicode. *
+*		    Added option --lock in debug mode. Version 1.6.	      *
+*                   							      *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
 #define PROGRAM_VERSION "1.6"
-#define PROGRAM_DATE    "2020-04-24"
+#define PROGRAM_DATE    "2020-04-25"
+
+#define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
+
+#ifndef _WIN32
+#error "Unsuported OS. This program is Windows-specific."
+#endif
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
@@ -52,16 +61,15 @@
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
+#include <conio.h>
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
-#include "stversion.h"	/* SysToolsLib version strings and routine. Include last. */
+#include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 // My favorite string comparison routines.
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 
 #define BLOCKSIZE (4096)	// Number of characters that will be allocated in each loop.
-
-#define NARGS 10		// Max number of command line arguments supported.
 
 /* Local definitions */
 
@@ -75,7 +83,8 @@ DEBUG_GLOBALS
 
 void usage(void);
 int IsSwitch(char *pszArg);
-int _cdecl ReportWin32Error(char *pszExplanation, ...);
+int _cdecl PrintCError(char *pszExplanation, ...);
+int _cdecl PrintWin32Error(char *pszExplanation, ...);
 int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
 int ToClipW(const WCHAR* pwBuffer, size_t nWChars);
 
@@ -139,6 +148,21 @@ int main(int argc, char *argv[]) {
 	isHTML = TRUE;
 	continue;
       }
+      DEBUG_CODE(
+      if (streq(arg+1, "-lock")) {	/* --lock: Lock the clipboard, for testing access conflicts */
+      	HWND hWND = FindWindow("ConsoleWindowClass", NULL);
+	if (OpenClipboard(hWND)) {	  /* Give clipboard ownership to the console window */
+	  printf("Clipboard locked. Press ESC to exit.\n");
+	  while ((i = _getch()) != EOF) if (i == '\x1B') break;
+	  CloseClipboard();
+	  printf("Clipboard unlocked.\n");
+	  exit(0);
+	} else {
+	  PrintWin32Error("Can't lock the clipboard");
+	  exit(1);
+	}
+      }
+      )
       if (streq(arg+1, "O")) {		/* Assume the input is OEM text */
 	codepage = CP_OEMCP;
 	continue;
@@ -164,10 +188,10 @@ int main(int argc, char *argv[]) {
 	iCtrlZ = TRUE;
 	continue;
       }
-      fprintf(stderr, "Unsupported switch %s ignored.\n", arg);
+      fprintf(stderr, PROGRAM_NAME ".exe: Unsupported switch %s ignored.\n", arg);
       continue;
     }
-    fprintf(stderr, "Unexpected argument %s ignored.\n", arg);
+    fprintf(stderr, PROGRAM_NAME ".exe: Unexpected argument %s ignored.\n", arg);
   }
 
   /* Go for it */
@@ -180,7 +204,7 @@ int main(int argc, char *argv[]) {
   while (!feof(stdin)) {
     pBuffer = realloc(pBuffer, nTotal + BLOCKSIZE);
     if (!pBuffer) {
-      ReportWin32Error("Can't read all input!");
+      PrintCError("Can't read all input");
       exit(1);
     }
     if (!iCtrlZ) {
@@ -228,7 +252,7 @@ int main(int argc, char *argv[]) {
       if (codepage != CP_NULL) {
 	pwUnicodeBuf = (WCHAR *)malloc(2*(nTotal));
 	if (!pwUnicodeBuf) {
-	  ReportWin32Error("Can't convert the intput to Unicode!");
+	  PrintCError("Can't convert the intput to Unicode");
 	  exit(1);
 	}
 	nTotal = MultiByteToWideChar(codepage,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
@@ -239,7 +263,7 @@ int main(int argc, char *argv[]) {
 				     (int)nTotal		/* cchWideChar, */
 				     );
 	if (!nTotal) {
-	  ReportWin32Error("Can't convert the intput to Unicode!");
+	  PrintWin32Error("Can't convert the intput to Unicode");
 	  exit(1);
 	}
       } else {
@@ -275,28 +299,36 @@ int main(int argc, char *argv[]) {
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-void usage(void)
-    {
-    UINT cpANSI = GetACP();
-    UINT cpOEM = GetOEMCP();
-    UINT cpCurrent = GetConsoleOutputCP();
+void usage(void) {
+  UINT cpANSI = GetACP();
+  UINT cpOEM = GetOEMCP();
+  UINT cpCurrent = GetConsoleOutputCP();
 
-    printf(
+  printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
 \n\
-    <command> | 2clip [switches]\n\
+    <command> | " PROGRAM_NAME " [switches]\n\
 \n\
 Switches:\n\
   -?        Display this help screen\n\
-  -A        Assume input is ANSI text (Code page %u)\n"
+  -A        Assume input is ANSI text (Code page %u)\n\
+"
 #ifdef _DEBUG
 "\
-  -d        Output debug information.\n"
+  -d        Output debug information.\n\
+"
 #endif
 "\
   -h        Register input as HTML\n\
+"
+#ifdef _DEBUG
+"\
+  --lock    Lock the clipboard, for testing access conflicts.\n\
+"
+#endif
+"\
   -O        Assume input is OEM text (Code page %u)\n\
   -r        Register input as RTF\n\
   -u        Assume input is Unicode text\n\
@@ -306,77 +338,129 @@ Switches:\n\
 \n\
 Default input encoding: The current console code page (Code page %u).\n\
 \n"
-"Author: Jean-Francois Larvoire"
+"Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, cpANSI, cpOEM, cpCurrent
-);
+, cpANSI, cpOEM, cpCurrent);
 
-    return;
-    }
+  return;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    IsSwitch						      |
+|   Function	    IsSwitch						      |
 |									      |
-|   Description:    Test if a command line argument is a switch.	      |
+|   Description     Test if a command line argument is a switch.	      |
 |									      |
-|   Parameters:     char *pszArg					      |
+|   Parameters      char *pszArg					      |
 |									      |
-|   Returns:	    TRUE or FALSE					      |
+|   Returns	    TRUE or FALSE					      |
 |									      |
-|   Notes:								      |
+|   Notes								      |
 |									      |
-|   History:								      |
-|									      |
+|   History								      |
 |    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    switch (*pszArg)
-	{
-	case '-':
-	case '/':
-	    return TRUE;
-	default:
-	    return FALSE;
-	}
-    }
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
+    default:
+      return FALSE;
+  }
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    ReportWin32Error					      |
+|   Function	    PrintCError						      |
+|									      |
+|   Description     Print C library error messages with a consistent format   |
+|									      |
+|   Parameters      char *pszFormat	The error context, or NULL            |
+|		    ...			Optional arguments		      |
+|		    							      |
+|   Returns	    The number of characters written			      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2020-04-25 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int _cdecl PrintCError(char *pszFormat, ...) {
+  va_list vl;
+  int n;
+  int e = errno; /* The initial C errno when this routine starts */
+
+  n = fprintf(stderr, PROGRAM_NAME
+#if defined(_MSDOS) || defined(_WIN32)
+		      ".exe"
+#endif
+		      ": ");
+
+  if (pszFormat) {
+    va_start(vl, pszFormat);
+    n += vfprintf(stderr, pszFormat, vl);
+    n += fprintf(stderr, ". ");
+    va_end(vl);
+  }
+
+  n += fprintf(stderr, "%s.\n", strerror(e));
+
+  return n;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    PrintWin32Error					      |
 |                                                                             |
 |   Description:    Display a message with the last error.		      |
 |                   							      |
-|   Parameters:     char *pszExplanation    Why we think this occured, or NULL|
-|                   ...			    Optional arguments to format      |
+|   Parameters      char *pszFormat	The error context, or NULL            |
+|		    ...			Optional arguments		      |
 |                   							      |
 |   Returns:	    The number of characters written.        		      |
 |                   							      |
-|   Notes:	    Danger: Known issue: We use a fixed 4KB buffer for the    |
-|		    error message, and do not check for overflows. This is    |
-|		    more than enough for all actual error message, but be     |
-|		    cautious anyway when using optional formatted arguments.  |
+|   Notes:	    							      |
 |                   							      |
 |   History:								      |
-|    1998-11-19 jfl Created this routine.				      |
+|    1998-11-19 JFL Created routine ReportWin32Error.			      |
 |    2005-06-10 JFL Added the message description, as formatted by the OS.    |
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
 |    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
 |                   Make sure WIN32 msg and explanation are on the same line. |
 |    2019-09-27 JFL Fixed a formatting error.                                 |
 |                   Prepend the program name to the output.		      |
+|    2020-04-25 JFL Redesigned to avoid using a fixed size buffer.	      |
+|                   Reordered the output so that it sounds more natural.      |
+|                   Renamed as PrintWin32Error.				      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl ReportWin32Error(char *pszExplanation, ...) {
-  char szErrorMsg[4096];
-  va_list pArgs;
+int _cdecl PrintWin32Error(char *pszFormat, ...) {
+  va_list vl;
   int n;
-  LPVOID lpMsgBuf;
-  DWORD dwErr = GetLastError();
+  char FAR *lpMsgBuf;
+  DWORD dwErr = GetLastError(); /* The initial WIN32 error when this routine starts */
+
+  n = fprintf(stderr, PROGRAM_NAME
+#if defined(_MSDOS) || defined(_WIN32)
+		      ".exe"
+#endif
+		      ": ");
+
+  if (pszFormat) {
+    va_start(vl, pszFormat);
+    n += vfprintf(stderr, pszFormat, vl);
+    n += fprintf(stderr, ". ");
+    va_end(vl);
+  }
 
   if (FormatMessage( 
       FORMAT_MESSAGE_ALLOCATE_BUFFER | 
@@ -388,23 +472,18 @@ int _cdecl ReportWin32Error(char *pszExplanation, ...) {
       (LPTSTR) &lpMsgBuf,
       0,
       NULL )) { // Display both the error code and the description string.
-    n = wsprintf(szErrorMsg, "Error %lu: %s", dwErr, lpMsgBuf);
+    int l = lstrlen(lpMsgBuf);
+    // Remove the trailing new line and dot, if any.
+    if (l && (lpMsgBuf[l-1] == '\n')) lpMsgBuf[--l] = '\0';
+    if (l && (lpMsgBuf[l-1] == '\r')) lpMsgBuf[--l] = '\0';
+    if (l && (lpMsgBuf[l-1] == '.')) lpMsgBuf[--l] = '\0';
+    n += fprintf(stderr, "%s.\n", lpMsgBuf);
     LocalFree(lpMsgBuf); // Free the buffer.
-    // Remove the trailing new line
-    if (n && (szErrorMsg[n-1] == '\n')) szErrorMsg[--n] = '\0';
-    if (n && (szErrorMsg[n-1] == '\r')) szErrorMsg[--n] = '\0';
   } else { // Error, we did not find a description string for this error code.
-    n = wsprintf(szErrorMsg, "Error %lu.", dwErr);
+    n += fprintf(stderr, "Win32 error %lu.\n", dwErr);
   }
 
-  if (pszExplanation) {
-    szErrorMsg[n++] = ' '; // Add a blank separator
-    va_start(pArgs, pszExplanation);
-    n += wvsprintf(szErrorMsg+n, pszExplanation, pArgs);
-    va_end(pArgs);
-  }
-
-  return fprintf(stderr, PROGRAM_NAME ".exe: %s\n", szErrorMsg);
+  return n;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -451,17 +530,17 @@ int ToClip(const char* pBuffer, size_t lBuf, UINT cf)
                 if (SetClipboardData(cf, hClipData))
 		    iResult = TRUE; /* finally, success! */
 		else
-		    ReportWin32Error("Failed to write to the clipboard!");
+		    PrintWin32Error("Failed to write to the clipboard");
                 CloseClipboard();
                 }
             else
-                ReportWin32Error("Insufficient memory for the clipboard!");
+                PrintWin32Error("Insufficient memory for the clipboard");
             }
         else
-            ReportWin32Error("Could not empty the clipboard!");
+            PrintWin32Error("Could not empty the clipboard");
         }
     else
-        ReportWin32Error("Could not open the clipboard!");
+        PrintWin32Error("Could not open the clipboard");
 
     return iResult;
     }
@@ -506,17 +585,17 @@ int ToClipW(const WCHAR* pwBuffer, size_t nWChars)
                 if (SetClipboardData(CF_UNICODETEXT, hClipData))
 		    iResult = TRUE; /* finally, success! */
 		else
-		    ReportWin32Error("Failed to write to the clipboard!");
+		    PrintWin32Error("Failed to write to the clipboard");
                 CloseClipboard();
                 }
             else
-                ReportWin32Error("Insufficient memory for the clipboard!");
+                PrintWin32Error("Insufficient memory for the clipboard");
             }
         else
-            ReportWin32Error("Could not empty the clipboard!");
+            PrintWin32Error("Could not empty the clipboard");
         }
     else
-        ReportWin32Error("Could not open the clipboard!");
+        PrintWin32Error("Could not open the clipboard");
 
     return iResult;
     }
