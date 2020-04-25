@@ -4,9 +4,9 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2020-04-02
+## [Unreleased] 2020-04-25
 ### Fixed
-- C/SRC/2clip.c: Fixed incorrectly formatted error messages.
+- C/SRC/1clip.c, 2clip.c, 2note.c: Fixed incorrectly formatted error messages.
 
 ## [Unreleased] 2020-04-20
 ### New
