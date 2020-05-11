@@ -53,6 +53,8 @@
 *    2019-10-24 JFL Added option -z to stop input on Ctrl-Z.		      *
 *    2019-11-01 JFL Added option -Z to append a Ctrl-Z (EOF) to the output.   *
 *		    Version 2.1.					      *
+*    2020-05-10 JFL Test IMultiLanguage2::DetectInputCodepage() in debug mode.*
+*		    Version 2.1.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,8 +62,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2019-11-01"
+#define PROGRAM_VERSION "2.1.1"
+#define PROGRAM_DATE    "2020-05-10"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -170,6 +172,13 @@ LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf,
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 #define strieq(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
+#if _DEBUG /* C front end to COM C++ method IMultiLanguage2::DetectInputCodepage() */
+#include <MLang.h>
+#include <objbase.h>
+#pragma comment(lib, "ole32.lib")
+HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT *piSize, DetectEncodingInfo *lpInfo, INT *pnInfos);
+#endif
+
 #endif /* defined(_WIN32) */
 
 /************************* Unix-specific definitions *************************/
@@ -216,7 +225,8 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
 /* Function prototypes */
 
 int IsSwitch(char *pszArg);
-int is_redirected(FILE *f);	    /* Check if a file handle is the console */
+int is_redirected(FILE *f);	/* Check if a file handle is the console */
+int is_pipe(FILE *f);		/* Check if a file handle is a pipe */
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszOutput, size_t nOutputSize,
 			char *pszInputSet, char *pszOutputSet,
@@ -547,6 +557,30 @@ fail_no_mem:
     if (iCtrlZ && (nRead < BLOCKSIZE)) break;
     Sleep(0);	    /* Release end of time-slice */
   }
+  /* Test the COM API IMultiLanguage2::DetectInputCodepage() */
+  DEBUG_CODE({
+    HRESULT hr;
+    UINT cp;
+    int iSize = (int)nRead;
+    DetectEncodingInfo dei[10];
+    int iCount = sizeof(dei) / sizeof(DetectEncodingInfo); // # of elements of dei
+
+    if ((sf == stdin) && (isatty(0) || is_pipe(stdin))) {
+      cp = GetConsoleOutputCP();
+    } else {
+      cp = CP_ACP;
+    }
+    fprintf(mf, "Based on the stream type, I think the input may be CP %u:\n", (unsigned int)cp);
+    hr = DetectInputCodepage(0, cp, pszBuffer, &iSize, dei, &iCount);
+    if (FAILED(hr)) {
+      fprintf(stderr, "DetectInputCodepage() failed\n");
+    } else {
+      fprintf(mf, "IMultiLanguage2::DetectInputCodepage() found in the first %d bytes:\n", iSize);
+      for (i=0; i<iCount; i++) {
+	fprintf(mf, "CP %u, in %d%% of the text, with %d confidence.\n", (unsigned int)(dei[i].nCodePage), (int)(dei[i].nDocPercent), (int)(dei[i].nConfidence));
+      }
+    }
+  })
   if (*pszInType == '?') { /* Then detect the input data encoding, using the Unicode BOM */
     /* https://en.wikipedia.org/wiki/Byte_order_mark */
     if ((nTotal >= 3) && !strncmp(pszBuffer, "\xEF\xBb\xBF", 3)) { /* UTF-8 BOM */
@@ -687,19 +721,29 @@ int IsSwitch(char *pszArg) {
 #define S_IFIFO         0010000         /* pipe */
 #endif
 
-int is_redirected(FILE *f)
-    {
-    int err;
-    struct stat buf;			/* Use MSC 6.0 compatible names */
-    int h;
+int is_redirected(FILE *f) {
+  int err;
+  struct stat buf;			/* Use MSC 6.0 compatible names */
+  int h;
 
-    h = fileno(f);			/* Get the file handle */
-    err = fstat(h, &buf);		/* Get information on that handle */
-    if (err) return FALSE;		/* Cannot tell more if error */
-    return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
-            || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
-	   );
-    }
+  h = fileno(f);			/* Get the file handle */
+  err = fstat(h, &buf);			/* Get information on that handle */
+  if (err) return FALSE;		/* Cannot tell more if error */
+  return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
+	  || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
+	 );
+}
+
+int is_pipe(FILE *f) {
+  int err;
+  struct stat buf;			/* Use MSC 6.0 compatible names */
+  int h;
+
+  h = fileno(f);			/* Get the file handle */
+  err = fstat(h, &buf);			/* Get information on that handle */
+  if (err) return FALSE;		/* Cannot tell more if error */
+  return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
+}
 
 #ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
@@ -1332,3 +1376,53 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
   /* Unrecognized string */
   return FALSE;
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    DetectInputCodepage					      |
+|									      |
+|   Description     C front end to COM IMultiLanguage2::DetectInputCodepage() |
+|									      |
+|   Parameters:     Same as the COM API.				      |
+|                   							      |
+|   Returns	    Same as the COM API.				      |
+|									      |
+|   Notes	    See the IMultiLanguage2 interface doc:		      |
+|   https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa741001%28v%3dvs.85%29
+|		    							      |
+|   History								      |
+|    2020-05-10 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#if _DEBUG
+HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT *piSize, DetectEncodingInfo *lpInfo, INT *pnInfos) {
+  HRESULT hr;
+  IMultiLanguage2 *pML;
+
+  // Initialize COM
+  hr = CoInitialize(NULL);
+  if (FAILED(hr)) return hr;
+
+  // Obtain the MLang IMultiLanguage2 object interface
+  hr = CoCreateInstance(&CLSID_CMultiLanguage, NULL, CLSCTX_INPROC_SERVER, &IID_IMultiLanguage2, (LPVOID *)&pML);
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+  // Call the requested C++ method
+  hr = pML->lpVtbl->DetectInputCodepage(
+      pML,			// C++ this,
+      dwFlags,			// dwFlag,
+      dwPrefCP,			// dwPrefWinCodePage,
+      pszBuffer,		// *pSrcStr,
+      piSize,			// *pcSrcSize,
+      lpInfo,			// *lpEncoding,
+      pnInfos			// *pnScores
+  );
+  if (FAILED(hr)) goto cleanup_and_exit;
+
+cleanup_and_exit:
+  CoUninitialize();
+  
+  return hr;
+}
+#endif
