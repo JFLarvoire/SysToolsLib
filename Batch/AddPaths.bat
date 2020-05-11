@@ -17,13 +17,14 @@
 :#                  Display the result path list just once in the end.        #
 :#                  Added option -r to remove all my personal paths.          #
 :#   2020-02-24 JFL Use the new paths.bat, instead of the old addpath.bat.    #
+:#   2020-05-07 JFL Added option -S to _not_ set persistent system variables. #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-02-24"
+set "VERSION=2020-05-07"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "SDRV=%~d0"
@@ -39,6 +40,7 @@ echo.
 echo Options:
 echo   -?         Display this help
 echo   -r         Remove all paths added by this script
+echo   -S         No-System mode: Do not also set persistent system variables
 echo   -V         Display the script version and exit
 echo   -X         Display the commands generated and exit
 echo.
@@ -51,6 +53,7 @@ goto :eof
 set "CALL=call"
 set "EXEC="
 set "VERBOSE=0"
+set "NOSYSTEM=0"
 goto :get_args
 
 :next_arg
@@ -60,6 +63,7 @@ if .%1.==.. goto :go
 if "%~1"=="/?" goto :Help
 if "%~1"=="-?" goto :Help
 if "%~1"=="-r" call :Remove & goto :addpath.exit
+if "%~1"=="-S" set "NOSYSTEM=1" & goto :next_arg
 if "%~1"=="-v" set "VERBOSE=1" & goto :next_arg
 if "%~1"=="-V" (echo.%VERSION%) & goto :eof
 if "%~1"=="-X" set "CALL=echo" & set "EXEC=rem" & goto :next_arg
@@ -81,8 +85,10 @@ set "RETCODE=0"
 if exist "%~1" (
   %CALL% %ADDPATH% -q    -a "%~1"
   if errorlevel 1 set "RETCODE=1"
-  %CALL% %ADDPATH% -q -s -a "%~1"
-  if errorlevel 1 set "RETCODE=1"
+  if not "%NOSYSTEM%"=="1" (
+    %CALL% %ADDPATH% -q -s -a "%~1"
+    if errorlevel 1 set "RETCODE=1"
+  )
 )
 exit /b %RETCODE%
 
