@@ -219,6 +219,9 @@
 :#   2020-02-14 JFL Added routines :is_empty_dir, :has_files, :has_dirs,      #
 :#		    :test_errorlevel                                          #
 :#   2020-03-13 JFL Added routines :EchoVal[.Debug] and macros %ECHOVAL[.D]%. #
+:#   2020-04-26 JFL Renamed EchoVal* & ECHOVAL* as EchoVals* & ECHOVALS* resp.#
+:#		    Added routines :EchoStrings* and macro %ECHOSTRINGS*%.    #
+:#		    Fixed the %LCALL% mechanism in the absence of any arg.    #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -230,8 +233,8 @@ if not "%OS%"=="Windows_NT"     goto Err9X
 ver | find "Windows NT" >NUL && goto ErrNT
 
 :# Mechanism for calling subroutines in this library, either locally or from another script.
-:# Called by (%LCALL% :label [arguments]), with LCALL defined in the Call module below.
-if '%1'=='call' %*& exit /b
+:# Called by (%LCALL% :label [arguments]), with LCALL defined in the "sourcing" block below.
+if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
 set "VERSION=2019-10-05"
@@ -250,9 +253,11 @@ if '%1'=='-call' !ARGS:~1!& exit /b
 
 :# Mechanism for "sourcing" this library from another script.
 if '%1'=='source' (
-  endlocal &:# Define everything in the context of the caller script
+  endlocal & endlocal &:# Define everything in the context of the caller script
   if not "!!"=="" >&2 echo "%SFULL%" %1 Error: Must be called with DelayedExpansion ENABLED. & exit /b 1
   set ^"LCALL=call "%SFULL%" call^"	&rem :# This is the full path of this library's ARG0
+) else (
+  set "LCALL=call"
 ) &:# Now initialize the library modules, then return to the parent script.
 
 :# Initialize the most commonly used library components.
@@ -262,6 +267,13 @@ if '%1'=='source' exit /b 0	&:# If we're sourcing this lib, we're done.
 
 :# Go process command-line arguments
 goto Main
+
+:# Mechanism for calling subroutines in this library, either locally or from another script.
+:# Called by (%LCALL% :label [arguments]), with LCALL defined in the "sourcing" block above.
+:# Note: We cannot do (if '%1'=='call' %*&exit /b) above, as this fails if %* is empty.
+:call
+%*
+exit /b
 
 :Err9X
 echo Error: Does not work on Windows 9x
@@ -673,7 +685,7 @@ goto :eof
 :#                  EchoVars	    Display a set of variables name=value     #
 :#                  EchoStringVars  Display a string, then a set of variables #
 :#                  EchoArgs	    Display all arguments name=value          #
-:#                  EchoVal	    Display the value of one variable         #
+:#                  EchoVals	    Display the value of multiple variables   #
 :#		    All functions in that series have two other derivatives,  #
 :#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
 :#                  These display only in debug and verbose mode respectively,#
@@ -713,8 +725,13 @@ goto :eof
 :#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
 :#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
 :#                                                                            #
-:#                  %ECHOVAL%       Echo the value of variable ARG1           #
-:#                  %ECHOVAL.D%     Idem, but display it in debug mode only   #
+:#                  %ECHOVALS%      Echo the value of multiple variables      #
+:#                  %ECHOVALS.V%    Idem, but display them in verb. mode only #
+:#                  %ECHOVALS.D%    Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOSTRINGS%   Echo the value of multiple quoted strings #
+:#                  %ECHOSTRINGS.V% Idem, but display them in verb. mode only #
+:#                  %ECHOSTRINGS.D% Idem, but display them in debug mode only #
 :#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
@@ -739,7 +756,8 @@ goto :eof
 :#                                  Inherited. Default=. (empty string)       #
 :#                                                                            #
 :#  Notes           All output from these routines is sent to the log file.   #
-:#                  In debug mode, the debug output is also sent to stderr.   #
+:#                  The debug output is sent stdout or stderr, depending on   #
+:#                  variable %>DEBUGOUT%.				      # 
 :#                                                                            #
 :#                  Traced functions are indented, based on the call depth.   #
 :#                  Use %ECHO% to get the same indentation of normal output.  #
@@ -876,10 +894,18 @@ set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
 set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
-set "ECHOVAL=%LCALL% :EchoVal"
-set "ECHOVAL.D=%LCALL% :EchoVal.Debug"
+set "ECHOVALS=%LCALL% :EchoVals"
+set "ECHOVALS.V=%LCALL% :EchoVals.Verbose"
+set "ECHOVALS.D=%LCALL% :EchoVals.Debug"
+set "ECHOSTRINGS=%LCALL% :EchoStrings"
+set "ECHOSTRINGS.V=%LCALL% :EchoStrings.Verbose"
+set "ECHOSTRINGS.D=%LCALL% :EchoStrings.Debug"
 set "+INDENT=%LCALL% :Debug.IncIndent"
 set "-INDENT=%LCALL% :Debug.DecIndent"
+set ">MSGOUT.V[0]=rem"
+set ">MSGOUT.V[1]="
+set ">MSGOUT.D[0]=rem"
+set ">MSGOUT.D[1]=%>DEBUGOUT%"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -904,7 +930,7 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string alternance #%%\n%
   if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
@@ -1117,28 +1143,57 @@ set /a N=N+1
 shift
 goto EchoArgs.loop
 
-:# Echo the value of a variable
-:EchoVal	%1=VARNAME
-setlocal EnableExtensions EnableDelayedExpansion
-%>DEBUGOUT% echo.%INDENT%!%~1!
-if defined LOGFILE %>>LOGFILE% echo %INDENT%!%~1!
+:# Echo the value of multiple variables on the same line
+:EchoVals	%1=VARNAME, %2=VARNAME, ...
+setlocal EnableDelayedExpansion
+set ">MSGOUT="
+:EchoVals.1
+set "EchoVals.LINE=" &:# Use a qualified name, in case the caller passes a variable called LINE
+for %%v in (%*) do set "EchoVals.LINE=!EchoVals.LINE! !%%v!"
+if not defined EchoVals.LINE set "EchoVals.LINE= " &:# Make sure there's a head space even if the variable list was empty
+%>MSGOUT% echo.%INDENT%!EchoVals.LINE:~1!
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%!EchoVals.LINE:~1!
 endlocal & exit /b
 
-:EchoVal.Debug
-%IF_DEBUG% (
-  call :EchoVal %*
-) else ( :# Make sure the variables are logged
-  call :EchoVal %* >NUL 2>NUL
-)
-exit /b
+:EchoVals.Verbose
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.V[%VERBOSE%]!"
+goto :EchoVals.1
 
-:EchoVal.Verbose
+:EchoVals.Debug
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.D[%DEBUG%]!"
+goto :EchoVals.1
+
+:# Echo the value of multiple strings on the same line. They must not contain double quotes.
+:EchoStrings	%1=Quoted_String, %2=Quoted_String, ...
+setlocal DisableDelayedExpansion
+set ">MSGOUT="
+:EchoStrings.1
+set "LINE=" &:# No need for a qualified name, since we don't use caller variables
+for %%v in (%*) do set "LINE=%LINE% %%~v"
+if not defined LINE set "LINE= " &:# Make sure there's a head space even if the string list was empty
+%>MSGOUT% echo.%INDENT%%LINE:~1%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%LINE:~1%
+endlocal & exit /b
+
+:EchoStrings.Verbose
+setlocal DisableDelayedExpansion
 %IF_VERBOSE% (
-  call :EchoVal %*
+  set ">MSGOUT="
 ) else ( :# Make sure the variables are logged
-  call :EchoVal %* >NUL 2>NUL
+  set ">MSGOUT=rem"
 )
-exit /b
+goto :EchoStrings.1
+
+:EchoString1.Debug
+setlocal DisableDelayedExpansion
+%IF_DEBUG% (
+  set ">MSGOUT=%>DEBUGOUT%"
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
 
 :Debug.End
 
