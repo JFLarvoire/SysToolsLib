@@ -4,6 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-05-16
+### New
+- Batch/AddPaths.bat: Added option -S to _not_ set the system variables.
+- Batch/Library.bat: Added routines :EchoStrings* and macro %ECHOSTRINGS*%.
+
+### Changed
+- Batch/Library.bat: Renamed EchoVal* & ECHOVAL* as EchoVals* & ECHOVALS* resp.
+- C/SRC/conv.c: Test IMultiLanguage2::DetectInputCodepage() in debug mode.
+
+### Fixed
+- Batch/Library.bat: Fixed the %LCALL% mechanism in the absence of any arg.
+
 ## [Unreleased] 2020-04-25
 ### Fixed
 - C/SRC/1clip.c, 2clip.c, 2note.c: Fixed incorrectly formatted error messages.
