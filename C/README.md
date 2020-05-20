@@ -93,8 +93,8 @@ In all cases:
         make
 
 
-Quick guide for rebuilding everything in Linux
-----------------------------------------------
+Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS)
+----------------------------------------------------------------
 
 1. Download the whole SysToolsLib C folder contents into a $WORKDIR directory.
 
