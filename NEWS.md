@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.18] 2020-05-20
+### New
+- Batch/Library.bat: Added routine :AbsDirName.
+
 ## [Unreleased] 2020-05-16
 ### New
 - Batch/AddPaths.bat: Added option -S to _not_ set the system variables.

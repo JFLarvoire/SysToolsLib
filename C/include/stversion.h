@@ -22,8 +22,8 @@
 #define	_STVERSION_H	1
 
 
-#define SYSTOOLSLIB_VERSION         2019,6,15,0
-#define SYSTOOLSLIB_VERSION_STR     "2019-06-15"
+#define SYSTOOLSLIB_VERSION         2020,5,20,0
+#define SYSTOOLSLIB_VERSION_STR     "2020-05-20"
 #define SYSTOOLSLIB_NAME            "System Tools Library"
 
 
