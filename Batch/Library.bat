@@ -3270,6 +3270,13 @@ endlocal & set "%~2=%NAME%" & exit /b
 
 :#----------------------------------------------------------------------------#
 
+:# Get the absolute pathname of a (possibly relative) existing directory name
+:absdirname %1=pathname %2=OutVar
+for /f "delims=" %%p in ('cd %1 ^& cd') do @set "%2=%%p"
+exit /b
+
+:#----------------------------------------------------------------------------#
+
 :has_wildcards NAME	:# Return ERRORLEVEL 0 if a name contains wildcards
 setlocal EnableExtensions EnableDelayedExpansion
 set "NAME=%~1"
