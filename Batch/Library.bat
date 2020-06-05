@@ -222,6 +222,9 @@
 :#   2020-04-26 JFL Renamed EchoVal* & ECHOVAL* as EchoVals* & ECHOVALS* resp.#
 :#		    Added routines :EchoStrings* and macro %ECHOSTRINGS*%.    #
 :#		    Fixed the %LCALL% mechanism in the absence of any arg.    #
+:#   2020-06-03 JFL Added a new version of :basename.                         #
+:#   2020-06-04 JFL Split :noww into :Now.wmic and :GetWeekDay.               #
+:#   2020-06-03 JFL Added a :return routine, for lightweight debugging.       #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -237,7 +240,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
-set "VERSION=2019-10-05"
+set "VERSION=2020-06-05"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -1018,6 +1021,16 @@ setlocal DisableDelayedExpansion
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
 endlocal
 goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
+
+:# A lightweight alternative for the %RETURN% macro.
+:# Only traces the %ERRORLEVEL%, but not the variables returned.
+:# Trace the return from a subroutine, and do the actual return, in a single call
+:Return
+setlocal
+set "ERR=%~1"
+if not defined ERR set "ERR=%ERRORLEVEL%"
+%>DEBUGOUT% echo   exit /b %ERR%
+2>NUL (goto) & exit /b %ERR% &:# Endlocal and pop one call stack, then return to the upper level
 
 :# Routine to set the VERBOSE mode, in response to the -v argument.
 :Verbose.Off
@@ -3241,6 +3254,23 @@ set "%RETVAR%=%NAME%"
 
 :#----------------------------------------------------------------------------#
 
+:# Simpler version not supporting wild-cards, but that works with any absolute or relative pathname
+
+:# Returns the directory part of the pathname, so that %DIRVAR%\NAME refers to that file
+:basename PATHNAME DIRVAR
+setlocal EnableExtensions EnableDelayedExpansion
+set "DIR=%~1"
+:dirname.next
+if "!DIR:~-1!"=="\" set "DIR=!DIR:~0,-1!" & goto :dirname.done
+if "!DIR:~-1!"==":" set "DIR=!DIR!." & goto :dirname.done
+set "DIR=!DIR:~0,-1!"
+if defined DIR goto :dirname.next
+set "DIR=."			&:# If empty, return the current directory
+:dirname.done
+endlocal & set "%~2=%DIR%" & exit /b
+
+:#----------------------------------------------------------------------------#
+
 :dirname PATHNAME DIRVAR	:# Returns the directory part of the pathname
 setlocal EnableExtensions EnableDelayedExpansion
 set "DIR=%~1"
@@ -3544,7 +3574,7 @@ endlocal & set "RETVAL=%a%" & goto :eof
 :#----------------------------------------------------------------------------#
 
 :now
-setlocal enableextensions enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 :# First get the short date format from the Control Panel data in the registry
 for /f "tokens=3" %%a in ('reg query "HKCU\Control Panel\International" /v sShortDate 2^>NUL ^| findstr "REG_SZ"') do set "SDFTOKS=%%a"
 if .%DEBUG_NOW%.==.1. echo set "SDFTOKS=!SDFTOKS!"
@@ -3586,7 +3616,7 @@ endlocal & set "YEAR=%YEAR%" & set "MONTH=%MONTH%" & set "DAY=%DAY%" & set "HOUR
 
 :# Initial implementation, with a less detailed output, but simple and guarantied to work in all cases.
 :now
-setlocal enableextensions enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 :# Get the time, including seconds. ('TIME /T' returns MM:SS only)
 for /f "delims=.," %%t in ("%TIME%") do SET T=%%t
 :# Change the optional leading space to a 0. (For countries that use a 12-hours format)
@@ -3609,7 +3639,7 @@ endlocal & set "RETVAL=%NOW%" & set "NOW=%NOW%" & goto :eof
 :# This can easily be adapted to other languages: French=(jj-mm-aa) German=(TT-MM-JJ) Spanish=(dd-mm-aa) Japanese ([]-[]-[])
 :# But Chinese outputs a string without dashes: ([][][]) so this would be more difficult.
 :now
-setlocal enableextensions enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 set "D="
 for /f "tokens=2 delims=:" %%a in ('echo.^|date') do (
   if "!D!"=="" ( set "D=%%a" ) else ( set "O=%%a" )
@@ -3625,17 +3655,28 @@ endlocal & SET "YEAR=%yy%" & SET "MONTH=%mm%" & SET "DAY=%dd%" & goto :eof
 
 :#----------------------------------------------------------------------------#
 
-:# Another implementation based on wmic. Not available in early XP versions?
+:# Get the current date/time
+:# Implementation based on wmic. Not available in early XP versions?
 :# Just as fast as the pure batch version using reg for internationalization.
 
-:noww
-setlocal enableextensions
-for %%i in ("0=Sun" "1=Mon" "2=Tue" "3=Wed" "4=Thu" "5=Fri" "6=Sat") do set "wd%%~i"
+:Now.wmic
+setlocal EnableExtensions
 for /f %%i in ('WMIC OS GET LocalDateTime /value') do for /f "tokens=2 delims==" %%j in ("%%i") do set "dt=%%j"
-:# for /f %%i in ('WMIC PATH Win32_LocalTime GET DayOfWeek /value') do for /f "tokens=2 delims==" %%j in ("%%i") do (
-:#   call set "dt=%%wd%%j%% %dt:~,4%-%dt:~4,2%-%dt:~6,2% %dt:~8,2%:%dt:~10,2%:%dt:~12,5%"
-:# )
 endlocal & set "YEAR=%dt:~,4%" & set "MONTH=%dt:~4,2%" & set "DAY=%dt:~6,2%" & set "HOUR=%dt:~8,2%" & set "MINUTE=%dt:~10,2%" & set "SECOND=%dt:~12,2%" & set "MS=%dt:~15,3%"
+exit /b
+
+:#----------------------------------------------------------------------------#
+
+:GetWeekDay
+setlocal EnableExtensions EnableDelayedExpansion
+for %%i in ("0=Sun" "1=Mon" "2=Tue" "3=Wed" "4=Thu" "5=Fri" "6=Sat") do set "wd%%~i"
+:# The first for trims spaces around the answer; The second for extracts the value after the = sign.
+for /f %%i in ('WMIC PATH Win32_LocalTime GET DayOfWeek /value') do for /f "tokens=2 delims==" %%j in ("%%i") do (
+  set "WEEKDAY=%%j"
+  set "WEEKDAYNAME=!wd%%j!"
+)
+endlocal & set "WEEKDAY=%WEEKDAY%" & set "WEEKDAYNAME=%WEEKDAYNAME%"
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
