@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-06-26
+### New
+- MsvcLibX\src\asprintf.c: Added GNU C library routine asprintf().
+
+## [Unreleased] 2020-06-05
+### New
+- Batch/Library.bat: Added a new version of :basename.
+  Split :noww into :Now.wmic and :GetWeekDay.
+  Added a :return routine, for lightweight debugging.
+
 ## [1.18] 2020-05-20
 ### New
 - Batch/Library.bat: Added routine :AbsDirName.
