@@ -22,11 +22,12 @@
 :#                  in the pipe. This is possible now that flipmails.tcl      #
 :#                  correctly handles code pages, like my C tools did.        #
 :#   2018-10-18 JFL Added options -?, -A, -U, -V, -X.			      #
+:#   2020-07-01 JFL Added options -h, -n.            			      #
 :#                                                                            #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2018-10-18"
+set "VERSION=2020-07-01"
 set ^"ARGS=%*^"					&:# Argument line
 goto :main
 
@@ -80,6 +81,8 @@ echo.
 echo 12 Options:
 echo   -?    Display this help and exit
 echo   -A    Filter ANSI characters. Default only for 82w.bat
+echo   -h    Input HTML from the clipboard
+echo   -n    Output to Notepad instead of the clipboard
 echo   -U    Filter UTF-8 characters. Default
 echo   -V    Display this script version and exit
 echo   -X    Display the commands to execute, but don't run them
@@ -95,6 +98,8 @@ exit /b
 :# Actually use UTF-8 in all cases now
 set "NEWCP=65001"
 set "_CLIPMODE="
+set "INPUT_CMD=1clip"
+set "OUTPUT_CMD=2clip"
 set "EXEC="
 set "|=|"
 set ">NUL=>NUL"
@@ -105,6 +110,8 @@ call :PopArg
 if [%ARG%]==[-?] goto :help
 if [%ARG%]==[/?] goto :help
 if [%ARG%]==[-A] set "_CLIPMODE= -A" & goto next_arg
+if [%ARG%]==[-h] set "INPUT_CMD=%INPUT_CMD% %ARG%" & goto next_arg
+if [%ARG%]==[-n] set "OUTPUT_CMD=2note%OUTPUT_CMD:~5%" & goto next_arg
 if [%ARG%]==[-U] set "_CLIPMODE= -U" & goto next_arg
 if [%ARG%]==[-V] (echo.%VERSION%) & exit /b
 if [%ARG%]==[-X] set "EXEC=echo" & set "|=^|" & set ">NUL=" & goto next_arg
@@ -118,7 +125,10 @@ for /f "tokens=2 delims=:" %%n in ('chcp') do for %%p in (%%n) do set OLDCP=%%p
 :# Change to the default system code page if needed
 if not "%OLDCP%"=="%NEWCP%" %EXEC% chcp %NEWCP% %>NUL%
 
-%EXEC% 1clip%_CLIPMODE% %|% %ARGS% %|% 2clip%_CLIPMODE%
+set "INPUT_CMD=%INPUT_CMD%%_CLIPMODE%"
+set "OUTPUT_CMD=%OUTPUT_CMD%%_CLIPMODE%"
+
+%EXEC% %INPUT_CMD% %|% %ARGS% %|% %OUTPUT_CMD%
 
 :# Return to the initial code page if it was different
 if not "%OLDCP%"=="%NEWCP%" %EXEC% chcp %OLDCP% %>NUL%
