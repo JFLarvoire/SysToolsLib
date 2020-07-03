@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-07-02
+### New
+- Batch/12.bat: Added options -h, -n.
+- Batch/md2h.bat: Added options -c, -p, -s to use specific github servers.
+  Added support for per-server authentication tokens, and option -t to use a specific token.
+
 ## [Unreleased] 2020-06-26
 ### New
 - MsvcLibX\src\asprintf.c: Added GNU C library routine asprintf().
