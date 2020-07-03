@@ -21,13 +21,16 @@
 :#   2019-11-30 JFL Created this script.				      #
 :#   2019-12-09 JFL Display which server was used.			      #
 :#   2019-12-13 JFL Display an error message if curl failed.		      #
+:#   2020-07-03 JFL Added options -c & -t to select the github server to use. #
+:#		    Added option -t to use an authentication token.           #
+:#		    Added option -s to use a given github server API URL.     #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2019-12-13"
+set "VERSION=2020-07-03"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -36,11 +39,12 @@ set "SFULL=%~f0"		&:# Script full pathname
 set ^"ARG0=%0^"			&:# Script invokation name
 set ^"ARGS=%*^"			&:# Argument line
 
-set "GITHUB=https://api.github.com"
+set "GITHUB.COM=https://api.github.com"	&:# URL of the public GitHub API
+set "GITHUB.CORP="			&:# URL of the corporate GitHub API
 :# Within HPE, prefer HPE's corporate github server
 :# Also this avoids having to configure the http_proxy environment variable.
 nslookup github.hpe.com. 2>NUL | findstr /r /c:"[ 	]github.hpe.com$" >NUL
-if not errorlevel 1 set "GITHUB=https://github.hpe.com/api/v3"
+if not errorlevel 1 set "GITHUB.CORP=https://github.hpe.com/api/v3"
 
 goto :main
 
@@ -90,13 +94,20 @@ echo.
 echo Usage: %SCRIPT% [OPTIONS] PATHNAME
 echo.
 echo Options:
-echo   -?    Display this help message and exit
-echo   -v    Display curl progress messages
-echo   -V    Display the script version and exit
-echo   -X    Display the commands to execute, but don't run them
+echo   -?       Display this help message and exit
+echo   -c       Use the Corporate GitHub (Default: Use it if possible)
+echo   -p       Use the Public GitHub (Default: Use it if no alternative)
+echo   -s URL   Use the GitHub API at this URL
+echo   -t TOKEN Use this authentication token. (See note 2)
+echo   -v       Display curl progress messages
+echo   -V       Display the script version and exit
+echo   -X       Display the commands to execute, but don't run them
 echo.
-echo Note: This program uses curl.exe. For old Windows versions that don't have it,
-echo       curl.exe can be downloaded from https://curl.haxx.se/windows/
+echo Notes:
+echo 1) This program uses curl.exe. For old Windows versions that don't have it,
+echo    curl.exe can be downloaded from https://curl.haxx.se/windows/
+echo 2) By default, uses the authentication token defined in the optional file
+echo    "%%USERPROFILE%%\.config\md2h\SERVER.DOMAIN.COM.txt"
 exit /b 0
 
 :#----------------------------------------------------------------------------#
@@ -110,16 +121,22 @@ set "EXEC="
 set ">=>"
 set ">>=>>"
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
+set "GITHUB="
+set "TOKEN="
 
 goto :get_arg
 :next_arg
 shift
 :get_arg
-if [%1]==[] goto :start
 set "ARG=%~1"
+if [%1]==[] goto :start
 if "%ARG%"=="-?" goto :help
 if "%ARG%"=="/?" goto :help
+if "%ARG%"=="-c" set "GITHUB=%GITHUB.CORP%" & goto :next_arg
 if "%ARG%"=="-d" set "DEBUG=1" & set "ECHO.D=echo" & goto :next_arg
+if "%ARG%"=="-p" set "GITHUB=%GITHUB.COM%" & goto :next_arg
+if "%ARG%"=="-s" set "GITHUB=%~2" & shift & goto :next_arg
+if "%ARG%"=="-t" set "TOKEN=%~2" & shift & goto :next_arg
 if "%ARG%"=="-v" set "OPTS=%OPTS: -s=%" & goto :next_arg
 if "%ARG%"=="-V" (echo %VERSION%) & exit /b
 if "%ARG%"=="-X" set "EXEC=echo" & set ">=^>" & set ">>=^>^>" & goto :next_arg
@@ -134,6 +151,8 @@ if not exist "%MD%" (
   >&2 echo Error: File "%MD%" not found
   exit /b 1
 )
+if not defined GITHUB set "GITHUB=%GITHUB.CORP%"
+if not defined GITHUB set "GITHUB=%GITHUB.COM%"
 %ECHO.D% # Server: %GITHUB%
 for %%f in ("%MD%") do set "HTML=%TEMP%\%%~nf.htm"
 %ECHO.D% # HTML file: "%HTML%"
@@ -158,6 +177,13 @@ for /f "delims=/ tokens=2" %%u in ("%GITHUB%") do set "SERVER=%%u" &:# Extract t
 call :condquote NXMD
 echo # Converting %NXMD% using %SERVER%
 
+:# Load the authentication token from "%USERPROFILE%\.config\md2h\%SERVER%.txt" if present
+if not defined TOKEN (
+  for %%f in ("%USERPROFILE%\.config\md2h\%SERVER%.txt") do if exist %%f (
+    for /f "delims=" %%t in (%%~sf) do set "TOKEN=%%~t"
+  )
+)
+
 set "LT=<"
 set "GT=>"
 
@@ -169,6 +195,7 @@ set "GT=>"
 >> "!HTML!" echo !LT!/head!GT!
 
 >> "!HTML!" echo !LT!body!GT!
+if defined TOKEN set OPTS=%OPTS% -H "Authorization: token %TOKEN%"
 %TRUE.EXE% &:# Set ERRORLEVEL to 0. Useful in no-exec mode to avoid triggering error messages below.
 %EXEC% curl%OPTS% %GITHUB%/markdown/raw -X "POST" -H "Content-Type: text/plain" --data-binary "@!MD!" %>>% "!HTML!"
 if errorlevel 9009 (
