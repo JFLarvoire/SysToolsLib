@@ -27,6 +27,7 @@
 *    2017-01-06 JFL Added an optional data compatison routine for multimaps.  *
 *		    Create with NewMMap(datacmp) or NewIMMap(datacmp).	      *
 *    2020-04-20 JFL Added support for MacOS.				      *
+*    2020-07-29 JFL MsvcLibX now supports a standard snprintf().	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,13 +35,13 @@
 
 /* Implemented as a self-balancing binary tree */
 #include "tree.h"
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #ifdef _WIN32
 /* These are standard routines, but Microsoft thinks not */
 #define strdup _strdup
-#define snprintf _snprintf
 #endif /* _WIN32 */
 
 #if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */

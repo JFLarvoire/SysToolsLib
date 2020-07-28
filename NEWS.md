@@ -4,6 +4,21 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-07-29
+### New
+- C/MsvcLibX/src/snprintf.c: Added fixed versions of snprintf() and vsnprintf() for old versions of MSVC.
+- C/MsvcLibX/src/asprintf.c: Added asprintf() and vasprintf() routines emulating those from the GNU C library.
+- C/MsvcLibX/src/aswprintf.c: Added wide character derivatives of asprintf() and vasprintf().
+- C/MsvcLibX/src/dasprintf.c: Added asprintf() and vasprintf() derivatives used for MsvcLibX debugging.
+- C/MsvcLibX/src/daswprintf.c: Added aswprintf() and vaswprintf() derivatives used for MsvcLibX debugging.
+
+### Changed
+- C/MsvcLibX/include/stdio.h: Define all the above.
+
+### Fixed
+- C/Include/debugm.h: Rewrote debug_printf() to use the standard asprintf() if available; Else use the fixed emulations.
+  This should fix occasional crashes of programs, directly or indirectly using broken versions of MSVC's _snprintf().
+
 ## [Unreleased] 2020-07-02
 ### New
 - Batch/12.bat: Added options -h, -n.

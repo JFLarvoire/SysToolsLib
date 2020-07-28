@@ -138,6 +138,8 @@
 *		    and WIN95 when used with undefined macros.		      *
 *    2020-07-22 JFL Fixed bug in debug_vsprintf(): Make sure _vsnprintf()     *
 *		    in try_vsnprintf() always appends a NUL to its output.    *
+*    2020-07-24 JFL Rewrote debug_printf() to use the standard asprintf() as  *
+*		    much as possible.					      *
 *		    							      *
 *	 (C) Copyright 2016 Hewlett Packard Enterprise Development LP	      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -171,15 +173,95 @@ extern "C" {
 #define DEBUG_TLS
 #endif
 
-#ifndef _MSC_VER /* Emulate Microsoft's _vsnprintf() using the standard vsnprintf() */
-#define _VSNPRINTF_EMULATION \
-int _vsnprintf(char *pBuf, int iBufSize, const char *pszFormat, va_list vl) {	  \
-  int iRet = vsnprintf(pBuf, iBufSize, pszFormat, vl); /* Always appends an \0 */ \
-  if (iRet >= iBufSize) iRet = -1; /* So if need iBufSize, output is truncated */ \
-  return iRet;									  \
+#if defined(HAS_MSVCLIBX) || defined(GNU_SOURCE)  /* If we have MsvcLibX or GNU asprintf() functions, use them */
+#define _DEBUG_USE_ASPRINTF 1
+#endif
+
+/* #undef _DEBUG_USE_ASPRINTF // For testing the alternate implementation */
+
+#if _DEBUG_USE_ASPRINTF || (!defined(_MSC_VER)) || defined(_UCRT)  /* If this library has a standard vsnprintf() function, use it */
+#define _DEBUG_VSNPRINTF_DEFINITION
+#define debug_vsnprintf vsnprintf
+#elif !defined(_MSDOS)	    /* Else redefine them for MSVC versions before the UCRT was introduced, except for MS-DOS which does not support very large macros like that */
+#define _DEBUG_VSNPRINTF_DEFINITION									 	\
+int debug_vsnprintf(char *pBuf, size_t nBufSize, const char *pszFormat, va_list vl) {                           \
+  char *pBuf2;                                                                                                  \
+  int iRet;                                                                                                     \
+  va_list vl0;                                                                                                  \
+  /* First try it with the original arguments */                                                                \
+  /* This consumes the vl arguments, which needs to be done once */                                             \
+  /* This also optimizes the number of calls, in the normal case where the output buffer was sized correctly */ \
+  va_copy(vl0, vl);	/* Save a copy of the caller's va_list */                                               \
+  iRet = _vsnprintf(pBuf, nBufSize, pszFormat, vl);                                                             \
+  if (iRet >= 0) {	/* Success, the output apparently fits in the buffer */                                 \
+    if ((size_t)iRet == nBufSize) if (pBuf && nBufSize) pBuf[nBufSize-1] = '\0'; /* Fix the missing NUL */      \
+    va_end(vl0);                                                                                                \
+    return iRet;                                                                                                \
+  }                                                                                                             \
+  /* OK, this does not fit. Try it with larger and larger buffers, until we know the full output size */        \
+  iRet = vasprintf(&pBuf2, pszFormat, vl0);                                                                     \
+  if (iRet >= 0) {	/*  Success at last, now we know the necessary size */                                  \
+    if (pBuf && nBufSize) {	/* Copy whatever fits in the output buffer */                                   \
+      if (nBufSize-1) memcpy(pBuf, pBuf2, nBufSize-1);                                                          \
+      pBuf[nBufSize-1] = '\0';	/* Make sure there's a NUL in the end */                                        \
+    }                                                                                                           \
+    free(pBuf2);                                                                                                \
+  }                                                                                                             \
+  va_end(vl0);                                                                                                  \
+  return iRet;                                                                                                  \
 }
-#else /* Use Microsoft's own */
-#define _VSNPRINTF_EMULATION
+#endif
+
+#if _DEBUG_USE_ASPRINTF  /* If we have MsvcLibX or GNU asprintf() functions, use them */
+#define _DEBUG_ASPRINTF_DEFINITION
+#define debug_vasprintf vasprintf
+#define debug_asprintf  asprintf
+#elif !defined(_MSDOS)	    /* Else redefine them, except for MS-DOS which does not support very large macros like that */
+#define _DEBUG_ASPRINTF_DEFINITION							    \
+int debug_vasprintf(char **ppszBuf, const char *pszFormat, va_list vl) {		    \
+  char *pBuf, *pBuf2;									    \
+  int n, nBufSize = 64;									    \
+  va_list vl0, vl2;									    \
+  /* First try it once with the original va_list (When nBufSize == 128) */		    \
+  /* This consumes the vl arguments, which needs to be done once */			    \
+  va_copy(vl0, vl);	/* Save a copy of the caller's va_list */			    \
+  for (pBuf = NULL; (pBuf2 = (char *)realloc(pBuf, nBufSize *= 2)) != NULL; ) {		    \
+    va_copy(vl2, vl0);									    \
+    n = debug_vsnprintf(pBuf = pBuf2, nBufSize, pszFormat, (nBufSize == 128) ? vl : vl2);   \
+    va_end(vl2);									    \
+    if ((n >= 0) && (n < nBufSize)) { /* Success, now we know the necessary size */	    \
+      pBuf2 = (char *)realloc(pBuf, n+1); /* Free the unused space in the end - May fail */ \
+      *ppszBuf = pBuf2 ? pBuf2 : pBuf;	  /* Return the valid one */			    \
+      va_end(vl0);									    \
+      return n;										    \
+    } /* Else if n == nBufSize, actually not success, as there's no NUL in the end */	    \
+  }											    \
+  va_end(vl0);										    \
+  return -1;										    \
+}											    \
+int debug_asprintf(char **ppszBuf, const char *pszFormat, ...) {			    \
+  int n;										    \
+  va_list vl;										    \
+  va_start(vl, pszFormat);								    \
+  n = debug_vasprintf(ppszBuf, pszFormat, vl);						    \
+  va_end(vl);										    \
+  return n;										    \
+}
+#endif
+
+#if defined(HAS_MSVCLIBX)  /* If we have the MsvcLibX dasprintf() functions, use it */
+#define _DEBUG_DASPRINTF_DEFINITION
+#define debug_dasprintf dasprintf
+#else
+#define _DEBUG_DASPRINTF_DEFINITION							\
+char *debug_dasprintf(const char *pszFormat, ...) {					\
+  char *pszBuf = NULL;									\
+  va_list vl;										\
+  va_start(vl, pszFormat);								\
+  debug_vasprintf(&pszBuf, pszFormat, vl); /* Updates pszBuf only if successful */	\
+  va_end(vl);										\
+  return pszBuf;									\
+}
 #endif
 
 /* Conditional compilation based on Microsoft's standard _DEBUG definition */
@@ -197,58 +279,36 @@ int (*pdput)(const char *) = debug_put; /* Debug output routine. Default: debug_
 #define DEBUG_GLOBALS DEBUG_GLOBAL_VARS
 #else /* !defined(_MSDOS) */
 #define DEBUG_GLOBALS \
-DEBUG_GLOBAL_VARS									\
-_VSNPRINTF_EMULATION									\
-/* Wrapper around _vsnprintf() that avoids consuming the va_list arguments */		\
-static int try_vsnprintf(char *pBuf, int iBufSize, const char *pszFormat, va_list vl) { \
-  int iRet;										\
-  va_list vl2;										\
-  va_copy(vl2, vl);									\
-  iRet = _vsnprintf(pBuf, iBufSize, pszFormat, vl2);					\
-  if (iRet == iBufSize) iRet = -1; /* No NUL was written, this is not acceptable */	\
-  va_end(vl2);										\
-  return iRet;										\
-}											\
-char *debug_vsprintf(char *pszFormat, va_list vl) {					\
-  char *pszBuf = NULL;									\
-  int n = 0, nBufSize = 64;								\
-  do {pszBuf = (char *)realloc(pszBuf, nBufSize *= 2);} while (				\
-    pszBuf && ((n = try_vsnprintf(pszBuf, nBufSize, pszFormat, vl)) == -1)		\
-  );											\
-  if (!pszBuf) return NULL;								\
-  return (char *)realloc(pszBuf, n+1);							\
-}											\
-char *debug_sprintf(char *pszFormat, ...) {						\
-  char *pszBuf;										\
-  va_list vl;										\
-  va_start(vl, pszFormat);								\
-  pszBuf = debug_vsprintf(pszFormat, vl);						\
-  va_end(vl);										\
-  return pszBuf;									\
-}											\
-int debug_printf(char *pszFormat, ...) {						\
-  char *pszBuf1 = NULL, *pszBuf2 = NULL;						\
-  int n = 0;										\
-  va_list vl;										\
-  va_start(vl, pszFormat);								\
-  pszBuf1 = debug_vsprintf(pszFormat, vl);						\
-  va_end(vl);										\
-  if (!pszBuf1) return 0;								\
-  pszBuf2 = debug_sprintf("%*s%s", iIndent, "", pszBuf1);				\
-  if (pszBuf2) n = (int)strlen(pszBuf2);						\
-  pdput(pszBuf2);									\
-  fflush(stdout);									\
-  free(pszBuf1); free(pszBuf2);								\
-  return n;										\
+DEBUG_GLOBAL_VARS									    \
+_DEBUG_VSNPRINTF_DEFINITION								    \
+_DEBUG_ASPRINTF_DEFINITION								    \
+_DEBUG_DASPRINTF_DEFINITION								    \
+int debug_printf(const char *pszFormat, ...) {						    \
+  char *pszBuf1, *pszBuf2;								    \
+  int n;										    \
+  va_list vl;										    \
+  va_start(vl, pszFormat);								    \
+  n = debug_vasprintf(&pszBuf1, pszFormat, vl);						    \
+  va_end(vl);										    \
+  if (n == -1) return -1; /* No memory for generating the debug output */		    \
+  n = debug_asprintf(&pszBuf2, "%*s%s", iIndent, "", pszBuf1);				    \
+  if (n == -1) goto abort_debug_printf;							    \
+  pdput(pszBuf2); /* Output everything in a single system call. Useful if multithreaded. */ \
+  fflush(stdout); /* Make sure we see the output. Useful to see everything before a crash */\
+  free(pszBuf2);									    \
+abort_debug_printf:									    \
+  free(pszBuf1);									    \
+  return n;										    \
 }
 #endif /* defined(_MSDOS) */
 
 extern int iDebug;	/* Global variable enabling of disabling debug messages */
 extern int (*pdput)(const char *);	/* Pointer to the debug puts routine */
 #if !defined(_MSDOS)
-extern int debug_printf(char *fmt,...); /* Print debug messages */
-extern char *debug_sprintf(char *fmt,...); /* Print debug messages to a new buffer */
-extern char *debug_vsprintf(char *fmt, va_list vl); /* Common subroutine of the previous two */
+extern int debug_printf(const char *fmt, ...);		  /* Print debug messages */
+extern int debug_asprintf(char **, const char *fmt, ...); /* Print debug messages to a new buffer */
+extern int debug_vasprintf(char **, const char *fmt, va_list vl); /* Common subroutine of the previous two */
+extern char *debug_dasprintf(const char *fmt, ...);	  /* Shorter alternative used by other macros below */
 #endif /* !defined(_MSDOS) */
 #define DEBUG_ON() iDebug = 1		/* Turn debug mode on */
 #define DEBUG_MORE() iDebug += 1	/* Increase the debug level */
@@ -332,25 +392,25 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
   DEBUG_LEAVE(("return %p; // \n", DEBUG_p)); if (DEBUG_IS_ON()) printf args; return DEBUG_p;)
 #else /* !defined(_MSDOS) */
 #define RETURN_COMMENT(args) DEBUG_DO(char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return; // %s", DEBUG_buf)); return;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return; // %s", DEBUG_buf)); free(DEBUG_buf); return;)
 #define RETURN_CONST_COMMENT(k, args) DEBUG_DO(char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %s; // %s", #k, DEBUG_buf)); free(DEBUG_buf); return k;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %s; // %s", #k, DEBUG_buf)); free(DEBUG_buf); return k;)
 #define RETURN_INT_COMMENT(i, args) DEBUG_DO(int DEBUG_i = (i); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %d; // %s", DEBUG_i, DEBUG_buf)); free(DEBUG_buf); return DEBUG_i;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %d; // %s", DEBUG_i, DEBUG_buf)); free(DEBUG_buf); return DEBUG_i;)
 #define RETURN_STRING_COMMENT(s, args) DEBUG_DO(char *DEBUG_s = (s); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_s, DEBUG_buf)); free(DEBUG_buf); return DEBUG_s;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_s, DEBUG_buf)); free(DEBUG_buf); return DEBUG_s;)
 #define RETURN_CHAR_COMMENT(c, args) DEBUG_DO(char DEBUG_c = (c); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %c; // %s", DEBUG_c, DEBUG_buf)); free(DEBUG_buf); return DEBUG_c;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %c; // %s", DEBUG_c, DEBUG_buf)); free(DEBUG_buf); return DEBUG_c;)
 #define RETURN_BOOL_COMMENT(b, args) DEBUG_DO(int DEBUG_b = (b); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_b ? "TRUE" : "FALSE", DEBUG_buf)); free(DEBUG_buf); return DEBUG_b;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_b ? "TRUE" : "FALSE", DEBUG_buf)); free(DEBUG_buf); return DEBUG_b;)
 #define RETURN_PTR_COMMENT(p, args) DEBUG_DO(void *DEBUG_p = (p); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %p; // %s", DEBUG_p, DEBUG_buf)); free(DEBUG_buf); return DEBUG_p;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %p; // %s", DEBUG_p, DEBUG_buf)); free(DEBUG_buf); return DEBUG_p;)
 #define RETURN_LONG_COMMENT(l, args) DEBUG_DO(long DEBUG_l = (l); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %l; // %s", DEBUG_l, DEBUG_buf)); free(DEBUG_buf); return DEBUG_l;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %l; // %s", DEBUG_l, DEBUG_buf)); free(DEBUG_buf); return DEBUG_l;)
 #define RETURN_CSTRING_COMMENT(s, args) DEBUG_DO(const char *DEBUG_s = (s); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_s, DEBUG_buf)); free(DEBUG_buf); return DEBUG_s;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_s, DEBUG_buf)); free(DEBUG_buf); return DEBUG_s;)
 #define RETURN_CPTR_COMMENT(p, args) DEBUG_DO(const void *DEBUG_p = (p); char *DEBUG_buf = NULL; \
-  if (DEBUG_IS_ON()) DEBUG_buf = debug_sprintf args; DEBUG_LEAVE(("return %p; // %s", DEBUG_p, DEBUG_buf)); free(DEBUG_buf); return DEBUG_p;)
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %p; // %s", DEBUG_p, DEBUG_buf)); free(DEBUG_buf); return DEBUG_p;)
 #endif /* defined(_MSDOS) */
 
 #define SET_DEBUG_PUT(pFunc) pdput = pFunc /* Set the debug put routine */
