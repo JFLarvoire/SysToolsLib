@@ -9,7 +9,7 @@
 *		    This allows building it without needing itself for	      *
 *		    converting UTF-8 back to CP 1252.			      *
 *		    							      *
-*		    The default character sets (w for input, . for output)    *		    							      *
+*		    The default character sets (w for input, . for output)    *
 *		    are chosen to allow typing a Windows file on the console, *
 *		    by running: type WINDOWS_FILE | conv		      *
 *		    or simply: conv <WINDOWS_FILE			      *
@@ -55,6 +55,10 @@
 *		    Version 2.1.					      *
 *    2020-05-10 JFL Test IMultiLanguage2::DetectInputCodepage() in debug mode.*
 *		    Version 2.1.1.					      *
+*    2020-08-11 JFL Added the detection of UTF-8 and UTF-16 without BOM.      *
+*    2020-08-12 JFL Change the default encoding to UTF-8 on Windows 10 >= 2019.
+*    2020-08-17 JFL Fixed a memory allocation bug causing a debug mode crash. *
+*		    Version 2.2.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -62,8 +66,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.1.1"
-#define PROGRAM_DATE    "2020-05-10"
+#define PROGRAM_VERSION "2.2"
+#define PROGRAM_DATE    "2020-08-17"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -142,9 +146,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #include <io.h>
 
 /* Define WIN32 replacements for common Standard C library functions. */
-#define malloc(size) (void *)LocalAlloc(LMEM_FIXED, size)
-#define realloc(pBuf, l) (void *)LocalReAlloc((HLOCAL)pBuf, l, LMEM_MOVEABLE)	/* Returns fixed memory, despite the flag name. */
-#define free(pBuf) LocalFree((HLOCAL)pBuf)
+/* 2020-08-17 Bug fix: Do NOT redefine malloc/realloc/free as this breaks the release of blocks indirectly allocated by C library functions */
 #define strlwr CharLower
 #define strcmp lstrcmp
 #define strcpy lstrcpy
@@ -329,6 +331,7 @@ int __cdecl main(int argc, char *argv[]) {
   int     i;
   char   *pszInType = NULL;	/* Input character set Windows/Mac/DOS/UTF-8 */
   char   *pszOutType = NULL;	/* Output character set Windows/Mac/DOS/UTF-8 */
+  char   *pszDefaultType = "w";	/* Default encoding, if we don't know better */
   int     iBOM = 0;		/* 1=Output BOM; -1=Output NO BOM; 0=unchanged */
   FILE *sf = NULL;		/* Source file handle */
   char *pszInName = NULL;	/* Source file name */
@@ -435,20 +438,20 @@ fail_no_mem:
       continue;
     }
     if ((!pszInType) && isEncoding(pszArg, NULL, NULL)) {
-	pszInType = pszArg;
-	continue;
+      pszInType = pszArg;
+      continue;
     }
     if ((!pszOutType) && isEncoding(pszArg, NULL, NULL)) {
-	pszOutType = pszArg;
-	continue;
+      pszOutType = pszArg;
+      continue;
     }
     if (!pszInName) {
-	pszInName = pszArg;
-	continue;
+      pszInName = pszArg;
+      continue;
     }
     if (!pszOutName) {
-	pszOutName = pszArg;
-	continue;
+      pszOutName = pszArg;
+      continue;
     }
     /* Unexpected arguments are ignored */
     fprintf(stderr, "Warning: Unexpected argument ignored: %s\n", pszArg);
@@ -463,11 +466,61 @@ fail_no_mem:
     }
   )
 
+  /* If we're on a recent version of Windows 10, update the default encoding to UTF-8 */
+  {
+    unsigned major;
+    unsigned minor;
+    unsigned build;
+    OSVERSIONINFO osvi = {0};
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+#pragma warning(disable:4996)       /* Ignore the deprecated name warning */
+    GetVersionEx(&osvi);
+    major = (unsigned)osvi.dwMajorVersion;
+    minor = (unsigned)osvi.dwMinorVersion;
+    build = (unsigned)osvi.dwBuildNumber;
+    DEBUG_FPRINTF((mf, "// Windows version %u.%u.%u\n", major, minor, build));
+    /* But in Windows 8.1 and later, GetVersionEx() lies about the true version,
+       and pretends to be version 6.2, that is Windows 8.0.
+       So instead, query the Windows kernel DLL version. */
+    if ( (major > 6) || ((major == 6) && (minor >= 2)) ) {
+      char *pszKernel32 = "kernel32.dll";
+      DWORD  dwHandle;
+      DWORD  dwSize;
+#pragma comment(lib, "version.lib")
+      if ((dwSize = GetFileVersionInfoSize(pszKernel32, &dwHandle)) > 0) {
+	LPBYTE lpBuffer = malloc((size_t)dwSize);
+	if (lpBuffer) {
+	  if (GetFileVersionInfo(pszKernel32, dwHandle, dwSize, lpBuffer)) {
+	    VS_FIXEDFILEINFO *pfi;
+	    UINT size = 0;
+	    if (VerQueryValue(lpBuffer, "\\", (LPVOID *)&pfi, &size)) {
+	      major = ( pfi->dwFileVersionMS >> 16 ) & 0xffff;
+	      minor = ( pfi->dwFileVersionMS >>  0 ) & 0xffff;
+	      build = ( pfi->dwFileVersionLS >> 16 ) & 0xffff;
+	      DEBUG_FPRINTF((mf, "// kernel32 version %u.%u.%u\n", major, minor, build));
+	    }
+	  }
+	  free(lpBuffer);
+	}
+      }
+    }
+    if ( (major > 10) || ((major == 10) && (build >= 18298)) ) {
+      /* Since Windows 10 build 18298 (2018/12/10), Notepad defaults to UTF-8 without BOM for new files */
+      /* https://blogs.windows.com/windowsexperience/2018/12/10/announcing-windows-10-insider-preview-build-18298/ */
+      pszDefaultType = "8";
+    }
+    DEBUG_FPRINTF((mf, "pszDefaultType = \"%s\"\n", pszDefaultType));
+  }
+
   if (!pszInType) {
-      pszInType = "?";	/* Detect the input data encoding */
+    pszInType = "?";	/* Detect the input data encoding */
   }
   if (!pszOutType) {
+    if (((!pszOutName) || streq(pszOutName, "-")) && (is_pipe(stdout) || isatty(_fileno(stdout)))) {
       pszOutType = ".";
+    } else { /* Writing to a file */
+      pszOutType = pszDefaultType;
+    }
   }
   verbose((mf, "Input character set: %s\n", pszInType));
   verbose((mf, "Output character set: %s\n", pszOutType));
@@ -558,7 +611,7 @@ fail_no_mem:
     Sleep(0);	    /* Release end of time-slice */
   }
   /* Test the COM API IMultiLanguage2::DetectInputCodepage() */
-  DEBUG_CODE({
+  DEBUG_CODE_IF_ON({
     HRESULT hr;
     UINT cp;
     int iSize = (int)nRead;
@@ -568,34 +621,110 @@ fail_no_mem:
     if ((sf == stdin) && (isatty(0) || is_pipe(stdin))) {
       cp = GetConsoleOutputCP();
     } else {
-      cp = CP_ACP;
+      cp = GetACP();
     }
-    fprintf(mf, "Based on the stream type, I think the input may be CP %u:\n", (unsigned int)cp);
+    fprintf(mf, "Based on the stream type, I infer the input to be CP %u\n", (unsigned int)cp);
     hr = DetectInputCodepage(0, cp, pszBuffer, &iSize, dei, &iCount);
     if (FAILED(hr)) {
-      fprintf(stderr, "DetectInputCodepage() failed\n");
+      fprintf(stderr, "IMultiLanguage2::DetectInputCodepage() failed\n");
     } else {
-      fprintf(mf, "IMultiLanguage2::DetectInputCodepage() found in the first %d bytes:\n", iSize);
+      fprintf(mf, "IMultiLanguage2::DetectInputCodepage(%u, ...) found in the first %d bytes:\n", (unsigned int)cp, iSize);
       for (i=0; i<iCount; i++) {
-	fprintf(mf, "CP %u, in %d%% of the text, with %d confidence.\n", (unsigned int)(dei[i].nCodePage), (int)(dei[i].nDocPercent), (int)(dei[i].nConfidence));
+	fprintf(mf, "CP %u, in %d%% of the text, with %d%% confidence.\n", (unsigned int)(dei[i].nCodePage), (int)(dei[i].nDocPercent), (int)(dei[i].nConfidence));
       }
     }
   })
-  if (*pszInType == '?') { /* Then detect the input data encoding, using the Unicode BOM */
-    /* https://en.wikipedia.org/wiki/Byte_order_mark */
+  if (*pszInType == '?') { /* Then use heuristics to detect the input data encoding */
+    char *pszMsg = NULL;
+    /* First look for a Unicode BOM: https://en.wikipedia.org/wiki/Byte_order_mark */
     if ((nTotal >= 3) && !strncmp(pszBuffer, "\xEF\xBb\xBF", 3)) { /* UTF-8 BOM */
       pszInType = "8";
+      pszMsg = "Detected UTF-8 BOM";
     } else if ((nTotal >= 4) && (!strncmp(pszBuffer, "\x2B\x2F\x76", 3)) && strchr("\x38\x39\x2B\x2F", pszBuffer[3])) { /* UTF-7 BOM */
       pszInType = "7";
+      pszMsg = "Detected UTF-7 BOM";
     } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFF\xFE", 2)) { /* UTF-16 BOM */
       pszInType = "u";
+      pszMsg = "Detected UTF-16 BOM";
     } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFE\xFF", 2)) { /* UTF-16 BE BOM */
       pszInType = "1201";
-    } else { /* No Unicode BOM */
-      /* TO DO: Do a more thorough analysis, for example to detect UTF-8 without BOM */
-      pszInType = "w"; /* Default: Assume it's the default Windows encoding */
+      pszMsg = "Detected UTF-16 BE BOM";
+    } else { /* No Unicode BOM. Try detecting UTF-8 or UTF-16 without BOM */
+      size_t n;
+      size_t nNonASCII = 0;
+      size_t nOddNUL = 0;
+      size_t nEvenNUL = 0;
+      int isValidUTF8 = TRUE;
+      for (n=0; n<nRead; n++) {
+      	char c = pszBuffer[n];
+	if (!c) {
+	  if (n & 1) {
+	    nOddNUL += 1;
+	  } else {
+	    nEvenNUL += 1;
+	  }
+	  continue;
+	}
+/* See https://en.wikipedia.org/wiki/UTF-8 */
+#define IS_ASCII(c)     ((c&0x80) == 0)
+#define IS_LEAD_BYTE(c) ((c&0xC0) == 0xC0)
+#define IS_TAIL_BYTE(c) ((c&0xC0) == 0x80)
+	if (IS_ASCII(c)) continue;
+	nNonASCII += 1;
+	if (isValidUTF8) { /* No need to keep validating if we already know it's invalid */
+	  if (IS_LEAD_BYTE(c)) {
+	    int nTailBytesExpected = 0;
+	    if ((c&0x20) == 0) {
+	      nTailBytesExpected = 1;
+	      if ((c == '\xC0') || (c == '\xC1')) isValidUTF8 = FALSE; /* Overlong encoding of 7-bits ASCII */
+	    } else if ((c&0x10) == 0) {
+	      nTailBytesExpected = 2;
+	    } else if ((c&0x08) == 0) {
+	      nTailBytesExpected = 3;
+	      if ((c >= '\xF5') && (c <= '\xF7')) isValidUTF8 = FALSE; /* Encoding of invalid Unicode chars > \u10FFFF */
+	    } else {	/* No valid Unicode character requires a 5-bytes or more encoding */
+	      isValidUTF8 = FALSE;
+	      continue;
+	    }
+	    /* Then make sure that the expected tail bytes are all there */
+	    for ( ; nTailBytesExpected && (++n < nRead); nTailBytesExpected--) {
+	      c = pszBuffer[n];
+	      if (!IS_ASCII(c)) nNonASCII += 1;
+	      if (!IS_TAIL_BYTE(c)) { /* Invalid UTF-8 sequence */
+		isValidUTF8 = FALSE;
+		break;
+	      }
+	    }
+	    if (nTailBytesExpected) isValidUTF8 = FALSE; /* Incomplete UTF-8 sequence at the end of the buffer */
+	  } else { /* Invalid UTF-8 tail byte not preceeded by a lead byte */
+	    isValidUTF8 = FALSE;
+	  } /* End if (IS_LEAD_BYTE(c)) */
+	} /* End if (isValidUTF8) */
+      } /* End for each byte in pszBuffer[] */
+      /* Heuristics for identifying an encoding from the information gathered so far.
+         Note that this choice is probabilistic. It may not be correct in all cases. */
+      if (nEvenNUL + nOddNUL) { /* There are NUL bytes, so it's probably a kind of UTF-16 */
+      	/* TO DO: Try distinguishing UTF-16 LE and UTF-16 BE */
+      	pszInType = "u"; /* Assume it's UTF-16 LE for now, which is the default in Windows */
+	pszMsg = "Detected UTF-16 without BOM";
+      } else if (nNonASCII && isValidUTF8) {
+      	pszInType = "8"; /* We've verified this is valid UTF-8 */
+	pszMsg = "Detected UTF-8 without BOM";
+      } else {
+      	/* Ideally we could default to the current console code page for input from a pipe,
+      	   and to the ANSI code page for input from a file.
+      	   But the most common use case being to correct the output to the console
+      	   when it's in the wrong code page, ie. NOT in the current console code page,
+      	   then defaulting to the ANSI code page now is the best choice. */
+	pszInType = "w"; /* Default to the Windows encoding */
+	pszMsg = "Default to the Windows ANSI code page";
+      }
+      DEBUG_FPRINTF((mf, "nOddNUL = %lu\n", (unsigned long)nOddNUL));
+      DEBUG_FPRINTF((mf, "nEvenNUL = %lu\n", (unsigned long)nEvenNUL));
+      DEBUG_FPRINTF((mf, "nNonASCII = %lu\n", (unsigned long)nNonASCII));
+      DEBUG_FPRINTF((mf, "isValidUTF8 = %d\n", isValidUTF8));
     }
-    verbose((mf, "Detected input character set: %s\n", pszInType));
+    verbose((mf, "Input character set: %s\n", pszMsg));
   }
   if (nTotal > 0) {
     size_t nOutBufSize = 2*nTotal + 4;	/* Size may double for ansi -> utf8 cases */
@@ -1219,20 +1348,27 @@ LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf,
 |		    							      |
 |   History								      |
 |    2016-09-12 JFL Created this routine				      |
+|    2020-08-14 JFL Added USE_WIN32_API to allow testing with the alternative.|
 *									      *
 \*---------------------------------------------------------------------------*/
+
+#ifdef _WIN32
+#define USE_WIN32_API 1
+#else
+#define USE_WIN32_API 0
+#endif
 
 int IsSameFile(char *pszPathname1, char *pszPathname2) {
   int iSameFile;
   char *pszBuf1 = NULL;
   char *pszBuf2 = NULL;
-#if defined _WIN32
+#if USE_WIN32_API
   WIN32_FILE_ATTRIBUTE_DATA attr1;
   WIN32_FILE_ATTRIBUTE_DATA attr2;
 #else
   struct stat attr1;
   struct stat attr2;
-#endif /* defined _WIN32 */
+#endif /* USE_WIN32_API */
   int bDone1;
   int bDone2;
   DEBUG_CODE(
@@ -1252,13 +1388,13 @@ IsSameFile_done:
   }
 
   /* Then try a simple attributes comparison, to quickly detect different files */
-#if defined _WIN32
+#if USE_WIN32_API
   bDone1 = (int)GetFileAttributesEx(pszPathname1, GetFileExInfoStandard, &attr1);
   bDone2 = (int)GetFileAttributesEx(pszPathname2, GetFileExInfoStandard, &attr2);
 #else
   bDone1 = stat(pszPathname1, &attr1) + 1;
   bDone2 = stat(pszPathname2, &attr2) + 1;
-#endif /* defined _WIN32 */
+#endif /* USE_WIN32_API */
   if (bDone1 != bDone2) {
     DEBUG_CODE(pszReason = "One exists and the other does not";)
     iSameFile = FALSE;
