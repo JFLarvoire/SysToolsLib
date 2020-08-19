@@ -59,6 +59,7 @@
 *    2020-08-12 JFL Change the default encoding to UTF-8 on Windows 10 >= 2019.
 *    2020-08-17 JFL Fixed a memory allocation bug causing a debug mode crash. *
 *		    Version 2.2.					      *
+*    2020-08-18 JFL Factored-out routine GetTrueWindowsVersion().             *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -67,7 +68,7 @@
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
 #define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2020-08-17"
+#define PROGRAM_DATE    "2020-08-18"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -166,6 +167,8 @@ int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...);
 
 #define FAIL(msg) fail("%s", msg);
 #define WIN32FAIL(msg) fail("Error %d: %s", GetLastError(), msg)
+
+DWORD GetTrueWindowsVersion(void); /* Extend GetVersion() */
 
 /* Define easy to use functions for reading registry values, compatible with old versions of Windows */
 LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf, size_t nBufSize); /* Returns the string size, or (-error). */
@@ -467,50 +470,20 @@ fail_no_mem:
   )
 
   /* If we're on a recent version of Windows 10, update the default encoding to UTF-8 */
+#ifdef _WIN32
   {
-    unsigned major;
-    unsigned minor;
-    unsigned build;
-    OSVERSIONINFO osvi = {0};
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-#pragma warning(disable:4996)       /* Ignore the deprecated name warning */
-    GetVersionEx(&osvi);
-    major = (unsigned)osvi.dwMajorVersion;
-    minor = (unsigned)osvi.dwMinorVersion;
-    build = (unsigned)osvi.dwBuildNumber;
-    DEBUG_FPRINTF((mf, "// Windows version %u.%u.%u\n", major, minor, build));
-    /* But in Windows 8.1 and later, GetVersionEx() lies about the true version,
-       and pretends to be version 6.2, that is Windows 8.0.
-       So instead, query the Windows kernel DLL version. */
-    if ( (major > 6) || ((major == 6) && (minor >= 2)) ) {
-      char *pszKernel32 = "kernel32.dll";
-      DWORD  dwHandle;
-      DWORD  dwSize;
-#pragma comment(lib, "version.lib")
-      if ((dwSize = GetFileVersionInfoSize(pszKernel32, &dwHandle)) > 0) {
-	LPBYTE lpBuffer = malloc((size_t)dwSize);
-	if (lpBuffer) {
-	  if (GetFileVersionInfo(pszKernel32, dwHandle, dwSize, lpBuffer)) {
-	    VS_FIXEDFILEINFO *pfi;
-	    UINT size = 0;
-	    if (VerQueryValue(lpBuffer, "\\", (LPVOID *)&pfi, &size)) {
-	      major = ( pfi->dwFileVersionMS >> 16 ) & 0xffff;
-	      minor = ( pfi->dwFileVersionMS >>  0 ) & 0xffff;
-	      build = ( pfi->dwFileVersionLS >> 16 ) & 0xffff;
-	      DEBUG_FPRINTF((mf, "// kernel32 version %u.%u.%u\n", major, minor, build));
-	    }
-	  }
-	  free(lpBuffer);
-	}
-      }
-    }
-    if ( (major > 10) || ((major == 10) && (build >= 18298)) ) {
+    DWORD dwVersion = GetTrueWindowsVersion();
+    unsigned major = (unsigned)(LOBYTE(LOWORD(dwVersion)));
+    unsigned minor = (unsigned)(HIBYTE(LOWORD(dwVersion)));
+    unsigned build = (unsigned)(HIWORD(dwVersion));
+    if ( (major > 10) || ((major == 10) && ((minor > 0) || (build >= 18298)))) {
       /* Since Windows 10 build 18298 (2018/12/10), Notepad defaults to UTF-8 without BOM for new files */
       /* https://blogs.windows.com/windowsexperience/2018/12/10/announcing-windows-10-insider-preview-build-18298/ */
       pszDefaultType = "8";
     }
     DEBUG_FPRINTF((mf, "pszDefaultType = \"%s\"\n", pszDefaultType));
   }
+#endif /* defined(_WIN32) */
 
   if (!pszInType) {
     pszInType = "?";	/* Detect the input data encoding */
@@ -1562,3 +1535,61 @@ cleanup_and_exit:
   return hr;
 }
 #endif
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetTrueWindowsVersion				      |
+|									      |
+|   Description     Extend GetVersion() to work on Windows versions >= 8.1    |
+|									      |
+|   Parameters	    None						      |
+|                   							      |
+|   Returns	    Same as GetVersion()				      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2020-08-18 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#pragma warning(disable:4996)       /* Ignore the deprecated name warning */
+
+#ifdef _WIN32
+
+DWORD GetTrueWindowsVersion(void) {
+  DWORD dwVersion = GetVersion();
+  unsigned major = (unsigned)(LOBYTE(LOWORD(dwVersion)));
+  unsigned minor = (unsigned)(HIBYTE(LOWORD(dwVersion)));
+  unsigned build = (unsigned)(HIWORD(dwVersion));
+  DEBUG_FPRINTF((mf, "GetVersion(); // %u.%u.%u\n", major, minor, build));
+  /* But in Windows 8.1 and later, GetVersionEx() lies about the true version,
+     and pretends to be version 6.2, that is Windows 8.0.
+     So instead, query the Windows kernel DLL version. */
+  if ( (major > 6) || ((major == 6) && (minor >= 2)) ) {
+    char *pszKernel32 = "kernel32.dll";
+    DWORD  dwHandle;
+    DWORD  dwSize;
+#pragma comment(lib, "version.lib")
+    if ((dwSize = GetFileVersionInfoSize(pszKernel32, &dwHandle)) > 0) {
+      LPBYTE lpBuffer = malloc((size_t)dwSize);
+      if (lpBuffer) {
+	if (GetFileVersionInfo(pszKernel32, dwHandle, dwSize, lpBuffer)) {
+	  VS_FIXEDFILEINFO *pfi;
+	  UINT size = 0;
+	  if (VerQueryValue(lpBuffer, "\\", (LPVOID *)&pfi, &size)) {
+	    major = ( pfi->dwFileVersionMS >> 16 ) & 0xffff;
+	    minor = ( pfi->dwFileVersionMS >>  0 ) & 0xffff;
+	    build = ( pfi->dwFileVersionLS >> 16 ) & 0xffff;
+	    dwVersion = major | (minor << 8) | (build << 16);
+	  }
+	}
+	free(lpBuffer);
+      }
+    }
+  }
+  DEBUG_FPRINTF((mf, "GetTrueWindowsVersion(); // %u.%u.%u\n", major, minor, build));
+  return dwVersion;
+}
+
+#endif /* defined(_WIN32) */
