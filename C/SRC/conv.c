@@ -60,6 +60,8 @@
 *    2020-08-17 JFL Fixed a memory allocation bug causing a debug mode crash. *
 *		    Version 2.2.					      *
 *    2020-08-18 JFL Factored-out routine GetTrueWindowsVersion().             *
+*    2020-08-19 JFL Added type * for IMultiLanguage2::DetectInputCodepage().  *
+*		    Version 2.3.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -67,8 +69,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2020-08-18"
+#define PROGRAM_VERSION "2.3"
+#define PROGRAM_DATE    "2020-08-19"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -177,12 +179,11 @@ LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf,
 #define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 #define strieq(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
-#if _DEBUG /* C front end to COM C++ method IMultiLanguage2::DetectInputCodepage() */
+/* C front end to COM C++ method IMultiLanguage2::DetectInputCodepage() */
 #include <MLang.h>
 #include <objbase.h>
 #pragma comment(lib, "ole32.lib")
 HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT *piSize, DetectEncodingInfo *lpInfo, INT *pnInfos);
-#endif
 
 #endif /* defined(_WIN32) */
 
@@ -289,17 +290,23 @@ INFILE = Input file pathname. Default or \"-\" = Read from stdin\n\
 OUTFILE = Output file pathname. Default or \"-\" = Write to stdout\n\
 \n\
 Character Sets: One of the following codes, or a code page number such as 1252\n\
-  ?         Autodetect the input data encoding (default for input)\n\
-  .         Console Active CP (CP %d in this shell) (default for output)\n\
-  w         Windows System CP (CP %d on this system)\n\
-  d         DOS default CP    (CP %d on this system)\n\
-  m         Macintosh CP      (CP %d on this system)\n\
-  7         UTF-7             (CP 65000)\n\
-  8         UTF-8             (CP 65001)\n\
-  u         UTF-16            (CP 1200)\n\
-  s         Symbol            (CP 42)\n\
+  ?         Detect the input data encoding w. a simple heuristic (dflt for input)\n\
+  *         Detect the input data encoding w. Windows' IMultiLanguage2 COM API\n\
+  .         Current Console CP (CP %d in this shell) (See note 1)\n\
+  w         Windows System CP  (CP %d on this system) (See note 1)\n\
+  d         DOS default CP     (CP %d on this system)\n\
+  m         Macintosh CP       (CP %d on this system)\n\
+  7         UTF-7              (CP 65000)\n\
+  8         UTF-8              (CP 65001) (See note 1)\n\
+  u         UTF-16             (CP 1200) (See note 1)\n\
+  s         Symbol             (CP 42)\n\
 \n\
-If one of the symbolic character sets above is specified, also decodes the\n\
+Notes:\n\
+1) If not explicitely specified, the default output encoding is UTF-16 for\n\
+output to the console; The current console code page for output to a pipe;\n\
+UTF-8 for output to a file on Windows 10 2019 H1 or later; Windows system code\n\
+page for output to a file on all older versions of Windows.\n\
+2) If one of the symbolic character sets above is specified, also decodes the\n\
 mime encoded strings in the input stream. Not done if using numeric CP numbers.\n\
 \n"
 "Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
@@ -495,8 +502,8 @@ fail_no_mem:
       pszOutType = pszDefaultType;
     }
   }
-  verbose((mf, "Input character set: %s\n", pszInType));
-  verbose((mf, "Output character set: %s\n", pszOutType));
+  verbose((mf, "Input type argument: %s\n", pszInType));
+  verbose((mf, "Output type argument: %s\n", pszOutType));
 
   /* Force stdin and stdout to untranslated */
 #if defined(_MSDOS) || defined(_WIN32)
@@ -583,30 +590,48 @@ fail_no_mem:
     if (iCtrlZ && (nRead < BLOCKSIZE)) break;
     Sleep(0);	    /* Release end of time-slice */
   }
-  /* Test the COM API IMultiLanguage2::DetectInputCodepage() */
-  DEBUG_CODE_IF_ON({
+  /* 
+    Windows provides an API that is supposed to detect a text encoding.
+    They warn that this cannot be reliably detected in all cases, which is true.
+    I implemented this in the hope that this API would give better results than
+    my simple heuristic that follows. But unfortunately, the results are bad.
+    It basically fails most of the times, except when the text is pure ASCII.
+    Anyway, I'm leaving this in, in case of a future miracle. Like maybe Windows
+    using open-source libraries like uchardet, or Google's ced.
+  */
+  if (*pszInType == '*') { /* Then use the COM API IMultiLanguage2::DetectInputCodepage() */
     HRESULT hr;
-    UINT cp;
+    UINT cp = 0; /* I tried setting this to GetACP(), but the end results are even worse */
     int iSize = (int)nRead;
     DetectEncodingInfo dei[10];
     int iCount = sizeof(dei) / sizeof(DetectEncodingInfo); // # of elements of dei
+    int iMaxConf = 0;
+    static char szCP[6];
 
-    if ((sf == stdin) && (isatty(0) || is_pipe(stdin))) {
-      cp = GetConsoleOutputCP();
-    } else {
-      cp = GetACP();
-    }
-    fprintf(mf, "Based on the stream type, I infer the input to be CP %u\n", (unsigned int)cp);
+    DEBUG_FPRINTF((mf, "Assuming the input to be CP %u\n", (unsigned int)cp));
     hr = DetectInputCodepage(0, cp, pszBuffer, &iSize, dei, &iCount);
     if (FAILED(hr)) {
       fprintf(stderr, "IMultiLanguage2::DetectInputCodepage() failed\n");
+      pszInType = "?"; /* Fall back to using our simple heuristics */
     } else {
-      fprintf(mf, "IMultiLanguage2::DetectInputCodepage(%u, ...) found in the first %d bytes:\n", (unsigned int)cp, iSize);
+      DEBUG_FPRINTF((mf, "IMultiLanguage2::DetectInputCodepage(%u, ...) found in the first %d bytes:\n", (unsigned int)cp, iSize));
       for (i=0; i<iCount; i++) {
-	fprintf(mf, "CP %u, in %d%% of the text, with %d%% confidence.\n", (unsigned int)(dei[i].nCodePage), (int)(dei[i].nDocPercent), (int)(dei[i].nConfidence));
+      	int iConfidence = (int)(dei[i].nConfidence);
+      	cp = (unsigned int)(dei[i].nCodePage);
+	DEBUG_FPRINTF((mf, "CP %u, in %d%% of the text, with %d%% confidence.\n", cp, (int)(dei[i].nDocPercent), iConfidence));
+	if (iConfidence < 0) iConfidence = 100; /* For very small texts, iConfidence == -1 */
+	if (iConfidence > iMaxConf) {
+	  sprintf(szCP, "%u", cp);
+	  pszInType = szCP;
+	}
       }
     }
-  })
+    verbose((mf, "Windows' IMultiLanguage2 COM API detected CP: %s\n", pszInType));
+  }
+  /*
+    A simple heuristic for selecting among the most common cases in Windows:
+    1) The Windows system code page; 2) UTF-8; 3) UTF-16
+  */
   if (*pszInType == '?') { /* Then use heuristics to detect the input data encoding */
     char *pszMsg = NULL;
     /* First look for a Unicode BOM: https://en.wikipedia.org/wiki/Byte_order_mark */
@@ -697,8 +722,10 @@ fail_no_mem:
       DEBUG_FPRINTF((mf, "nNonASCII = %lu\n", (unsigned long)nNonASCII));
       DEBUG_FPRINTF((mf, "isValidUTF8 = %d\n", isValidUTF8));
     }
-    verbose((mf, "Input character set: %s\n", pszMsg));
+    verbose((mf, "Heuristic detected input type: %s\n", pszMsg));
   }
+
+  /* Do the conversion */
   if (nTotal > 0) {
     size_t nOutBufSize = 2*nTotal + 4;	/* Size may double for ansi -> utf8 cases */
     size_t nOutputSize;		/* Size actually used in the out. buf. */
@@ -1426,6 +1453,7 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
   if (pszEncoding[0] && !pszEncoding[1]) {
     switch (tolower(pszEncoding[0])) {
     case '?':			/* Autodetect the encoding */
+    case '*':			/* Autodetect the encoding */
       cp = CP_AUTODETECT;
       break;
     case '.':			/* Console CP */
@@ -1504,7 +1532,8 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#if _DEBUG
+#ifdef _WIN32
+
 HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT *piSize, DetectEncodingInfo *lpInfo, INT *pnInfos) {
   HRESULT hr;
   IMultiLanguage2 *pML;
@@ -1534,7 +1563,8 @@ cleanup_and_exit:
   
   return hr;
 }
-#endif
+
+#endif /* defined(_WIN32) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
