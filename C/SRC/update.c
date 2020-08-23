@@ -172,6 +172,8 @@
 *    2020-03-26 JFL Added option -B|--nobak to skip backup and temp. files.   *
 *                   Version 3.9.                                              *
 *    2020-04-19 JFL Added support for MacOS. Version 3.10.                    *
+*    2020-08-23 JFL Added argument D:= for the same path on another drive.    *
+*                   Version 3.11.                                             *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -179,8 +181,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.10"
-#define PROGRAM_DATE    "2020-04-19"
+#define PROGRAM_VERSION "3.11"
+#define PROGRAM_DATE    "2020-08-23"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -710,6 +712,36 @@ int main(int argc, char *argv[]) {
       do_exit(1);
     }
   }
+  /* Handle the D:= special target */
+  if (target[0] && streq(target+1, ":=") && (argc == (iArg+1))) {
+    char *source = argv[iArg];
+    char cDrive = target[0];
+    char *pSep;
+    char *pName;
+    if ((!source[0]) || (source[1] != ':')) { /* If the source had no drive */
+      target = malloc(strlen(source) + 3);    /* Then make room for one */
+      if (target) {
+      	strcpy(target+2, source);
+      	target[1] = ':';
+      }
+    } else {			/* Else simply duplicate the source pathname */
+      target = strdup(source);
+    }
+    if (!target) {
+      printError("Error: Cannot build the target path: %s", strerror(errno));
+      do_exit(1);
+    }
+    target[0] = cDrive;
+    /* Find the last name component in the target */
+    pSep = strrchr(target, DIRSEPARATOR_CHAR);
+    if (!pSep) pSep = target+1; /* We know there's a : there */
+    pName = pSep + 1;
+    /* Strip wild cards, and actual file names */
+    if (strchr(pName, '*') || strchr(pName, '?') || exist_file(source)) {
+      *pName = '\0';
+    }
+
+  }
 #endif
 
   for ( ; iArg < argc; iArg++) { /* For every source file before that */
@@ -734,9 +766,11 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 Usage: update [SWITCHES] FILES DIRECTORY\n\
        update [SWITCHES] FILES DIRECTORY" DIRSEPARATOR_STRING "NEWDIR" DIRSEPARATOR_STRING "\n\
        update [SWITCHES] FILE  DIRECTORY[" DIRSEPARATOR_STRING "NEWNAME]\n\
+       update [SWITCHES] FILE  D:=\n\
 \n\
 Files:          FILE1 [FILE2 ...]\n\
                 Wildcards are allowed in source files pathnames\n\
+                D:= specifies the same directory pathname on another drive\n\
 \n\
 Switches:\n\
   --            End of switches\n"
