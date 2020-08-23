@@ -32,6 +32,8 @@
 *    2020-01-14 JFL Fixed a regression due to a change in MsvcLibX's version  *
 *		    of BreakArgLine():					      *
 *                   Remove C escape sequences, like \n \xXX, from the string. *
+*    2020-08-23 JFL Fixed a memory allocation bug that may cause a debug mode *
+*		    crash.                                                    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -39,7 +41,7 @@
 
 #define PROGRAM_DESCRIPTION "Display a Message Box and return the user's choice"
 #define PROGRAM_NAME    "msgbox"
-#define PROGRAM_VERSION "2020-01-14"
+#define PROGRAM_VERSION "2020-08-23"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -64,14 +66,13 @@
 #define streqi(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
 // Define WIN32 replacements for Standard C library functions
-#define malloc(size) (void *)LocalAlloc(LMEM_FIXED, size)
+/* 2020-08-17 Bug fix: Do NOT redefine malloc/realloc/free as this breaks the release of blocks indirectly allocated by C library functions */
 #define strlwr CharLower
 #define strcmp lstrcmp
 #define strcpy lstrcpy
 #define strcat lstrcat
 #define strlen lstrlen
 #define _tell(hf) _llseek(hf, 0, FILE_CURRENT)
-#define _filelength(hf) ( 
 
 #define NARGS 20
 
