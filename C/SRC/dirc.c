@@ -227,6 +227,8 @@
 *    2020-04-06 JFL Added option -B|--nobak to skip backup and temp. files.   *
 *                   Version 3.3.					      *
 *    2020-04-19 JFL Added support for MacOS. Version 3.4.                     *
+*    2020-08-24 JFL Added argument D:= for the same path on another drive.    *
+*                   Version 3.5.                                              *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -234,8 +236,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.4"
-#define PROGRAM_DATE    "2020-04-19"
+#define PROGRAM_VERSION "3.5"
+#define PROGRAM_DATE    "2020-08-24"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -863,6 +865,37 @@ int main(int argc, char *argv[]) {
   )
 #endif
 
+#if defined(_MSDOS) || defined(_WIN32)
+  /* Handle the D:= special target */
+  if (to && to[0] && streq(to+1, ":=")) {
+    char cDrive = to[0];
+    char *pSep;
+    char *pName;
+    if ((!from[0]) || (from[1] != ':')) { /* If the left path had no drive */
+      to = malloc(strlen(from) + 3);    /* Then make room for one */
+      if (to) {
+      	strcpy(to+2, from);
+      	to[1] = ':';
+      }
+    } else {			/* Else simply duplicate the left pathname */
+      to = strdup(from);
+    }
+    if (!to) {
+      finis(RETCODE_NO_MEMORY, "Out of memory building the right path");
+    }
+    to[0] = cDrive;
+    /* Find the last name component in the right path */
+    pSep = strrchr(to, DIRSEPARATOR);
+    if (!pSep) pSep = to+1; /* We know there's a : there */
+    pName = pSep + 1;
+    /* Strip wild cards, if any */
+    if (strchr(pName, '*') || strchr(pName, '?')) {
+      *pName = '\0';
+    }
+    DEBUG_PRINTF(("to = \"%s\";\n", to));
+  }
+#endif /* DOS or Windows */
+
   getdir(path, PATHNAME_SIZE);    /* Get current directory full pathname */
   if (!from) from = path;
 
@@ -954,6 +987,7 @@ Usage:\n\
   dirc [SWITCHES] PATHNAME1 [PATHNAME2] [PATTERN]\n\
 \n\
 Pathname: directory_name[\\pattern]\n\
+  PATHNAME2 may be \"D:=\", meaning \"Same path as PATHNAME1 on drive D:\".\n\
 \n\
 Pattern: An optional global wildcards pattern. Default: " PATTERN_ALL "\n\
 If no pathname2 is entered, list only one directory, sorted.\n\
