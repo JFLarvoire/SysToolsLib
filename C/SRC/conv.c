@@ -62,6 +62,7 @@
 *    2020-08-18 JFL Factored-out routine GetTrueWindowsVersion().             *
 *    2020-08-19 JFL Added type * for IMultiLanguage2::DetectInputCodepage().  *
 *		    Version 2.3.					      *
+*    2020-08-29 JFL Removed unused routine ReportWin32Error(). Version 2.3.1. *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -69,8 +70,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2020-08-19"
+#define PROGRAM_VERSION "2.3.1"
+#define PROGRAM_DATE    "2020-08-29"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -164,8 +165,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 #include <Tchar.h>
 #include <strsafe.h>
-
-int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...);
 
 #define FAIL(msg) fail("%s", msg);
 #define WIN32FAIL(msg) fail("Error %d: %s", GetLastError(), msg)
@@ -873,70 +872,6 @@ int is_pipe(FILE *f) {
   if (err) return FALSE;		/* Cannot tell more if error */
   return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
 }
-
-#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    ReportWin32Error					      |
-|                                                                             |
-|   Description:    Output a message with a description of the last error.    |
-|                                                                             |
-|   Parameters:     _TCHAR *pszExplanation	Context description	      |
-|                   ...				Optional arguments to format  |
-|                                                                             |
-|   Returns:	    The number of characters output.        		      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-|    1998/11/19 JFL Created this routine.				      |
-|    2005/06/10 JFL Added the message description, as formatted by the OS.    |
-|    2007/07/03 JFL Updated to support both ASCII and Unicode modes.	      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int _cdecl ReportWin32Error(_TCHAR *pszExplanation, ...) {
-    _TCHAR szErrorMsg[1024];
-    va_list pArgs;
-    int n;
-    LPVOID lpMsgBuf;
-    DWORD dwErr = GetLastError();
-    HRESULT hRes;
-
-    if (FormatMessage( 
-	    FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-	    FORMAT_MESSAGE_FROM_SYSTEM | 
-	    FORMAT_MESSAGE_IGNORE_INSERTS,
-	    NULL,
-	    dwErr,
-	    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
-	    (LPTSTR) &lpMsgBuf,
-	    0,
-	    NULL ))	{ /* Display both the error code and the description string. */
-	hRes = StringCbPrintf(szErrorMsg, sizeof(szErrorMsg),
-		                  _T("Error %ld: %s"), dwErr, lpMsgBuf);
-	LocalFree( lpMsgBuf ); /* Free the buffer. */
-    } else { /* Error, we did not find a description string for this error code. */
-	hRes = StringCbPrintf(szErrorMsg, sizeof(szErrorMsg), _T("Error %ld: "), dwErr);
-    }
-    if (SUCCEEDED(hRes)) {
-	n = lstrlen(szErrorMsg);
-    } else {
-	n = 0;
-    }
-
-    va_start(pArgs, pszExplanation);
-    hRes = StringCbVPrintf(szErrorMsg+n, sizeof(szErrorMsg) - (n*sizeof(TCHAR)),
-		                   pszExplanation, pArgs);
-    va_end(pArgs);
-
-    if (FAILED(hRes)) lstrcpy(szErrorMsg, _T("Failed to format the error"));
-
-    return _tprintf(_T("%s"), szErrorMsg);
-}
-
-#endif /* defined(_WIN32) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
