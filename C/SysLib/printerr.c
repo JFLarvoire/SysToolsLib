@@ -4,8 +4,11 @@
 *									      *
 *   Description:    Display a formatted WIN32 error message.		      *
 *									      *
-*   Notes:	    							      *
-*									      *
+*   Notes:	    This module is obsolete, now that the MsvcLibX library    *
+*		    supports UTF-8 strings.				      *
+*		    All SysToolsLib C sources using a PrintWin32Error()	      *
+*		    routine implement one that generates UTF-8 strings.       *
+*		    							      *
 *   History:								      *
 *    2002/02/07 JFL Created this file.					      *
 *                                                                             *

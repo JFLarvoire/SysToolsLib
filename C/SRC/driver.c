@@ -46,6 +46,8 @@
 *		    Version 2.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.2.      *
+*    2020-08-29 JFL Merged in changes from another PrintWin32Error().	      *
+*		    Removed unnecessary calls to oemprintf(). Version 2.1.3.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -53,8 +55,8 @@
 
 #define PROGRAM_DESCRIPTION "Manage system drivers and services"
 #define PROGRAM_NAME    "driver"
-#define PROGRAM_VERSION "2.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2.1.3"
+#define PROGRAM_DATE    "2020-08-29"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -114,7 +116,7 @@ int iVerbose = FALSE;
 /* Forward references */
 
 void usage(int retcode);
-int PrintWin32Error(char *pszFormat, ...);
+int PrintWin32Error(const char *pszFormat, ...);
 int IsSwitch(char *pszArg);
 int MyAnsiToUtf8(char *pszString);
 void _cdecl WaitForAnyKey(void);
@@ -261,7 +263,7 @@ int main(int argc, char *argv[])
 		iWait = TRUE;
 		continue;
 	    }
-	    oemprintf("Unrecognized switch %s. Ignored.\n", arg);
+	    printf("Unrecognized switch %s. Ignored.\n", arg);
             continue;
 	}
 	/* If no action has been chosen yet, assume this is an information request for a particular driver */
@@ -272,7 +274,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* We really don't know what to do with this argument */
-	oemprintf("Unexpected argument: %s\nIgnored.\n", arg);
+	printf("Unexpected argument: %s\nIgnored.\n", arg);
         break;  /* Ignore other arguments */
     }
 
@@ -325,7 +327,7 @@ int main(int argc, char *argv[])
 	    }
 	else
 	    {
-	    PrintWin32Error("Failed to install %s.\n", szDeviceName);
+	    PrintWin32Error("Failed to install %s", szDeviceName);
 	    exit(1);
 	    }
 	}
@@ -339,7 +341,7 @@ int main(int argc, char *argv[])
 	    PROCESS_INFORMATION processInfo;
 
 	    // WinExec("vxd.com -l hpmmkb.vxd", SW_HIDE);
-	    oemprintf("Running %s\n", pszTest);
+	    printf("Running %s\n", pszTest);
 	    startInfo.cb = sizeof(STARTUPINFO);
 	    GetStartupInfo(&startInfo);
 	    startInfo.wShowWindow = SW_HIDE;    // Prevent the 16-bits app from showing up on screen
@@ -357,16 +359,16 @@ int main(int argc, char *argv[])
 	    if (bDone)
 		{
 		WaitForSingleObject(processInfo.hProcess, 2000);
-		oemprintf("VXD.COM terminated.\n");
+		printf("VXD.COM terminated.\n");
 		}
 	    else
 		{
-		PrintWin32Error("Failed to run \"%s\".\n", pszTest);
+		PrintWin32Error("Failed to run \"%s\"", pszTest);
 		}
 	    }
 	else
 	    {
-	    oemprintf("Option -t not supported under NT.\n");
+	    printf("Option -t not supported under NT.\n");
 	    }
 	}
 	break;
@@ -405,7 +407,7 @@ int main(int argc, char *argv[])
 	    }
 	else
 	    {
-	    PrintWin32Error("Failed to start %s.\n", pszName);
+	    PrintWin32Error("Failed to start %s", pszName);
 	    exit(1);
 	    }
 	}
@@ -413,7 +415,7 @@ int main(int argc, char *argv[])
 
     case UNLOAD:
 	{
-	oemprintf("Unloading %s\n", pszName);
+	printf("Unloading %s\n", pszName);
 
 	if (IS_NT())
 	    bDone = StopNtDriver(pszName);
@@ -426,7 +428,7 @@ int main(int argc, char *argv[])
 	    }
 	else
 	    {
-	    PrintWin32Error("Failed to stop %s.\n", pszName);
+	    PrintWin32Error("Failed to stop %s", pszName);
 	    exit(1);
 	    }
 	}
@@ -445,7 +447,7 @@ int main(int argc, char *argv[])
 	    }
 	else
 	    {
-	    PrintWin32Error("Failed to uninstall %s.\n", pszName);
+	    PrintWin32Error("Failed to uninstall %s", pszName);
 	    exit(1);
 	    }
 	}
@@ -584,57 +586,91 @@ int Convert2Utf8(void *pwszString, char *tmpBuf, size_t lBuf) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    PrintWin32Error					      |
-|									      |
-|   Description:    Display an error message, and the last win32 error text.  |
-|									      |
-|   Parameters:     char *pszFormat	Format string			      |
-|		    ... 		Optional parameters		      |
-|									      |
-|   Returns:	    The number of characters written			      |
-|									      |
-|   Notes:								      |
-|									      |
-|   History:								      |
-|									      |
-|    1997-03-25 JFL Created this routine.				      |
-|    2015-01-15 JFL Converted to using UTF-8.				      |
-*									      *
+|   Function	    PrintWin32Error					      |
+|                                                                             |
+|   Description     Display a message with the last WIN32 error.	      |
+|                   							      |
+|   Parameters      char *pszFormat	The error context, or NULL            |
+|		    ...			Optional arguments		      |
+|                   							      |
+|   Returns	    The number of characters written        		      |
+|                   							      |
+|   Notes	    							      |
+|                   							      |
+|   History								      |
+|    1997-03-25 JFL Created another PrintWin32Error routine.		      |
+|    1998-11-19 JFL Created routine ReportWin32Error.			      |
+|    2005-06-10 JFL Added the message description, as formatted by the OS.    |
+|    2010-10-08 JFL Adapted to a console application, output to stderr.       |
+|    2015-01-15 JFL Converted PrintWin32Error to using UTF-8.		      |
+|    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
+|                   Make sure WIN32 msg and explanation are on the same line. |
+|    2019-09-27 JFL Fixed a formatting error.                                 |
+|                   Prepend the program name to the output.		      |
+|    2020-04-25 JFL Redesigned to avoid using a fixed size buffer.	      |
+|                   Reordered the output so that it sounds more natural.      |
+|                   Renamed ReportWin32Error as PrintWin32Error.	      |
+|    2020-08-28 JFL If no message found, display both dec. and hexa. codes.   |
+|    2020-08-29 JFL Merged in 2015-01-15 UTF-8 support from the other routine.|
+*                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int PrintWin32Error(char *pszFormat, ...)
-    {
-    DWORD dwError;
-    va_list pArgs;
-    LPWSTR lpwMsgBuf;
-    char *lpMsgBuf;
-    int n, m;
-    size_t l;
+#if 0
+#define WIN32_ERROR_PREFIX PROGRAM_NAME EXE_SUFFIX ": "
+#endif
+		      
+#define WIN32_ERROR_PREFIX "Error: "
 
-    dwError = GetLastError();
-    va_start(pArgs, pszFormat);
-    n = vprintf(pszFormat, pArgs);
-    l = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		       FORMAT_MESSAGE_FROM_SYSTEM |
-		       FORMAT_MESSAGE_IGNORE_INSERTS,
-		       NULL,
-		       dwError,
-		       MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-		       (LPWSTR)&lpwMsgBuf, // Address of the allocated buffer address
-		       0,
-		       NULL
-		      );
-    l = 2*(l+1); /* Worst case increase for UTF16 to UTF8 conversion */
+int PrintWin32Error(const char *pszFormat, ...) {
+  va_list vl;
+  int n = 0;
+  size_t l;
+  LPWSTR lpwMsgBuf;
+  LPSTR  lpMsgBuf;
+  DWORD dwError = GetLastError(); // The initial WIN32 error when this routine starts
+
+#if defined(WIN32_ERROR_PREFIX)
+  n += fprintf(stderr, "%s", WIN32_ERROR_PREFIX);
+#endif
+
+  if (pszFormat) {
+    va_start(vl, pszFormat);
+    n += vfprintf(stderr, pszFormat, vl);
+    n += fprintf(stderr, ". ");
+    va_end(vl);
+  }
+
+  l = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		     FORMAT_MESSAGE_FROM_SYSTEM | 
+		     FORMAT_MESSAGE_IGNORE_INSERTS,
+		     NULL,
+		     dwError,
+		     MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+		     (LPWSTR)&lpwMsgBuf, // Address of the allocated buffer address
+		     0,
+		     NULL);
+  if (l) {
+    // Remove the trailing dot and CRLF, if any
+    // (The CR causing problems later on, as the LF would be expanded with a second CR)
+    if (l && (lpwMsgBuf[l-1] == L'\n')) lpwMsgBuf[--l] = L'\0';
+    if (l && (lpwMsgBuf[l-1] == L'\r')) lpwMsgBuf[--l] = L'\0';
+    if (l && (lpwMsgBuf[l-1] == L'.')) lpwMsgBuf[--l] = L'\0';
+    // Convert the trimmed message to UTF-8
+    l = 2*(l+1); // Worst case increase for UTF16 to UTF8 conversion
     lpMsgBuf = (char *)LocalAlloc(LPTR, l);
     if (lpMsgBuf) {
-      m = WideCharToMultiByte(CP_UTF8, 0, lpwMsgBuf, -1, lpMsgBuf, (int)l, NULL, NULL);
-      n += printf("Error %08lX: %s\n", dwError, lpMsgBuf);
-      LocalFree(lpMsgBuf);
+      l = WideCharToMultiByte(CP_UTF8, 0, lpwMsgBuf, -1, lpMsgBuf, (int)l, NULL, NULL);
+      if (l) n += fprintf(stderr, "%s.\n", lpMsgBuf);
+      LocalFree(lpMsgBuf); // Free the UTF-8 buffer
     }
-    LocalFree(lpwMsgBuf);
+    LocalFree(lpwMsgBuf); // Free the UTF-16 buffer
+  }
+  if (!l) { // We did not find a description string for this error code, or could not display it
+    n += fprintf(stderr, "Win32 error %lu (0x%08lX).\n", dwError, dwError);
+  }
 
-    return n;
-    }
+  return n;
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -694,9 +730,9 @@ int ConvertCodePage(char *pszString, int iOldCp, int iNewCp)
     // oemprintf("Initial string %s\n", pszString);
     pwszName = (PWSTR)malloc(2*(len+1));
     iDone = MultiByteToWideChar(iOldCp, MB_PRECOMPOSED, pszString, (int)len, pwszName, (int)len+1);
-    if (!iDone) PrintWin32Error("Failed to convert \"%s\" to wide chars.\n", pszString);
+    if (!iDone) PrintWin32Error("Failed to convert \"%s\" to wide chars", pszString);
     iDone = WideCharToMultiByte(iNewCp, 0, pwszName, (int)len, pszString, (int)len+1, NULL, NULL);
-    if (!iDone) PrintWin32Error("Failed to convert \"%s\" back to normal chars.\n", pszString);
+    if (!iDone) PrintWin32Error("Failed to convert \"%s\" back to normal chars", pszString);
     // oemprintf("Converted string %s\n", pszString);
     free(pwszName);
 
@@ -729,10 +765,10 @@ int MyAnsiToUtf8(char *pszString)
 void _cdecl WaitForAnyKey(void)
     {
     while (kbhit()) getch();	// Flush pending input
-    oemprintf("Press any key to exit ");
+    printf("Press any key to exit ");
     while ( !kbhit() ) ;	// Wait for the next input
     getch();			// Flush it
-    oemprintf("\n");
+    printf("\n");
     }
 
 /*---------------------------------------------------------------------------*\
@@ -1020,10 +1056,10 @@ BOOL WINAPI EnumServicesStatusU( /* UTF-8 version of EnumServicesStatus() */
     int n;
 
     n = Convert2Utf8(lpServices[dw].lpServiceName, buf, sizeof(buf));
-    if (!n) PrintWin32Error("Failed to convert service name to UTF-8.\n");
+    if (!n) PrintWin32Error("Failed to convert service name to UTF-8");
 
     n = Convert2Utf8(lpServices[dw].lpDisplayName, buf, sizeof(buf));
-    if (!n) PrintWin32Error("Failed to convert display name to UTF-8.\n");
+    if (!n) PrintWin32Error("Failed to convert display name to UTF-8");
   }
   return bRet;
 }
@@ -1046,7 +1082,7 @@ BOOL ListNtDrivers(DWORD dwType, DWORD dwState)
     hSCManager = OpenSCManager(NULL, SERVICES_ACTIVE_DATABASE, SC_MANAGER_ENUMERATE_SERVICE);
     if (!hSCManager)
 	{
-	PrintWin32Error("Failed to open the service manager.\n");
+	PrintWin32Error("Failed to open the service manager");
 	return bRet; // Failure
 	}
 
@@ -1064,7 +1100,7 @@ BOOL ListNtDrivers(DWORD dwType, DWORD dwState)
     if (bRet || (GetLastError() != ERROR_MORE_DATA))
 	{
 	CloseServiceHandle (hSCManager);
-	PrintWin32Error("Failed to get driver list size.\n");
+	PrintWin32Error("Failed to get driver list size");
 	return FALSE;
 	}
     DEBUG_PRINTF(("EnumServicesStatus() requires a %ld bytes buffer\n", (unsigned long)dwBytesNeeded));
@@ -1104,7 +1140,7 @@ BOOL ListNtDrivers(DWORD dwType, DWORD dwState)
 	    }
 	else
 	    {
-	    PrintWin32Error("Failed to enumerate drivers. Needed=%ld\n", dwBytesNeeded);
+	    PrintWin32Error("Failed to enumerate drivers. Needed=%ld", dwBytesNeeded);
 	    break;
 	    }
     } while (dwErr == ERROR_MORE_DATA);
@@ -1142,7 +1178,7 @@ SC_HANDLE WINAPI OpenServiceU(
 
   n = MultiByteToWideChar(CP_UTF8, 0, lpServiceName, -1, wszName, sizeof(wszName)/sizeof(WCHAR));
   if (!n) {
-    PrintWin32Error("Failed to convert service name to UTF-8.\n");
+    PrintWin32Error("Failed to convert service name to UTF-8");
     return 0;
   }
   return OpenServiceW(hSCManager, wszName, dwDesiredAccess);
@@ -1168,19 +1204,19 @@ BOOL WINAPI QueryServiceConfigU(
   }
 
   n = Convert2Utf8(lpServiceConfig->lpBinaryPathName, buf, sizeof(buf));
-  if (!n) PrintWin32Error("Failed to convert lpBinaryPathName to UTF-8.\n");
+  if (!n) PrintWin32Error("Failed to convert lpBinaryPathName to UTF-8");
 
   n = Convert2Utf8(lpServiceConfig->lpLoadOrderGroup, buf, sizeof(buf));
-  if (!n) PrintWin32Error("Failed to convert lpLoadOrderGroup to UTF-8.\n");
+  if (!n) PrintWin32Error("Failed to convert lpLoadOrderGroup to UTF-8");
 
   n = Convert2Utf8(lpServiceConfig->lpDependencies, buf, sizeof(buf));
-  if (!n) PrintWin32Error("Failed to convert lpDependencies to UTF-8.\n");
+  if (!n) PrintWin32Error("Failed to convert lpDependencies to UTF-8");
 
   n = Convert2Utf8(lpServiceConfig->lpServiceStartName, buf, sizeof(buf));
-  if (!n) PrintWin32Error("Failed to convert lpServiceStartName to UTF-8.\n");
+  if (!n) PrintWin32Error("Failed to convert lpServiceStartName to UTF-8");
 
   n = Convert2Utf8(lpServiceConfig->lpDisplayName, buf, sizeof(buf));
-  if (!n) PrintWin32Error("Failed to convert lpDisplayName to UTF-8.\n");
+  if (!n) PrintWin32Error("Failed to convert lpDisplayName to UTF-8");
 
   return bRet;
 }
@@ -1241,14 +1277,14 @@ BOOL NtDriverStatus(char *pszServiceName) /* pszServiceName = UTF-8 name */
     if (bRet || (GetLastError() != ERROR_INSUFFICIENT_BUFFER))
 	{
 	CloseServiceHandle(hSCManager);
-	PrintWin32Error("Failed to get the service configuration.\n");
+	PrintWin32Error("Failed to get the service configuration");
 	return FALSE;
 	}
     lpServiceConfig = (LPQUERY_SERVICE_CONFIG) LocalAlloc(LPTR, dwBytesNeeded);
     if (!lpServiceConfig)
 	{
 	CloseServiceHandle(hSCManager);
-	printf("Error: Not enough memory to get the service configuration.\n");
+	PrintWin32Error("Failed to get the service configuration");
 	return FALSE;
 	}
     bRet = QueryServiceConfigU(
@@ -1326,7 +1362,7 @@ BOOL InstallVxd(char *pszServiceName, char *pszFileName)
     dwLen = GetShortPathName(szCanonicName, szCorrectedName, sizeof(szCorrectedName));
     if (!dwLen)
 	{
-	PrintWin32Error("Failed to get the short pathname.\n");
+	PrintWin32Error("Failed to get the short pathname");
 	return FALSE;
 	}
     if (iVerbose) printf("The equivalent short name is %s\n", szCorrectedName);
@@ -1337,7 +1373,7 @@ BOOL InstallVxd(char *pszServiceName, char *pszFileName)
 	&hKey);
     if (lError != ERROR_SUCCESS)
 	{
-	PrintWin32Error("Failed to open the registry.\n");
+	PrintWin32Error("Failed to open the registry");
 	return FALSE;
 	}
 
@@ -1349,7 +1385,7 @@ BOOL InstallVxd(char *pszServiceName, char *pszFileName)
 	lstrlen(szCorrectedName) + 1); // size of value data
     if (lError != ERROR_SUCCESS)
 	{
-	PrintWin32Error("Failed to write to the registry.\n");
+	PrintWin32Error("Failed to write to the registry");
 	RegCloseKey(hKey);
 	return FALSE;
 	}
@@ -1390,7 +1426,7 @@ HANDLE LoadVxd(char *pszServiceName)
 		    OPEN_EXISTING,
 		    0,	// Do not use FILE_FLAG_DELETE_ON_CLOSE as it would not stay loaded after this program exits.
 		    NULL);
-    if (iVerbose) oemprintf("Returned handle %08X.\n", hDriver);
+    if (iVerbose) printf("Returned handle %08X.\n", hDriver);
     if (hDriver != (HANDLE)INVALID_HANDLE_VALUE) return hDriver;
 
     // There's nothing else we can do if this is a Win32 device name.
@@ -1490,7 +1526,7 @@ BOOL UnloadVxd(char *pszDeviceName)
 
     if (hVxdLoader == (HANDLE)INVALID_HANDLE_VALUE)
 	{
-	PrintWin32Error("Cannot open VXDLDR.VxD.\n");
+	PrintWin32Error("Cannot open VXDLDR.VxD");
         return FALSE;
 	}
 
@@ -1538,14 +1574,14 @@ BOOL RemoveVxd(char *pszServiceName)
 	&hKey);
     if (lError != ERROR_SUCCESS)
 	{
-	PrintWin32Error("Failed to open the registry.\n");
+	PrintWin32Error("Failed to open the registry");
 	return FALSE;
 	}
 
     lError = RegDeleteValue(hKey, pszServiceName);
     if (lError != ERROR_SUCCESS)
 	{
-	PrintWin32Error("Failed to write to the registry.\n");
+	PrintWin32Error("Failed to write to the registry");
 	RegCloseKey(hKey);
 	return FALSE;
 	}
@@ -1603,7 +1639,7 @@ BOOL GetVxdldrVersion(void)
 
     if (hVxdLoader == (HANDLE)INVALID_HANDLE_VALUE)
 	{
-	PrintWin32Error("Cannot open VXDLDR.VxD.\n");
+	PrintWin32Error("Cannot open VXDLDR.VxD");
         return FALSE;
 	}
 
@@ -1625,7 +1661,7 @@ BOOL GetVxdldrVersion(void)
 	}
     else
 	{
-	PrintWin32Error("No version returned\n");
+	PrintWin32Error("No version returned");
 	}
 
     CloseHandle(hVxdLoader);
@@ -1691,7 +1727,7 @@ BOOL ListVxds(void) {
 
     if (hVxdLoader == (HANDLE)INVALID_HANDLE_VALUE)
 	{
-	PrintWin32Error("Cannot open VXDLDR.VxD.\n");
+	PrintWin32Error("Cannot open VXDLDR.VxD");
         return FALSE;
 	}
 
@@ -1707,7 +1743,7 @@ BOOL ListVxds(void) {
 	}
     else
 	{
-	PrintWin32Error("No pointer returned\n");
+	PrintWin32Error("No pointer returned");
 	}
 
     CloseHandle(hVxdLoader);

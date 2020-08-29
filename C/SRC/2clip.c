@@ -39,6 +39,7 @@
 *		    PrintCError(), and use them instead of COMPLAIN().        *
 *		    Converted the source to UTF-8 and output help as Unicode. *
 *		    Added option --lock in debug mode. Version 1.6.	      *
+*    2020-08-29 JFL Merged in changes from another PrintWin32Error(). V 1.6.1.*
 *                   							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -46,8 +47,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.6"
-#define PROGRAM_DATE    "2020-04-25"
+#define PROGRAM_VERSION "1.6.1"
+#define PROGRAM_DATE    "2020-08-29"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -83,8 +84,8 @@ DEBUG_GLOBALS
 
 void usage(void);
 int IsSwitch(char *pszArg);
-int _cdecl PrintCError(char *pszExplanation, ...);
-int _cdecl PrintWin32Error(char *pszExplanation, ...);
+int PrintCError(const char *pszExplanation, ...);
+int PrintWin32Error(const char *pszExplanation, ...);
 int ToClip(const char* pBuffer, size_t lBuf, UINT cf);
 int ToClipW(const WCHAR* pwBuffer, size_t nWChars);
 
@@ -393,16 +394,12 @@ int IsSwitch(char *pszArg) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl PrintCError(char *pszFormat, ...) {
+int PrintCError(const char *pszFormat, ...) {
   va_list vl;
   int n;
   int e = errno; /* The initial C errno when this routine starts */
 
-  n = fprintf(stderr, PROGRAM_NAME
-#if defined(_MSDOS) || defined(_WIN32)
-		      ".exe"
-#endif
-		      ": ");
+  n = fprintf(stderr, PROGRAM_NAME EXE_SUFFIX ": Error: ");
 
   if (pszFormat) {
     va_start(vl, pszFormat);
@@ -418,42 +415,49 @@ int _cdecl PrintCError(char *pszFormat, ...) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    PrintWin32Error					      |
+|   Function	    PrintWin32Error					      |
 |                                                                             |
-|   Description:    Display a message with the last error.		      |
+|   Description     Display a message with the last WIN32 error.	      |
 |                   							      |
 |   Parameters      char *pszFormat	The error context, or NULL            |
 |		    ...			Optional arguments		      |
 |                   							      |
-|   Returns:	    The number of characters written.        		      |
+|   Returns	    The number of characters written        		      |
 |                   							      |
-|   Notes:	    							      |
+|   Notes	    							      |
 |                   							      |
-|   History:								      |
+|   History								      |
+|    1997-03-25 JFL Created another PrintWin32Error routine.		      |
 |    1998-11-19 JFL Created routine ReportWin32Error.			      |
 |    2005-06-10 JFL Added the message description, as formatted by the OS.    |
 |    2010-10-08 JFL Adapted to a console application, output to stderr.       |
+|    2015-01-15 JFL Converted PrintWin32Error to using UTF-8.		      |
 |    2018-11-02 JFL Allow pszExplanation to be NULL.			      |
 |                   Make sure WIN32 msg and explanation are on the same line. |
 |    2019-09-27 JFL Fixed a formatting error.                                 |
 |                   Prepend the program name to the output.		      |
 |    2020-04-25 JFL Redesigned to avoid using a fixed size buffer.	      |
 |                   Reordered the output so that it sounds more natural.      |
-|                   Renamed as PrintWin32Error.				      |
+|                   Renamed ReportWin32Error as PrintWin32Error.	      |
+|    2020-08-28 JFL If no message found, display both dec. and hexa. codes.   |
+|    2020-08-29 JFL Merged in 2015-01-15 UTF-8 support from the other routine.|
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl PrintWin32Error(char *pszFormat, ...) {
-  va_list vl;
-  int n;
-  char FAR *lpMsgBuf;
-  DWORD dwErr = GetLastError(); /* The initial WIN32 error when this routine starts */
+#define WIN32_ERROR_PREFIX PROGRAM_NAME EXE_SUFFIX ": Error: "
+// #define WIN32_ERROR_PREFIX "Error: "
 
-  n = fprintf(stderr, PROGRAM_NAME
-#if defined(_MSDOS) || defined(_WIN32)
-		      ".exe"
+int PrintWin32Error(const char *pszFormat, ...) {
+  va_list vl;
+  int n = 0;
+  size_t l;
+  LPWSTR lpwMsgBuf;
+  LPSTR  lpMsgBuf;
+  DWORD dwError = GetLastError(); // The initial WIN32 error when this routine starts
+
+#if defined(WIN32_ERROR_PREFIX)
+  n += fprintf(stderr, "%s", WIN32_ERROR_PREFIX);
 #endif
-		      ": ");
 
   if (pszFormat) {
     va_start(vl, pszFormat);
@@ -462,25 +466,33 @@ int _cdecl PrintWin32Error(char *pszFormat, ...) {
     va_end(vl);
   }
 
-  if (FormatMessage( 
-      FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-      FORMAT_MESSAGE_FROM_SYSTEM | 
-      FORMAT_MESSAGE_IGNORE_INSERTS,
-      NULL,
-      dwErr,
-      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-      (LPTSTR) &lpMsgBuf,
-      0,
-      NULL )) { // Display both the error code and the description string.
-    int l = lstrlen(lpMsgBuf);
-    // Remove the trailing new line and dot, if any.
-    if (l && (lpMsgBuf[l-1] == '\n')) lpMsgBuf[--l] = '\0';
-    if (l && (lpMsgBuf[l-1] == '\r')) lpMsgBuf[--l] = '\0';
-    if (l && (lpMsgBuf[l-1] == '.')) lpMsgBuf[--l] = '\0';
-    n += fprintf(stderr, "%s.\n", lpMsgBuf);
-    LocalFree(lpMsgBuf); // Free the buffer.
-  } else { // Error, we did not find a description string for this error code.
-    n += fprintf(stderr, "Win32 error %lu.\n", dwErr);
+  l = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		     FORMAT_MESSAGE_FROM_SYSTEM | 
+		     FORMAT_MESSAGE_IGNORE_INSERTS,
+		     NULL,
+		     dwError,
+		     MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+		     (LPWSTR)&lpwMsgBuf, // Address of the allocated buffer address
+		     0,
+		     NULL);
+  if (l) {
+    // Remove the trailing dot and CRLF, if any
+    // (The CR causing problems later on, as the LF would be expanded with a second CR)
+    if (l && (lpwMsgBuf[l-1] == L'\n')) lpwMsgBuf[--l] = L'\0';
+    if (l && (lpwMsgBuf[l-1] == L'\r')) lpwMsgBuf[--l] = L'\0';
+    if (l && (lpwMsgBuf[l-1] == L'.')) lpwMsgBuf[--l] = L'\0';
+    // Convert the trimmed message to UTF-8
+    l = 2*(l+1); // Worst case increase for UTF16 to UTF8 conversion
+    lpMsgBuf = (char *)LocalAlloc(LPTR, l);
+    if (lpMsgBuf) {
+      l = WideCharToMultiByte(CP_UTF8, 0, lpwMsgBuf, -1, lpMsgBuf, (int)l, NULL, NULL);
+      if (l) n += fprintf(stderr, "%s.\n", lpMsgBuf);
+      LocalFree(lpMsgBuf); // Free the UTF-8 buffer
+    }
+    LocalFree(lpwMsgBuf); // Free the UTF-16 buffer
+  }
+  if (!l) { // We did not find a description string for this error code, or could not display it
+    n += fprintf(stderr, "Win32 error %lu (0x%08lX).\n", dwError, dwError);
   }
 
   return n;
