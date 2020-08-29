@@ -56,6 +56,7 @@
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 2.1.6.					      *
 *    2020-04-19 JFL Added support for MacOS. Version 2.2.                     *
+*    2020-08-28 JFL Avoid double CR in Win32 error messages. Version 2.2.1.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -63,8 +64,8 @@
 
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2020-04-19"
+#define PROGRAM_VERSION "2.2.1"
+#define PROGRAM_DATE    "2020-08-28"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -397,7 +398,7 @@ int main(int argc, char *argv[]) {
     case 3: fprintf(stderr, "Error writing to %s.\n", argv[3]); break;
     default: {
 #if defined(_WIN32)
-      LPVOID lpMsgBuf;
+      LPTSTR lpMsgBuf;
       if (FormatMessage(
 	FORMAT_MESSAGE_ALLOCATE_BUFFER |
 	FORMAT_MESSAGE_FROM_SYSTEM |
@@ -408,7 +409,12 @@ int main(int argc, char *argv[]) {
 	(LPTSTR) &lpMsgBuf,
 	0,
 	NULL )) {
-	fprintf(stderr, "Error. %s\n", lpMsgBuf);
+	int l = lstrlen(lpMsgBuf);
+	/* Remove the trailing new line and dot, if any. */
+	if (l && (lpMsgBuf[l-1] == '\n')) lpMsgBuf[--l] = '\0';
+	if (l && (lpMsgBuf[l-1] == '\r')) lpMsgBuf[--l] = '\0';
+	if (l && (lpMsgBuf[l-1] == '.')) lpMsgBuf[--l] = '\0';
+	fprintf(stderr, "Error. %s.\n", lpMsgBuf);
 	LocalFree( lpMsgBuf );     /* Free the buffer */
       } else {
 	fprintf(stderr, "Unexpected return value: %d\n", err); break;
