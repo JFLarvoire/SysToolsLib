@@ -21,6 +21,10 @@
 *		    PrintCError(), and use them instead of COMPLAIN().        *
 *		    Added the -d debug option. Version 1.1.		      *
 *    2020-08-29 JFL Merged in changes from another PrintWin32Error(). V 1.1.1.*
+*                   Added option -8 as an alias for option -U to input UTF-8, *
+*                   and option -16 as an alias for option -u to input UTF-16. *
+*    2020-08-30 JFL Added the autodetection of UTF encodings.                 *
+*		    Version 1.2.					      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -28,8 +32,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows Notepad"
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2020-08-29"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2020-08-30"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -44,6 +48,9 @@
 #include <io.h>
 #include <windows.h>
 #include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -55,7 +62,14 @@
 
 /* Local definitions */
 
-#define CP_NULL ((UINT)-1) /* No code page. Can't use 0 as CP_ACP is 0 */
+#define CP_NULL ((UINT)-1)	/* No code page. Can't use 0 as CP_ACP is 0 */
+#define CP_AUTODETECT ((UINT)-2) /* For autodetecting the code page */
+#define CP_UTF16    1200
+#define CP_UTF16LE  1200
+#define CP_UTF16BE  1201
+#define CP_UTF32   12000
+#define CP_UTF32LE 12000
+#define CP_UTF32BE 12001
 
 /* Global variables */
 
@@ -68,6 +82,8 @@ int IsSwitch(char *pszArg);
 int PrintCError(const char *pszExplanation, ...);
 int PrintWin32Error(const char *pszExplanation, ...);
 int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars);
+int is_pipe(FILE *f);		/* Check if a file handle is a pipe */
+UINT DetectUTF(const char *pBuffer, size_t nBufSize);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -92,13 +108,12 @@ int main(int argc, char *argv[]) {
   size_t  nTotal = 0;		// Total number of characters read.
   char   *pBuffer;
   int i;
-  UINT codepage;
+  UINT codepage = CP_AUTODETECT;
+  UINT uConsoleCP = GetConsoleOutputCP();
+  UINT uWindowsCP = GetACP();	/* From HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage\ACP */
   int iDone;
   int iRet;
   int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
-
-  /* Record the console code page, to allow converting the output accordingly */
-  codepage = GetConsoleOutputCP();
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -107,6 +122,14 @@ int main(int argc, char *argv[]) {
       if (streq(arg+1, "?")) {		/* -?: Help */
 	usage();                            /* Display help */
 	return 0;
+      }
+      if (streq(arg+1, "8")) {		/* -8: Assume the input is UTF-8 text */
+	codepage = CP_UTF8;
+	continue;
+      }
+      if (streq(arg+1, "16")) {		/* -16: Assume the input is UTF-16 text */
+	codepage = CP_UTF16;
+	continue;
       }
       if (streq(arg+1, "A")) {		/* Assume the input is ANSI text */
 	codepage = CP_ACP;
@@ -123,7 +146,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(arg+1, "u")) {		/* Assume the input is Unicode */
-	codepage = CP_NULL;
+	codepage = CP_UTF16;
 	continue;
       }
       if (streq(arg+1, "U")) {		/* Assume the input is UTF-8 text */
@@ -174,8 +197,21 @@ int main(int argc, char *argv[]) {
   }
   if (nTotal > 0) {
     WCHAR *pwUnicodeBuf = (WCHAR *)pBuffer;
+    /* Use heuristics to select a codepage, if none was provided */
+    if (codepage == CP_AUTODETECT) {
+      codepage = DetectUTF(pBuffer, nTotal); /* Is this a UTF encoding */
+      if (!codepage) { /* If not, assume it's either the Windows or the console CP */
+      	if (is_pipe(stdin) || isatty(_fileno(stdin))) {
+      	  codepage = uConsoleCP;
+      	  DEBUG_PRINTF(("It's not UTF, and coming from the console or a pipe => Using the current console code page %u\n", codepage));
+      	} else {
+      	  codepage = uWindowsCP;
+      	  DEBUG_PRINTF(("It's not UTF, and coming from a file => Using the Windows system code page %u\n", codepage));
+      	}
+      }
+    }
     /* This is text. Convert it to Unicode to avoid codepage issues */
-    if (codepage != CP_NULL) {
+    if (codepage != CP_UTF16) {
       pwUnicodeBuf = (WCHAR *)malloc(2*(nTotal));
       if (!pwUnicodeBuf) {
 	PrintCError("Can't convert the input to Unicode");
@@ -239,16 +275,18 @@ Switches:\n\
   -?        Display this help screen\n\
   -A        The input is ANSI text (Code page %u)\n\
   -O        The input is OEM text (Code page %u)\n\
-  -u        The input is UTF-16 text (Unicode)\n\
-  -U        The input is UTF-8 text (Code page 65001)\n\
+  -u|-16    Assume input is UTF-16 text (Unicode)\n\
+  -U|-8     Assume input is UTF-8 text (Code page 65001)\n\
   -V        Display the program version\n\
   -z        Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
 \n\
-Default input encoding: The current console code page (Code page %u).\n\
+Default input encoding: UTF-8 or UTF-16 if valid; Else for data coming through\n\
+a pipe the current console code page (Code page %u); Else for files the Windows\n\
+System Code Page (Code page %u).\n\
 \n"
 "Author: Jean-François Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, cpANSI, cpOEM, cpCurrent);
+, cpANSI, cpOEM, cpCurrent, cpANSI);
 
   return;
 }
@@ -537,4 +575,147 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
 cleanup:
   GlobalFree(pGlobalBuf);
   return iResult;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    is_pipe						      |
+|									      |
+|   Description     Check if a FILE is a pipe			 	      |
+|									      |
+|   Parameters     FILE *f		    The file to test		      |
+|									      |
+|   Returns	    TRUE if the FILE is a pipe				      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#ifndef S_IFIFO
+#define S_IFIFO         0010000         /* pipe */
+#endif
+
+int is_pipe(FILE *f) {
+  int err;
+  struct stat buf;			/* Use MSC 6.0 compatible names */
+  int h;
+
+  h = fileno(f);			/* Get the file handle */
+  err = fstat(h, &buf);			/* Get information on that handle */
+  if (err) return FALSE;		/* Cannot tell more if error */
+  return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    DetectUTF						      |
+|									      |
+|   Description     Detect if a buffer contains a kind of UTF text encoding   |
+|		    							      |
+|   Parameters      const char *pBuffer		A data buffer with text	      |
+|		    size_t nBufSize		The number of bytes in buffer |
+|		    							      |
+|   Returns	    0 | CP_UTF7 | CP_UTF8 | CP_UTF16 | CP_UTF16BE	      |
+|		    							      |
+|   History								      |
+|    Long ago	JFL Implemented UTF-7/8/16 BOM detection in conv.c.	      |
+|    2020-08-11 JFL Implemented the detection of UTF-8 and UTF-16 without BOM.|
+|    2020-08-30 JFL Created this routine from code in conv.c.                 |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+UINT DetectUTF(const char *pBuffer, size_t nBufSize) {
+  DEBUG_CODE(
+  char *pszMsg = NULL;
+  )
+  UINT cp = 0;
+  
+  /* First look for a Unicode BOM: https://en.wikipedia.org/wiki/Byte_order_mark */
+  if ((nBufSize >= 3) && !strncmp(pBuffer, "\xEF\xBB\xBF", 3)) { /* UTF-8 BOM */
+    cp = CP_UTF8;
+    DEBUG_CODE(pszMsg = "Found a UTF-8 BOM";)
+  } else if ((nBufSize >= 4) && (!strncmp(pBuffer, "\x2B\x2F\x76", 3)) && strchr("\x38\x39\x2B\x2F", pBuffer[3])) { /* UTF-7 BOM */
+    cp = CP_UTF7;
+    DEBUG_CODE(pszMsg = "Found a UTF-7 BOM";)
+  } else if ((nBufSize >= 2) && !strncmp(pBuffer, "\xFF\xFE", 2)) { /* UTF-16 BOM */
+    cp = CP_UTF16;
+    DEBUG_CODE(pszMsg = "Found a UTF-16 BOM";)
+  } else if ((nBufSize >= 2) && !strncmp(pBuffer, "\xFE\xFF", 2)) { /* UTF-16 BE BOM */
+    cp = CP_UTF16BE;
+    DEBUG_CODE(pszMsg = "Found a UTF-16 BE BOM";)
+  } else { /* No Unicode BOM. Try detecting UTF-8 or UTF-16 without BOM */
+    size_t n;
+    size_t nNonASCII = 0;
+    size_t nOddNUL = 0;
+    size_t nEvenNUL = 0;
+    int isValidUTF8 = TRUE;
+    for (n=0; n<nBufSize; n++) {
+      char c = pBuffer[n];
+      if (!c) {
+	if (n & 1) {
+	  nOddNUL += 1;
+	} else {
+	  nEvenNUL += 1;
+	}
+	continue;
+      }
+/* See https://en.wikipedia.org/wiki/UTF-8 */
+#define IS_ASCII(c)     ((c&0x80) == 0)
+#define IS_LEAD_BYTE(c) ((c&0xC0) == 0xC0)
+#define IS_TAIL_BYTE(c) ((c&0xC0) == 0x80)
+      if (IS_ASCII(c)) continue;
+      nNonASCII += 1;
+      if (isValidUTF8) { /* No need to keep validating if we already know it's invalid */
+	if (IS_LEAD_BYTE(c)) {
+	  int nTailBytesExpected = 0;
+	  if ((c&0x20) == 0) {
+	    nTailBytesExpected = 1;
+	    if ((c == '\xC0') || (c == '\xC1')) isValidUTF8 = FALSE; /* Overlong encoding of 7-bits ASCII */
+	  } else if ((c&0x10) == 0) {
+	    nTailBytesExpected = 2;
+	  } else if ((c&0x08) == 0) {
+	    nTailBytesExpected = 3;
+	    if ((c >= '\xF5') && (c <= '\xF7')) isValidUTF8 = FALSE; /* Encoding of invalid Unicode chars > \u10FFFF */
+	  } else {	/* No valid Unicode character requires a 5-bytes or more encoding */
+	    isValidUTF8 = FALSE;
+	    continue;
+	  }
+	  /* Then make sure that the expected tail bytes are all there */
+	  for ( ; nTailBytesExpected && (++n < nBufSize); nTailBytesExpected--) {
+	    c = pBuffer[n];
+	    if (!IS_ASCII(c)) nNonASCII += 1;
+	    if (!IS_TAIL_BYTE(c)) { /* Invalid UTF-8 sequence */
+	      isValidUTF8 = FALSE;
+	      break;
+	    }
+	  }
+	  if (nTailBytesExpected) isValidUTF8 = FALSE; /* Incomplete UTF-8 sequence at the end of the buffer */
+	} else { /* Invalid UTF-8 tail byte not preceeded by a lead byte */
+	  isValidUTF8 = FALSE;
+	} /* End if (IS_LEAD_BYTE(c)) */
+      } /* End if (isValidUTF8) */
+    } /* End for each byte in pBuffer[] */
+    /* Heuristics for identifying an encoding from the information gathered so far.
+       Note that this choice is probabilistic. It may not be correct in all cases. */
+    if (nEvenNUL + nOddNUL) { /* There are NUL bytes, so it's probably a kind of UTF-16 */
+      /* TO DO: Try distinguishing UTF-16 LE and UTF-16 BE */
+      cp = CP_UTF16; /* Assume it's UTF-16 LE for now, which is the default in Windows */
+      DEBUG_CODE(pszMsg = "Detected UTF-16 without BOM";)
+    } else if (nNonASCII && isValidUTF8) {
+      cp = CP_UTF8; /* We've verified this is valid UTF-8 */
+      DEBUG_CODE(pszMsg = "Detected UTF-8 without BOM";)
+    } else {
+      cp = 0; /* Default to the Windows encoding */
+      DEBUG_CODE(pszMsg = "This is not a UTF encoding";)
+    }
+    DEBUG_PRINTF(("nOddNUL = %lu\n", (unsigned long)nOddNUL));
+    DEBUG_PRINTF(("nEvenNUL = %lu\n", (unsigned long)nEvenNUL));
+    DEBUG_PRINTF(("nNonASCII = %lu\n", (unsigned long)nNonASCII));
+    DEBUG_PRINTF(("isValidUTF8 = %d\n", isValidUTF8));
+  }
+
+  DEBUG_PRINTF(("DetectUTF(): return %u; // %s\n", cp, pszMsg));
+  return cp;
 }
