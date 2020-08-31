@@ -4,6 +4,22 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-08-31
+### New
+- C/SRC/conv.c: Added the automatic detection of UTF-8 and UTF-16 input without BOM.
+  Changed the default output file encoding to UTF-8 on Windows 10 >= 2019.
+  Added type * to get the input encoding from IMultiLanguage2::DetectInputCodepage().
+- C/SRC/2clip.c, 2note.c: Added the automatic detection of UTF-8 and UTF-16 input, both with and without BOM.
+  Added options -8 and -16 to force decoding the input as UTF-8 or UTF-16.
+- C/SRC/1clip.c: Added options -8 and -16 to encode the output as UTF-8 or UTF-16.
+- C/SRC/update.c, dirc.c: Added the 2nd argument D:= , refencing the same path as the first argument, but on another drive.
+
+### Fixed
+- C/SRC/backnum.c: The debug version no longer outputs double CRs at the end of Win32 error messages.
+- C/MsvcLibX/src/err2errno.c: The Win32 error messages no longer contain a CR character.
+- C/SRC/1clip.c, 2clip.c, 2note.c, driver.c: Non ASCII characters in Win32 error messages are now displayed correctly.
+- C/SRC/conv.c, msgbox.c: Fixed a memory allocation bug causing a debug mode crash.
+
 ## [Unreleased] 2020-07-29
 ### New
 - C/MsvcLibX/src/snprintf.c: Added fixed versions of snprintf() and vsnprintf() for old versions of MSVC.
