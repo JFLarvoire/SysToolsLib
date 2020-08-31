@@ -48,6 +48,8 @@
 *    2020-04-25 JFL Rewrote ReportWin32Error as PrintWin32Error(); Added new  *
 *		    PrintCError(), and use them instead of PUTERR(). V 2.1.2. *
 *    2020-08-29 JFL Merged in changes from another PrintWin32Error(). V 2.1.3.*
+*                   Added option -8 as an alias for option -U to output UTF-8,*
+*                   and option -16 to output UTF-16. Version 2.2.             *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,7 +57,7 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.1.3"
+#define PROGRAM_VERSION "2.2"
 #define PROGRAM_DATE    "2020-08-29"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
@@ -151,6 +153,14 @@ int main(int argc, char *argv[]) {
       if (streq(arg+1, "?")) {			/* -?: Help */
 	usage();                            /* Display help */
 	return 0;
+      }
+      if (streq(arg+1, "8")) {			/* -8: Output as UTF-8 text */
+	codepage = CP_UTF8;
+	continue;
+      }
+      if (streq(arg+1, "16")) {			/* -u: Output as UTF-16 text */
+	codepage = CP_NULL;
+	continue;
       }
       if (streq(arg+1, "a")) {			/* -a: Get the ANSI type */
 	type = CF_TEXT;
@@ -270,6 +280,7 @@ Usage:\n\
 \n\
 Options:\n\
   -?      Display this help screen\n\
+  -16     Output using the UTF-16 encoding\n\
   -a      Get the ANSI text from the clipboard\n\
   -A      Output using the ANSI encoding (Code page %u)\n\
   -b      Output binary data\n"
@@ -285,7 +296,7 @@ Options:\n\
   -r      Get the RTF data from the clipboard\n\
   -t N    Get format N. Default: 1 = plain text\n\
   -u      Get the Unicode text from the clipboard (Default)\n\
-  -U      Output using the UTF-8 encoding (Code page 65001)\n\
+  -U|-8   Output using the UTF-8 encoding (Code page 65001)\n\
   -V      Display the program version\n\
   -Z      Append a Ctrl-Z (aka. SUB or EOF) to the output\n\
 \n\
