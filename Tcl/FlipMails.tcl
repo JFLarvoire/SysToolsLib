@@ -35,13 +35,14 @@
 #    2018-09-18 JFL If the mail has double interline, halve interlines.       #
 #    2018-10-09 JFL Decode many common Unicode emoticons to ASCII art.        #
 #    2019-05-13 JFL Remove URL defense call wrappers.			      #
+#    2020-06-19 JFL Also reformat Yammer threads.
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2019-05-13"
+set version "2020-06-22"
 
 # Force running the script as UTF-8, if executed in a system with a different encoding.
 # This is necessary because we have Unicode strings in this script encoded as UTF-8.
@@ -1411,7 +1412,7 @@ proc Realign {text {merge 1}} {
     regsub -all {😆} $line "X-D" line		;# Laughing with eyes crossed
     regsub -all {😍} $line "8-)" line		;# Loving smile
     regsub -all {|☹|🙁|😠} $line ":-("	 line	;# Frown
-    regsub -all {😞|😟} $line ":-\[" line	;# Angry
+    regsub -all {😞|😟|🤬} $line ":-\[" line	;# Angry
     regsub -all {😡|😣|😖} $line ":-<" line	;# Pouting
     regsub -all {😢|😭} $line ":'-(" line	;# Crying
     regsub -all {😂} $line ":'-)" line		;# Tears of happiness
@@ -1576,6 +1577,64 @@ proc DeQuote {input} {
   return $input
 }
 
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function	    FormatYammerThread                             	      #
+#                                                                             #
+#   Description     Format a Yammer thread				      #
+#                                                                             #
+#   Parameters      text        A block of text with multiple lines           #
+#                                                                             #
+#   Returns 	    The reformatted thread, with separators between posts     #
+#                                                                             #
+#   Notes:	                                                              #
+#                                                                             #
+#   History:								      #
+#    2020-06-19 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+proc FormatYammerThread {text} {
+  # Remove \r to be sure
+  regsub -all "\r?\n" $text "\n" text
+  # Fix the initial author line
+  set rx {^\n*(New: )?([^\n]+?) FollowFollow (\2[^\n]+?)\n}
+  regsub -all $rx $text "\\3\n\n\n\n" text
+  # Merge the duplicate author lines in each reply, and add separator lines between posts
+  set rx {(New: )?([^\n]+?)( in reply to [^\n]+?)? [-–] [^\n]+?\n[^\n]*?\n\2[^\n]*? [-–] ([^\n]+?)\n}
+  regsub -all $rx $text "\n$::dashLine\n\n\\2\\3 - \\4\n\n\n\n" text
+  # Halve the number of blank lines in the body of each post
+  regsub -all "\n\n" $text "\n" text
+  # Remove the collapse links
+  regsub -all {‹ collapse\n} $text "\n" text
+  # Remove LIKE prompts, etc
+  set rx {\n LIKE like this message  REPLY reply to this message  SHARE share this message[^\n]+\n}
+  regsub -all $rx $text "\n\n" text
+  # Remove repeated attached links
+  set rx {\nAttached link[^\n]+?\. Click to open in new tab\.\n([^\n]+\n)+More link options}
+  regsub -all $rx $text "" text
+  # Remove the extra blank lines in the end of each post
+  regsub -all "\n+${::dashLine}\n+" $text "\n\n$::dashLine\n\n" text
+  # Remove the counter, etc, at the end of the first thread
+  set rx {\nSeen by \d+\n(\s*\d+ shares\n)?(Add Topics\n)?((Show \d+ previous replies\n)?\n-{50})}
+  regsub $rx $text "\n\\3" text
+  # Warn if there are hidden posts
+  set n 0
+  set rx {Show (\d+) previous replies\n}
+  regexp $rx $text - n
+  if {$n} {
+    puts stderr "Warning: There are $n hidden posts in this thread"
+    regsub $rx $text {} text
+  }
+  # Warn if there are unexpanded posts
+  set n [regexp -all {expand ›\n} $text]
+  if {$n} {
+    puts stderr "Warning: There are $n unexpanded posts in this thread"
+  }
+  # Done
+  return $text
+}
+
 } ;# End of TraceProcs section
 
 #-----------------------------------------------------------------------------#
@@ -1625,6 +1684,7 @@ set noOptions 0
 set realign 1
 set merge 1
 set dequote 1
+set yammer 1
 while {"$args" != ""} {
   set arg [PopArg]
   if {[string match -* $arg] && !$noOptions} {
@@ -1696,6 +1756,11 @@ if {$dequote} {
 # Realign paragraphs and (possibly multi-level) bullet lists
 if {$realign} {
   set input [Realign $input $merge]
+}
+
+# Cleanup Yammer threads
+if {$yammer && [regexp {LIKE like this message  REPLY reply to this message  SHARE share this message} $input -]} {
+  set input [FormatYammerThread $input]
 }
 
 # Recognize mail separators
