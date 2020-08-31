@@ -13,6 +13,7 @@ For more details about changes in a particular area, see the README.txt and/or N
   Added options -8 and -16 to force decoding the input as UTF-8 or UTF-16.
 - C/SRC/1clip.c: Added options -8 and -16 to encode the output as UTF-8 or UTF-16.
 - C/SRC/update.c, dirc.c: Added the 2nd argument D:= , refencing the same path as the first argument, but on another drive.
+- Tcl/FlipMails.tcl: Also reformat Yammer threads.
 
 ### Fixed
 - C/SRC/backnum.c: The debug version no longer outputs double CRs at the end of Win32 error messages.
