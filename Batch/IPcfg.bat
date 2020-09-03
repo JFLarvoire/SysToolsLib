@@ -50,13 +50,14 @@
 :#   2013-06-26 JFL Restructured to sort interfaces in alphabetic order.      #
 :#   2015-02-24 JFL Fixed the -i option for VPN interfaces without a MAC@.    #
 :#                  Updated -i to display all interfaces by default.          #
+:#   2020-09-03 JFL Fixed the virtual adapter detection for English.          #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2015-02-24"
+set "VERSION=2020-09-03"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 
@@ -244,7 +245,7 @@ if .%VERBOSE%.==.1. goto :Echo
 goto :Echo.Log
 
 :Echo.Debug
-if .%DEBUG%.==.1. goto :Echo
+if .%DEBUG%.==.1. >&2 echo.%INDENT%%*
 goto :Echo.Log
 
 :# Echo and log variable values, indented at the same level as the debug output.
@@ -415,6 +416,8 @@ set "remove.Wir=21"
 set "remove.Ppp=12"
 set "remove.Tun=15"
 set "remove.Vir=0"
+:# Property names that we'll need to process
+set "description=Description"
 
 :# Find the localization, and adjust locale-specific settings if needed.
 :# Note that each language uses a specific code page in cmd boxes. Some SBCS and some DBCS.
@@ -645,14 +648,60 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
       set "NPROPS=0"
     ) else (
       :# This is an interface property line, shifted to the right.
-      if not !action!==list (
-	:# Record all property lines.
-	set "NPROP=!NPROPS!"
-	set /a NPROPS=NPROPS+1
-	set "NPROP2=0!NPROP!"
-	set "NPROP2=!NPROP2:~-2!"
-	set "ADAPTER[!NADAPTER!].LINES.!NPROP2!=!line!"
-	%PUTVARS.D% ADAPTER[!NADAPTER!].LINES.!NPROP2!
+      :# Record them in any case: We need the description, even for the action "list".
+      set "NPROP=!NPROPS!"
+      set /a NPROPS=NPROPS+1
+      set "NPROP2=0!NPROP!"
+      set "NPROP2=!NPROP2:~-2!"
+      set "ADAPTER[!NADAPTER!].LINES.!NPROP2!=!line!"
+      %PUTVARS.D% ADAPTER[!NADAPTER!].LINES.!NPROP2!
+      :# Look for the properties with additional information we need
+      if not "!line: : =!"=="!line!" ( :# If this is a "property . . . : value" definition line
+	for /f "tokens=1,* delims=:" %%p in ("!line:~3!") do set "prop=%%p" & set "val=%%q"
+	:# Remove all trailing . . . . behind the property name
+	:# Note: Don't use library.bat :trimright for performance reasons.
+	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	set prop=!prop: .=!
+	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	%PUTVARS.D% prop val
+	:# Now check if the description identifies this as a virtual interface
+	if "!prop!"=="!description!" if not "!val:Virtual=!"=="!val!" (
+	  %ECHO.D% It's a virtual adapter!
+	  set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	)
+      )
+    )
+  )
+)
+
+:# If we didn't get all properties, repeat with them all, because we at least need the description
+set NADAPTER=-1
+if not "!opts: /all=!"=="!opt!" %FOREACHLINE% %%l in ('ipconfig!opts! /all') do (
+  set "line=%%l"
+  :# Work around for XP ipconfig.exe bug: Remove the trailing \x0D
+  if %WINMAJOR%==5 set line=!line:~0,-1!
+  if not "!line!"=="" (
+    set "head=!line:~0,3!"
+    :# Some lines begin with tab-space-space... Treat them as space-space-space.
+    if "!head!"=="	  " set "head=   "
+    if not "!head!"=="   " (	:# This is an interface title line
+      :# Assume the adapters are in the same order as the first time
+      set /a NADAPTER=NADAPTER+1
+    ) else (			:# This is an interface property line, shifted to the right.
+      :# Look for the properties with additional information we need
+      if not "!line: : =!"=="!line!" ( :# If this is a "property . . . : value" definition line
+	for /f "tokens=1,* delims=:" %%p in ("!line:~3!") do set "prop=%%p" & set "val=%%q"
+	:# Remove all trailing . . . . behind the property name
+	:# Note: Don't use library.bat :trimright for performance reasons.
+	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	set prop=!prop: .=!
+	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	%PUTVARS.D% prop val
+	:# Now check if the description identifies this as a virtual interface
+	if "!prop!"=="!description!" if not "!val:Virtual=!"=="!val!" (
+	  %ECHO.D% It's a virtual adapter!
+	  set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	)
       )
     )
   )
@@ -673,7 +722,7 @@ if "%action%"=="list" (
 	echo !name!
       ) else (
 	set "line=!line: :=!
-	echo !line::=!
+	echo [!type!]  !line::=!
       )
     )
   )
@@ -687,7 +736,7 @@ for /f "tokens=1,2 delims==" %%a in ('echo ADAPTER.NAMES.!ADAPTER[0].NAME!^=0^& 
   set "NADAPTER=%%b"
   set "name=!name:ADAPTER.NAMES.=!"
   set "line=!ADAPTER[%%b].LINE!"
-  set "type=!line:~%type_at%,3!"
+  set "type=!ADAPTER[%%b].TYPE!"
   set "show=0"
   for %%t in (!type!) do set "show=!show.%%t!"
   if not "%adapter%"=="" ( :# If a name is specified, and if it does _Not_ match, then don't show it.
