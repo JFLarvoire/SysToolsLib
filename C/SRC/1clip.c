@@ -50,6 +50,7 @@
 *    2020-08-29 JFL Merged in changes from another PrintWin32Error(). V 2.1.3.*
 *                   Added option -8 as an alias for option -U to output UTF-8,*
 *                   and option -16 to output UTF-16. Version 2.2.             *
+*    2020-09-03 JFL Minor correction to one error message. Version 2.2.1.     *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,8 +58,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2020-08-29"
+#define PROGRAM_VERSION "2.2.1"
+#define PROGRAM_DATE    "2020-09-03"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -627,7 +628,7 @@ int CopyClip(UINT type, UINT codepage) {
 				     NULL		/* lpUsedDefaultChar */
 				     );
 	if (!nChars) {
-	  PrintWin32Error("Cannot convert the data to the output code page.");
+	  PrintWin32Error("Cannot convert the data to the output code page");
 	  goto cleanup;
 	}
 	DEBUG_PRINTF(("Converted %d WCHARs to %d chars in CP %u\n", nWChars, nChars, ActualCP(codepage)));
