@@ -27,13 +27,18 @@
 :#   2020-03-12 JFL Search python.exe in more locations.                      #
 :#   2020-03-13 JFL Added the update of the local and global system PATH.     #
 :#                  Merged in Batch debug library updates.                    #
+:#   2020-10-01 JFL Bug fix: Use reg.exe to set system paths for large PATHs, #
+:#                  as setx.exe fails if the PATH is > 1KB. If using reg.exe, #
+:#                  still use setx on another variable to broadcast the change.
+:#                  Bug fix: Allow running as non-administrator, to be able   #
+:#                  to at least update local settings.                        #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-03-13"
+set "VERSION=2020-10-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1564,22 +1569,23 @@ for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to add
 :# goto :MasterPath.Set
 
 :MasterPath.Set
-set "SETX="
+set "MORE_THAN_1KB=!MPATH:~1024!" &:# Defined if the new PATH is larger than 1 KB
+:# Gotcha: reg.exe and setx.exe interpret a trailing \" as escaping the "
+if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
+set "CMD="
 for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
-if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred)
-  :# Gotcha: regex.exe does interpret a trailing \" as escaping the "
-  if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
-  :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
-:# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
-  set CMD=setx %PATHVAR% "!MPATH!" %SETXOPT%
-) else ( :# Fallback to updating the registry value manually using reg.exe.
+if not defined MORE_THAN_1KB ( :# If the PATH is less than 1KB long, then try using setx
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred if within the 1KB limit)
+    :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set ^"CMD=setx %PATHVAR% "!MPATH!" %SETXOPT%^"
+  )
+)  
+if not defined CMD ( :# Fallback to updating the registry value manually using reg.exe.
   :# reg.exe updates the %PATHVAR%, but does _not_ broadcast a WM_SETTINGCHANGE to all apps
   :# Note: On XP, /f does not work if it is the last option.
-  set CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"
-  echo Warning: setx.exe is not available on this system.
-  echo The %OWNER%'s default PATH update will only be visible after a reboot.
-  echo Note: setx.exe is standard in Windows Vista and later versions.
-  echo       A version for Windows XP is available in the XP Resource Kit.
+  set ^"CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"^"
+  set "NEED_BROADCAST=1"
 )
 if "%NOEXEC%"=="0" (	:# Normal execution mode
   :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
@@ -1685,8 +1691,7 @@ if defined RETVAR set "%RETVAR%=%EXE%"
 :# First check administrator rights
 ren %SystemRoot%\win.ini win.ini >NUL 2>&1
 if errorlevel 1 (
-  >&2 %ECHO% Error: This must be run as Administrator.
-  %RETURN% 1
+  %ECHO% Warning: This must be run as Administrator for changing system settings.
 )
 %UPVAR% PATH
 %UPVAR% PATHEXT
@@ -1809,6 +1814,7 @@ set SH=!%2!
 set CMD=!%3!
 set DEFCLASS=%4
 set NEEDSETUP=0
+set "NEED_BROADCAST=0"
 
 :# The open command may of may not be quoted
 set ARGS=!CMD!
@@ -1891,6 +1897,7 @@ for %%u in (!USERS!) do (
       %ECHO% :# Removing the .%EXT% extension class association for user !USER!
       :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
       %EXEC% reg delete "!KEY!" /f
+      set "NEED_BROADCAST=1"
     )
   ) else (
     %ECHO% The .%EXT% Extension is not associated for user !USER! with any specific class
@@ -1937,6 +1944,7 @@ if defined CLASS (
       	>NUL !CHGCMD!
         call :CheckError !ERRORLEVEL!
       )
+      set "NEED_BROADCAST=1"
     )
   )
   if !FIRED!==no ( :# Else one of the commands matches
@@ -1974,6 +1982,7 @@ if defined CLASS (
     if %MODE%==setup (
       %ECHO% :# Deleting it
       %EXEC% reg delete !KEY! /v command /f
+      set "NEED_BROADCAST=1"
     )
   ) else (
     endlocal
@@ -2019,6 +2028,7 @@ if defined CMD3 (
 	>NUL !CHGCMD!
 	call :CheckError !ERRORLEVEL!
       )
+      set "NEED_BROADCAST=1"
     )
   )
 ) else ( :# CMD3 is not defined
@@ -2056,6 +2066,7 @@ if "%InstallPath%"=="%PYTHONBIN%" (
     %ECHO% :# Updating the InstallPath registration to: "%PYTHONBIN%\"
     :# Note: The double \\ in the end is necessary for reg.exe, else one \ would escape the "
     %EXEC% reg add "%KEY%" /d "%PYTHONBIN%\\" /f
+    set "NEED_BROADCAST=1"
   )
 )
 
@@ -2081,6 +2092,7 @@ if not "%PythonPath%"=="%PythonPath2%" (
     %ECHO% :# Updating the PythonPath registration to: "!PythonPath2!"
     :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
     %EXEC% reg add "%KEY%" /d "!PythonPath2!\" /f
+    set "NEED_BROADCAST=1"
   )
 )
 
@@ -2182,6 +2194,7 @@ if "!CONTAINS_P!"=="contains" (
   if %MODE%==setup (
     %ECHO% :# Adding the Python directory "%PYTHONBIN%" to the %OWNER% PATH
     call :MasterPath.Add1 "%PYTHONBIN%"
+    rem set "NEED_BROADCAST=1" &:# Already done by the routine
   )
 )
 %ECHO% The global %OWNER% PATH !CONTAINS_S! !SCRIPTSDIR!
@@ -2196,6 +2209,7 @@ if "%CONTAINS_S%"=="contains" (
   if %MODE%==setup (
     %ECHO% :# Adding the Python scripts directory "%SCRIPTSDIR%" to the %OWNER% PATH
     call :MasterPath.Add1 "%SCRIPTSDIR%"
+    rem set "NEED_BROADCAST=1" &:# Already done by the routine
   )
 )
 %ECHO% Other Python directories in the global %OWNER% PATH:
@@ -2211,6 +2225,7 @@ if not defined OTHERS (
   for %%o in (!OTHERS!) do (
     %ECHO% :# Removing the "%%~o" directory from the %OWNER% PATH
     call :MasterPath.Remove1 "%%~o"
+    rem set "NEED_BROADCAST=1" &:# Already done by the routine
   )
 )
 if not "!MPATH!"=="!MPATH0!" (
@@ -2234,11 +2249,7 @@ if %PEXTOK%==0 (
   if %MODE%==setup (
     %ECHO% :# Updating global environment variable PATHEXT to: %PE%;.%EXT%
     %EXEC% reg add "%KEY%" /v PATHEXT /d "%PE%;.%EXT%" /f
-    %ECHO% :# Notifying all windows of the environment block change
-    :# The ^) below is necessary to prevent the ) from closing the if block ... v
-    %ECHO.XVD% C# SendMessage(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment"^);
-    :# Run a second instance of this script in PowerShell, to do the broadcast
-    %IF_EXEC% PowerShell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"
+    set "NEED_BROADCAST=1"
   )
 ) else (
   set "MSG="
@@ -2266,6 +2277,32 @@ if %PEXTOK%==0 (
   %IF_VERBOSE% set "MSG=The local PATHEXT contains .%EXT%"
   call :Echo.OK " "
   %ECHO% !MSG!
+)
+
+:# Finally, if any registry setting changed, broadcast that to the rest of the system
+if "%NEED_BROADCAST%"=="1" (
+  %ECHO% :# Notifying all windows of the system environment change
+  :# Find a way to broadcast a WM_SETTINGCHANGE message
+  set "CMD="
+  for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred, as this is faster)
+    :# setx.exe updates _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set "VAR=PROCESSOR_ARCHITECTURE" &:# This system variable is always short, and is unlikely to ever change
+    set ^"CMD=setx !VAR! -k "%MENVKEY%\!VAR!" -m^"
+  ) else ( :# If powershell.exe is in the PATH, then use it to run the PS routine at the send of this script. (Slower)
+    for /f %%i in ("powershell.exe") do set "POWERSHELL=%%~$PATH:i"
+    if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"^"
+  )
+  if defined CMD (
+    %ECHO.XVD% !CMD!
+    :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+    :# Errors, if any, will still be output on stderr.
+    %IF_EXEC% !CMD! >NUL
+  ) else if "%QUIET%"=="0" ( :# Only happens in Windows XP or Windows 7 without setx.exe and PowerShell
+    echo Warning: Could not find a way to broadcast the change to other applications.
+    echo New shells will only have the updated settings after you log off and log back in.
+  )
 )
 
 %RETURN%
