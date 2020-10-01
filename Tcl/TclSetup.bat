@@ -1,5 +1,5 @@
 <# :# PowerShell comment block protecting the batch section
-@echo off & goto :init_batch
+@echo off
 :#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  File name       TclSetup.bat                                              #
@@ -34,14 +34,18 @@
 :#                  Accept start commands using copies of the default command.#
 :#                  Added a verification that there's no additional command   #
 :#		    associated with the class.				      #
+:#   2020-10-01 JFL Merged in Batch debug library updates.                    #
+:#                  Use either setx.exe (preferred) or PowerShell to          #
+:#                  broadcast a WM_SETTINGCHANGE message in the end.          #
+:#                  Bug fix: Allow running as non-administrator, to be able   #
+:#                  to at least update local settings.                        #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
-:init_batch
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2018-11-19"
+set "VERSION=2020-10-01"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -136,6 +140,9 @@ goto :eof
 :#                  But call itself has a quirk, which requires a convoluted  #
 :#                  workaround to process the /? argument.                    #
 :#                                                                            #
+:#                  Known limitation: Special character ^ is preserved within #
+:#                  "quoted" arguments, but not within unquoted arguments.    #
+:#                                                                            #
 :#                  Known limitation: After using :PopArg, all consecutive    #
 :#                  argument separators in %ARGS% are replaced by one space.  #
 :#                  For example: "A==B" becomes "A B"                         #
@@ -167,13 +174,18 @@ goto :eof
 call :Call.Init
 goto Call.end
 
+:Sub.Init # Create a SUB variable containing a SUB (Ctrl-Z) character
+>NUL copy /y NUL + NUL /a "%TEMP%\1A.chr" /a
+for /f %%c in (%TEMP%\1A.chr) do set "SUB=%%c"
+exit /b
+
 :Call.Init
 if not defined LCALL set "LCALL=call"	&:# Macro to call functions in this library
 set "POPARG=%LCALL% :PopArg"
 set "POPSARG=%LCALL% :PopSimpleArg"
 
 :# Mechanism for calling subroutines in a second external instance of the top script.
-set ^"XCALL=call "!ARG0!" -call^"	&:# This is the top script's (or this lib's if called directly) ARG0
+set ^"XCALL=call "!SFULL!" -call^"	&:# This is the full path to the top script's (or this lib's if called directly) ARG0
 set ^"XCALL@=!XCALL! :CallVar^"		&:# Indirect call, with the label and arguments in a variable
 
 :# Define a LF variable containing a Line Feed ('\x0A')
@@ -233,6 +245,9 @@ if defined ARGS (
   setlocal EnableDelayedExpansion
   for /f "delims=" %%a in ("!ARGS:%%=%%%%!") do endlocal & set ^"PopArg.ARGS=%%a^"
 )
+:# Note: The following call doubles ^ within "quotes", but not those outside of quotes.
+:# So :PopArg.Helper will correctly record ^ within quotes, but miss those outside. (Unless quadrupled!)
+:# The only way to fix this would be to completely rewrite :PopArg as a full fledged batch parser written in batch!
 call :PopArg.Helper %PopArg.ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
 :# Finding that impossible combination now is proof that the call was not executed.
 :# In this case, try again with the /? quoted, to prevent the call parser from processing it.
@@ -258,7 +273,7 @@ goto :PopArg.GetNext
 
 :PopArg.Eon
 setlocal DisableDelayedExpansion
-call :PopArg
+call :PopArg.Eoff
 call :Prep2ExpandVars ARG ^""ARG"^" ARGS
 setlocal EnableDelayedExpansion
 for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS!") do (
@@ -444,9 +459,16 @@ goto :eof
 :#                  Debug.Return    Log exit from a routine		      #
 :#                  Verbose.Off	    Disable the verbose mode                  #
 :#                  Verbose.On	    Enable the verbose mode		      #
+:#                                                                            #
 :#                  Echo	    Echo and log strings, indented            #
-:#                  EchoVars	    Display the values of a set of variables  #
-:#                  EchoArgs	    Display the values of all arguments       #
+:#                  EchoVars	    Display a set of variables name=value     #
+:#                  EchoStringVars  Display a string, then a set of variables #
+:#                  EchoArgs	    Display all arguments name=value          #
+:#                  EchoVals	    Display the value of multiple variables   #
+:#		    All functions in that series have two other derivatives,  #
+:#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
+:#                  These display only in debug and verbose mode respectively,#
+:#                  but always log the string (if a log file is defined).     #
 :#                                                                            #
 :#  Macros          %FUNCTION%	    Define and trace the entry in a function. #
 :#                  %UPVAR%         Declare a var. to pass back to the caller.#
@@ -478,12 +500,27 @@ goto :eof
 :#                  %ECHOVARS.V%    Idem, but display them in verb. mode only #
 :#                  %ECHOVARS.D%    Idem, but display them in debug mode only #
 :#                                                                            #
+:#                  %ECHOSVARS%	    Echo ARG1 before each variable.           #
+:#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
+:#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOVALS%      Echo the value of multiple variables      #
+:#                  %ECHOVALS.V%    Idem, but display them in verb. mode only #
+:#                  %ECHOVALS.D%    Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOSTRINGS%   Echo the value of multiple quoted strings #
+:#                  %ECHOSTRINGS.V% Idem, but display them in verb. mode only #
+:#                  %ECHOSTRINGS.D% Idem, but display them in debug mode only #
+:#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
 :#                                                                            #
 :#                  %FUNCTION0%	    Weak functions with no local variables.   #
 :#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
 :#                  %RETURN#%       Idem, with comments after the return      #
+:#                                                                            #
+:#                  %+INDENT%       Manually increase the debug INDENT        #
+:#                  %-INDENT%       Manually decrease the debug INDENT        #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
@@ -498,7 +535,8 @@ goto :eof
 :#                                  Inherited. Default=. (empty string)       #
 :#                                                                            #
 :#  Notes           All output from these routines is sent to the log file.   #
-:#                  In debug mode, the debug output is also sent to stderr.   #
+:#                  The debug output is sent stdout or stderr, depending on   #
+:#                  variable %>DEBUGOUT%.				      # 
 :#                                                                            #
 :#                  Traced functions are indented, based on the call depth.   #
 :#                  Use %ECHO% to get the same indentation of normal output.  #
@@ -562,6 +600,7 @@ if exist echo >&2 echo WARNING: The file "echo" in the current directory will ca
 :# Initialize other debug variables
 set "ECHO=%LCALL% :Echo"
 set "ECHOVARS=%LCALL% :EchoVars"
+set "ECHOSVARS=%LCALL% :EchoStringVars"
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -632,6 +671,20 @@ set "ECHO.V=%LCALL% :Echo.Verbose"
 set "ECHO.D=%LCALL% :Echo.Debug"
 set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
+set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
+set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "ECHOVALS=%LCALL% :EchoVals"
+set "ECHOVALS.V=%LCALL% :EchoVals.Verbose"
+set "ECHOVALS.D=%LCALL% :EchoVals.Debug"
+set "ECHOSTRINGS=%LCALL% :EchoStrings"
+set "ECHOSTRINGS.V=%LCALL% :EchoStrings.Verbose"
+set "ECHOSTRINGS.D=%LCALL% :EchoStrings.Debug"
+set "+INDENT=%LCALL% :Debug.IncIndent"
+set "-INDENT=%LCALL% :Debug.DecIndent"
+set ">MSGOUT.V[0]=rem"
+set ">MSGOUT.V[1]="
+set ">MSGOUT.D[0]=rem"
+set ">MSGOUT.D[1]=%>DEBUGOUT%"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -656,7 +709,7 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string alternance #%%\n%
   if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
@@ -719,6 +772,7 @@ setlocal DisableDelayedExpansion
 %>DEBUGOUT% echo %INDENT%call %*
 if defined LOGFILE %>>LOGFILE% echo %INDENT%call %*
 endlocal
+:Debug.IncIndent
 set "INDENT=%INDENT%  "
 goto :eof
 
@@ -733,7 +787,8 @@ goto :eof
 :Debug.Return0 %1=Exit code
 %>DEBUGOUT% echo %INDENT%return %1
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %1
-set "INDENT=%INDENT:~0,-2%"
+:Debug.DecIndent
+if defined INDENT set "INDENT=%INDENT:~2%"
 exit /b %1
 
 :Debug.Return# :# %RETURN.ERR% %MACRO.ARGS%
@@ -742,6 +797,16 @@ setlocal DisableDelayedExpansion
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
 endlocal
 goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
+
+:# A lightweight alternative for the %RETURN% macro.
+:# Only traces the %ERRORLEVEL%, but not the variables returned.
+:# Trace the return from a subroutine, and do the actual return, in a single call
+:Return
+setlocal
+set "ERR=%~1"
+if not defined ERR set "ERR=%ERRORLEVEL%"
+%>DEBUGOUT% echo   exit /b %ERR%
+2>NUL (goto) & exit /b %ERR% &:# Endlocal and pop one call stack, then return to the upper level
 
 :# Routine to set the VERBOSE mode, in response to the -v argument.
 :Verbose.Off
@@ -810,7 +875,12 @@ setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
-:EchoVars
+:EchoStringVars %1=string %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+set "INDENT=%INDENT%%~1 "
+shift
+goto :EchoVars.loop
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
 setlocal EnableExtensions EnableDelayedExpansion
 :EchoVars.loop
 if "%~1"=="" endlocal & goto :eof
@@ -835,6 +905,22 @@ goto :eof
 )
 goto :eof
 
+:EchoStringVars.Verbose
+%IF_VERBOSE% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
+:EchoStringVars.Debug
+%IF_DEBUG% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
 :# Echo a list of arguments.
 :EchoArgs
 setlocal EnableExtensions DisableDelayedExpansion
@@ -845,6 +931,58 @@ set /a N=N+1
 %>DEBUGOUT% echo %INDENT%set "ARG%N%=%1"
 shift
 goto EchoArgs.loop
+
+:# Echo the value of multiple variables on the same line
+:EchoVals	%1=VARNAME, %2=VARNAME, ...
+setlocal EnableDelayedExpansion
+set ">MSGOUT="
+:EchoVals.1
+set "EchoVals.LINE=" &:# Use a qualified name, in case the caller passes a variable called LINE
+for %%v in (%*) do set "EchoVals.LINE=!EchoVals.LINE! !%%v!"
+if not defined EchoVals.LINE set "EchoVals.LINE= " &:# Make sure there's a head space even if the variable list was empty
+%>MSGOUT% echo.%INDENT%!EchoVals.LINE:~1!
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%!EchoVals.LINE:~1!
+endlocal & exit /b
+
+:EchoVals.Verbose
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.V[%VERBOSE%]!"
+goto :EchoVals.1
+
+:EchoVals.Debug
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.D[%DEBUG%]!"
+goto :EchoVals.1
+
+:# Echo the value of multiple strings on the same line. They must not contain double quotes.
+:EchoStrings	%1=Quoted_String, %2=Quoted_String, ...
+setlocal DisableDelayedExpansion
+set ">MSGOUT="
+:EchoStrings.1
+set "LINE=" &:# No need for a qualified name, since we don't use caller variables
+for %%v in (%*) do set "LINE=%LINE% %%~v"
+if not defined LINE set "LINE= " &:# Make sure there's a head space even if the string list was empty
+%>MSGOUT% echo.%INDENT%%LINE:~1%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%LINE:~1%
+endlocal & exit /b
+
+:EchoStrings.Verbose
+setlocal DisableDelayedExpansion
+%IF_VERBOSE% (
+  set ">MSGOUT="
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
+
+:EchoString1.Debug
+setlocal DisableDelayedExpansion
+%IF_DEBUG% (
+  set ">MSGOUT=%>DEBUGOUT%"
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
 
 :Debug.End
 
@@ -977,7 +1115,8 @@ set "XEXEC@=%XCALL% :Exec.ExecVar"
 for %%t in (tee.exe) do set "Exec.tee=%%~$PATH:t"
 :# Initialize ERRORLEVEL with known values
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE0.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE.EXE=((for /f %%i in () do .)||rem.)" &:# Faster macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -1192,8 +1331,7 @@ for /l %%n in (1,1,24) do if not "!ECHO.FILE:~%%n!"=="" <nul set /p "=%ECHO.DEL%
 :# Remove the other unwanted characters "\..\: ##-"
 <nul set /p "=%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%"
 :# Append the optional CRLF
-set "TAIL=%3"
-if defined TAIL echo.%~3&if defined LOGFILE %>>LOGFILE% echo.%~3
+if not "%~3"=="" echo.&if defined LOGFILE %>>LOGFILE% echo.
 endlocal & endlocal & goto :eof
 
 :Echo.Color.Var %1=Color %2=StrVar [%3=/n]
@@ -1261,6 +1399,7 @@ goto :eof
 :#		    Added support for empty pathnames.                        #
 :#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -1282,7 +1421,7 @@ echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^
 if not errorlevel 1 set P="!P!"
 :condquote_ret
 set "%RETVAR%=!P!"
-%RETURN%
+%RETURN% 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -1335,6 +1474,64 @@ set "VARNAME=%~1"
 set "%VARNAME%=!%VARNAME%!::" &:# Note that :: cannot appear in a pathname
 set "%VARNAME%=!%VARNAME%:\::=::!"
 set "%VARNAME%=!%VARNAME%:::=!"
+%RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        SysVar                                                    #
+:#                                                                            #
+:#  Description     Manage system and user environment variables              #
+:#                                                                            #
+:#  Note            Sets "NEED_BROADCAST=1" if not done already by setx.exe.  #
+:#                                                                            #
+:#  History                                                                   #
+:#   2020-10-01 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:SysVar.Init
+set "SYS_ENV_KEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
+set "USR_ENV_KEY=HKCU\Environment"
+exit /b
+
+:SysVar.Set %1=SYSVARNAME %2=VALUEVAR [%3=S|U]
+%FUNCTION% EnableDelayedExpansion
+%UPVAR% %NEED_BROADCAST%
+if not defined SYS_ENV_KEY call :SysVar.Init
+set "VARNAME=%~1"
+set "VALUE=!%~2!"
+set "CAT=%~3"
+if not defined CAT set "CAT=S"
+set "KEY="
+if "!CAT:~0,1!"=="S" set "KEY=!SYS_ENV_KEY!" & set "SETXOPT=-m"
+if "!CAT:~0,1!"=="U" set "KEY=!USR_ENV_KEY!" & set "SETXOPT="
+if not defined KEY >&2 echo Bug: :SysVar.Set argument 3 %3 invalid & %RETURN%
+set "MORE_THAN_1KB=!VALUE:~1024!" &:# Defined if the new value is longer than 1 KB
+:# Gotcha: reg.exe and setx.exe interpret a trailing \" as escaping the "
+if "!VALUE:~-1!"=="\" set "VALUE=!VALUE!\"
+set "CMD="
+for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+if not defined MORE_THAN_1KB ( :# If the PATH is less than 1KB long, then try using setx
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred if within the 1KB limit)
+    :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set ^"CMD=setx %VARNAME% "!VALUE!" %SETXOPT%^"
+  )
+)
+if not defined CMD ( :# Fallback to updating the registry value manually using reg.exe.
+  :# reg.exe updates the %PATHVAR%, but does _not_ broadcast a WM_SETTINGCHANGE to all apps
+  :# Note: On XP, /f does not work if it is the last option.
+  set ^"CMD=reg add "%KEY%" /f /v %VARNAME% /d "!VALUE!"^"
+  set "NEED_BROADCAST=1"
+)
+if "%NOEXEC%"=="0" (	:# Normal execution mode
+  :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+  :# Errors, if any, will still be output on stderr.
+  if "%VERBOSE%"=="1" echo :# !CMD!
+  !CMD! >NUL
+) else (		:# NoExec mode. Just echo the command to execute.
+  echo !CMD!
+)
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -1427,8 +1624,7 @@ if defined TCLEXE (
 :# First check administrator rights
 ren %SystemRoot%\win.ini win.ini >NUL 2>&1
 if errorlevel 1 (
-  >&2 %ECHO% Error: This must be run as Administrator.
-  %RETURN% 1
+  %ECHO% Warning: This must be run as Administrator for changing system settings.
 )
 %UPVAR% PATH
 %UPVAR% PATHEXT
@@ -1518,6 +1714,7 @@ set SH=!%2!
 set CMD=!%3!
 set DEFCLASS=%4
 set NEEDSETUP=0
+set "NEED_BROADCAST=0"
 
 :# The open command may of may not be quoted
 set ARGS=!CMD!
@@ -1599,6 +1796,7 @@ for %%u in (!USERS!) do (
       %ECHO% :# Removing the .%EXT% extension class association for user !USER!
       :# Note: The extra \ in the end is necessary for reg.exe, else one \ would escape the "
       %EXEC% reg delete "!KEY!" /f
+      set "NEED_BROADCAST=1"
     )
   ) else (
     %ECHO% The .%EXT% Extension is not associated for user !USER! with any specific class
@@ -1645,6 +1843,7 @@ if defined CLASS (
 	>NUL !CHGCMD!
 	call :CheckError !ERRORLEVEL!
       )
+      set "NEED_BROADCAST=1"
     )
   )
   if !FIRED!==no ( :# Else one of the commands matches
@@ -1682,6 +1881,7 @@ if defined CLASS (
     if %MODE%==setup (
       %ECHO% :# Deleting it
       %EXEC% reg delete !KEY! /v command /f
+      set "NEED_BROADCAST=1"
     )
   ) else (
     endlocal
@@ -1727,6 +1927,7 @@ if defined CMD3 (
 	>NUL !CHGCMD!
 	call :CheckError !ERRORLEVEL!
       )
+      set "NEED_BROADCAST=1"
     )
   )
 ) else ( :# CMD3 is not defined
@@ -1751,13 +1952,10 @@ if %PEXTOK%==0 (
     set "NEEDSETUP=1"
   :# )
   if %MODE%==setup (
-    %ECHO% :# Updating global environment variable PATHEXT to: %PE%;.%EXT%
-    %EXEC% reg add "%KEY%" /v PATHEXT /d "%PE%;.%EXT%" /f
-    %ECHO% :# Notifying all windows of the environment block change
-    :# The ^) below is necessary to prevent the ) from closing the if block ... v
-    %ECHO.XVD% C# SendMessage(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment"^);
-    :# Run a second instance of this script in PowerShell, to do the broadcast
-    %IF_EXEC% PowerShell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"
+    set "PE=%PE%;.%EXT%"
+    %ECHO% :# Updating global environment variable PATHEXT to: !PE!
+    call :SysVar.Set PATHEXT PE
+    rem set "NEED_BROADCAST=1" &:# Already done by the routine
   )
 ) else (
   set "MSG="
@@ -1785,6 +1983,32 @@ if %PEXTOK%==0 (
   %IF_VERBOSE% set "MSG=The local PATHEXT contains .%EXT%"
   call :Echo.OK " "
   %ECHO% !MSG!
+)
+
+:# Finally, if any registry setting changed, broadcast that to the rest of the system
+if "%NEED_BROADCAST%"=="1" (
+  %ECHO% :# Notifying all windows of the system environment change
+  :# Find a way to broadcast a WM_SETTINGCHANGE message
+  set "CMD="
+  for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred, as this is faster)
+    :# setx.exe updates _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set "VAR=PROCESSOR_ARCHITECTURE" &:# This system variable is always short, and is unlikely to ever change
+    set ^"CMD=setx !VAR! -k "%SYS_ENV_KEY%\!VAR!" -m^"
+  ) else ( :# If powershell.exe is in the PATH, then use it to run the PS routine at the send of this script. (Slower)
+    for /f %%i in ("powershell.exe") do set "POWERSHELL=%%~$PATH:i"
+    if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"^"
+  )
+  if defined CMD (
+    %ECHO.XVD% !CMD!
+    :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+    :# Errors, if any, will still be output on stderr.
+    %IF_EXEC% !CMD! >NUL
+  ) else if "%QUIET%"=="0" ( :# Only happens in Windows XP or Windows 7 without setx.exe and PowerShell
+    echo Warning: Could not find a way to broadcast the change to other applications.
+    echo New shells will only have the updated settings after you log off and log back in.
+  )
 )
 
 %RETURN%
@@ -1837,6 +2061,7 @@ set "SEARCHDRIVES=C U"		&:# List of drives where to search for tclsh.exe.
 if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE:~0,1% %SEARCHDRIVES%"
 set "ACTION="
 set ">DEBUGOUT=>&2"	&:# Send debug output to stderr, so that it does not interfere with subroutines output capture
+call :SysVar.Init
 goto getarg
 
 :# Process the command line options
