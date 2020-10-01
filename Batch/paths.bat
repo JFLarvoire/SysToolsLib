@@ -1,3 +1,4 @@
+<# :# PowerShell comment block protecting the batch section
 @echo off
 :##############################################################################
 :#                                                                            #
@@ -13,7 +14,8 @@
 :#                  The major advantage of using setx over simply updating    #
 :#                  the registry key, is that setx sends a WM_SETTINGCHANGE   #
 :#                  broadcast to all Windows applications, ensuring that the  #
-:#                  new path is immediately reloaded in all of them.          #
+:#                  new PATH is used for new shells started from explorer.exe.#
+:#                  Else it'd be available only after logging off and back on.#
 :#                                                                            #
 :#  History                                                                   #
 :#   1994-12-07 JFL Created ADDPATH.BAT for DOS and Windows 95.		      #
@@ -44,17 +46,23 @@
 :#                  Added support for moving and removing multiple paths.     #
 :#   2019-12-11 JFL Avoid displaying empty lines when PATH ends with a ;      #
 :#   2020-03-13 JFL Corrected one message and two comments.                   #
+:#   2020-10-01 JFL Bug fix: Use reg.exe to set system paths for large PATHs, #
+:#                  as setx.exe fails if the PATH is > 1KB. If using reg.exe, #
+:#                  still use setx on another variable to broadcast the change.
+:#                  Added PowerShell as an alternative broadcast mechanism.   #
 :#                  							      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-03-13"
-set "SCRIPT=%~nx0"
-set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
-set "SNAME=%~n0"
-set "ARG0=%~f0"
+set "VERSION=2020-10-01"
+
+set "SCRIPT=%~nx0"				&:# Script name
+set "SNAME=%~n0"				&:# Script name, without the extension
+set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
+set "SFULL=%~f0"				&:# Script full pathname
+set ^"ARG0=%0^"					&:# Script invokation name
 
 set "ECHO=call :echo"
 set "ECHO.D=call :noop"
@@ -168,6 +176,7 @@ if "%~1"=="-r" set "METHOD=Remove" & set "VALUE=%~2" & goto :next_2nd_arg
 :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
 if "%~1"=="-s" set "OBJECT=MasterPath" & set "SETXOPT=-M" & set "MKEY=%MENVKEY%" & set "OWNER=system" & goto :next_arg
 if "%~1"=="-t" set "WHERE=tail" & goto :next_arg
+if "%~1"=="-tb" goto :TestBroadcast
 if "%~1"=="-u" set "OBJECT=MasterPath" & set "SETXOPT=" & set "MKEY=%UENVKEY%" & set "OWNER=user" & goto :next_arg
 if "%~1"=="-v" set "VERBOSE=1" & goto :next_arg
 if "%~1"=="-V" (echo.%VERSION%) & exit /b
@@ -185,6 +194,8 @@ goto :next_arg
 if not defined PATHVAR set "PATHVAR=PATH"
 goto :%OBJECT%.%METHOD%
 
+:#----------------------------------------------------------------------------#
+:#                      Manage paths in the local shell                       #
 :#----------------------------------------------------------------------------#
 
 :LocalPath.Echo %1=Optional variable name. Default=PATHVAR
@@ -277,6 +288,8 @@ for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to move
 goto :LocalPath.Set
 
 :#----------------------------------------------------------------------------#
+:#                  Manage persistent user and system paths                   #
+:#----------------------------------------------------------------------------#
 
 :MasterPath.Get
 setlocal EnableExtensions DisableDelayedExpansion
@@ -326,22 +339,24 @@ for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to add
 :# goto :MasterPath.Set
 
 :MasterPath.Set
-set "SETX="
+set "MORE_THAN_1KB=!MPATH:~1024!" &:# Defined if the new PATH is larger than 1 KB
+:# Gotcha: reg.exe and setx.exe interpret a trailing \" as escaping the "
+if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
+set "CMD="
+set "NEED_BROADCAST=0"
 for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
-if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred)
-  :# Gotcha: regex.exe does interpret a trailing \" as escaping the "
-  if "!MPATH:~-1!"=="\" set "MPATH=!MPATH!\"
-  :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
-:# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
-  set CMD=setx %PATHVAR% "!MPATH!" %SETXOPT%
-) else ( :# Fallback to updating the registry value manually using reg.exe.
+if not defined MORE_THAN_1KB ( :# If the PATH is less than 1KB long, then try using setx
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred if within the 1KB limit)
+    :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set ^"CMD=setx %PATHVAR% "!MPATH!" %SETXOPT%^"
+  )
+)  
+if not defined CMD ( :# Fallback to updating the registry value manually using reg.exe.
   :# reg.exe updates the %PATHVAR%, but does _not_ broadcast a WM_SETTINGCHANGE to all apps
   :# Note: On XP, /f does not work if it is the last option.
-  set CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"
-  echo Warning: setx.exe is not available on this system.
-  echo The %OWNER%'s default PATH update will only be visible after a reboot.
-  echo Note: setx.exe is standard in Windows Vista and later versions.
-  echo       A version for Windows XP is available in the XP Resource Kit.
+  set ^"CMD=reg add "%MKEY%" /f /v %PATHVAR% /d "%MPATH%"^"
+  set "NEED_BROADCAST=1"
 )
 if "%NOEXEC%"=="0" (	:# Normal execution mode
   :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
@@ -350,6 +365,34 @@ if "%NOEXEC%"=="0" (	:# Normal execution mode
   %CMD% >NUL
 ) else (		:# NoExec mode. Just echo the command to execute.
   echo %CMD%
+)
+:# If the update was done with reg.exe, we need to tell Windows Explorer about the change
+if "%NEED_BROADCAST%"=="1" (
+  :# Find a way to broadcast a WM_SETTINGCHANGE message
+  set "CMD="
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred, as this is faster)
+    :# setx.exe updates _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    :# Change a system variable, for both cases of the user or system PATHs.
+    set "VAR=PROCESSOR_ARCHITECTURE" &:# This system variable is always short, and is unlikely to ever change
+    set ^"CMD=setx !VAR! -k "%MENVKEY%\!VAR!" -m^"
+  ) else ( :# If powershell.exe is in the PATH, then use it to run the PS routine at the send of this script. (Slower)
+    for /f %%i in ("powershell.exe") do set "POWERSHELL=%%~$PATH:i"
+    if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"^"
+  )
+  if defined CMD (
+    if "%NOEXEC%"=="0" (	:# Normal execution mode
+      :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+      :# Errors, if any, will still be output on stderr.
+      if "%VERBOSE%"=="1" echo :# !CMD!   ^&:# Broadcast a WM_SETTINGCHANGE message
+      !CMD! >NUL
+    ) else (		:# NoExec mode. Just echo the command to execute.
+      echo !CMD!   ^&:# Broadcast a WM_SETTINGCHANGE message
+    )
+  ) else if "%QUIET%"=="0" ( :# Only happens in Windows XP or Windows 7 without setx.exe and PowerShell
+    echo Warning: Could not find a way to broadcast the change to other applications.
+    echo New shells will only have the updated PATH after you log off and log back in.
+  )
 )
 if "%NOEXEC%"=="0" if "%QUIET%"=="0" goto :MasterPath.Echo
 exit /b
@@ -380,5 +423,60 @@ for %%p in ("!VALUE:;=" "!") do ( :# For each individual path to move
 goto :MasterPath.Set
 
 :#----------------------------------------------------------------------------#
+:#           Broadcast a WM_SETTINGCHANGE message using PowerShell            #
+:#----------------------------------------------------------------------------#
 
+:# Test the WM_SETTINGCHANGE broadcast
+:TestBroadcast
+:# Run a second instance of this script in PowerShell, to do the broadcast
+:# This first command is simpler, but does not work in all versions of PowerShell
+:# type %ARG0% | PowerShell -c -
+:# Instead, use this one that works from Win7/PSv2 to Win10/PSv5
+PowerShell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"
+exit /b
 
+:# End of the PowerShell comment section protecting the batch section.
+#>
+
+# PowerShell subroutine called from the batch setup routine
+
+# Redefine the colors for a few message types
+$colors = (Get-Host).PrivateData
+if ($colors) { # Exists for ConsoleHost, but not for ServerRemoteHost
+  $colors.VerboseForegroundColor = "white"	# Less intrusive than the default yellow
+  $colors.DebugForegroundColor = "cyan"		# Distinguish debug messages from yellow warning messages
+}
+
+# Inherit the DEBUG mode from the batch instance
+if ($env:DEBUG -eq 1) {
+  $Debug = $true
+  $DebugPreference = "Continue"		# Make sure Write-Debug works
+} else {
+  $Debug = $false
+  $DebugPreference = "SilentlyContinue"	# Write-Debug does nothing
+}
+
+Write-Debug "# This is PowerShell, broadcasting WM_SETTINGCHANGE for the Environment"
+
+# import sendmessagetimeout from win32
+add-type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
+  [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+  public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult
+  );
+"@
+
+function Invoke-WMSettingsChanged {
+  $HWND_BROADCAST = [intptr]0xffff;
+  $WM_SETTINGCHANGE = 0x1a;
+  $result = [uintptr]::zero
+  # notify all windows of environment block change
+  $done = [win32.nativemethods]::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE,
+	    [uintptr]::Zero, "Environment", 2, 5000, [ref]$result);
+  return $done # 0=Failed. Check GetLastError(); !0=Success
+}
+
+$done = Invoke-WMSettingsChanged
+
+return
