@@ -4,6 +4,25 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-10-15
+### New
+- Batch/n.bat: Added command-line arguments -? and -X when running in NT cmd.exe.
+  Added the ability to pipe names of the files to open via stdin. Ex: dir /b *.c \| n
+- Batch/ipcfg.bat: Also search the adapter name in the description field.
+  Added the ability to define alias names and types, and defined "VPN" as the alias for Pulse Secure VPN.
+
+### Fixed
+- Batch/ipcfg.bat: Fixed the virtual adapter detection for English.
+- Batch/path.bat: The PATH was truncated if it was > 1KB.
+- Batch/pysetup.bat: The PATH was truncated if it was > 1KB.
+
+### Changed
+- Batch/pysetup.bat: Allow running as non-administrator, to be able to at least update local settings.
+- Batch/paths.bat, pysetup.bat, tclsetup.bat:
+  Use setx.exe to set global variables < 1KB, or reg.exe for those >= 1KB.
+  Use either setx.exe (preferred) or PowerShell to broadcast a WM_SETTINGCHANGE message in the end.
+- Library.bat: Changed :Echo.Color final string to a valid PowerShell comment ##- , for compatibility with mixed Batch+PowerShell scripts.
+
 ## [Unreleased] 2020-08-31
 ### New
 - C/SRC/conv.c: Added the automatic detection of UTF-8 and UTF-16 input without BOM.
