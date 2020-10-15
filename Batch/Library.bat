@@ -1877,13 +1877,14 @@ goto :eof
 :#   2012-11-13 JFL Copy the string into the log file, if defined.            #
 :#   2017-01-16 JFL Use bright colors for [Success]/[Warning]/[Failure],      #
 :#                  and added an optional suffix and end of line.             #
+:#   2017-01-25 JFL Changed the final string to valid PowerShell comment ##-  #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
  
 call :Echo.Color.Init
 goto Echo.Color.End
 
-:Echo.Color %1=Color %2=Str [%3=/n]
+:Echo.Color %1=Hex Color %2=String [%3=/n]
 :# Temporarily disable expansion to preserve ! in the input string
 setlocal disableDelayedExpansion
 set "str=%~2"
@@ -1896,12 +1897,12 @@ set "str=!str:/=a%ECHO.DEL%/..\%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%!"
 set "str=!str:"=\"!"
 :# Go to the script directory and search for the trailing -
 pushd "%ECHO.DIR%"
-findstr /p /r /a:%~1 "^^-" "!str!\..\!ECHO.FILE!" nul
+findstr /p /r /a:%~1 "^^##-" "!str!\..\!ECHO.FILE!" nul
 popd
 :# Remove the name of this script from the output. (Dependant on its length.)
 for /l %%n in (1,1,24) do if not "!ECHO.FILE:~%%n!"=="" <nul set /p "=%ECHO.DEL%"
-:# Remove the other unwanted characters "\..\: -"
-<nul set /p "=%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%"
+:# Remove the other unwanted characters "\..\: ##-"
+<nul set /p "=%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%"
 :# Append the optional CRLF
 if not "%~3"=="" echo.&if defined LOGFILE %>>LOGFILE% echo.
 endlocal & endlocal & goto :eof
@@ -4950,4 +4951,4 @@ goto :next_arg
 goto :Help
 
 :# The following line, used by :Echo.Color, must be last and not end by a CRLF.
--
+##-
