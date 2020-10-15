@@ -51,15 +51,25 @@
 :#   2015-02-24 JFL Fixed the -i option for VPN interfaces without a MAC@.    #
 :#                  Updated -i to display all interfaces by default.          #
 :#   2020-09-03 JFL Fixed the virtual adapter detection for English.          #
+:#   2020-10-13 JFL Also search the adapter name in the description field.    #
+:#                  Added a special case for the Pulse Secure VPN.            #
+:#   2020-10-15 JFL Generalized the ability to define alias names and types.  #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2020-09-03"
+set "VERSION=2020-10-15"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
+
+:# User-defined alias(es) for complex adapter names
+set "ALIAS.NAMES=VPN" &:# Space-delimited list of alias names, each one used as index below
+:# Define sets of variables ALIAS[name].NAME, ALIAS[name].TYPE, ALIAS[name].HELP
+set "ALIAS[VPN].NAME=Juniper"	&:# The first word(s) in the adapter name
+set "ALIAS[VPN].TYPE=Vir"	&:# One of: Eth Ppp Tun Vir Wir
+set "ALIAS[VPN].HELP=The Juniper Networks Pulse Secure VPN virtual adapter"
 
 :# FOREACHLINE macro. (Change the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
@@ -377,6 +387,7 @@ echo Adapter:  Name of a target adapter (Needs quotes if it contains a space)
 echo           Default: All adapter types selected with options above
 echo           Use option -l to list adapter names
 echo           * = All adapters
+for %%a in (!ALIAS.NAMES!) do echo           %%a = !ALIAS[%%a].HELP!
 echo.
 echo Property: Display this property only. Ex: "ipv4 address". Default: all
 echo           Can be a partial name. Ex: "ipv4". Make sure to avoid duplicates.
@@ -604,6 +615,12 @@ for /f "tokens=1 delims=." %%i in ('for /f "tokens=*" %%m in ^("%MAC%"^) do @rou
 goto :eof
 
 :start
+:# If an alias is defined for that name, use it.
+for %%a in ("%adapter%") do ( :# Use a %%a variable as we begin by updating %adapter%
+  if defined ALIAS[%%~a].NAME set "adapter=!ALIAS[%%~a].NAME!"
+  if defined ALIAS[%%~a].TYPE call :select !ALIAS[%%~a].TYPE! 1
+)
+
 if "%action%"=="get_interface" goto :get_interface
 %PUTVARS.D% LANG type_at types adapter names.display
 for %%t in (%types%) do %PUTVARS.D% type.%%t show.%%t remove.%%t
@@ -665,9 +682,12 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
 	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
 	%PUTVARS.D% prop val
 	:# Now check if the description identifies this as a virtual interface
-	if "!prop!"=="!description!" if not "!val:Virtual=!"=="!val!" (
-	  %ECHO.D% It's a virtual adapter!
-	  set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	if "!prop!"=="!description!" (
+	  set "ADAPTER[!NADAPTER!].DESC=!val!"
+	  if not "!val:Virtual=!"=="!val!" (
+	    %ECHO.D% It's a virtual adapter!
+	    set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	  )
 	)
       )
     )
@@ -698,9 +718,12 @@ if not "!opts: /all=!"=="!opt!" %FOREACHLINE% %%l in ('ipconfig!opts! /all') do 
 	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
 	%PUTVARS.D% prop val
 	:# Now check if the description identifies this as a virtual interface
-	if "!prop!"=="!description!" if not "!val:Virtual=!"=="!val!" (
-	  %ECHO.D% It's a virtual adapter!
-	  set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	if "!prop!"=="!description!" (
+	  set "ADAPTER[!NADAPTER!].DESC=!val!"
+	  if not "!val:Virtual=!"=="!val!" (
+	    %ECHO.D% It's a virtual adapter!
+	    set "ADAPTER[!NADAPTER!].TYPE=%type.Vir%"
+	  )
 	)
       )
     )
@@ -737,10 +760,11 @@ for /f "tokens=1,2 delims==" %%a in ('echo ADAPTER.NAMES.!ADAPTER[0].NAME!^=0^& 
   set "name=!name:ADAPTER.NAMES.=!"
   set "line=!ADAPTER[%%b].LINE!"
   set "type=!ADAPTER[%%b].TYPE!"
+  set "desc=!ADAPTER[%%b].DESC!"
   set "show=0"
   for %%t in (!type!) do set "show=!show.%%t!"
   if not "%adapter%"=="" ( :# If a name is specified, and if it does _Not_ match, then don't show it.
-    if /I "!name:%adapter%=!"=="!name!" set "show=0"
+    if /I "!name:%adapter%=!"=="!name!" if /I "!desc:%adapter%=!"=="!desc!" set "show=0"
   )
   %PUTVARS.D% line type name NADAPTER show
   if "!show!"=="1" (
@@ -787,4 +811,3 @@ for /f "tokens=1,2 delims==" %%a in ('echo ADAPTER.NAMES.!ADAPTER[0].NAME!^=0^& 
   )
 )
 echo.
-
