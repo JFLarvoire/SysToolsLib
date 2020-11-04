@@ -81,8 +81,16 @@
 :#                       other scripting languages.                           #
 :#                    + This stands out better than the :: used by many.      #
 :#                    + This avoids echoing the comment in echo on mode.      #
-:#                    + Gotcha: A :# comment cannot be at the last line of    #
-:#                       a ( block of code ). Use (rem :# comment) instead.   #
+:#                    + Gotcha: A :# comment in a ( block of code ) must be   #
+:#                       followed by a valid command. No blank line allowed.  #
+:#                       Also it cannot be at the last line of the block.     #
+:#                    + Gotcha: Be ware of undefined variables with substring #
+:#                       replacements. Ex, this will fail with a syntax error:#
+:#                         if "%ARG:-=%"=="v" ( :# -v or v-                   #
+:#                       Protecting that code in an 'if defined ARG (code)'   #
+:#                       does not help. The root cause is not the comment,    #
+:#                       but the ':'. Changing the comment to 'rem -v or v-'  #
+:#                       fixes the issue, but 'rem -v : v-' would also fail.  #
 :#                  * Always enquote args sent, and dequote args received.    #
 :#                    + Best strategy for preserving reserved chars across.   #
 :#                  * Always enclose the set command in quotes: set "VAR=val" #
