@@ -1,4 +1,4 @@
-<# :# PowerShell comment block protecting the batch section
+<# :# PowerShell comment block protecting the Batch section
 @echo off
 :##############################################################################
 :#                                                                            #
@@ -50,13 +50,14 @@
 :#                  as setx.exe fails if the PATH is > 1KB. If using reg.exe, #
 :#                  still use setx on another variable to broadcast the change.
 :#                  Added PowerShell as an alternative broadcast mechanism.   #
+:#   2020-11-03 JFL Fixed the PS call when there's a ' in the script path.    #
 :#                  							      #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-10-01"
+set "VERSION=2020-11-03"
 
 set "SCRIPT=%~nx0"				&:# Script name
 set "SNAME=%~n0"				&:# Script name, without the extension
@@ -378,7 +379,7 @@ if "%NEED_BROADCAST%"=="1" (
     set ^"CMD=setx !VAR! -k "%MENVKEY%\!VAR!" -m^"
   ) else ( :# If powershell.exe is in the PATH, then use it to run the PS routine at the send of this script. (Slower)
     for /f %%i in ("powershell.exe") do set "POWERSHELL=%%~$PATH:i"
-    if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"^"
+    if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL:'=''%'))"^"
   )
   if defined CMD (
     if "%NOEXEC%"=="0" (	:# Normal execution mode
@@ -432,13 +433,14 @@ goto :MasterPath.Set
 :# This first command is simpler, but does not work in all versions of PowerShell
 :# type %ARG0% | PowerShell -c -
 :# Instead, use this one that works from Win7/PSv2 to Win10/PSv5
-PowerShell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL%'))"
+PowerShell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL:'=''%'))"
 exit /b
 
-:# End of the PowerShell comment section protecting the batch section.
-#>
+:# End of the PowerShell comment block protecting the Batch section #>
 
-# PowerShell subroutine called from the batch setup routine
+#-----------------------------------------------------------------------------#
+#          PowerShell subroutine called from the main Batch routine           #
+#-----------------------------------------------------------------------------#
 
 # Redefine the colors for a few message types
 $colors = (Get-Host).PrivateData
@@ -478,5 +480,6 @@ function Invoke-WMSettingsChanged {
 }
 
 $done = Invoke-WMSettingsChanged
+Write-Debug "Broadcast $(if ($done) {"succeeded"} else {"failed"})"
 
-return
+exit $(!$done) # If done, return 0; Else if not done return 1
