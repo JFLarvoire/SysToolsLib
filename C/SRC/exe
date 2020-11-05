@@ -1,11 +1,11 @@
 #!/bin/bash
 #*****************************************************************************#
 #                                                                             #
-#  Filename:	    exe							      #
+#  Filename 	    exe							      #
 #                                                                             #
-#  Description:     Build simple C/C++ programs for Unix/Linux		      #
+#  Description      Build simple C/C++ programs for Unix/Linux		      #
 #                                                                             #
-#  Notes:	    Usage: ./exe PROGRAM				      #
+#  Notes 	    Usage: ./exe PROGRAM				      #
 #                                                                             #
 #                   Stores the executables in $OS.$PROC/[Debug/] for	      #
 #                   consistency with the Windows build tools.                 #
@@ -13,7 +13,7 @@
 #                   using VMs for building the various Windows and Linux      #
 #                   versions in a set of OS-specific subdirectories.          #
 #                                                                             #
-#  History:                                                                   #
+#  History                                                                    #
 #    2013-12-16 JFL Added support for MinGW64.				      #
 #    2015-12-12 JFL Help now displays the output directory name.              #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
@@ -60,7 +60,7 @@ fi
 # Command line analysis.
 case "$1" in
   "" | "-h" | "-?" | --help)
-    echo "Build simple C/C++ programs, storing the executables in $OUTDIR/"
+    echo "Build simple C/C++ programs, storing the executables in bin/$OUTDIR/"
     echo "Usage: ./exe PROGRAM"
     exit 0
     ;;
