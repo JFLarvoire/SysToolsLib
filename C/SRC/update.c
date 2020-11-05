@@ -1,13 +1,13 @@
 ﻿/*****************************************************************************\
 *                                                                             *
-*   FILENAME:	    update.c						      *
+*   Filename	    update.c						      *
 *									      *
-*   PURPOSE:	    Copy files only if the destination file is older	      *
+*   Description	    Copy files only if the destination file is older	      *
 *									      *
-*   DESCRIPTION:    Get time of both files. Copy if the destination file      *
+*   Notes           Get time of both files. Copy if the destination file      *
 *		    does not exist or if it is older than the source.	      *
 *									      *
-*   Notes:	    Uses our custom debugging macros in debugm.h.	      *
+*		    Uses our custom debugging macros in debugm.h.	      *
 *		    							      *
 *		    To build in Unix/Linux, copy debugm.h into your ~/include *
 *		    directory or equivalent, then run commands like:	      *
@@ -44,7 +44,7 @@
 *		    string pointer, and return NULL for success or a          *
 *		    dynamically created error message in case of error.	      *
 *		    							      *
-*   History:								      *
+*   History								      *
 *    1986-04-01 JFL jf.larvoire@hp.com created this program.		      *
 *    1987-05-07 JFL Adapted to Lattice 3.10				      *
 *    1992-05-20 JFL Adapted to Microsoft C. Adapted to OS/2. Switch /?.       *
@@ -174,6 +174,8 @@
 *    2020-04-19 JFL Added support for MacOS. Version 3.10.                    *
 *    2020-08-23 JFL Added argument D:= for the same path on another drive.    *
 *                   Version 3.11.                                             *
+*    2020-11-05 JFL Moved copydate() to SysLib, adding ns resolution.         *
+*                   Version 3.12.					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -181,8 +183,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.11"
-#define PROGRAM_DATE    "2020-08-23"
+#define PROGRAM_VERSION "3.12"
+#define PROGRAM_DATE    "2020-11-05"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -192,12 +194,9 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <limits.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use JFL's MsvcLibX library extensions if needed */
-#include <sys/time.h>		/* For lutimes() */
-#include <utime.h>		/* For struct utimbuf */
 #include <dirent.h>		/* We use the DIR type and the dirent structure */
 #include <unistd.h>		/* For the access function */
 #include <fnmatch.h>
@@ -205,6 +204,7 @@
 #include <inttypes.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
+#include "copyfile.h"		/* Copy file, and related functions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debugging macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -410,7 +410,6 @@ int is_directory(char *);		/* Is name a directory? -> TRUE/FALSE */
 int is_effective_directory(char *name); /* Is name a directory, or a link to a directory? */
 int older(char *, char *);		/* Is file 1 older than file 2? */
 time_t getmodified(char *);		/* Get time of file modification */
-int copydate(char *to, char *from);	/* Copy the file date & time */
 int filecompare(char *, char *);	/* Compare two files */
 
 char *strgfn(const char *);		/* Get file name position */
@@ -1939,129 +1938,6 @@ void strsfp(const char *pathname, char *path, char *name)   /* Split file pathna
     if (name) strcpy(name, p);
     RETURN_COMMENT(("path=\"%s\", name=\"%s\"\n", path, p));
     }
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    copydate						      |
-|									      |
-|   Description:    Copy the Date/time stamp from one file to another	      |
-|									      |
-|   Parameters:     char *pszToFile	Destination file		      |
-|		    char *pszFromFile	Source file			      |
-|									      |
-|   Returns:	    0 = Success, else error and errno set		      |
-|									      |
-|   Notes:	    This operation is useless if the destination file is      |
-|		    written to again. So it's necessary to flush it before    |
-|		    calling this function.				      |
-|									      |
-|   History:								      |
-|									      |
-|    1996-10-14 JFL Made a clean, application-independent, version.	      |
-|    2011-05-12 JFL Rewrote in an OS-independent way.			      |
-|    2015-01-08 JFL Fallback to using chmod and utimes if lchmod and lutimes  |
-|                   are not implemented. This will cause minor problems if the|
-|                   target is a link, but will work well in all other cases.  |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-/* Old Linux versions define lchmod, but only implement a stub that always fails */
-#ifdef __stub_lchmod
-// #pragma message "The C Library does not implement lchmod. Using our own replacement."
-#define lchmod lchmod1 /* Then use our own replacement for lchmod */
-int lchmod1(const char *path, mode_t mode) {
-  struct stat st = {0};
-  int err;
-  DEBUG_PRINTF(("lchmod1(\"%s\", %X);\n", path, mode));
-  err = lstat(path, &st);
-  if (err) return err;
-  /* Assume that libs that bother defining __stub_lchmod all define S_ISLNK */
-  if (!S_ISLNK(st.st_mode)) { /* If it's anything but a link */
-    err = chmod(path, mode);	/* Then use the plain function supported by all OSs */
-  } else { /* Else don't do it for a link, as it's the target that would be modified */
-    err = -1;
-    errno = ENOSYS;
-  }
-  return err;
-}
-#endif
-
-#ifndef _STRUCT_TIMEVAL
-/* No support for micro-second file time resolution. Use utime(). */
-int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
-  /* Note: "struct _stat" and "struct _utimbuf" don't compile under Linux */
-  struct stat stFrom = {0};
-  struct utimbuf utbTo = {0};
-  int err;
-  err = lstat(pszFromFile, &stFrom);
-  /* Copy file permissions too */
-  err = lchmod(pszToFile, stFrom.st_mode);
-  /* And copy file times */
-  utbTo.actime = stFrom.st_atime;
-  utbTo.modtime = stFrom.st_mtime;
-  err = lutime(pszToFile, &utbTo);
-  DEBUG_CODE({
-    struct tm *pTime;
-    char buf[40];
-    pTime = LocalFileTime(&(utbTo.modtime)); // Time of last data modification
-    sprintf(buf, "%4d-%02d-%02d %02d:%02d:%02d",
-	    pTime->tm_year + 1900, pTime->tm_mon + 1, pTime->tm_mday,
-	    pTime->tm_hour, pTime->tm_min, pTime->tm_sec);
-    DEBUG_PRINTF(("utime(\"%s\", %s) = %d %s\n", pszToFile, buf, err,
-      		  err?strerror(errno):""));
-  });
-  return err;                       /* Success */
-}
-#else /* defined(_STRUCT_TIMEVAL) */
-
-#ifdef __stub_lutimes
-// #pragma message "The C Library does not implement lutimes. Using our own replacement."
-#define lutimes lutimes1 /* Then use our own replacement for lutimes */
-int lutimes1(const char *path, const struct timeval times[2]) {
-  struct stat st = {0};
-  int err;
-  // DEBUG_PRINTF(("lutimes1(\"%s\", %p);\n", path, &times)); // No need for this as VALUEIZE(lutimes) duplicates this below.
-  err = lstat(path, &st);
-  if (err) return err;
-  /* Assume that libs that bother defining __stub_lutimes all define S_ISLNK */
-  if (!S_ISLNK(st.st_mode)) { /* If it's anything but a link */
-    err = utimes(path, times);	/* Then use the plain function supported by all OSs */
-  } else { /* Else don't do it for a link, as it's the target that would be modified */
-    err = -1;
-    errno = ENOSYS;
-  }
-  return err;
-}
-#endif
-
-/* Micro-second file time resolution supported. Use utimes(). */
-int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
-  /* Note: "struct _stat" and "struct _utimbuf" don't compile under Linux */
-  struct stat stFrom = {0};
-  struct timeval tvTo[2] = {{0}, {0}};
-  int err;
-  DEBUG_PRINTF(("copydate(\"%s\", \"%s\")\n", pszToFile, pszFromFile));
-  lstat(pszFromFile, &stFrom);
-  /* Copy file permissions too */
-  err = lchmod(pszToFile, stFrom.st_mode);
-  /* And copy file times */
-  TIMESPEC_TO_TIMEVAL(&tvTo[0], &stFrom.st_atim);
-  TIMESPEC_TO_TIMEVAL(&tvTo[1], &stFrom.st_mtim);
-  err = lutimes(pszToFile, tvTo);
-#ifndef _MSVCLIBX_H_ /* Trace lutimes() call and return in Linux too */
-  DEBUG_CODE({
-    struct tm *pTime;
-    char buf[40];
-    pTime = LocalFileTime(&(stFrom.st_mtime)); // Time of last data modification
-    sprintf(buf, "%4d-%02d-%02d %02d:%02d:%02d.%06ld",
-	    pTime->tm_year + 1900, pTime->tm_mon + 1, pTime->tm_mday,
-	    pTime->tm_hour, pTime->tm_min, pTime->tm_sec, (long)stFrom.st_mtim.tv_nsec / 1000);
-    DEBUG_PRINTF((VALUEIZE(lutimes) "(\"%s\", %s) = %d\n", pszToFile, buf, err));
-  });
-#endif
-  return err;                       /* Success */
-}
-#endif /* !defined(_STRUCT_TIMEVAL) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

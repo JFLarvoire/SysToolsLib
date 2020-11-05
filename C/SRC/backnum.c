@@ -1,10 +1,10 @@
 ﻿/*****************************************************************************\
 *                                                                             *
-*   Filename:       backnum.c                                                 *
+*   Filename        backnum.c                                                 *
 *                                                                             *
-*   Description:    Backup a file, using chronological numbers extensions.    *
+*   Description     Backup a file, using chronological numbers extensions.    *
 *                                                                             *
-*   Notes:          To build in Unix/Linux, copy debugm.h into your ~/include *
+*   Notes           To build in Unix/Linux, copy debugm.h into your ~/include *
 *		    directory or equivalent, then run commands like:	      *
 *		    export C_INCLUDE_PATH=~/include			      *
 *		    gcc dirsize.c -o dirsize	# Release mode version	      *
@@ -22,7 +22,7 @@
 *		    Quick and dirty alternative: Change in include directives *
 *		    below dirent.h -> dirent.c, and fnmatch.h -> fnmatch.c.   *
 *                                                                             *
-*   History:                                                                  *
+*   History                                                                   *
 *    1987-05-07 JFL Initial implementation in Lattice C                       *
 *    1992-05-20 JFL Adapted to Microsoft C.                                   *
 *    1993-10-19 JFL Cleanup for reuse in other programs                       *
@@ -57,6 +57,8 @@
 *                   Version 2.1.6.					      *
 *    2020-04-19 JFL Added support for MacOS. Version 2.2.                     *
 *    2020-08-28 JFL Avoid double CR in Win32 error messages. Version 2.2.1.   *
+*    2020-11-05 JFL Moved copydate() to SysLib, adding ns resolution.         *
+*                   Version 2.3.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -64,8 +66,8 @@
 
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.2.1"
-#define PROGRAM_DATE    "2020-08-28"
+#define PROGRAM_VERSION "2.3"
+#define PROGRAM_DATE    "2020-11-05"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -73,24 +75,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <stdint.h> /* Actually we just need stdint.h, but Tru64 doesn't have it */
-#ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
-typedef unsigned long uintmax_t;
-#endif
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <utime.h>
-#include <time.h>
-#include <sys/time.h>		/* For lutimes() */
+#include <errno.h>
+/* The following include files are not available in the Microsoft C libraries */
+/* Use JFL's MsvcLibX library extensions if needed */
 #include <dirent.h>		/* We use the DIR type and the dirent structure */
 #include <fnmatch.h>		/* We use wild card file name matching */
 #ifndef FNM_MATCH /* fnmatch.h always defines FNM_NOMATCH, but not always FNM_MATCH */
 #define FNM_MATCH 0
 #endif
-#include <unistd.h>		/* For chdir() */
-#include <errno.h>
+#include <unistd.h>		/* For access() */
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
+#include "copyfile.h"		/* Copy file, and related functions */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -192,7 +190,6 @@ int iAppend = 1;	/* Append the extension */
 void usage(void);
 int IsSwitch(char *pszArg);
 int fcopy(char *name2, char *name1);
-int copydate(char *name2, char *name1);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -593,128 +590,6 @@ int fcopy(char *name2, char *name1) {
 #ifdef _MSC_VER
 #pragma warning(default:4706)
 #endif
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    copydate						      |
-|									      |
-|   Description:    Copy the Date/time stamp from one file to another	      |
-|									      |
-|   Parameters:     char *pszToFile	Destination file		      |
-|		    char *pszFromFile	Source file			      |
-|									      |
-|   Returns:	    None						      |
-|									      |
-|   Notes:	    This operation is useless if the destination file is      |
-|		    written to again. So it's necessary to flush it before    |
-|		    calling this function.				      |
-|									      |
-|   History:								      |
-|									      |
-|    1996-10-14 JFL Made a clean, application-independant, version.	      |
-|    2011-05-12 JFL Rewrote in an OS-independant way.			      |
-|    2015-01-08 JFL Fallback to using chmod and utimes if lchmod and lutimes  |
-|                   are not implemented. This will cause minor problems if the|
-|                   target is a link, but will work well in all other cases.  |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-/* Old Linux versions define lchmod, but only implement a stub that always fails */
-#ifdef __stub_lchmod
-/* #pragma message "The C Library does not implement lchmod. Using our own replacement." */
-#define lchmod lchmod1 /* Then use our own replacement for lchmod */
-int lchmod1(const char *path, mode_t mode) {
-  struct stat st = {0};
-  int err;
-  DEBUG_PRINTF(("lchmod1(\"%s\", %X);\n", path, mode));
-  err = lstat(path, &st);
-  if (err) return err;
-  /* Assume that libs that bother defining __stub_lchmod all define S_ISLNK */
-  if (!S_ISLNK(st.st_mode)) { /* If it's anything but a link */
-    err = chmod(path, mode);	/* Then use the plain function supported by all OSs */
-  } else { /* Else don't do it for a link, as it's the target that would be modified */
-    err = -1;
-    errno = ENOSYS;
-  }
-  return err;
-}
-#endif
-
-#ifndef _STRUCT_TIMEVAL
-/* No support for micro-second file time resolution. Use utime(). */
-int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
-  /* Note: "struct _stat" and "struct _utimbuf" don't compile under Linux */
-  struct stat stFrom = {0};
-  struct utimbuf utbTo = {0};
-  int err;
-  err = lstat(pszFromFile, &stFrom);
-  /* Copy file permissions too */
-  err = lchmod(pszToFile, stFrom.st_mode);
-  /* And copy file times */
-  utbTo.actime = stFrom.st_atime;
-  utbTo.modtime = stFrom.st_mtime;
-  err = lutime(pszToFile, &utbTo);
-  DEBUG_CODE({
-    struct tm *pTime;
-    char buf[40];
-    pTime = LocalFileTime(&(utbTo.modtime)); /* Time of last data modification */
-    sprintf(buf, "%4d-%02d-%02d %02d:%02d:%02d",
-	    pTime->tm_year + 1900, pTime->tm_mon + 1, pTime->tm_mday,
-	    pTime->tm_hour, pTime->tm_min, pTime->tm_sec);
-    DEBUG_PRINTF(("utime(\"%s\", %s) = %d %s\n", pszToFile, buf, err,
-      		  err?strerror(errno):""));
-  });
-  return err;                       /* Success */
-}
-#else /* defined(_STRUCT_TIMEVAL) */
-
-#ifdef __stub_lutimes
-/* #pragma message "The C Library does not implement lutimes. Using our own replacement." */
-#define lutimes lutimes1 /* Then use our own replacement for lutimes */
-int lutimes1(const char *path, const struct timeval times[2]) {
-  struct stat st = {0};
-  int err;
-  /* DEBUG_PRINTF(("lutimes1(\"%s\", %p);\n", path, &times)); // No need for this as VALUEIZE(lutimes) duplicates this below. */
-  err = lstat(path, &st);
-  if (err) return err;
-  /* Assume that libs that bother defining __stub_lutimes all define S_ISLNK */
-  if (!S_ISLNK(st.st_mode)) { /* If it's anything but a link */
-    err = utimes(path, times);	/* Then use the plain function supported by all OSs */
-  } else { /* Else don't do it for a link, as it's the target that would be modified */
-    err = -1;
-    errno = ENOSYS;
-  }
-  return err;
-}
-#endif
-
-/* Micro-second file time resolution supported. Use utimes(). */
-int copydate(char *pszToFile, char *pszFromFile) { /* Copy the file dates */
-  /* Note: "struct _stat" and "struct _utimbuf" don't compile under Linux */
-  struct stat stFrom = {0};
-  struct timeval tvTo[2] = {{0}, {0}};
-  int err;
-  lstat(pszFromFile, &stFrom);
-  /* Copy file permissions too */
-  err = lchmod(pszToFile, stFrom.st_mode);
-  /* And copy file times */
-  TIMESPEC_TO_TIMEVAL(&tvTo[0], &stFrom.st_atim);
-  TIMESPEC_TO_TIMEVAL(&tvTo[1], &stFrom.st_mtim);
-  err = lutimes(pszToFile, tvTo);
-#ifndef _MSVCLIBX_H_ /* Trace lutimes() call and return in Linux too */
-  DEBUG_CODE({
-    struct tm *pTime;
-    char buf[40];
-    pTime = LocalFileTime(&(stFrom.st_mtime)); /* Time of last data modification */
-    sprintf(buf, "%4d-%02d-%02d %02d:%02d:%02d.%06ld",
-	    pTime->tm_year + 1900, pTime->tm_mon + 1, pTime->tm_mday,
-	    pTime->tm_hour, pTime->tm_min, pTime->tm_sec, (long)stFrom.st_mtim.tv_nsec / 1000);
-    DEBUG_PRINTF((VALUEIZE(lutimes) "(\"%s\", %s) = %d\n", pszToFile, buf, err));
-  });
-#endif
-  return err;                       /* Success */
-}
-#endif /* !defined(_STRUCT_TIMEVAL) */
 
 #ifdef _UNIX		/* Defined when targeting a Unix app. */
 

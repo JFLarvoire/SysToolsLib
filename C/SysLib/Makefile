@@ -136,7 +136,7 @@ XPD = $(OSPD)
 B = $(XP)
 
 # Define compiler and linker flags
-CFLAGS = -std=c99 -pthread -Wall
+CFLAGS = -std=c99 -pthread -Wall -fno-diagnostics-show-caret # -ftrack-macro-expansion=0
 CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap

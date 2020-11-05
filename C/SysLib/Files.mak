@@ -26,6 +26,7 @@
 
 # Common objects usable in all operating systems with a Standard C library
 COMMON_OBJECTS = \
+    +$(O)/copydate.obj		\
     +$(O)/IsMBR.obj		\
     +$(O)/oprintf.obj		\
     +$(O)/oprintf6.obj		\
@@ -60,6 +61,8 @@ OBJECTS = $(OBJECTS1:.obj=.o) $(UNIX_OBJECTS)
 $(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/LogDisk.h
 
 $(S)/Block.h: $(S)/SysLib.h $(S)/qword.h
+
+$(S)/copydate.c: $(S)/SysLib.h $(S)/copyfile.h
 
 $(S)/crc32.cpp: $(S)/crc32.h \
 		$(GNUEFI)/inc/efi.h $(GNUEFI)/inc/efilib.h
