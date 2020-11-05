@@ -1,0 +1,94 @@
+#!/bin/bash
+#*****************************************************************************#
+#                                                                             #
+#  Filename 	    clean						      #
+#                                                                             #
+#  Description      Delete all compilation output files for a given program   #
+#                                                                             #
+#  Notes 	    Usage: ./clean PROGRAM				      #
+#                                                                             #
+#                   Removes PROGRAM* from bin/$OS.$PROC.		      #
+#                                                                             #
+#  History                                                                    #
+#    2020-11-04 JFL Created this script based on exe.			      #
+#                                                                             #
+#         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+#*****************************************************************************#
+
+# Global variables
+VERSION="2020-11-04"
+SCRIPT="${ARGV0##*/}"           # Extract the script base name...
+
+EXEC=1				# 1=Execute commands; 0=Don't
+
+#-----------------------------------------------------------------------------#
+# Delete all compilation output files for a given program
+
+clean() {
+  CMD="find bin/$OUTDIR -iname '$1*' -print"
+  if [[ $EXEC -eq 1 ]] ; then
+    CMD="$CMD -exec rm {} ';'"
+  fi
+  eval $CMD
+}
+
+#-----------------------------------------------------------------------------#
+# Identify the OS
+
+OS=`uname -s`
+PROC=`uname -p`
+if [[ "$OS" == "OSF1" && "`uname -m`" == "alpha" ]] ; then
+  OS=Tru64
+fi
+if [[ "$OS" == "WindowsNT" ]] ; then
+  OS=WIN32
+fi
+OUTDIR=$OS.$PROC
+if [[ "${OS:0:7}" == "MINGW32" ]] ; then # Ex: "MINGW32_NT-6.1"
+  OUTDIR=MINGW32 # MinGW shell if NOT case sensitive
+  # 2013-12-16 Actually, the 64-bits tool chain also reports MINGW32_NT-6.1
+  # So distinguish the two by whether /mingw is mounted on C:\MinGW or C:\MinGW64
+  if mount | grep /mingw | grep 64 > /dev/null ; then
+    OUTDIR=MINGW64 # MinGW shell if NOT case sensitive
+  fi
+fi
+if [[ "${OS:0:7}" == "MINGW64" ]] ; then # Ex: ?
+  OUTDIR=MINGW64
+fi
+if [[ "${OS:0:6}" == "CYGWIN" ]] ; then # Ex: "CYGWIN_NT-6.1-WOW64"
+  OUTDIR=cygwin # Cygwin shell if case sensitive, so use lower case
+fi
+
+#-----------------------------------------------------------------------------#
+# Main routine
+# Process command line arguments
+
+err=0
+while (( $# > 0 )) ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    "" | "-h" | "-?" | --help)
+      echo "Delete all compilation output files in bin/$OUTDIR/ for a given program"
+      echo "Usage: ./clean PROGRAM"
+      exit 0
+      ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -X|--noexec)
+      EXEC=0
+    ;;
+    -*)
+      echo "Unrecognized option: \"$arg\"" >&2
+      echo "Run $SCRIPT -? to get a list of valid arguments" >&2
+      exit 3 # Unimplemented feature
+    ;;
+    *)
+      clean $arg
+    ;;
+  esac
+done
