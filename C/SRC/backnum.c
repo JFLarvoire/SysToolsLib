@@ -154,18 +154,9 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define _stricmp strcasecmp
 
-#define LocalFileTime localtime
-
 /* Redefine Microsoft-specific _splitpath() and _makepath() */
 void _splitpath(const char *path, char *d, char *p, char *n, char *x);
 void _makepath(char *buf, const char *d, const char *p, const char *n, const char *x);
-
-/* In MacOS, these struct stat fields have different names */
-#if defined(__MACH__)
-#define st_atim st_atimespec
-#define st_mtim st_mtimespec
-#define st_ctim st_ctimespec
-#endif
 
 #endif /* __unix__ */
 
