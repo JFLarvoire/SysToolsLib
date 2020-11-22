@@ -351,6 +351,8 @@ int main(int argc, char *argv[])
   PRINTVAL(=_OPENMP);
 
   /* OS */
+  /* http://beefchunk.com/documentation/lang/c/pre-defined-c/preos.html */
+  
   PRINTVAL(=linux);
   PRINTVAL(=_linux);
   PRINTVAL(=__linux);
@@ -360,6 +362,10 @@ int main(int argc, char *argv[])
   PRINTVAL(=_unix);
   PRINTVAL(=__unix);
   PRINTVAL(=__unix__);
+
+  PRINTVAL(=__FreeBSD__);
+  PRINTVAL(=__NetBSD__);
+  PRINTVAL(=__OpenBSD__);
 
   PRINTVAL(=MSDOS);
   PRINTVAL(=_MSDOS);
@@ -401,6 +407,17 @@ int main(int argc, char *argv[])
   PRINTVAL(=__APPLE_CC__);
   PRINTVAL(=__BSD__);
   PRINTVAL(=__STRICT_BSD__);
+
+  PRINTVAL(=_AIX);
+  PRINTVAL(=AMIGA);
+  PRINTVAL(=hpux);
+  PRINTVAL(=__hpux);
+  PRINTVAL(=__GNU__);		/* Hurd */
+  PRINTVAL(=__osf__);		/* OSF/1 */
+  PRINTVAL(=__QNX__);
+  PRINTVAL(=sun);		/* Solaris or SunOS */
+  PRINTVAL(=__sun);		/* Solaris or SunOS */
+  PRINTVAL(=VMS);
 
   /* Processor type */
   PRINTVAL(=_X86_);
