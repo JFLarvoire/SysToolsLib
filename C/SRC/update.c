@@ -194,6 +194,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <limits.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use JFL's MsvcLibX library extensions if needed */
@@ -313,13 +314,6 @@ off_t _filelength(int hFile);
 // #define fullpath(absPath, relPath, maxLength) realpath(relPath, absPath)
 char *fullpath(char *absPath, const char *relPath, size_t maxLength);
 #define LocalFileTime localtime
-
-/* In MacOS, these struct stat fields have different names */
-#if defined(__MACH__)
-#define st_atim st_atimespec
-#define st_mtim st_mtimespec
-#define st_ctim st_ctimespec
-#endif
 
 #endif /* __unix__ */
 
