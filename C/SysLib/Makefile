@@ -21,6 +21,8 @@
 #    2020-03-18 JFL Fixed PROC for the Raspberry Pi, and define EXE_PROC_NAME.#
 #                   Install to /usr/bin if /usr/local/bin is not in the PATH. #
 #    2020-04-19 JFL Corrected the C/C++ "Compiling xxxx.c" message.	      #
+#    2020-11-18 JFL Disable diagnostics carets for gcc and clang that have it.#
+#    2020-11-21 JFL Avoid displaying entering/leaving directory for same dir. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -136,11 +138,47 @@ XPD = $(OSPD)
 B = $(XP)
 
 # Define compiler and linker flags
-CFLAGS = -std=c99 -pthread -Wall -fno-diagnostics-show-caret # -ftrack-macro-expansion=0
+CFLAGS = -std=c99 -pthread -Wall
 CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap
 CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
+
+# The C compiler diagnostic caret is useful, but annoying when outputing information messages.
+# Find the C-compiler-specific option for removing it.
+# Note: All this should be better done using autoconf/automake!
+ifndef CC_NOCARET_OPT
+  CC_VERSION_LINE := $(shell cc -v 2>&1 | grep -i ' version ')
+  CC_NAME := $(shell echo "$(CC_VERSION_LINE)" | sed -E -e 's/(.* )?([^ ]+) version .*/\2/')
+  # $(info CC_NAME=$(CC_NAME))
+  CC_VERSION := $(shell echo "$(CC_VERSION_LINE)" | sed -E -e 's/(.* )?version ([0-9.]+).*/\2/')
+  # $(info CC_VERSION=$(CC_VERSION))
+  CC_VER := $(shell echo "$(CC_VERSION)" | sed -E -e 's/.*/&.0.0/' -e 's/([0-9]+\.[0-9]+\.[0-9]+).*/\1/' -e 's/\.([0-9][0-9])/\1/g' -e 's/\.([0-9])/0\1/g')
+  # $(info CC_VER=$(CC_VER))
+  # Now the C-compiler-specific part
+  ifeq "$(CC_NAME)" "gcc"
+    GCC_MIN_VER := 40800 # 4.8.0
+    ifeq "$(shell expr $(CC_VER) \>= $(GCC_MIN_VER))" "1" # If GCC_VER >= GCC_MIN_VER
+      # $(info gcc is $(GCC_MIN_VER) or later)
+      CC_NOCARET_OPT := -fno-diagnostics-show-caret # -ftrack-macro-expansion=0
+    else
+      # $(info gcc is older than $(GCC_MIN_VER))
+      CC_NOCARET_OPT := 
+    endif
+  else ifeq "$(CC_NAME)" "clang"
+    CLANG_MIN_VER := 40000 # 4.0.0 (Actually it may have been there in earlier versions)
+    # $(info clang is fine in any version)
+    CC_NOCARET_OPT := -fno-caret-diagnostics # -Wno-\#pragma-messages
+  else
+    $(warning Unidentified compiler: $(CC_VERSION_LINE))
+    CC_NOCARET_OPT := 
+  endif
+endif
+export CC_NOCARET_OPT
+ifneq "$(CC_NOCARET_OPT)" ""
+  CFLAGS   += $(CC_NOCARET_OPT)
+  CXXFLAGS += $(CC_NOCARET_OPT)
+endif
 
 # Add the path to SysToolsLib global include files
 ifdef STINCLUDE
@@ -161,60 +199,59 @@ endif
 # Make file messages control
 TRACE_MSGS = $(or $(filter-out 0, $(VERBOSE)), $(filter-out 0, $(DEBUG)))
 REPORT_FAILURE = (ERR=$$? ; echo " ... FAILED" ; exit $$ERR)
+QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory # Don't print entering/leaving even if -w is in the inherited flags
 
 # Pattern rules for compiling a C or C++ source.
 $(OPN)/%.o: %.c
-	$(MAKE) -$(MAKEFLAGS) dirs
+	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.c
-	$(MAKE) -$(MAKEFLAGS) ddirs
+	$(MAKE) -$(QMAKEFLAGS) ddirs
 	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPN)/%.o: %.cpp
-	$(MAKE) -$(MAKEFLAGS) dirs
+	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.cpp
-	$(MAKE) -$(MAKEFLAGS) ddirs
+	$(MAKE) -$(QMAKEFLAGS) ddirs
 	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 # Pattern rules for compiling and linking a standalone C or C++ program.
 $(OSPN)/%: %.c
-	$(MAKE) -$(MAKEFLAGS) dirs
+	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.c
-	$(MAKE) -$(MAKEFLAGS) ddirs
+	$(MAKE) -$(QMAKEFLAGS) ddirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPN)/%: %.cpp
-	$(MAKE) -$(MAKEFLAGS) dirs
+	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Building $@ ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.cpp
-	$(MAKE) -$(MAKEFLAGS) ddirs
+	$(MAKE) -$(QMAKEFLAGS) ddirs
 	echo "Building $@ ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 # Pattern rules for Building the normal and debug versions of a C or C++ program.
-QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory
-
 %: %.c
 	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
 	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
@@ -313,12 +350,12 @@ checkenv:
 .PHONY: lib libSysLib SysLib libsyslib syslib
 _DEBUG :=
 lib libSysLib libsyslib SysLib syslib: checkenv
-	$(MAKE) -$(MAKEFLAGS)            $(OSPN)/libSysLib.a
-	$(MAKE) -$(MAKEFLAGS) "_DEBUG=1" $(OSPD)/libSysLib.a
+	$(MAKE) -$(QMAKEFLAGS)            $(OSPN)/libSysLib.a
+	$(MAKE) -$(QMAKEFLAGS) "_DEBUG=1" $(OSPD)/libSysLib.a
 	echo "All SysLib library versions built."
 
 $(OSP)/libSysLib.a: $(OBJECTS)
-	$(MAKE) -$(MAKEFLAGS) dirs
+	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Building $@ ..."
 	$(AR) -cvq $@ $? || $(REPORT_FAILURE)
 	echo " ... $@ done"
