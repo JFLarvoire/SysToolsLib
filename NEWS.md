@@ -4,6 +4,28 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-11-22
+### New
+- C/SysLib/copydate.c: copydate() routine, factored out of several C SRCs. Copies the timestamp and flags from one file to another.
+  Added a version with ns resolution, and gave it priority when APIs are available.
+  Added support for LLVM and FreeBSD.
+- C/SRC/clean: Clean output files for a single program. Linux equivalent of the existing clean.bat.
+
+### Changed
+- C/SRC/backnum.c:
+- C/SRC/update.c:
+  Use the new factored out copydate() routine.
+- C/SysLib/Makefile:
+- C/SRC/Makefile:
+  Avoid displaying entering/leaving directory for the same directory.
+  Disable diagnostics carets for gcc and clang versions that have it. (To allow outputing readable compilation pragma messages.)
+
+### Fixed
+- Batch/Paths.bat:
+- Python/PySetup.bat:
+- Tcl/TclSetup.bat:
+  Fixed an unlikely issue with the PowerShell call when there's a "'" in the script path.
+
 ## [Unreleased] 2020-10-15
 ### New
 - Batch/n.bat: Added command-line arguments -? and -X when running in NT cmd.exe.
