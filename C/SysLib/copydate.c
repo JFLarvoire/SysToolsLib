@@ -15,10 +15,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using fopen, etc */
 
-#define _POSIX_SOURCE		/* Define POSIX extensions. Ex: function fileno in stdio.h */
-#define _BSD_SOURCE    		/* Define BSD extensions. Ex: S_IFREG in sys/stat.h */
-#define _DEFAULT_SOURCE		/* glibc >= 2.19 will complain about _BSD_SOURCE if it doesn't see this */
-#define _GNU_SOURCE		/* Implies all the above. And also MsvcLibX support for UTF-8 I/O */
+#define _GNU_SOURCE		/* Include as many extensions as possible */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,14 +25,36 @@
 #include <utime.h>
 #include <time.h>
 #include <sys/time.h>		/* For lutimes() */
+#include <errno.h>
 
 #include "debugm.h"		/* SysToolsLib debug macros */
 
 #include "copyfile.h"		/* Public definitions for this file */
 
-#if defined(_WIN32)
+/************************ Win32-specific definitions *************************/
+
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 app. */
+
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
-#endif /* defined(_WIN32) */
+
+#endif /* _WIN32 */
+
+/************************* Unix-specific definitions *************************/
+
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define LocalFileTime localtime
+
+/* In MacOS, these struct stat fields have different names */
+#if defined(__MACH__)
+#define st_atim st_atimespec
+#define st_mtim st_mtimespec
+#define st_ctim st_ctimespec
+#endif
+
+#endif /* __unix__ */
+
+/*********************** End of OS-specific definitions **********************/
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -90,7 +109,9 @@
 
 /* Old Glibc versions define lchmod, but only implement a stub that always fails */
 #ifdef __stub_lchmod
+#if defined(_DEBUG)
 #pragma message("The C Library implements a fake lchmod(). Using our own replacement.")
+#endif
 #ifdef _ATFILE_SOURCE
 #define lchmod(path, mode) fchmodat(AT_FDCWD, path, mode, AT_SYMLINK_NOFOLLOW)
 #else
@@ -113,10 +134,20 @@ int lchmod1(const char *path, mode_t mode) {
 #endif
 #endif
 
-#if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 200809L) /* Preferred solution with 1ns resolution */
+/*---------------------------------------------------------------------------*\
+|*               Preferred implementation with 1ns resolution                *|
+\*---------------------------------------------------------------------------*/
+
+#if defined(__USE_XOPEN2K8) || (defined(__POSIX_VISIBLE) && (__POSIX_VISIBLE >= 200809L))
+
+#if defined(_DEBUG)
+/* This is the normal case, so don't even display the message anymore
 #pragma message("Using utimensat() to copy timestamps with 1ns resolution.")
+*/
+#endif
 /* References:
-   http://manpages.ubuntu.com/manpages/trusty/en/man2/utimensat.2.html
+   https://pubs.opengroup.org/onlinepubs/9699919799/functions/utimensat.html
+   https://manpages.ubuntu.com/manpages/trusty/en/man2/utimensat.2.html
    https://www.freebsd.org/cgi/man.cgi?query=utimensat&sektion=2
 */
 
@@ -134,16 +165,24 @@ int copydate(const char *pszToFile, const char *pszFromFile) { /* Copy the file 
   return err;                       /* Success */
 }
 
-#elif defined(_STRUCT_TIMEVAL) /* Second best solution with 1us resolution */
+/*---------------------------------------------------------------------------*\
+|*              Second best implementation with 1us resolution               *|
+\*---------------------------------------------------------------------------*/
+
+#elif defined(_STRUCT_TIMEVAL)
+
+#if defined(_DEBUG)
 #pragma message("Using lutimes() to copy timestamps with 1us resolution.")
+#endif
 /* References:
-   http://manpages.ubuntu.com/manpages/trusty/en/man3/lutimes.3.html
+   Not listed in pubs.opengroup.org
+   https://manpages.ubuntu.com/manpages/trusty/en/man3/lutimes.3.html
    https://www.freebsd.org/cgi/man.cgi?query=lutimes&sektion=2
 */
 
 /* Some Unix C libraries also have a non-functional stub for this one */
 #ifdef __stub_lutimes
-#pragma message "The C Library implements a fake lutimes(). Using our own replacement."
+#pragma message("The C Library implements a fake lutimes(). Using our own replacement.")
 #define lutimes lutimes1 /* Then use our own replacement for lutimes */
 int lutimes1(const char *path, const struct timeval times[2]) {
   struct stat st = {0};
@@ -189,10 +228,18 @@ int copydate(const char *pszToFile, const char *pszFromFile) { /* Copy the file 
   return err;                       /* Success */
 }
 
-#else /* !defined(_STRUCT_TIMEVAL) */ /* Worst solution with just 1s resolution */
+/*---------------------------------------------------------------------------*\
+|*               Worst implementation with just 1s resolution                *|
+\*---------------------------------------------------------------------------*/
+
+#else /* !defined(_STRUCT_TIMEVAL) */
+
+#if defined(_DEBUG)
 #pragma message("Using utime() to copy timestamps with 1s resolution.")
+#endif
 /* References:
-   http://manpages.ubuntu.com/manpages/trusty/en/man2/utime.2.html
+   https://pubs.opengroup.org/onlinepubs/9699919799/functions/utime.html
+   https://manpages.ubuntu.com/manpages/trusty/en/man2/utime.2.html
    https://www.freebsd.org/cgi/man.cgi?query=utime&sektion=3
 */
 
