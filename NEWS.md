@@ -8,6 +8,9 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### New
 - C/Bash/distrib: New script identifying the OS distribution and version. Works in any Posix shell, and in any Unix derivative.
 
+### Fixed
+- C/Bash/*: Use a shebang with the '/usr/bin/env bash' command, as bash is not installed in /bin on all systems.
+
 ## [Unreleased] 2020-11-22
 ### New
 - C/SysLib/copydate.c: copydate() routine, factored out of several C SRCs. Copies the timestamp and flags from one file to another.
