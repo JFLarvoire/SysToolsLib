@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-11-26
+### New
+- C/Bash/distrib: New script identifying the OS distribution and version. Works in any Posix shell, and in any Unix derivative.
+
 ## [Unreleased] 2020-11-22
 ### New
 - C/SysLib/copydate.c: copydate() routine, factored out of several C SRCs. Copies the timestamp and flags from one file to another.
