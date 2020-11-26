@@ -6,7 +6,7 @@
 #   Description     Get the Unix distribution name, version, and processor    #
 #                                                                             #
 #   Notes           Linux is usually packaged in a "Distribution", with the   #
-#		    Linux kernel itself, and many software packages.          #
+#		    Linux kernel itself, and many GNU software packages.      #
 #                   Examples are "Red Hat Enterprise Linux", "Suse Linux",    #
 #                   "Ubuntu", etc.                                            #
 #                                                                             #
@@ -30,6 +30,7 @@
 #    2020-11-23 JFL Improved the processor identification based on Wikipedia. #
 #                   Added command-line processing, and a help screen.         #
 #                                                                             #
+#         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
