@@ -301,6 +301,6 @@ done
 GetOSDistribution
 
 if [ -z "$FORMAT" ] ; then
-  FORMAT=" \$DISTRIB \$PROC \$VER"
+  FORMAT=" \$DISTRIB \$VER \$PROC"
 fi
 eval "echo$FORMAT"
