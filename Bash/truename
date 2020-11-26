@@ -1,5 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
-echo "# Please use realpath, which is Unix equivalent to DOS truename"
+>&2 echo "# Please use realpath, which is the Unix equivalent of DOS' truename"
 realpath "$@"
-

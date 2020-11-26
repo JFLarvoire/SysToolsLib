@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 #                                                                             #
 #   Filename        Library.bash                                              #
@@ -16,13 +16,14 @@
 #    2013-12-16 JFL One minor tweak in test routine fact().		      #
 #    2020-03-23 JFL Updated the help screen.               		      #
 #    2020-04-01 JFL Fixed cd & export in Exec().           		      #
+#    2020-11-24 JFL Use a shebang with the env command.                       #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2020-04-01"
+VERSION="2020-11-24"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
