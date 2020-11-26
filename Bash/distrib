@@ -1,0 +1,303 @@
+#!/bin/sh
+###############################################################################
+#                                                                             #
+#   Filename        distrib                                                   #
+#                                                                             #
+#   Description     Get the Unix distribution name, version, and processor    #
+#                                                                             #
+#   Notes           Linux is usually packaged in a "Distribution", with the   #
+#		    Linux kernel itself, and many software packages.          #
+#                   Examples are "Red Hat Enterprise Linux", "Suse Linux",    #
+#                   "Ubuntu", etc.                                            #
+#                                                                             #
+#                   Other proprietary Unix versions do not have that notion   #
+#		    of a distribution. But this script simply considers them  #
+#                   as Unix distributions.                                    #
+#                                                                             #
+#                   This script defines a distribution name as a single word  #
+#                   that identifies it best, from the commercial name of the  #
+#                   distribution. For example instead of "CentOS Linux",      #
+#		    it just outputs "CentOS".                                 #
+#                   Likewise, the distribution name is a name that is valid   #
+#                   for all releases of that distribution. This is not the    #
+#                   same as the code name for a particular release.           #
+#                                                                             #
+#                   Use only Bourne Shell features, as it's the only common   #
+#                   subset of features available in all Unix flavors.         #
+#                                                                             #
+#   History                                                                   #
+#    2020-11-08 JFL Created this script.                                      #
+#    2020-11-23 JFL Improved the processor identification based on Wikipedia. #
+#                   Added command-line processing, and a help screen.         #
+#                                                                             #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Global variables
+VERSION="2020-11-25"
+SCRIPT=`basename "$0"`	# Extract the script base name...
+
+#-----------------------------------------------------------------------------#
+# Display all version strings - Useful for debugging this script
+TryCmd() {		# $1=Command $2=optional argument ...
+  if type $1 >/dev/null 2>&1; then
+    (value=`"$@" 2>/dev/null` && echo "\$($*) = \"$value\"" || echo "\$($*) # Error $?")
+  else
+    if [ "$LAST_CMD" != "$1" ] ; then
+      echo "\$($1) # Command not found"
+    fi
+  fi
+  LAST_CMD=$1
+}
+
+# Check if a variable exists.
+VarExists() {
+  eval "test \"\${${1}+true}\" = \"true\""
+}
+
+# Get the value of a variable.
+VarValue() {
+  eval "echo \"\${${1}}\""
+}
+
+GetAllVersions() {
+  # All Unix systems support the uname command. Options with (*) below are not portable
+  for opt in a i m o p r s v ; do # a=All i=HW(*) m=Machine o=OS p=Processor(*) r=Release s=System v=Version
+    TryCmd uname -$opt
+  done
+  # Linux Standard Base distributions support the lsb_release command
+  for opt in c d i r ; do # c=CodeName d=Description i=ID r=Release
+    TryCmd lsb_release -s$opt
+  done
+  # Mac OS X sw_vers command
+  for opt in productName productVersion buildVersion ; do
+    TryCmd sw_vers -$opt
+  done
+  # AIX oslevel command
+  TryCmd oslevel
+  TryCmd oslevel -r
+
+  # Dump all files in /etc that end in [-_]release or [-_]version
+  for file in `find /etc -maxdepth 1 -type f -name '*[-_]release' -o -name '*[-_]version'` ; do
+    echo "\$(cat $file) = "
+    cat "$file" | sed 's/.*/  &/'
+  done
+
+  # Dump known variables
+  for var in \
+    MINGW_CHOST MINGW_PREFIX \
+    MSYSTEM MSYSTEM_CARCH MSYSTEM_CHOST MSYSTEM_PREFIX \
+    HOSTTYPE OS
+  do
+    if VarExists $var ; then
+      echo "$var = \"$(VarValue $var)\""
+    else
+      true
+      # echo "$var undefined"
+    fi
+  done
+}
+
+#-----------------------------------------------------------------------------#
+# Extract the major.minor part from a complex version string
+TrimVersion() {
+  if [ $# != 0 ] ; then
+    echo "$*"
+  else
+    cat
+  fi | sed 's/\([0-9][0-9]*.[0-9][0-9]*\).*/\1/' # Mac OS X's sed is so old that it does not support + nor \+
+}
+
+#-----------------------------------------------------------------------------#
+# Identify the Linux distribution
+GetLinuxDistribution() {	# Returns $DISTRIB and $VER
+  # Try standards first, then distribution-specific methods
+  # Test derived distributions mothods (ex: Ubuntu) before their ancestor's (ex: Debian)
+  if type lsb_release >/dev/null 2>&1 ; then	# Linux Standard Base (May require an optional package, ex: redhat-lsb)
+    DISTRIB=`lsb_release -si`
+    VER=`lsb_release -sr`
+  elif [ -f /etc/lsb-release ] ; then		# Some versions of Debian/Ubuntu without lsb_release command
+    . /etc/lsb-release
+    DISTRIB=$DISTRIB_ID
+    VER=$DISTRIB_RELEASE
+  elif [ -f /etc/debian_version ] ; then	# Older Debian/Ubuntu/etc.
+    DISTRIB=Debian
+    VER=`cat /etc/debian_version`
+  elif [ -f /etc/centos-release ] ; then	# Ex: "CentOS Linux release 7.3.1611 (Core)"
+    DISTRIB=CentOS
+    VER=`cat /etc/centos-release | sed 's/.*release \([0-9][0-9]*.[0-9][0-9]*\).*/\1/'`
+  elif [ -f /etc/redhat-release ] ; then	# Ex: "Red Hat Enterprise Linux Server release 7.3 (Maipo)"
+    VER=`cat /etc/redhat-release`
+    DISTRIB=`echo "$VER" | grep "Red Hat Enterprise Linux" >/dev/null && echo RHEL || echo RedHat`
+    VER=`echo "$VER" | sed 's/.*release \([0-9][0-9]*.[0-9][0-9]*\).*/\1/'`
+  elif [ -f /etc/SuSe-release ] ; then		# SuSE/etc.
+    . /etc/SuSe-release
+    DISTRIB=SuSE
+    VER="$VERSION.$PATCHLEVEL"
+  elif [ -f /etc/os-release ] ; then		# freedesktop.org and systemd
+    . /etc/os-release
+    DISTRIB=$ID
+    VER=$VERSION_ID
+  elif [ -s /etc/slackware-version ] ; then	# Slackware
+    DISTRIB=Slackware
+    VER=$REV
+  else						# Fall back to uname
+    DISTRIB=$OS
+    VER=$REV
+  fi
+
+  # Avoid having multiple words in the DISTRIB name. Ex: "CentOS Linux" -> "CentOS"
+  DISTRIB2=`echo $DISTRIB | sed 's/[Ll]inux//' | sed 's/  *//'`
+  if [ "$DISTRIB2" != "$DISTRIB" -a "$DISTRIB2" != "" ]; then
+    DISTRIB="$DISTRIB2"
+  fi
+}
+
+#-----------------------------------------------------------------------------#
+# Get the MSYS version. MSYS and MinGW are a Unix-compatible environment for Windows
+GetMsysVer() {
+  DISTRIB=`echo "$MSYSTEM" | sed -e 's/MINGW/MinGW/' -e 's/MSYS/Msys/'`
+  # REV=`uname -r`
+  MSYS_VER=`echo $REV | cut -d. -f1`	# Keep only the major MSYS version
+  if [ $MSYS_VER = 1 ] ; then	# MSYS version 1 was used by the old MINGW project
+    DISTRIB=MinGW
+    VER=$REV	# TODO: How to get the actual MinGW version?
+  else				# MSYS2 and later are used by the new MINGW-W64 project
+    VER=$REV	# TODO: See actual versions in http://mingw-w64.org/doku.php/versions
+  fi
+}
+
+#-----------------------------------------------------------------------------#
+# Identify the operating system and its major.minor version
+GetOS() {	# Returns $OS, $DISTRIB, and $VER
+  OS=`(uname -o 2>/dev/null || uname -s) | sed -e 's|GNU/||' -e 's|/|-|'`
+  REV=`uname -r`
+
+  case "$OS" in
+    "Linux")
+      GetLinuxDistribution
+    ;;
+    "FreeBSD")
+      . /etc/os-release
+      DISTRIB=FreeBSD
+      VER=$VERSION_ID
+    ;;
+    "Msys")	# MinGW or MinGW-W64 Unix subsystems for Windows
+      GetMsysVer
+    ;;
+    "Darwin")	# Apple Mac OS X
+      DISTRIB=`sw_vers -productName | sed 's/ //g'` # Change "Mac OS X" to "MacOSX"
+      VER=`sw_vers -productVersion`
+    ;;
+    "SunOS")	# Sun Solaris OS
+      DISTRIB=Solaris
+      VER=$REV
+    ;;
+    "AIX")	# IBM AIX
+      DISTRIB=$OS
+      VER=$(oslevel)
+    ;;
+    *)		# Default: Use uname output
+      DISTRIB=$OS
+      VER=$REV
+    ;;
+  esac
+  VER=`TrimVersion "$VER"`
+}
+
+#-----------------------------------------------------------------------------#
+# Identify the processor
+# Ref: https://en.wikipedia.org/wiki/Uname
+GetProc() {	# Returns $PROC
+  PROC=`uname -p 2>/dev/null || uname -m` # uname -p is not a valid option on all systems
+  case "$PROC" in
+    "powerpc"|"mips"|"sparc")
+      return
+    ;;
+  esac
+  MACHINE=`uname -m` # uname -m reports motherboard information on some systems
+  case "$PROC" in
+    "unknown"|"i386"|"athlon"|"sun4u"|"x86at"|Intel*)
+      PROC=$MACHINE
+    ;;
+  esac
+  PROC=`echo $PROC | sed -e 's/ /_/g' -e 's|/|-|g'`
+}
+
+#-----------------------------------------------------------------------------#
+# Display the help screen
+Help() {
+  cat <<EOF
+$SCRIPT - Get the Unix distribution name, version, and processor
+
+Usage: $SCRIPT [OPTIONS] [INFO]
+
+Options:
+  -?    Display this help
+  -V    Display the script version
+
+Info: What information to display. One of the following. By default, display all three.
+  name        The distribution name. (One word)
+  version     Its major dot minor version
+  processor   The target processor
+
+EOF
+}
+
+#-----------------------------------------------------------------------------#
+# Main routine
+# Process command line arguments
+while [ $# -gt 0 ] ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -h|--help|"-?")
+      Help
+      exit 0
+    ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -a|--all)
+      GetAllVersions
+      exit 0
+    ;;
+    name)
+      GetOS
+      echo "$DISTRIB"
+      exit
+    ;;
+    os)
+      GetOS
+      echo "$OS"
+      exit
+    ;;
+    processor)
+      GetProc
+      echo "$PROC"
+      exit
+    ;;
+    version)
+      GetOS
+      echo "$VER"
+      exit
+    ;;
+    -*)
+      echo "Unrecognized option: \"$arg\"" >&2
+      echo "Run `$SCRIPT -?` to get a list of valid arguments" >&2
+      $exit 3 ; # Unimplemented feature
+    ;;
+    *)
+      echo "Unrecognized argument: \"$arg\"" >&2
+      echo "Run `$SCRIPT -?` to get a list of valid arguments" >&2
+      $exit 3 ; # Unimplemented feature
+    ;;
+  esac
+done
+
+GetOS
+GetProc
+
+echo "$DISTRIB $VER $PROC"
