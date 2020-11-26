@@ -29,13 +29,14 @@
 #    2020-11-08 JFL Created this script.                                      #
 #    2020-11-23 JFL Improved the processor identification based on Wikipedia. #
 #                   Added command-line processing, and a help screen.         #
+#    2020-11-26 JFL Allow specifying multiple information arguments.          #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2020-11-25"
+VERSION="2020-11-26"
 SCRIPT=`basename "$0"`	# Extract the script base name...
 
 #-----------------------------------------------------------------------------#
@@ -169,8 +170,27 @@ GetMsysVer() {
 }
 
 #-----------------------------------------------------------------------------#
-# Identify the operating system and its major.minor version
-GetOS() {	# Returns $OS, $DISTRIB, and $VER
+# Identify the processor
+# Ref: https://en.wikipedia.org/wiki/Uname
+GetProc() {	# Returns $PROC
+  PROC=`uname -p 2>/dev/null || uname -m` # uname -p is not a valid option on all systems
+  case "$PROC" in
+    "powerpc"|"mips"|"sparc")
+      return
+    ;;
+  esac
+  MACHINE=`uname -m` # uname -m reports motherboard information on some systems
+  case "$PROC" in
+    "unknown"|"i386"|"athlon"|"sun4u"|"x86at"|Intel*)
+      PROC=$MACHINE
+    ;;
+  esac
+  PROC=`echo $PROC | sed -e 's/ /_/g' -e 's|/|-|g'`
+}
+
+#-----------------------------------------------------------------------------#
+# Identify the operating system, its distribution, and its major.minor version
+GetOSDistribution() {	# Returns $OS, $DISTRIB, and $VER
   OS=`(uname -o 2>/dev/null || uname -s) | sed -e 's|GNU/||' -e 's|/|-|'`
   REV=`uname -r`
 
@@ -204,25 +224,8 @@ GetOS() {	# Returns $OS, $DISTRIB, and $VER
     ;;
   esac
   VER=`TrimVersion "$VER"`
-}
-
-#-----------------------------------------------------------------------------#
-# Identify the processor
-# Ref: https://en.wikipedia.org/wiki/Uname
-GetProc() {	# Returns $PROC
-  PROC=`uname -p 2>/dev/null || uname -m` # uname -p is not a valid option on all systems
-  case "$PROC" in
-    "powerpc"|"mips"|"sparc")
-      return
-    ;;
-  esac
-  MACHINE=`uname -m` # uname -m reports motherboard information on some systems
-  case "$PROC" in
-    "unknown"|"i386"|"athlon"|"sun4u"|"x86at"|Intel*)
-      PROC=$MACHINE
-    ;;
-  esac
-  PROC=`echo $PROC | sed -e 's/ /_/g' -e 's|/|-|g'`
+  
+  GetProc
 }
 
 #-----------------------------------------------------------------------------#
@@ -231,22 +234,27 @@ Help() {
   cat <<EOF
 $SCRIPT - Get the Unix distribution name, version, and processor
 
-Usage: $SCRIPT [OPTIONS] [INFO]
+Usage: $SCRIPT [OPTIONS] [INFO [...]]
 
 Options:
   -?    Display this help
+  -a    Show all sources of information about distributions. For debug.
   -V    Display the script version
 
-Info: What information to display. One of the following. By default, display all three.
-  name        The distribution name. (One word)
-  version     Its major dot minor version
-  processor   The target processor
+Info: What information to display. Default: name version processor
+  os          The operating system. Ex: Linux or MacOSX or FreeBSD
+  name        The distribution name. Ex: RHEL or Ubuntu or MacOSX
+  version     The distribution major.minor version. Ex: 7.3 or 2020.10
+  processor   The target processor. Ex: i386 or amd64 or armv71
 
 EOF
 }
 
 #-----------------------------------------------------------------------------#
 # Main routine
+
+FORMAT=""
+
 # Process command line arguments
 while [ $# -gt 0 ] ; do
   # Pop the first argument off the head of the list
@@ -265,25 +273,17 @@ while [ $# -gt 0 ] ; do
       GetAllVersions
       exit 0
     ;;
-    name)
-      GetOS
-      echo "$DISTRIB"
-      exit
+    n*)	# name
+      FORMAT="$FORMAT \$DISTRIB"
     ;;
-    os)
-      GetOS
-      echo "$OS"
-      exit
+    o*) # OS
+      FORMAT="$FORMAT \$OS"
     ;;
-    processor)
-      GetProc
-      echo "$PROC"
-      exit
+    p*) # processor
+      FORMAT="$FORMAT \$PROC"
     ;;
-    version)
-      GetOS
-      echo "$VER"
-      exit
+    v*) # version
+      FORMAT="$FORMAT \$VER"
     ;;
     -*)
       echo "Unrecognized option: \"$arg\"" >&2
@@ -298,7 +298,9 @@ while [ $# -gt 0 ] ; do
   esac
 done
 
-GetOS
-GetProc
+GetOSDistribution
 
-echo "$DISTRIB $VER $PROC"
+if [ -z "$FORMAT" ] ; then
+  FORMAT=" \$DISTRIB \$PROC \$VER"
+fi
+eval "echo$FORMAT"
