@@ -27,13 +27,14 @@
 #                   Added the ability to cascade Windows Explorer windows.    #
 #    2020-02-28 JFL Improved the Windows Explorer management.                 #
 #                   List apps if -l is specified without an app.              #
+#    2020-12-01 JFL Implemented the -X option, really.                        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set defaults
-set version "2020-02-28"
+set version "2020-12-01"
 
 set err [catch {
   set twapiVersion [package require twapi]
@@ -1431,6 +1432,9 @@ proc Cascade {app x y dx dy} {
   set nWnds 0
   set maxWidth 0
   set maxHeight 0
+  array set apps {}
+  array set titles {}
+  array set app_pids {}
   foreach pid $pids {
     set name [get_process_name $pid]
     foreach hWnd [find_windows -pids $pid -toplevel 1 -visible 1] {
@@ -1452,6 +1456,9 @@ proc Cascade {app x y dx dy} {
       }
       # OK, this window must be cascaded
       lappend hWnds $hWnd
+      set apps($hWnd) $name
+      set app_pids($hWnd) $pid
+      set titles($hWnd) $title
       incr nWnds
       # Record the biggest window
       if {$width > $maxWidth} {
@@ -1479,9 +1486,17 @@ proc Cascade {app x y dx dy} {
   }
   # Move all windows
   foreach hWnd [lsort -dictionary $hWnds] { # Sort by hWnd, like in the task bar buttons
-    minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
-    show_window $hWnd -normal -sync -activate
-    move_window $hWnd $x $y ; # Note: Does not work when minimized.
+    if {$::noexec} {
+      set app $apps($hWnd)
+      set pid $app_pids($hWnd)
+      set title $titles($hWnd)
+      regsub " HWND" $hWnd "" hWnd ;# Every such handle ends with " HWND"
+      Puts "move_window $hWnd $x $y ;# $app\[$pid\] \"$title\""
+    } else {
+      minimize_window $hWnd -sync ; # Makes sure the show_window below redraws it.
+      show_window $hWnd -normal -sync -activate
+      move_window $hWnd $x $y ; # Note: Does not work when minimized.
+    }
     incr x $dx
     incr y $dy
   }
@@ -1653,6 +1668,7 @@ Options:
   -v, --verbose     Verbose attributes. With -l, display unselected windows.
   -V, --version     Display this script version
   -x, --xindent     Horizontal indentation. Default: Width of the system button
+  -X, --noexec      Show what would be done, but don't do it
 
 Program:            Program name. Default extension: .exe
 }]
@@ -1743,10 +1759,6 @@ if $dxForce {
 
 if [Verbose] {
   foreach var {app x y dx dy} {PutVars $var}
-}
-
-if {$noexec} {
-  exit 0
 }
 
 if {$app == ""} {
