@@ -178,6 +178,7 @@ uuid.exe	| DW-	| Manage UUIDs.										| `uuid -s` &:# Display the system UUID
 
 Name		| OS   	| Description										| Example
 ----------------|-------|---------------------------------------------------------------------------------------|-------------
+distrib         | --L   | Display the Linux distribution name, major.minor version, and target processor        |
 FixMHT.tcl	| -WL	| Fix relative links in a .mht file. (Works around known bugs in many .mht files.)	|
 FlipMails.tcl	| -WL	| Convert mail threads into a single ASCII text file with mails in chronologic order.	| `12 flipmails`
 fvlCache.bat	| -W-	| List the most recent files in the Flash Player cache.					|
