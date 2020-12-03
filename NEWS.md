@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-12-03
+### New
+- C/Bash/truename: Added command-line arguments processing, and a pure Shell implementation for old systems that don't have realpath.
+
+### Changed
+- C/*/Makefile: Improved compatibility with old systems, by using our Bash/truename instead of realpath, and avoiding to use the sed -E argument.
+
+## [Unreleased] 2020-12-01
+### Changed
+- Tcl/cascade.tcl: Implemented the -X/--noexec option, really.
+
 ## [Unreleased] 2020-11-26
 ### New
 - C/Bash/distrib: New script identifying the OS distribution and version. Works in any Posix shell, and in any Unix derivative.
