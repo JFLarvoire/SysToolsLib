@@ -218,6 +218,7 @@ fi # End of alternative QuoteArg() versions
 # Echo multiple arguments with quotes, so that they can be reviewed easily
 QuoteArgs() { # $*=Arguments to quote
   local sep=""
+  local arg
   for arg in "$@" ; do
     printf "%s" "$sep$(QuoteArg "$arg")" # Do not use echo, with breaks on -n, -e, etc, arguments
     sep=" "
@@ -703,12 +704,12 @@ while (( $# > 0 )) ; do
     ;;
     -*)
       echo "Unrecognized option: \"$arg\"" >&2
-      echo "Run $SCRIPT -? to get a list of valid arguments" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
       err=3 ; # Unimplemented feature
     ;;
     *)
       echo "Unrecognized argument: \"$arg\"" >&2
-      echo "Run $SCRIPT -? to get a list of valid arguments" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
       err=3 ; # Unimplemented feature
     ;;
   esac
