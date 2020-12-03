@@ -51,9 +51,10 @@ bindir = $(exec_prefix)/bin
 libdir = $(exec_prefix)/lib
 
 # Prefer using PWD instead of CURDIR, as PWD does not expand links
+needed_before_using_Bash_scripts := $(shell for s in truename distrib ; do chmod +x ../Bash/$$s ; done)
 ifeq "$(PWD)" ""  # But some old shells don't define PWD
   PWD := $(CURDIR)# If it's not defined, fall back to using CURDIR
-else ifneq ($(shell realpath "$(PWD)"), $(shell realpath "$(CURDIR)"))
+else ifneq ($(shell ../Bash/truename -q "$(PWD)"), $(shell ../Bash/truename -q "$(CURDIR)"))
   PWD := $(CURDIR)# If it's ill defined, fall back to using CURDIR
 endif
 
