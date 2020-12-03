@@ -1,4 +1,318 @@
 #!/bin/sh
+###############################################################################
+#                                                                             #
+#   Filename        truename                                                  #
+#                                                                             #
+#   Description     Get the canonic pathname of a file, with links resolved   #
+#                                                                             #
+#   Note            For old systems that don't have realpath in Coreutils,    #
+#                   and for old MS-DOS users who don't know Unix well :-)     #
+#                                                                             #
+#   History                                                                   #
+#    2019-09-18 JFL Created this script.                                      #
+#    2020-12-01 JFL Added command-line arguments processing, and a pure Shell #
+#                   implementation for old systems that don't have realpath.  #
+#                                                                             #
+#         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
 
->&2 echo "# Please use realpath, which is the Unix equivalent of DOS' truename"
-realpath "$@"
+VERSION="2020-12-01"
+SCRIPT=`basename -- "$0"`	# Extract the script base name...
+
+#-----------------------------------------------------------------------------#
+# Posix Shell debug library
+
+VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+EXEC=1				# 1=Execute commands; 0=Don't
+
+Quiet() {
+  test $VERBOSITY -eq 0
+}
+NotQuiet() {
+  test $VERBOSITY -gt 0
+}
+Verbose() {
+  test $VERBOSITY -gt 1
+}
+Debug() {
+  test $VERBOSITY -gt 2
+}
+
+CALL_DEPTH=0
+CallIndent() {
+  printf '%*s' $CALL_DEPTH ''
+}
+
+# Display a string in debug mode
+EchoD() { # $*=echo arguments
+  if Debug ; then
+    >&2 echo "$(CallIndent)$*"
+  fi
+}
+
+# Display the values of a series of global variables.
+VarsValue() { # $*=Variables names. Display always.
+  for VV_var in "$@" ; do
+    set | grep "^$VV_var="
+  done
+}
+EchoVars() { # $*=Variables names. Display and log always.
+  Echo "$(VarsValue "$@")"
+}
+EchoDVars() { # $*=Variables names. Display in debug mode only and log always.
+  for EDV_var in "$@" ; do
+    EchoD "$(VarsValue "$EDV_var")"
+  done
+}
+
+# Echo arguments with quotes, so that they can be reentered in Shell verbatim.
+# User friendly output using the minimal number of quotes needed.
+# Does NOT handle control characters in args. ('\x00' to '\x1F')
+QuoteArg() { # $1=Argument to quote
+  QA_s="$1"
+  if [ $(expr "$QA_s" : "[ '\"\`\\\$&|#;]") -ne 0 ] ; then # This needs some form of quoting
+    if [ $(expr "$QA_s" : "'") -eq 0 ] ; then # If there are no single quotes
+      QA_s="'$QA_s'" # Quote with single quotes (simple and fast)
+    else # Quote everything that may be interpreted by the shell
+      QA_s="$(echo "$QA_s" | sed 's/\\/\\\\/')" # Escape anti-slashes
+      QA_s="$(echo "$QA_s" | sed 's/\$/\\\$/')" # Escape dollars
+      QA_s="$(echo "$QA_s" | sed 's/\"/\\\"/')" # Escape double quotes
+      QA_s="$(echo "$QA_s" | sed 's/\`/\\\`/')" # Escape back quotes
+      QA_s="\"${QA_s}\"" # Quote with double quotes
+    fi
+  fi
+  if [ "$QA_s" = "" ] ; then # Special case for the empty string
+    QA_s="''"
+  fi
+  printf "%s\n" "$QA_s" # Do not use echo, with breaks on -n, -e, etc, arguments
+}
+
+# Echo multiple arguments with quotes, so that they can be reviewed easily
+QuoteArgs() { # $*=Arguments to quote
+  QA_sep=""
+  for QA_arg in "$@" ; do
+    printf "%s" "$QA_sep$(QuoteArg "$QA_arg")" # Do not use echo, with breaks on -n, -e, etc, arguments
+    QA_sep=" "
+  done
+  echo ""
+}
+
+# Call a subroutine, logging the arguments and return value
+# Usage: Call [OPTIONS] [-U] FUNCTION ARGUMENTS
+# Options:
+#   -U             Do not log the underscore ahead of the function name (Must be last)
+#   -v VARNAME     Log variable VARNAME name and value when returning
+Call() {
+  # Get the list of variables to log upon return
+  Call_lVars="" # List of variables to log
+  while [ "$1" = "-v" ] ; do
+    shift
+    Call_lVars="$Call_lVars $1"
+    shift
+  done
+  # Get the function name, and remove the underscore if needed.
+  Call_func="$1"
+  if [ "$1" = "-U" ] ; then
+    shift
+    Call_func="$(echo "$1" | sed 's/^_\(.*\)/\1/')"
+  fi
+  _Call_func="$1"
+  shift
+  # Log the Call_function name and arguments
+  EchoD "$(QuoteArgs $Call_func "$@")"
+  CALL_DEPTH=$(expr $CALL_DEPTH + 2 )
+  $_Call_func "$@"
+  Call_ret=$?
+  # Log global variables that are set by the function
+  Call_Trace="return $Call_ret"
+  for Call_var in $Call_lVars ; do
+    Call_Trace="$Call_Trace; $(VarsValue $Call_var)"
+  done
+  # Cleanup and return
+  EchoD "$Call_Trace"
+  CALL_DEPTH=$(expr $CALL_DEPTH - 2)
+  return $Call_ret
+}
+
+# Define a front-end function, to trace _function arguments and return values
+TraceProc() { # $1=Function name; $2...=Additional options to pass to Call
+  TP_function="$1"
+  shift
+  eval "${TP_function}() {
+    if Debug ; then
+      Call $* -U _$TP_function \"\$@\"
+    else
+      _$TP_function \"\$@\"
+    fi
+  }"
+}
+
+# Conditionally execute a command line
+Exec() {
+  if [ $EXEC -eq 1 ] ; then
+    "$@"
+  else
+    QuoteArgs "$@"
+  fi
+}
+
+#-----------------------------------------------------------------------------#
+# Manage pseudo-local variables
+
+# Check if a variable exists.
+VarExists() { # $1=Variable name
+  eval "test \"\${${1}+true}\" = \"true\""
+}
+
+# Get the value of a variable.
+VarValue() { # $1=Variable name
+  eval "echo \"\${$1}\""
+}
+
+# Escape a string within single quotes, for reparsing by eval
+SingleQuote() { # $1=Value
+  echo "$1" | sed -e "s/'/'\"'\"'/g" -e "s/.*/'&'/"
+}
+
+# Set the value of a variable.
+SetVar() { # $1=Variable name; $2=New value
+  eval "$1=$(SingleQuote "$2")"
+}
+
+# Emulate local variables
+LOCAL_SCOPE=0
+Local() { # $*=Local variables names
+  LOCAL_SCOPE=$(expr $LOCAL_SCOPE + 1)
+  SetVar "LOCAL_${LOCAL_SCOPE}_VARS" "$*"
+  for LOCAL_VAR in $* ; do
+    if VarExists $LOCAL_VAR ; then
+      SetVar "LOCAL_${LOCAL_SCOPE}_RESTORE_$LOCAL_VAR" "SetVar $LOCAL_VAR $(SingleQuote "$(VarValue $LOCAL_VAR)")"
+    else
+      SetVar "LOCAL_${LOCAL_SCOPE}_RESTORE_$LOCAL_VAR" "unset $LOCAL_VAR"
+    fi
+  done
+}
+
+# Restore the initial variables
+EndLocal() {
+  LOCAL_RETCODE=$?
+  for LOCAL_VAR in $(VarValue "LOCAL_${LOCAL_SCOPE}_VARS") ; do
+    eval $(VarValue "LOCAL_${LOCAL_SCOPE}_RESTORE_$LOCAL_VAR")
+    unset "LOCAL_${LOCAL_SCOPE}_RESTORE_$LOCAL_VAR"
+  done
+  unset "LOCAL_${LOCAL_SCOPE}_VARS"
+  LOCAL_SCOPE=$(expr $LOCAL_SCOPE - 1)
+  return $LOCAL_RETCODE
+}
+
+#-----------------------------------------------------------------------------#
+# Shell implementation of realpath
+
+_TrueName() { # $1=PATHNAME $2=Optional OUTVAR
+  Local DIR NAME TARGET ABSDIR
+  if [ "$1" = "/" ] ; then
+    TRUENAME="/"
+  else
+    DIR="$(dirname "$1")"
+    NAME="$(basename "$1")"
+    if [ "$NAME" = ".." ] ; then
+      DIR="$1"
+      NAME="."
+    fi
+    ABSDIR="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
+    EchoDVars ABSDIR NAME
+    if [ "$NAME" = "." ] ; then
+      TrueName "$ABSDIR" TRUENAME
+    elif [ -h "$1" ] ; then
+      TARGET="$(readlink "$1")"
+      if [ $(expr "$TARGET" : '/.*') -ne 0 ] ; then
+	TrueName "$TARGET" TRUENAME
+      else
+	TrueName "$ABSDIR/$TARGET" TRUENAME
+      fi
+    elif [ "$ABSDIR" = "/" ] ; then
+      TRUENAME="/$NAME"
+    else
+      TrueName "$ABSDIR" TRUENAME
+      TRUENAME="$TRUENAME/$NAME"
+    fi
+  fi
+  if [ -n "$2" ] ; then
+    if [ "$2" != "$TRUENAME" ] ; then
+      SetVar $2 "$TRUENAME"
+    fi
+  else
+    echo "$TRUENAME"
+  fi
+  EndLocal
+}
+TraceProc TrueName -v TRUENAME
+
+#-----------------------------------------------------------------------------#
+
+Help() {
+  cat <<EOF
+$SCRIPT - Get the canonic pathname of a file, with links resolved
+
+Usage: $SCRIPT [OPTIONS] [PATHNAME]
+
+Options:
+  -?    Display this help
+  -q    Quiet mode. Do not display the message about realpath
+  -V    Display the script version
+  -X    Display the commands generated, but don't run them
+
+EOF
+}
+
+#-----------------------------------------------------------------------------#
+
+# Main routine
+
+# Check if realpath is installed on this system
+REALPATH=`which realpath 2>/dev/null`
+
+# Process command line arguments
+while [ $# -gt 0 ] ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -d|--debug)
+      VERBOSITY=$(expr $VERBOSITY + 2)
+    ;;
+    -h|--help|"-?")
+      Help
+      exit 0
+    ;;
+    -q|--quiet)
+      VERBOSITY=0
+    ;;
+    -t|--test)		# Force testing the built-in TrueName routine
+      REALPATH=""
+    ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -X|--noexec)
+      EXEC=0
+    ;;
+    -*)
+      echo "Unrecognized option: \"$arg\"" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
+      exit 3 ; # Unimplemented feature
+    ;;
+    *)
+      if [ -n "$REALPATH" ] ; then
+	if NotQuiet ; then
+	  >&2 echo "# Please use realpath, which is the Unix equivalent of DOS' truename"
+	fi
+	Exec "$REALPATH" "$arg"
+      else
+	TrueName "$arg"
+      fi
+    ;;
+  esac
+done
