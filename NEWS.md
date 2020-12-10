@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-12-10
+### New
+- Tcl/htmldec.tcl: Decode strings that contain HTML entities.
+- Tcl/htmlenc.tcl: Encode text strings with the 3 basic HTML entities & < >.
+
+### Changed
+- Batch/TimeX.bat: Added support for durations > 1 day.
+- Batch/Library.bat: Function :Time.Delta now has optional support for dates, and durations > 1 day. Also the output variables base name can be changed.
+
 ## [Unreleased] 2020-12-03
 ### New
 - C/Bash/truename: Added command-line arguments processing, and a pure Shell implementation for old systems that don't have realpath.
