@@ -3691,37 +3691,71 @@ exit /b
 :#                                                                            #
 :#  Function        Time.Delta                                                #
 :#                                                                            #
-:#  Description     Compute the difference between two times                  #
+:#  Description     Compute the duration between two date/times               #
 :#                                                                            #
-:#  Returns         Environment variables DC DH DM DS DMS                     #
-:#                  for carry, hours, minutes, seconds, milliseconds          #
+:#  Returns         Env. vars. VAR.DAY VAR.HOUR VAR.MINUTE VAR.SECOND VAR.MS  #
+:#                  for days, hours, minutes, seconds, milliseconds           #
 :#                                                                            #
-:#  Notes 	    Carry == 0, or -1 if the time flipped over midnight.      #
+:#  Notes 	    When not using dates, ignore VAR.DAY, and short durations #
+:#                  will be correct, even across the midnight boundary.       #
 :#                                                                            #
 :#  History                                                                   #
 :#   2012-10-08 JFL Created this routine.                                     #
 :#   2012-10-12 JFL Renamed variables. Added support for milliseconds.        #
+:#   2020-12-10 JFL Added optional support for dates, and durations > 1 day.  #
+:#                  Added an optional argument for the output structure name. #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:Time.Delta %1=T0 %2=T1 [%3=-f]. Input times in HH:MM:SS[.mmm] format.
-setlocal enableextensions enabledelayedexpansion
-for /f "tokens=1,2,3,4 delims=:." %%a in ("%~1") do set "H0=%%a" & set "M0=%%b" & set "S0=%%c" & set "MS0=%%d000" & set "MS0=!MS0:~0,3!"
-for /f "tokens=1,2,3,4 delims=:." %%a in ("%~2") do set "H1=%%a" & set "M1=%%b" & set "S1=%%c" & set "MS1=%%d000" & set "MS1=!MS1:~0,3!"
-:# Remove the initial 0, to avoid having numbers interpreted in octal afterwards. (MS may have 2 leading 0s!)
-for %%n in (0 1) do for %%c in (H M S MS MS) do if "!%%c%%n:~0,1!"=="0" set "%%c%%n=!%%c%%n:~1!"
+:# Convert a gregorian calender date to its julian day # (# days since 4713 BC)
+:# Based on https://www.dostips.com/DtCodeCmdLib.php#Function.date2jdate
+:# Itself based on https://aa.usno.navy.mil/faq/docs/JD_Formula.html
+:Date2JulianDay YEAR MONTH DAY [OUTVAR] # If no OUTVAR, echo the result
+setlocal
+set /a "YEAR=10000%~1 %% 10000, MONTH=100%~2 %% 100, DAY=100%~3 %% 100" &:# Make sure they have no leading 0
+if %YEAR% LSS 100 set /a YEAR+=2000 &:# Assume two digit years are in the 21st century
+set /a JD=DAY-32075+1461*(YEAR+4800+(MONTH-14)/12)/4+367*(MONTH-2-(MONTH-14)/12*12)/12-3*((YEAR+4900+(MONTH-14)/12)/100)/4
+endlocal & if not "%~4"=="" (set %~4=%JD%) else (echo.%JD%)
+exit /b
+
+:# Extract components from an ISO 8601 date/time
+:Time.Split TIME OUTSTRUCT # TIME=[YYYY-MM-DD_]HH:MM:SS[.m[m[m]]] _=T| |_
+setlocal EnableExtensions EnableDelayedExpansion
+for /f "tokens=1,2 delims=T_ " %%a in ("%~1") do set "_DATE=%%a" & set "_TIME=%%b"
+if not defined _TIME set "_TIME=%_DATE%" & set "_DATE="
+for /f "tokens=1,2 delims=.," %%a in ("%_TIME%") do set "_TIME=%%a" & set "_MS=%%b000" & set "_MS=!_MS:~0,3!"
+endlocal & (
+  for /f "tokens=1,2,3 delims=-" %%a in ("%_DATE%") do set "%~2.YEAR=%%a" & set "%~2.MONTH=%%b" & set "%~2.DAY=%%c"
+  for /f "tokens=1,2,3,4 delims=:" %%a in ("%_TIME%") do set "%~2.HOUR=%%a" & set "%~2.MINUTE=%%b" & set "%~2.SECOND=%%c"
+  set "%~2.MS=%_MS%"
+)
+exit /b
+
+:# Compute the duration between two date/times
+:Time.Delta TIME0 TIME1 [-f] [OUTSTRUCT] # TIME*=[YYYY-MM-DD_]HH:MM:SS[.mmm]
+setlocal EnableExtensions EnableDelayedExpansion
+call :Time.Split "%~1" T0
+call :Time.Split "%~2" T1
+:# Convert the dates to julian days
+set "T0.JDAY=0" & set "T1.JDAY=0"
+for %%n in (0 1) do if defined T%%n.DAY call :Date2JulianDay !T%%n.YEAR! !T%%n.MONTH! !T%%n.DAY! T%%n.JDAY
+:# Remove the initial 0, to avoid having numbers interpreted in octal afterwards.
+for %%n in (0 1) do for %%v in (HOUR MINUTE SECOND MS) do set /a "T%%n.%%v=1000!T%%n.%%v! %% 1000"
 :# Compute differences
-for %%c in (H M S MS) do set /a "D%%c=%%c1-%%c0"
-set "DC=0" & :# Carry  
-:# Report carries if needed
-if "%DMS:~0,1%"=="-" set /a "DMS=DMS+1000" & set /a "DS=DS-1"
-if "%DS:~0,1%"=="-" set /a "DS=DS+60" & set /a "DM=DM-1"
-if "%DM:~0,1%"=="-" set /a "DM=DM+60" & set /a "DH=DH-1"
-if "%DH:~0,1%"=="-" set /a "DH=DH+24" & set /a "DC=DC-1"
+for %%v in (JDAY HOUR MINUTE SECOND MS) do set /a "%%v=T1.%%v-T0.%%v"
+:# Propagate the carry upwards
+if %MS% LSS 0     set /a "MS=MS+1000, SECOND=SECOND-1"
+if %SECOND% LSS 0 set /a "SECOND=SECOND+60, MINUTE=MINUTE-1"
+if %MINUTE% LSS 0 set /a "MINUTE=MINUTE+60, HOUR=HOUR-1"
+if %HOUR% LSS 0   set /a "HOUR=HOUR+24, JDAY=JDAY-1"
 :# If requested, convert the results back to a 2-digit format.
-if "%~3"=="-f" for %%c in (H M S MS) do if "!D%%c:~1!"=="" set "D%%c=0!D%%c!"
-if "!DMS:~2!"=="" set "DMS=0!DMS!"
-endlocal & set "DC=%DC%" & set "DH=%DH%" & set "DM=%DM%" & set "DS=%DS%" & set "DMS=%DMS%" & goto :eof
+if "%~3"=="-f" ( shift
+  for %%v in (HOUR MINUTE SECOND) do if !%%v! lss 10 set "%%v=0!%%v!"
+  set "MS=00!MS!" & set "MS=!MS:~-3!"
+)
+if "%~3"=="" (set set=echo.) else (set set=set %~3.)
+endlocal&%set%DAY=%JDAY%&%set%HOUR=%HOUR%&%set%MINUTE=%MINUTE%&%set%SECOND=%SECOND%&%set%MS=%MS%
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -4464,7 +4498,7 @@ call :ConvertEntities CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do %EXEC% !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
-if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
+if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f D & echo Delta = !D.HOUR!:!D.MINUTE!:!D.SECOND!.!D.MS:~0,2!
 %CMD_AFTER%
 goto :eof
 
@@ -4480,7 +4514,7 @@ call :ConvertEntities CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
-if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
+if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f D & echo Delta = !D.HOUR!:!D.MINUTE!:!D.SECOND!.!D.MS:~0,2!
 %CMD_AFTER%
 goto :eof
 
@@ -4493,7 +4527,7 @@ call :ConvertEntities CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
-if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
+if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f D & echo Delta = !D.HOUR!:!D.MINUTE!:!D.SECOND!.!D.MS:~0,2!
 %CMD_AFTER%
 goto :eof
 
@@ -4527,7 +4561,7 @@ if defined CMD_BEFORE !CMD_BEFORE!
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do for /l %%c in (1,1,%NCMDS%) do call %%CMD[%%c]%% &:# Don't use !CMD[]! in case one command disables expansion
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
-if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f & echo Delta = !DH!:!DM!:!DS!.!DMS:~0,2!
+if not %NLOOPS%==1 call :Time.Delta %T0% %T1% -f D & echo Delta = !D.HOUR!:!D.MINUTE!:!D.SECOND!.!D.MS:~0,2!
 if defined CMD_AFTER !CMD_AFTER!
 goto :eof
 
