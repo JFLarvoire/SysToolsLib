@@ -76,6 +76,8 @@ Tcl\cfdt.tcl
 Tcl\fixmht.tcl
 Tcl\FlipMails.tcl
 Tcl\get.tcl
+Tcl\htmldec.tcl
+Tcl\htmlenc.tcl
 Tcl\lower.tcl
 Tcl\nlines.tcl
 Tcl\regsub.tcl
