@@ -11,6 +11,7 @@
 *    2017-04-10 JFL Added the new IO_REPARSE_TAG_LXSS_SYMLINK tag.            *
 *    2017-06-27 JFL Added several other reparse tags gathered from Internet.  *
 *		    Renamed IO_REPARSE_TAG_LXSS_SYMLINK as ..._TAG_LX_SYMLINK.*
+*    2020-12-11 JFL Added read structure for tag IO_REPARSE_TAG_APPEXECLINK.  *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -147,6 +148,7 @@
 #endif
 
 #pragma pack(1)
+
 typedef struct _REPARSE_READ_BUFFER {
   DWORD  ReparseTag;
   WORD   ReparseDataLength;
@@ -155,7 +157,7 @@ typedef struct _REPARSE_READ_BUFFER {
 } REPARSE_READ_BUFFER, *PREPARSE_READ_BUFFER;
 #define REPARSE_READ_BUFFER_HEADER_SIZE (sizeof(REPARSE_READ_BUFFER) - sizeof(UCHAR))
 
-typedef struct _REPARSE_SYMLINK_READ_BUFFER {
+typedef struct _REPARSE_SYMLINK_READ_BUFFER { // For tag IO_REPARSE_TAG_SYMLINK
   DWORD  ReparseTag;
   WORD   ReparseDataLength;
   WORD   Reserved;
@@ -168,7 +170,7 @@ typedef struct _REPARSE_SYMLINK_READ_BUFFER {
 } SYMLINK_READ_BUFFER, *PSYMLINK_READ_BUFFER;
 #define SYMLINK_READ_BUFFER_HEADER_SIZE (sizeof(SYMLINK_READ_BUFFER) - sizeof(WCHAR))
 
-typedef struct _REPARSE_MOUNTPOINT_READ_BUFFER {
+typedef struct _REPARSE_MOUNTPOINT_READ_BUFFER { // For tag IO_REPARSE_TAG_MOUNT_POINT, aka. junctions
   DWORD  ReparseTag;
   WORD   ReparseDataLength;
   WORD   Reserved;
@@ -190,6 +192,20 @@ typedef struct _REPARSE_MOUNTPOINT_WRITE_BUFFER {
   WCHAR  ReparseTarget[1];
 } MOUNTPOINT_WRITE_BUFFER, *PMOUNTPOINT_WRITE_BUFFER;
 #define MOUNTPOINT_WRITE_BUFFER_HEADER_SIZE (sizeof(MOUNTPOINT_WRITE_BUFFER) - sizeof(WCHAR))
+
+typedef struct _REPARSE_APPEXECLINK_READ_BUFFER { // For tag IO_REPARSE_TAG_APPEXECLINK
+  DWORD  ReparseTag;
+  WORD   ReparseDataLength;
+  WORD   Reserved;
+  ULONG  StringCount;                  // Number of the strings in the StringList, separated by '\0'
+  WCHAR  StringList[1];                // Multistring (strings separated by '\0', terminated by '\0\0')
+  /* There are normally 3 strings here. Ex:
+	L"Microsoft.WindowsTerminal_8wekyb3d8bbwe"
+	L"Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
+	L"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.4.3243.0_x64__8wekyb3d8bbwe\wt.exe"
+  */     
+} APPEXECLINK_READ_BUFFER, *PAPPEXECLINK_READ_BUFFER;
+
 #pragma pack()
 
 
