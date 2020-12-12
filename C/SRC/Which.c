@@ -1,6 +1,6 @@
 ﻿/*****************************************************************************\
 *		    							      *
-*   Filename	    which.c						      *
+*   Filename	    Which.c						      *
 *		    							      *
 *   Description     Find which instances of a program are in the PATH	      *
 *		    							      *
@@ -93,6 +93,9 @@
 *		    Version 1.14.					      *
 *    2020-03-22 JFL Fixed wildcards search in Unix. Version 1.14.1.           *
 *    2020-04-20 JFL Added support for MacOS. Version 1.15.                    *
+*    2020-12-11 JFL Added support for IO_REPARSE_TAG_APPEXECLINK reparse pts. *
+*		    The -l option now also displays the file length.          *
+*		    Version 1.16.					      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -100,8 +103,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
-#define PROGRAM_VERSION "1.15"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "1.16"
+#define PROGRAM_DATE    "2020-12-11"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1045,8 +1048,18 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
   RETURN_INT(nFound);
 }
 
+#if defined(_WIN32) && HAS_MSVCLIBX
+#define SUPPORT_APPEXECLINK 1
+#else
+#define SUPPORT_APPEXECLINK 0
+#endif
+
 int CheckProgram(char *pszName, int iFlags) {
   int nChars = 0;
+  char szComment[80] = "";
+#if SUPPORT_APPEXECLINK
+  char szAppExecLinkTarget[UTF8_PATH_MAX] = "";
+#endif
 
   DEBUG_PRINTF(("  Looking for \"%s\"", pszName));
   if ((!access(pszName, F_OK)) && (!is_directory(pszName))) {
@@ -1068,9 +1081,31 @@ int CheckProgram(char *pszName, int iFlags) {
       pszName = szName2;
     }
 #endif
-    iExecutable = !access(pszName, X_OK); /* access() returns 0=success, -1=error */
-    if (iFlags & WHICH_XCD) iExecutable = FALSE; /* CD not in PATH, so actually not executable */
-    if ((iFlags & WHICH_XCASE) || !iExecutable) {
+
+    /* Eliminate cases where the file is already known not to be executable */
+    if (iFlags & WHICH_XCD) { /* This shell does not search in the Current Directory */
+      iExecutable = FALSE;
+      snprintf(szComment, sizeof(szComment), " # %s does not search in \".\"", pszShells[shell]);
+    } else if (iFlags & WHICH_XCASE) { /* This OS is case dependant, and the case is wrong */
+      iExecutable = FALSE;
+      strcpy(szComment, "Case does not match");
+    } else
+#if SUPPORT_APPEXECLINK
+    /* Special case of IO_REPARSE_TAG_APPEXECLINK reparse points, for so-called "modern apps" */
+#ifndef IO_REPARSE_TAG_APPEXECLINK	/* For Windows 95 */
+#define IO_REPARSE_TAG_APPEXECLINK	0x8000001B
+#endif
+    if (GetReparseTag(pszName) == IO_REPARSE_TAG_APPEXECLINK) {
+      iExecutable = FALSE;
+      strcpy(szComment, "IO_REPARSE_TAG_APPEXECLINK");
+      ReadAppExecLink(pszName, szAppExecLinkTarget, sizeof(szAppExecLinkTarget));
+    } else
+#endif /* SUPPORT_APPEXECLINK */
+    { /* OK, now at last, check if it's actually executable */
+      iExecutable = !access(pszName, X_OK); /* access() returns 0=success, -1=error */
+      if (!iExecutable) strcpy(szComment, "Not executable");
+    }
+    if (!iExecutable) {
       if (!(iFlags & WHICH_VERBOSE)) goto search_failed;
       nChars += printf("# "); /* Display a comment showing the file, and why it's excluded */
     }
@@ -1080,8 +1115,13 @@ int CheckProgram(char *pszName, int iFlags) {
       struct tm *pTime;
       int year, month, day, hour, minute, second;
 
-      /* Get the time stamp of the actual file, not that of the link! */
-      if (stat(pszName, &s) == -1) goto search_failed;
+#if SUPPORT_APPEXECLINK
+      if (szAppExecLinkTarget[0]) {
+        if (lstat(pszName, &s) == -1) goto search_failed;
+      } else
+#endif
+        /* Get the time stamp and size of the actual file, not that of the link! */
+        if (stat(pszName, &s) == -1) goto search_failed;
       pTime = localtime(&(s.st_mtime)); /* Time of last data modification */
       year = pTime->tm_year + 1900;
       month = pTime->tm_mon + 1;
@@ -1089,7 +1129,7 @@ int CheckProgram(char *pszName, int iFlags) {
       hour = pTime->tm_hour;
       minute = pTime->tm_min;
       second = pTime->tm_sec;
-      nChars += printf("%04d-%02d-%02d %02d:%02d:%02d ", year, month, day, hour, minute, second);
+      nChars += printf("%04d-%02d-%02d %02d:%02d:%02d %8lu ", year, month, day, hour, minute, second, (unsigned long)s.st_size);
     }
     nChars += printf("%s", pszName);
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
@@ -1101,18 +1141,14 @@ int CheckProgram(char *pszName, int iFlags) {
       	if (readlink(pszName, target, PATH_MAX) == -1) goto search_failed;
 	nChars += printf(" -> %s", target); 
       }
+#if SUPPORT_APPEXECLINK
+      /* Check if its an APPEXECLINK */
+      if (szAppExecLinkTarget[0]) nChars += printf(" -> %s", szAppExecLinkTarget); 
+#endif
     }
 #endif
     if (!iExecutable) { /* Display a comment showing why it was excluded */
-      if (iFlags & WHICH_XCD) {
-      	nChars += printf(" # %s does not search in \".\"", pszShells[shell]);
-      } else {
-      	nChars += printf(" # Not executable");
-      }
-      goto search_failed;
-    }
-    if (iFlags & WHICH_XCASE) {
-      nChars += printf(" # Case does not match");
+      if (szComment[0]) nChars += printf(" # %s", szComment);
       goto search_failed;
     }
     printf("\n");
@@ -1122,6 +1158,11 @@ search_failed:
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* In DOS it's defined, but always returns 0 */
   if (nChars) printf("\n"); /* nChars cannot be > 0 for cases this is compiled out (MSDOS) */
 #endif
+
+#if SUPPORT_APPEXECLINK /* The APPEXECLINK failed, but try its target */
+  if (szAppExecLinkTarget[0]) return CheckProgram(szAppExecLinkTarget, iFlags);
+#endif /* defined(_WIN32) */
+
   DEBUG_PRINTF(("  Error %d\n", errno));
   return 0;	/* No match */
 }
