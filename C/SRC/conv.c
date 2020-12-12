@@ -63,6 +63,7 @@
 *    2020-08-19 JFL Added type * for IMultiLanguage2::DetectInputCodepage().  *
 *		    Version 2.3.					      *
 *    2020-08-29 JFL Removed unused routine ReportWin32Error(). Version 2.3.1. *
+*    2020-12-10 JFL Added option -= as a synonym for -same. Version 2.3.2.    *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -70,8 +71,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.3.1"
-#define PROGRAM_DATE    "2020-08-29"
+#define PROGRAM_VERSION "2.3.2"
+#define PROGRAM_DATE    "2020-12-10"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -276,7 +277,7 @@ Options:\n\
   -d        Output debug information\n"
 #endif
 "\
-  -same     Modify the input file in place. (Default: Automatically detected)\n\
+  -=|-same  Modify the input file in place. (Default: Automatically detected)\n\
   -st       Set the output file time to the same time as the input file.\n\
   -v        Display verbose information\n\
   -V        Display this program version\n\
@@ -411,7 +412,9 @@ fail_no_mem:
 	pszOutType = "o";
 	continue;
       }
-      if (streq(pszOpt, "same")) {	/* -same: Output to the input file */
+      if (   streq(pszOpt, "=")
+	  || streq(pszOpt, "same")
+	  || streq(pszOpt, "-same")) {	/* -same: Output to the input file */
 	iSameFile = TRUE;
 	continue;
       }
