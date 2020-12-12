@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-12-12
+### New
+- C/MsvcLibX/SRC/readlink.c: Added support for AppExecLink reparse points, and function ReadAppExecLink() to read them.
+- C/MsvcLibX/include/reparsept.h: Added support for AppExecLink reparse points.
+- C/MsvcLibX/include/unistd.h: Added prototype for function ReadAppExecLink().
+
+### Changed
+- C/SRC/Which.c: The -l option now also displays the file length. Added support for AppExecLink reparse points. 
+- C/SRC/conv.c: Added option -= as a synonym for -same.
+- C/include/BatProxy.bat: Search for batchs in [.|..|..\..]\[.|WIN32|C]\include.
+
 ## [Unreleased] 2020-12-10
 ### New
 - Tcl/htmldec.tcl: Decode strings that contain HTML entities.
