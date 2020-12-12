@@ -140,6 +140,7 @@
 *		    in try_vsnprintf() always appends a NUL to its output.    *
 *    2020-07-24 JFL Rewrote debug_printf() to use the standard asprintf() as  *
 *		    much as possible.					      *
+*    2020-12-11 JFL Added XDEBUG_WPRINTF and RETURN_DWORD* macros.            *
 *		    							      *
 *	 (C) Copyright 2016 Hewlett Packard Enterprise Development LP	      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -333,6 +334,7 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
    to make recursive calls easier to review. */
 #define DEBUG_FPRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); fprintf args;})
 #define DEBUG_WPRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); wprintf args;})
+#define XDEBUG_WPRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); wprintf args;})
 #if defined(_MSDOS)
 #define DEBUG_PRINTF(args) DEBUG_DO(if (DEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
 #define XDEBUG_PRINTF(args) DEBUG_DO(if (XDEBUG_IS_ON()) {DEBUG_PRINT_INDENT(); printf args; fflush(stdout);})
@@ -368,6 +370,8 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
   DEBUG_LEAVE(("return \"%s\";\n", DEBUG_s)); return DEBUG_s;)
 #define RETURN_CPTR(p) DEBUG_DO(const void *DEBUG_p = (p); \
   DEBUG_LEAVE(("return %p;\n", DEBUG_p)); return DEBUG_p;)
+#define RETURN_DWORD(dw) DEBUG_DO(DWORD DEBUG_dw = (dw); \
+  DEBUG_LEAVE(("return 0x%lX;\n", DEBUG_dw)); return DEBUG_dw;)
 
 #if defined(_MSDOS)
 #define RETURN_COMMENT(args) DEBUG_DO(DEBUG_LEAVE(("return; // ")); \
@@ -390,6 +394,8 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
   DEBUG_LEAVE(("return \"%s\"; // \n", DEBUG_s)); if (DEBUG_IS_ON()) printf args; return DEBUG_s;)
 #define RETURN_CPTR_COMMENT(p, args) DEBUG_DO(const void *DEBUG_p = (p); \
   DEBUG_LEAVE(("return %p; // \n", DEBUG_p)); if (DEBUG_IS_ON()) printf args; return DEBUG_p;)
+#define RETURN_DWORD_COMMENT(dw, args) DEBUG_DO(DWORD DEBUG_dw = (dw); \
+  DEBUG_LEAVE(("return 0x%lX; // \n", DEBUG_dw)); if (DEBUG_IS_ON()) printf args; return DEBUG_dw;)
 #else /* !defined(_MSDOS) */
 #define RETURN_COMMENT(args) DEBUG_DO(char *DEBUG_buf = NULL; \
   if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return; // %s", DEBUG_buf)); free(DEBUG_buf); return;)
@@ -411,6 +417,8 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
   if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %s; // %s", DEBUG_s, DEBUG_buf)); free(DEBUG_buf); return DEBUG_s;)
 #define RETURN_CPTR_COMMENT(p, args) DEBUG_DO(const void *DEBUG_p = (p); char *DEBUG_buf = NULL; \
   if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return %p; // %s", DEBUG_p, DEBUG_buf)); free(DEBUG_buf); return DEBUG_p;)
+#define RETURN_DWORD_COMMENT(dw, args) DEBUG_DO(DWORD DEBUG_dw = (dw); char *DEBUG_buf = NULL; \
+  if (DEBUG_IS_ON()) DEBUG_buf = debug_dasprintf args; DEBUG_LEAVE(("return 0x%X; // %s", DEBUG_dw, DEBUG_buf)); free(DEBUG_buf); return DEBUG_dw;)
 #endif /* defined(_MSDOS) */
 
 #define SET_DEBUG_PUT(pFunc) pdput = pFunc /* Set the debug put routine */
@@ -433,15 +441,16 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 
 #define DEBUG_PRINT_INDENT() DEBUG_DO_NOTHING() /* Print call-depth spaces */
 
-#define DEBUG_FPRINTF(args) DEBUG_DO_NOTHING()	/* Print a debug string to a stream */
-#define DEBUG_WPRINTF(args) DEBUG_DO_NOTHING()	/* Print a wide debug string to stdout */
-#define DEBUG_PRINTF(args)  DEBUG_DO_NOTHING()	/* Print a debug string to stdout */
-#define XDEBUG_PRINTF(args) DEBUG_DO_NOTHING()	/* Print an extra debug string to stdout */
-#define DEBUG_ENTER(args)   DEBUG_DO_NOTHING()	/* Print and increase indent */
-#define DEBUG_WENTER(args)  DEBUG_DO_NOTHING()	/* Print and increase indent */
-#define DEBUG_LEAVE(args)   DEBUG_DO_NOTHING()	/* Print and decrease indent */
-#define DEBUG_WLEAVE(args)  DEBUG_DO_NOTHING()	/* Print and decrease indent */
-#define DEBUG_QUIET_LEAVE() DEBUG_DO_NOTHING()	/* Print and decrease indent */
+#define DEBUG_FPRINTF(args)  DEBUG_DO_NOTHING()	/* Print a debug string to a stream */
+#define DEBUG_WPRINTF(args)  DEBUG_DO_NOTHING()	/* Print a wide debug string to stdout */
+#define DEBUG_PRINTF(args)   DEBUG_DO_NOTHING()	/* Print a debug string to stdout */
+#define XDEBUG_PRINTF(args)  DEBUG_DO_NOTHING()	/* Print an extra debug string to stdout */
+#define XDEBUG_WPRINTF(args) DEBUG_DO_NOTHING()	/* Print an extra debug string to stdout */
+#define DEBUG_ENTER(args)    DEBUG_DO_NOTHING()	/* Print and increase indent */
+#define DEBUG_WENTER(args)   DEBUG_DO_NOTHING()	/* Print and increase indent */
+#define DEBUG_LEAVE(args)    DEBUG_DO_NOTHING()	/* Print and decrease indent */
+#define DEBUG_WLEAVE(args)   DEBUG_DO_NOTHING()	/* Print and decrease indent */
+#define DEBUG_QUIET_LEAVE()  DEBUG_DO_NOTHING()	/* Print and decrease indent */
 
 #define DEBUG_RETURN_INT(i, comment) return(i)
 
@@ -456,6 +465,7 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define RETURN_LONG(l) return(l)
 #define RETURN_CSTRING(s) return(s)
 #define RETURN_CPTR(p) return(p)
+#define RETURN_DWORD(dw) return(dw)
 
 #define RETURN_COMMENT(args) return
 #define RETURN_CONST_COMMENT(k, args) return(k)
@@ -467,6 +477,7 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define RETURN_LONG_COMMENT(l, args) return(l)
 #define RETURN_CSTRING_COMMENT(s, args) return(s)
 #define RETURN_CPTR_COMMENT(p, args) return(p)
+#define RETURN_DWORD_COMMENT(dw, args) return(dw)
 
 #define SET_DEBUG_PUT(pFunc) DEBUG_DO_NOTHING() /* Set the debug put routine */
 
