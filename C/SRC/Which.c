@@ -95,6 +95,7 @@
 *    2020-04-20 JFL Added support for MacOS. Version 1.15.                    *
 *    2020-12-11 JFL Added support for IO_REPARSE_TAG_APPEXECLINK reparse pts. *
 *		    The -l option now also displays the file length.          *
+*    2020-12-15 JFL The MsvcLibX readlink() now supports APPEXECLINKs.        *
 *		    Version 1.16.					      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
@@ -104,7 +105,7 @@
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
 #define PROGRAM_VERSION "1.16"
-#define PROGRAM_DATE    "2020-12-11"
+#define PROGRAM_DATE    "2020-12-15"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -166,7 +167,7 @@ int iMatchFlags = FNM_CASEFOLD;
 #define INCL_DOSFILEMGR
 #define INCL_DOSMISC
 #define INCL_VIO
-#include "os2.h"
+#include <os2.h>
 
 char *pszExtReal[] = {"COM", "EXE", "BAT", NULL};
 char *pszExtProt[] = {"EXE", "CMD", NULL};
@@ -183,6 +184,9 @@ int iMatchFlags = FNM_CASEFOLD;
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+/* SysToolsLib include files */
+#include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
 
 /* Note: In Windows NT, some files may have the .com extension, but actually be
    structured as .exe internally. Look for the 'MZ' header to tell if it's an exe.
@@ -1049,6 +1053,8 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
 }
 
 #if defined(_WIN32) && HAS_MSVCLIBX
+/* Include special support for IO_REPARSE_TAG_APPEXECLINK reparse points,
+   used for Universal Windows Platform (UWP) applications execution links */
 #define SUPPORT_APPEXECLINK 1
 #else
 #define SUPPORT_APPEXECLINK 0
@@ -1085,22 +1091,18 @@ int CheckProgram(char *pszName, int iFlags) {
     /* Eliminate cases where the file is already known not to be executable */
     if (iFlags & WHICH_XCD) { /* This shell does not search in the Current Directory */
       iExecutable = FALSE;
-      snprintf(szComment, sizeof(szComment), " # %s does not search in \".\"", pszShells[shell]);
+      snprintf(szComment, sizeof(szComment), "%s does not search in \".\"", pszShells[shell]);
     } else if (iFlags & WHICH_XCASE) { /* This OS is case dependant, and the case is wrong */
       iExecutable = FALSE;
       strcpy(szComment, "Case does not match");
     } else
 #if SUPPORT_APPEXECLINK
-    /* Special case of IO_REPARSE_TAG_APPEXECLINK reparse points, for so-called "modern apps" */
-#ifndef IO_REPARSE_TAG_APPEXECLINK	/* For Windows 95 */
-#define IO_REPARSE_TAG_APPEXECLINK	0x8000001B
-#endif
     if (GetReparseTag(pszName) == IO_REPARSE_TAG_APPEXECLINK) {
-      iExecutable = FALSE;
-      strcpy(szComment, "IO_REPARSE_TAG_APPEXECLINK");
-      ReadAppExecLink(pszName, szAppExecLinkTarget, sizeof(szAppExecLinkTarget));
+      iExecutable = FALSE; /* Pretend it's not, and process the target of the link at the end of this routine */
+      strcpy(szComment, "UWP App. Exec. Link");
+      readlink(pszName, szAppExecLinkTarget, sizeof(szAppExecLinkTarget));
     } else
-#endif /* SUPPORT_APPEXECLINK */
+#endif
     { /* OK, now at last, check if it's actually executable */
       iExecutable = !access(pszName, X_OK); /* access() returns 0=success, -1=error */
       if (!iExecutable) strcpy(szComment, "Not executable");
@@ -1116,7 +1118,7 @@ int CheckProgram(char *pszName, int iFlags) {
       int year, month, day, hour, minute, second;
 
 #if SUPPORT_APPEXECLINK
-      if (szAppExecLinkTarget[0]) {
+      if (szAppExecLinkTarget[0]) { /* If it's an APPEXECLINK, report the link itself, like Windows does */
         if (lstat(pszName, &s) == -1) goto search_failed;
       } else
 #endif
@@ -1141,10 +1143,6 @@ int CheckProgram(char *pszName, int iFlags) {
       	if (readlink(pszName, target, PATH_MAX) == -1) goto search_failed;
 	nChars += printf(" -> %s", target); 
       }
-#if SUPPORT_APPEXECLINK
-      /* Check if its an APPEXECLINK */
-      if (szAppExecLinkTarget[0]) nChars += printf(" -> %s", szAppExecLinkTarget); 
-#endif
     }
 #endif
     if (!iExecutable) { /* Display a comment showing why it was excluded */
@@ -1159,9 +1157,9 @@ search_failed:
   if (nChars) printf("\n"); /* nChars cannot be > 0 for cases this is compiled out (MSDOS) */
 #endif
 
-#if SUPPORT_APPEXECLINK /* The APPEXECLINK failed, but try its target */
+#if SUPPORT_APPEXECLINK /* The APPEXECLINK is not the actual executable, report its target */
   if (szAppExecLinkTarget[0]) return CheckProgram(szAppExecLinkTarget, iFlags);
-#endif /* defined(_WIN32) */
+#endif
 
   DEBUG_PRINTF(("  Error %d\n", errno));
   return 0;	/* No match */
