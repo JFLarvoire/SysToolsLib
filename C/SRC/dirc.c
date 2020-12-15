@@ -231,6 +231,7 @@
 *                   Version 3.5.                                              *
 *    2020-12-13 JFL Report Linux Subsystem Symlinks and UWP App. Exec. links. *
 *    2020-12-14 JFL Use the whole screen width if listing a single directory. *
+*                   Version 3.6.                                              *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -238,8 +239,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.5"
-#define PROGRAM_DATE    "2020-08-24"
+#define PROGRAM_VERSION "3.6"
+#define PROGRAM_DATE    "2020-12-14"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
