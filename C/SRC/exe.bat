@@ -17,12 +17,14 @@
 :#   2014-03-27 JFL Changed option -f to use nmake option /A.                 *
 :#		    Added option -r for completeness.                         *
 :#   2015-11-13 JFL Adapted to the new multitarget make system.               *
+:#   2020-12-15 JFL Accept either program or program.exe as target arguments. *
 :#			                                                      *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal enableextensions enabledelayedexpansion
+set "VERSION=2020-12-15"
 goto main
 
 :main
@@ -41,7 +43,11 @@ if .%1.==.-a. set "ACTION=all" & goto next_arg
 if .%1.==.-d. set "ACTION=debug" & goto next_arg
 if .%1.==.-f. set "FORCE=1" & goto next_arg
 if .%1.==.-r. set "ACTION=release" & goto next_arg
+if .%1.==.-V. (echo.%VERSION%) & exit /b
 if .%1.==.-X. set "EXEC=echo" & goto next_arg
+set "PROGRAM=%~1.exe"
+set "PROGRAM=%PROGRAM:.exe.exe=.exe%"
+if "%PROGRAM%"==".exe" (>&2 echo Error: No target program specified) & exit /b 1
 set MAKEOPTS=%2 %3 %4 %5 %6 %7 %8 %9
 if "%FORCE%"=="1" set "MAKEOPTS=%MAKEOPTS% /A"
 goto %ACTION%
@@ -69,14 +75,14 @@ echo.  use nmake option /A. So: exe -f myprog ^<==^> exe myprog /A
 goto :eof
 
 :release
-%EXEC% make %MAKEOPTS% %1.exe
+%EXEC% make %MAKEOPTS% %PROGRAM%
 goto :eof
 
 :debug
-%EXEC% make %MAKEOPTS% debug\%1.exe
+%EXEC% make %MAKEOPTS% debug\%PROGRAM%
 goto :eof
 
 :default
 :all
-%EXEC% make %MAKEOPTS% %1.exe debug\%1.exe
+%EXEC% make %MAKEOPTS% %PROGRAM% debug\%PROGRAM%
 goto :eof
