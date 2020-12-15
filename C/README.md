@@ -33,7 +33,7 @@ Quick Guide for rebuilding everything in Windows
 2. Optional. Install the other compilers and SDKs for DOS and Windows that some tools depend on. See details further down.  
    Note: All tools will build correctly without these optional compilers and SDKs, with just some features missing.
 
-3. Download the whole SysToolsLib C folder contents into a %WORKDIR% directory.
+3. Download the whole SysToolsLib source tree into a %WORKDIR% directory.
 
 4. Rebuild everything
 
@@ -41,12 +41,15 @@ Quick Guide for rebuilding everything in Windows
         configure
         make
 
-Note:
+Notes:
 
-- The configure.bat script needs to be run only once, the first time a build is done.  
-- Before running make.bat, verify in the configure.bat output that it correctly detected the location of your
+- The `configure.bat` script needs to be run only once, the first time a build is done.  
+- Before running `make.bat`, verify in the `configure.bat` output that it correctly detected the location of your
   C compiler (CC) and Windows Software Development Kit (WINSDK).
-- Configure.bat must only be run again if other versions of the build tools (C compiler, etc) are installed,
+- The first time `configure.bat` runs, it creates proxy `configure.bat` and `make.bat` scripts as needed in %WORKDIR%
+  and all C source subdirectories.  
+  So later on, it's possible to run `configure` or `make` in any of these directories without specifying a path.
+- `configure.bat` must only be run again if other versions of the build tools (C compiler, etc) are installed,
   including the optional ones listed below, or if some of the build tools or libraries have been moved to another
   directory.
 
@@ -56,64 +59,71 @@ If you have a C compiler for DOS:
  
 1. Rebuild the BiosLib library.
 
-        cd %WORKDIR%\BiosLib
-        configure
+        cd %WORKDIR%\C\BiosLib
         make
 
 2. Rebuild the loDosLib library.
 
-        cd %WORKDIR%\loDosLib
-        configure
+        cd %WORKDIR%\C\loDosLib
         make
 
 3. Rebuild the PModeLib library.
 
-        cd %WORKDIR%\PModeLib
-        configure
+        cd %WORKDIR%\C\PModeLib
         make
 
 In all cases:
 
 4. Rebuild the MsvcLibX library.
 
-        cd %WORKDIR%\MsvcLibX\src
-        configure
+        cd %WORKDIR%\C\MsvcLibX\src
         make
 
 5. Rebuild the SysLib library.
 
-        cd %WORKDIR%\SysLib
-        configure
+        cd %WORKDIR%\C\SysLib
         make
 
 6. Rebuild all C tools.
 
-        cd %WORKDIR%\SRC
-        configure
+        cd %WORKDIR%\C\SRC
         make
+   
+   Or rebuild one particular tool.
+   
+        cd %WORKDIR%\C\SRC
+        make dirc.exe
 
 
-Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS)
-----------------------------------------------------------------
+Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
+-------------------------------------------------------------------------
 
-1. Download the whole SysToolsLib C folder contents into a $WORKDIR directory.
+1. Download the whole SysToolsLib source tree into a $WORKDIR directory.
 
-2. Rebuild everything
+2. Rebuild everything.
 
         cd $WORKDIR
         make
+   
+   Note: The makefiles use GNU Make extensions. So on systems like FreeBSD, which do not have GNU Make installed as the
+   default make, use `gmake` instead of `make`.
 
 ### Individual components can be built separately if desired
 
-1. Rebuild the SysLib library
+1. Rebuild the SysLib library.
 
-        cd $WORKDIR/SysLib
+        cd $WORKDIR/C/SysLib
         make
 
 2. Rebuild all C tools.
 
-        cd $WORKDIR/SRC
+        cd $WORKDIR/C/SRC
         make
+   
+   Or rebuild one particular tool.
+   
+        cd $WORKDIR/C/SRC
+        make dirc
 
 Note: The other components (BiosLib/LoDos/Lib/PModeLib/MsvcLibX) are for DOS or Windows only.
 
@@ -155,8 +165,8 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
   See explanations in the [SysLib/README.md](SysLib/README.md) file.  
   (Only necessary to rebuild support for NetBIOS and MAC address for DOS programs.)
 
-- The tools can be built for ARM and ARM64. This has been verified to work with Visual Studio 2019 Preview.
-  But the tools themselves have not been tested, for lack of a test system running an ARM or ARM64 version of Windows.  
+- The tools can be built for ARM and ARM64. This has been verified to work with Visual Studio 2019.  
+  But only very limited tests of the executables have been done, for the ARM versions on a Raspberry Pi 2 running Windows 10 IoT.  
   To build for these targets, run for example:
   
         cd %WORKDIR%
@@ -168,7 +178,6 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
 Procedure for generating a new release
 --------------------------------------
 
-        cd %WORKDIR%
-        configure
+        cd %WORKDIR%\C
         make
         make release
