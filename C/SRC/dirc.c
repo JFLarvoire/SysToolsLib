@@ -229,6 +229,8 @@
 *    2020-04-19 JFL Added support for MacOS. Version 3.4.                     *
 *    2020-08-24 JFL Added argument D:= for the same path on another drive.    *
 *                   Version 3.5.                                              *
+*    2020-12-13 JFL Report Linux Subsystem Symlinks and UWP App. Exec. links. *
+*    2020-12-14 JFL Use the whole screen width if listing a single directory. *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -360,6 +362,7 @@ static char *strupr(char *pString)
 #pragma warning(disable:4996)	/* Ignore the deprecated name warning */
 
 #include <conio.h>		/* For getch() */
+#include "reparsept.h"          /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
 
 #define DIRSEPARATOR '\\'
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
@@ -602,11 +605,12 @@ int main(int argc, char *argv[]) {
 #else // DOS or OS/2
   int attrib = (_A_SUBDIR | _A_SYSTEM | _A_HIDDEN);
 #endif
-  int ndir;                   /* Directory number */
+  int nDirs = 1;		/* Number of columns to output (1 or 2) */
+  int iDir;			/* Current directory number (1 or 2) */
   time_t datemin = 0;		/* Minimum date stamp */
-  time_t datemax = TIME_T_MAX;/* Maximum date stamp */
-  char *dateminarg = NULL;    /* Minimum date argument */
-  char *datemaxarg = NULL;    /* Maximum date argument */
+  time_t datemax = TIME_T_MAX;	/* Maximum date stamp */
+  char *dateminarg = NULL;	/* Minimum date argument */
+  char *datemaxarg = NULL;	/* Maximum date argument */
   fif **fiflist;		/* Array of fif pointers for sorting */
   int iStats = FALSE;
 #ifdef _MSDOS
@@ -812,6 +816,7 @@ int main(int argc, char *argv[]) {
     }
     if (!to) {
       to = arg;
+      nDirs = 2;
       continue;
     }
     if (!pattern) {
@@ -831,7 +836,8 @@ int main(int argc, char *argv[]) {
   iRows = GetScreenRows();
   if (!iCols) iCols = GetScreenColumns(); // If not forced by the -w option
   if (iCols < 80) iCols = 100; // Don't allow anything below 80. Dflt=100.
-  iBudget = (iCols - 4) / 2;  // Space available for each directory output.
+  iBudget = (iCols + 2 - (3*nDirs)) / nDirs;  // Space available for each directory output.
+  					      // (3 chars between each column, and 1 in the end)
   iBudget -= 18; // Remove minimal date/time fieds: " YY/MM/DD HH:MM:SS"
   if (iBudget >= 22) {
     iYearWidth = 4; // Display the century too.
@@ -904,13 +910,13 @@ int main(int argc, char *argv[]) {
   if (to) FixNameCase(to);
 #endif // !defined(_UNIX)
 
-  nfif = lis(from, pattern, 0, ndir=1, attrib, datemin, datemax, opts);
-  if (to) nfif = lis(to, pattern, nfif, ++ndir, attrib, datemin, datemax, opts);
+  nfif = lis(from, pattern, 0, iDir=1, attrib, datemin, datemax, opts);
+  if (to) nfif = lis(to, pattern, nfif, ++iDir, attrib, datemin, datemax, opts);
   DEBUG_PRINTF(("nfif = %d;\n", nfif));
 
   fiflist = AllocFifArray(nfif);
   trie(fiflist, nfif, opts);
-  affiche(fiflist, nfif, ndir, opts);
+  affiche(fiflist, nfif, iDir, opts);
   FreeFifArray(fiflist);
 
   if (opts.recurse) {
@@ -1755,10 +1761,19 @@ int affiche1(fif *pfif, int col, t_opts opts) {
 
 #if defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
     if (S_ISLNK(pfif->st.st_mode)) {
-      if (pfif->st.st_ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
-	nSize = sprintf(szSize, "<JUNCTION>"); // This is a junction
-      } else if (pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) {
-	nSize = sprintf(szSize, "<SYMLINKD>"); // This is a symlinkd
+      switch (pfif->st.st_ReparseTag) {
+      	case IO_REPARSE_TAG_MOUNT_POINT: // This is a junction
+	  nSize = sprintf(szSize, "<JUNCTION>"); break;
+      	case IO_REPARSE_TAG_APPEXECLINK: // This is an UWP application execution link
+	  nSize = sprintf(szSize, "<APPEXECL>"); break;
+      	case IO_REPARSE_TAG_LX_SYMLINK: // This is a Linux symlink
+	  nSize = sprintf(szSize, "<LXSYMLNK>"); break;
+      	case IO_REPARSE_TAG_SYMLINK: // This is a Windows symlink
+	default:
+          if (pfif->st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) { // This is a symlinkd
+	    nSize = sprintf(szSize, "<SYMLINKD>");
+	  } // Else it's a Windows symbolic link, and it's implied by the -> after the name
+	  break;
       }
     }
 #endif
