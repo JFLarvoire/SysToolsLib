@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2020-12-15
+### New
+- C/MsvcLibX/SRC/readlink.c, dirent.c, lstat.c: Added support for reading LXSS v2 symlinks.
+- C/SRC/dirc.c: Report Linux Subsystem Symlinks and UWP App. Exec. links.
+
+### Changed
+- configure.bat, Files.mak: Allow building the Windows version from the project root, like for Unix.
+- C/SRC/dirc.c: Use the whole screen width if listing a single directory.
+- C/SRC/Which.c: Finalized the AppExecLink reparse points support. 
+
 ## [Unreleased] 2020-12-12
 ### New
 - C/MsvcLibX/SRC/readlink.c: Added support for AppExecLink reparse points, and function ReadAppExecLink() to read them.
