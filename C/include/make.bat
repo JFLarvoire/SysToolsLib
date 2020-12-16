@@ -1556,10 +1556,17 @@ if "%OUTDIR%"=="" (
 )
 
 :# Allow optionally creating a junction or a symbolic link instead of a subdirectory
-if defined LINK_OUTDIR set MD_OUTDIR=mklink /j "%OUTDIR%" "%LINK_OUTDIR%\%OUTDIR%"
+if defined LINK_OUTDIR (
+  :# Check if creating junctions works
+  mklink /j TEST_JUNCTION_CREATION "%LINK_OUTDIR%\%OUTDIR%" >NUL 2>NUL
+  if not errorlevel 1 (
+    set MD_OUTDIR=mklink /j "%OUTDIR%" "%LINK_OUTDIR%\%OUTDIR%"
+    rd TEST_JUNCTION_CREATION
+  )
+)
 if not defined MD_OUTDIR set MD_OUTDIR=md "%OUTDIR%"
 if not "%OUTDIR%"=="" call :is_dir "%OUTDIR%" || %MD_OUTDIR% || (
-  >&2 echo Cannot create output directory "%OUTDIR%".
+  >&2 echo Error: %MD_OUTDIR%: Cannot create the output directory.
   exit /b 1
 )
 
