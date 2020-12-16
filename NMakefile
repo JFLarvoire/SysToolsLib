@@ -1,0 +1,41 @@
+###############################################################################
+#									      #
+#   File name	    NMakefile						      #
+#									      #
+#   Description     An NMake file for making all SysToolLib libs & programs   #
+#									      #
+#   Notes	    make.bat looks for a default nmake file called NMakeFile. #
+#									      #
+#   History								      #
+#    2020-12-16 JFL jf.larvoire@hpe.com created this file.                    #
+#		    							      #
+#         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+default: all
+
+# This help definition overrides the second one included in All.mak below.
+help: NUL
+    type <<
+Usage: make.bat [options] [nmake_options] [macro_definitions] [targets] ...
+
+Macro definitions:     (They must be quoted, else the = sign will be lost)
+  "DEBUG=1"            Generate the debug version. <==> Target in a Debug\ dir.
+  "OS=BIOS DOS WIN95 WIN32 WIN64 ARM ARM64"   List of target OSs to build for
+  "WINVER=4.0"         Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
+
+Targets:
+  all                  Build all available C/C++ sources (default)
+  clean                Erase all output files
+  distclean            Erase all output files and all configuration files
+  release              Generate a SysTools.zip release
+  source-release       Generate a SysTools-src.zip release
+<<
+
+# Include common definitions
+!INCLUDE <All.mak>
+
+# These targets are actually implemented in the C directory's NMakefile
+release source-release: NUL
+    $(BMAKE) -C C $@
