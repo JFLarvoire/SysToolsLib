@@ -96,6 +96,7 @@
 *    2020-12-11 JFL Added support for IO_REPARSE_TAG_APPEXECLINK reparse pts. *
 *		    The -l option now also displays the file length.          *
 *    2020-12-15 JFL The MsvcLibX readlink() now supports APPEXECLINKs.        *
+*    2020-12-16 JFL Added pwsh.exe as an alias for PowerShell.                *
 *		    Version 1.16.					      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
@@ -105,7 +106,7 @@
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
 #define PROGRAM_VERSION "1.16"
-#define PROGRAM_DATE    "2020-12-15"
+#define PROGRAM_DATE    "2020-12-16"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -417,7 +418,10 @@ int main(int argc, char *argv[]) {
   GetProcessName(getppid(), szShellName, sizeof(szShellName));
   DEBUG_PRINTF(("Executed inside %s.\n", szShellName));
   /* wsmprovhost.exe is PowerShell's remote session host process */
-  if (strieq(szShellName, "powershell.exe") || strieq(szShellName, "wsmprovhost.exe")) {
+  if (   strieq(szShellName, "powershell.exe")
+      || strieq(szShellName, "wsmprovhost.exe")
+      || strieq(szShellName, "pwsh.exe")
+     ) {
     shell = SHELL_POWERSHELL;
     if (iInternal == -1) iInternal = 0; /* The search is very slow the first time. Don't do it by default. */
     iSearchInCD = FALSE; /* Contrary to cmd, PowerShell does not search in the current directory first */
@@ -430,6 +434,8 @@ int main(int argc, char *argv[]) {
   } else if (strieq(szShellName, "bash.exe")) { 
     shell = SHELL_BASH;
     if (iInternal == -1) iInternal = 1; /* The search is fast. Do it by default. */
+  } else {
+    if (iVerbose) printf("# Warning: Unidentified shell: %s\n", szShellName);
   }
   if (iInternal == -1) iInternal = 0; /* Unidentified shell. Do not search internals, we don't know how anyway */
 
