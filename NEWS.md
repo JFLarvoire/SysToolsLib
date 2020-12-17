@@ -4,11 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.19] 2020-12-17
+
 ## [Unreleased] 2020-12-16
 ### New
-- C/include/configure.bat: Added option to link the OUTDIR directory to another one, if LINK_OUTDIR is defined.
-- C/config.outdir.bat, C/SRC/config.outdir.bat: Define LINK_OUTDIR=.. to output all .exe in the project root directory OUTDIR.
 - NMakeFile, Files.mak: Allow building for Windows and generating a release from the project root directory.
+- C/include/configure.bat, make.bat: Added option to link the OUTDIR directory to another one, if LINK_OUTDIR is defined, and creating links is authorized.
+- C/config.outdir.bat, C/SRC/config.outdir.bat: Define LINK_OUTDIR=.. to output all .exe in the project root directory OUTDIR if possible.
 
 ### Changed
 - C/SRC/Which.c: Added pwsh.exe as an alias for PowerShell.
@@ -18,7 +20,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2020-12-15
 ### New
-- C/MsvcLibX/SRC/readlink.c, dirent.c, lstat.c: Added support for reading LXSS v2 symlinks.
+- C/MsvcLibX/SRC/readlink.c, dirent.c, lstat.c: Added support for reading WSL v2 symlinks.
 - C/SRC/dirc.c: Report Linux Subsystem Symlinks and UWP App. Exec. links.
 
 ### Changed
