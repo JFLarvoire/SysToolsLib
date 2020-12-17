@@ -1565,7 +1565,7 @@ if defined LINK_OUTDIR ( :# Check if creating junctions works, and if so, prepar
   )
 )
 if not defined MD_OUTDIR set MD_OUTDIR=md "%OUTDIR%"
-%ECHOVARS% CD OUTDIR LINK_OUTDIR MD_OUTDIR
+%ECHOVARS.D% CD OUTDIR LINK_OUTDIR MD_OUTDIR
 if not "%OUTDIR%"=="" call :is_dir "%OUTDIR%" || %MD_OUTDIR% || (
   >&2 echo Error: %MD_OUTDIR%: Cannot create the output directory.
   exit /b 1
