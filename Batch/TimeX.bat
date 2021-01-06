@@ -24,13 +24,14 @@
 :#                  and added option -T to revert to the old behaviour.       #
 :#   2020-12-10 JFL Option -n does not imply -t anymore. (2020-04-01 conseq.) #
 :#                  Added support for durations > 1 day.                      #
+:#   2021-01-05 JFL Return the child task exit code.                          #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2020-12-10"
+set "VERSION=2021-01-05"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0"				&:# Script path
 set "SPATH=%SPATH:~0,-1%"			&:# Script path, without the trailing \
@@ -1347,6 +1348,7 @@ setlocal DisableDelayedExpansion &:# Else the ! characters do not make it throug
 for /l %%n in (1,1,%NLOOPS%) do (
   %EXEC% %ARGS%
 )
+set "ERR=%ERRORLEVEL%"
 
 call :Now
 set END_TIME=%HOUR%:%MINUTE%:%SECOND%.%MS%
@@ -1356,3 +1358,5 @@ set END_DATE=%YEAR%-%MONTH%-%DAY%
 call :Time.Delta %START_DATE%_%START_TIME% %END_DATE%_%END_TIME% -f D
 if %D.DAY% GTR 0 set /a "D.HOUR=24*D.DAY + (100%D.HOUR% %% 100)" &:# Don't do it for 0 days, to keep the %02d HOUR format
 %>DEBUGOUT% %ECHO% Duration: %D.HOUR%:%D.MINUTE%:%D.SECOND%.%D.MS%
+
+exit /b %ERR%
