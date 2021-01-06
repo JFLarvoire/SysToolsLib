@@ -31,7 +31,6 @@ C\SRC\dump.c
 C\SRC\exe
 C\SRC\exe.bat
 C\SRC\Files.mak
-C\SRC\lessive.c
 C\SRC\macros.cpp
 C\SRC\make.bat
 C\SRC\Makefile
@@ -44,6 +43,7 @@ C\SRC\src2objs.bat
 C\SRC\tee.c
 C\SRC\Tools.lst
 C\SRC\tree.h
+C\SRC\trim.c
 C\SRC\truename.c
 C\SRC\truename.mak
 C\SRC\update.c

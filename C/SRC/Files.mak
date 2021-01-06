@@ -32,7 +32,6 @@ PROGRAMS = \
   font.exe        \
   gpt.exe         \
   inicomp.exe     \
-  lessive.exe     \
   md.exe          \
   msgbox.exe      \
   rd.exe          \
@@ -41,6 +40,7 @@ PROGRAMS = \
   sector.exe      \
   smbios.exe      \
   tee.exe         \
+  trim.exe        \
   truename.exe    \
   update.exe      \
   uuid.exe	  \
@@ -62,11 +62,11 @@ UNIX_PROGRAMS = \
   dirsize         \
   dump            \
   inicomp         \
-  lessive         \
   md              \
   rd              \
   redo            \
   remplace        \
+  trim            \
   update          \
   Which		  \
   zap             \
@@ -113,7 +113,6 @@ ZIPSOURCES =		 \
   gpt.mak		 \
   inicomp.c              \
   inicomp.mak            \
-  lessive.c              \
   macros.cpp             \
   make.bat               \
   Makefile               \
@@ -135,6 +134,7 @@ ZIPSOURCES =		 \
   tee.c                  \
   Tools.lst              \
   tree.h                 \
+  trim.c                 \
   truename.c             \
   truename.mak           \
   update.c               \

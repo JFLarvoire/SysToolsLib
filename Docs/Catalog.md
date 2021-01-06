@@ -85,11 +85,11 @@ dump.exe	| DWL	| Hexadecimal dump.									| `1clip \| dump`
 halve.bat	| -W-	| Halve the number of new lines. (To cleanup text with double interline.)		| `12 halve`
 htmldec.tcl	| -WL	| Decode strings that contain HTML entities.						| `12 htmldec`
 htmlenc.tcl	| -WL	| Encode text strings with the 3 basic HTML entities for & < >.				| `12 htmlenc` or `htmlenc "R&D"`
-lessive.exe	| DWL	| Remove blank characters from the end of lines.					| `12 lessive`
 lower.tcl	| -WL	| Convert text to lower case.								| `12 lower`
 md2h.bat        | -W-   | Convert MarkDown to HTML, and display it in a Web browser.                            | `md2h catalog.md` &:# Display this catalog
 regsub.tcl	|  WL	| Replace a regular expression at the file level.					| `regsub "(\d\d)/(\d\d)/(\d\d)" "19\1-\2-\3" *.c` &:# Change old dates to the ISO format
 remplace.exe	| DWL	| Replace any characters by others, including CR and LF.				| `1clip \| remplace "; " \r\n \| sort` &:# Sort an email distribution list alphabetically
+trim.exe	| DWL	| Remove blank characters from the end of lines.					| `12 trim`
 u2a.bat		| -W-	| Convert 16-bits Unicode text to ANSI text.						|
 u2w.bat		| -W-	| Convert Unix End-Of-Lines (LF) to Windows End-Of-Lines (CR LF).			| `u2w UnixProg.c`
 upper.tcl	| -WL	| Convert text to UPPER CASE.								| `12 upper`

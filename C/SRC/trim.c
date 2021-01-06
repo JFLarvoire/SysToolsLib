@@ -1,11 +1,11 @@
 ﻿/*****************************************************************************\
 *                                                                             *
-*   File name:	    lessive.c				                      *
+*   File name:	    trim.c				                      *
 *                                                                             *
 *   Description:    Remove blanks at the end of lines in a text file.	      *
 *                                                                             *
 *   History:								      *
-*    1989-11-28 JFL jf.larvoire@hp.com created this program.                  *
+*    1989-11-28 JFL jf.larvoire@hp.com created lessive.c.                     *
 *    1991-07-16 JFL Fixed not to remove blank lines. Version 1.01.	      *
 *    1992-05-20 JFL Support for output file equal to the input file.          *
 *		    Support for OS/2. Version 1.1.			      *
@@ -44,15 +44,16 @@
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 1.5.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 1.6.                     *
+*    2021-01-06 JFL renamed lessive.c as trim.c. Version 2.0.                 *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
-#define PROGRAM_NAME    "lessive"
-#define PROGRAM_VERSION "1.6"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_NAME    "trim"
+#define PROGRAM_VERSION "2.0"
+#define PROGRAM_DATE    "2021-01-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -471,7 +472,7 @@ void usage(void) {
     printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: lessive [SWITCHES] [INFILE [OUTFILE|-same]]\n\
+Usage: trim [SWITCHES] [INFILE [OUTFILE|-same]]\n\
 \n\
 Switches:\n\
   -b|-bak  Create an *.bak backup file of existing output files\n"

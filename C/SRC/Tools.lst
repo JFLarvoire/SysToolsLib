@@ -7,10 +7,10 @@ DOS\dirc.exe
 DOS\dirsize.exe
 DOS\dump.exe
 DOS\getcodes.exe
-DOS\lessive.exe
 DOS\redo.exe
 DOS\remplace.exe
 DOS\smbios.exe
+DOS\trim.exe
 DOS\update.exe
 DOS\which.exe
 
@@ -19,9 +19,9 @@ Linux.i686\detab
 Linux.i686\dirc
 Linux.i686\dirsize
 Linux.i686\dump
-Linux.i686\lessive
 Linux.i686\redo
 Linux.i686\remplace
+Linux.i686\trim
 Linux.i686\update
 
 Linux.x86_64\backnum
@@ -29,9 +29,9 @@ Linux.x86_64\detab
 Linux.x86_64\dirc
 Linux.x86_64\dirsize
 Linux.x86_64\dump
-Linux.x86_64\lessive
 Linux.x86_64\redo
 Linux.x86_64\remplace
+Linux.x86_64\trim
 Linux.x86_64\update
 
 WIN32\1clip.exe
@@ -48,11 +48,11 @@ WIN32\dirsize.exe
 WIN32\driver.exe
 WIN32\dump.exe
 WIN32\inicomp.exe
-WIN32\lessive.exe
 WIN32\redo.exe
 WIN32\remplace.exe
 WIN32\smbios.exe
 WIN32\tee.exe
+WIN32\trim.exe
 WIN32\truename.exe
 WIN32\update.exe
 WIN32\which.exe
@@ -69,11 +69,11 @@ WIN64\dirc.exe
 WIN64\dirsize.exe
 WIN32\driver.exe
 WIN64\dump.exe
-WIN64\lessive.exe
 WIN64\redo.exe
 WIN64\remplace.exe
 WIN64\smbios.exe
 WIN64\tee.exe
+WIN64\trim.exe
 WIN64\truename.exe
 WIN64\update.exe
 WIN64\which.exe
@@ -93,11 +93,11 @@ WIN95\dirsize.exe
 WIN95\driver.exe
 WIN95\dump.exe
 WIN95\inicomp.exe
-WIN95\lessive.exe
 WIN95\redo.exe
 WIN95\remplace.exe
 WIN95\smbios.exe
 WIN95\tee.exe
+WIN95\trim.exe
 WIN95\truename.exe
 WIN95\update.exe
 WIN95\which.exe

@@ -54,9 +54,9 @@ conv.exe	Convert from/to various character sets.
 deffeed.exe	Remove form feeds, replacing then with new lines.
 detab.exe	Remove tabulations, replacing them with spaces.
 dump.exe	Hexadecimal dump.
-lessive.exe	Remove blank characters from the end of lines.
 remplace.exe	Replace characters. Very limited regular expressions subset.
 tee.exe		Duplicate stdin into two or more output streams.
+trim.exe	Remove blank characters from the end of lines.
 
 # System management [DOS,Win]
 
