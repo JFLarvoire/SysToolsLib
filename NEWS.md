@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-01-06
+### New
+- Batch/TimeX.bat: Return the child task exit code.
+
+### Changed
+- Renamed the lessive program as trim. This affects C sources, make files, the documentation, etc.
+
+### Fixed
+- C/SRC/tee.c: Fixed the exit code for the help screen.
+- C/SRC/Which.c: Don't report App Exec Link targets by default, until we know how to reliably use that target with the other link parameters.
+
 ## [1.19] 2020-12-17
 
 ## [Unreleased] 2020-12-16
