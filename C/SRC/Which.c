@@ -98,6 +98,8 @@
 *    2020-12-15 JFL The MsvcLibX readlink() now supports APPEXECLINKs.        *
 *    2020-12-16 JFL Added pwsh.exe as an alias for PowerShell.                *
 *		    Version 1.16.					      *
+*    2021-01-06 JFL Show APPEXECLINKs and not their targets for now, as the   *
+*		    targets aren't always executable directly. Version 1.16.1.*
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -105,8 +107,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
-#define PROGRAM_VERSION "1.16"
-#define PROGRAM_DATE    "2020-12-16"
+#define PROGRAM_VERSION "1.16.1"
+#define PROGRAM_DATE    "2021-01-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1061,6 +1063,9 @@ int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iFlags) {
 #if defined(_WIN32) && HAS_MSVCLIBX
 /* Include special support for IO_REPARSE_TAG_APPEXECLINK reparse points,
    used for Universal Windows Platform (UWP) applications execution links */
+/* 2021-01-06 Don't report the link target by default, until we know how to
+   reliably use that target with the other link parameters.
+   Change SUPPORT_APPEXECLINK to 2 once we know the complete command to run. */
 #define SUPPORT_APPEXECLINK 1
 #else
 #define SUPPORT_APPEXECLINK 0
@@ -1107,7 +1112,10 @@ int CheckProgram(char *pszName, int iFlags) {
       iExecutable = FALSE; /* Pretend it's not, and process the target of the link at the end of this routine */
       strcpy(szComment, "UWP App. Exec. Link");
       readlink(pszName, szAppExecLinkTarget, sizeof(szAppExecLinkTarget));
-    } else
+    }
+#if SUPPORT_APPEXECLINK > 1
+    else
+#endif
 #endif
     { /* OK, now at last, check if it's actually executable */
       iExecutable = !access(pszName, X_OK); /* access() returns 0=success, -1=error */
@@ -1163,7 +1171,7 @@ search_failed:
   if (nChars) printf("\n"); /* nChars cannot be > 0 for cases this is compiled out (MSDOS) */
 #endif
 
-#if SUPPORT_APPEXECLINK /* The APPEXECLINK is not the actual executable, report its target */
+#if SUPPORT_APPEXECLINK > 1 /* The APPEXECLINK is not the actual executable, report its target */
   if (szAppExecLinkTarget[0]) return CheckProgram(szAppExecLinkTarget, iFlags);
 #endif
 
