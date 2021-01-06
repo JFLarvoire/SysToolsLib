@@ -13,6 +13,7 @@
 *    2017-03-15 JFL Changed to a UTF-8 app, to support non-ASCII file names.  *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
+*    2021-01-06 JFL Fixed the exit code for the help screen. Version 1.1.3.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -20,8 +21,8 @@
 
 #define PROGRAM_DESCRIPTION "Duplicate the input to several outputs"
 #define PROGRAM_NAME    "tee"
-#define PROGRAM_VERSION "1.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.1.3"
+#define PROGRAM_DATE    "2021-01-06"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -73,7 +74,7 @@ typedef struct _outStream {
 
 /* Forward references */
 
-void usage();				/* Display a brief help screen */
+void usage(void);			/* Display a brief help screen */
 outStream *NewOutStream(char *pszName, char *pszMode, outStream *last);
 size_t GetDefaultBufSize();
 
@@ -184,9 +185,8 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-void usage(int iErr)
-    {
-    printf(
+void usage(void) {
+  printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: tee [OPTIONS] [[-a] FILENAME] ...\n\
@@ -206,8 +206,8 @@ Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 , GetDefaultBufSize());
-    exit(iErr);
-    }
+  return;
+}
 
 outStream *NewOutStream(char *pszName, char *pszMode, outStream *last) {
   outStream *pStream = (outStream *)malloc(sizeof(outStream));
