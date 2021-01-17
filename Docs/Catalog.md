@@ -26,6 +26,7 @@ dirc.exe	 | DWL	| Compares directories side by side.							| `dirc oldDir newDir
 dircc.bat	 | DW-	| Front end to dirc.exe. Compare file trees recursively, listing only different files.	| `dircc oldDir newDir`
 dirdir.bat	 | DW-	| List subdirectories. (Non trivial for DOS in the absence of a dir /ad option.)	| `dirdir`
 dirsize.exe	 | DWL	| Compute the total size used by a directory or a directory tree.			| `dirsize -s -t` &:# Find which subdirectory uses up all that space.
+mcd		 | --L	| Create a directory, and go there, in a single command.				| `mcd TempDir`
 mcd.bat 	 | DW-	| Create a directory, and go there, in a single command.				| `mcd TempDir`
 md.exe	 	 | DWL	| Create a directory, all its parents, and don't complain if any exists.		| `"md.exe" -v a\b\c` &:# Displays a\ then a\b\ then a\b\c\ the first time; Displays nothing if repeated. 
 rd.exe	 	 | DWL	| Remove a directory. Force mode to remove all contents. Don't complain if absent.	| `"rd.exe" -v a` &:# Displays a\b\c\ then a\b\ then a\ the first time; Displays nothing if repeated.

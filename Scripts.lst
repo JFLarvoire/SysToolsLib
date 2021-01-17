@@ -1,6 +1,7 @@
 Bash\distrib
 Bash\paths
 Bash\truename
+Bash\profile.d\mcd.sh
 Batch\12.bat
 Batch\25.BAT
 Batch\2note2.bat

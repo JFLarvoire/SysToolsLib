@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-01-16
+### New
+- /Bash/profile.d/mcd.sh: A Posix Shell initialization script defining an mcd function, doing the same as Batch/mcd.bat.
+
+### Changed
+- Makefile: Install /Bash/profile.d/*.sh scripts into /etc/profile.d/.
+
+## [Unreleased] 2021-01-08
+### Changed
+- C/SRC/exe.bat: Allow building multiple programs in a single command.
+
+### Fixed
+- C/SRC/exe.bat: Delete all local variables before running make.bat, which sometimes did confuse it, and caused it to fail.
+
 ## [Unreleased] 2021-01-06
 ### New
 - Batch/TimeX.bat: Return the child task exit code.

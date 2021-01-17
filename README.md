@@ -97,12 +97,13 @@ and further subdirectories.
 Name            | Description
 --------------- | -------------------------------------------------
 C/		| Programs and libraries written in C or C++
-Bash/		| Scripts and libraries in the Bash language
+Bash/		| Scripts and libraries in the Bash or Posix Shell language
+Bash/profile.d/	| Posix Shell initialization scripts to install into /etc/profile.d
 Batch/		| Scripts and libraries in the Batch language
 Docs/		| Project documentation
 PowerShell/	| Scripts and libraries in the PowerShell language
-Python/		| Scripts and libraries in the Python language
-Tcl/		| Scripts and libraries in the Tcl language
+Python/		| Scripts and libraries in or for the Python language
+Tcl/		| Scripts and libraries in or for the Tcl language
 
 Particular files:
 
