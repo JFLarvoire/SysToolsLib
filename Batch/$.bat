@@ -12,13 +12,16 @@
 :#   2021-01-11 JFL Created this script.				      *
 :#   2021-01-22 JFL Added a dirty work around the pipe issue by generating    *
 :#                  key strokes using JScript WScript.Shell.SendKeys().       *
+:#   2021-01-27 JFL Capture every line of output.                             *
+:#                  Quote lines that contain spaces, or other special chars.  *
+:#                  Added option -l to revert to the initial behavior.        *
 :#                                                                            *
 :#        © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license: www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2021-01-22"
+set "VERSION=2021-01-27"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name without the extension
 set "SPATH=%~dp0"
@@ -71,6 +74,45 @@ if [%2]==[] goto :eof
 :# Leave quotes in the tail of the argument line
 set ARGS=%ARGS% %2
 goto :PopArg.GetNext
+
+:#----------------------------------------------------------------------------#
+
+:# Quote strings that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
+setlocal EnableExtensions Disabledelayedexpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+call set "P=%%%~1%%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs quoting
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="%P%"
+:condquote_ret
+:# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
+:# because this interferes with the quoting already added above. This would
+:# fail if the quoted string contained an & character.
+:# But because of this, do not leave any space around & separators.
+endlocal&set %RETVAR%=%P%&exit /b 0
+
+:#----------------------------------------------------------------------------#
+
+:# Build a list of strings that can be used in a for loop
+:lappend	%1=List variable name. %2=String to add to the list
+setlocal DisableDelayedExpansion
+set "STRING=%~2"
+call :condquote STRING
+setlocal EnableDelayedExpansion
+set "LIST=!%~1!"
+if defined LIST set "LIST=!LIST! "
+endlocal & endlocal & set %~1=%LIST%%STRING%
+exit /b
 
 :#----------------------------------------------------------------------------#
 
@@ -160,17 +202,18 @@ echo Usage 2: COMMAND [ARGUMENTS] ^| %SNAME% [OPTIONS] VARIABLE
 echo.
 echo Options:
 echo   -?    Display this help
+echo   -l    Capture the last non-empty line. Default: Build a list w. all such lines
 echo   -q    Quiet mode: Don't display the set command executed
 echo   -X    Display the command generated, but don't run it
 echo.
 echo In the first usage case, special characters can be entered in arguments as html-like entities.
 echo For that, surround the [entity] name in brackets instead of html's ^&entity;. Supported entities:
-echo   [percnt]=%% [excl]=^! [quot]=" [hat]=^ [lt]=< [gt]=> [amp]=& [vert]=| [lpar]=( [rpar]=) [lbrack]=[ [rbrack]=]
+echo   [percnt]=%% [excl]=^! [quot]=" [hat]=^ [lt]=< [gt]=> [amp]=& [vert]=| [lpar]=( [rpar]=) [lbrack]=[ [rbrack]=] [tab]=\t
 echo.
 echo The second usage case allows capturing the output of a complex sequence
-echo of commands with several pipes. But the performance isn't as good.
+echo of commands with pipes. But the performance isn't as good.
 echo.
-echo In both cases, tricky characters like "^&<|> may cause unexpected results.
+echo In both cases, tricky characters like "^&<|>!%% may cause unexpected results.
 exit /b
 
 :#----------------------------------------------------------------------------#
@@ -179,11 +222,13 @@ exit /b
 set "EXEC="
 set "IF_NOEXEC=if defined EXEC"
 set "SET=call :EchoAndSet"	&:# Command used in the end to set the environment variable
+set "CAPTURE=:CaptureAll"
 :next_arg
 %POPARG%
 if "%ARG%"=="--" %POPARG% & goto :start &:# Allows defining a -X variable, etc
 if "%ARG%"=="-?" goto :help
 if "%ARG%"=="/?" goto :help
+if "%ARG%"=="-l" set "CAPTURE=:CaptureLast" & goto :next_arg
 if "%ARG%"=="-q" set "DO=do" & goto :next_arg
 if "%ARG%"=="-X" set "EXEC=echo" & set "SET=set" & goto :next_arg
 
@@ -195,14 +240,24 @@ set "VAR=%ARG%"
 set CMDLINE=%ARGS%
 if defined CMDLINE (
   call :Entities.decode ARGS CMDLINE
-  set CMDLINE=%CMDLINE% ^^^| findstr /R "^."
+  set CMDLINE=%CMDLINE%^^^| findstr /R "^."
+  set "SENDKEYS="
 ) else ( :# No command. Get the input from standard input.
   set CMDLINE=findstr /R "^."
-  set SET=CScript //nologo //E:JScript "%SFULL%"
+  if "%CAPTURE%"==":CaptureLast" set SET=CScript //nologo //E:JScript "%SFULL%"
+  set "SENDKEYS=%EXEC% CScript //nologo //E:JScript "%SFULL%" -s %VAR% RESULT"
 )
 :# %IF_NOEXEC% set CMDLINE
 :# In no-exec mode, correct the # of ^ so that the ^| displays right
 %IF_NOEXEC% set CMDLINE=%CMDLINE: ^| = ^^^^^^^| %
+
+goto %CAPTURE%
+
+:# Capture all output lines, quoting those with spaces or special characters
+:CaptureAll
+setlocal EnableDelayedExpansion
+set "RESULT="
+%EXEC% for /f "delims=" %%s in ('%CMDLINE%') do call :lappend RESULT "%%~s"
 
 :# NOTE: The findstr CMDLINE, used by default above, works for capturing stdin.
 :# What does not work is the export of the variable to the parent cmd.exe using pure batch.
@@ -212,7 +267,14 @@ if defined CMDLINE (
 :# I tried using known tricks like '(goto) 2>NUL' but this did not help.
 :# As a workaround, I'm now using JScript to generate a set command that's
 :# fed back into this shell's keyboard input stream.
+%SENDKEYS%
 
+%IF_NOEXEC% set "RESULT=%%RESULT%%"
+endlocal & endlocal & %EXEC% %SET% %VAR%=%RESULT%
+exit /b
+
+:# Capture only the last non-empty line
+:CaptureLast
 endlocal & %EXEC% for /f "delims=" %%v in ('%CMDLINE%') do %SET% %VAR%=%%v
 exit /b
 
@@ -224,36 +286,57 @@ exit /b
 :#############################################################################:
 End of the JScript comment around the Batch section; Beginning of the JScript section */
 
+/* Get the value of an environment variable */
+var shell;
+function getenv(varname, envname) {  // envname = "Process" | "System" | "User" | "Volatile"
+  if (!envname) envname = "Process"; // By default, use the current environment
+  if (!shell) shell = new ActiveXObject("WScript.Shell"); // Reuse the shell object
+  var env = shell.Environment(envname);
+  return env(varname);
+}
+
+/* Escape the reserved characters used by shell.SendKeys */
+function EscapeKeys(string) {
+  keys = "";
+  for (var j = 0; j < string.length; j++) {
+    var c = string.charAt(j);
+    switch (c) {
+    case '+':
+    case '~':
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+      c = "{" + c + "}";
+      break;
+    case '^':
+    case '%':
+      c = "{" + c + "}";
+      c = c + c;
+      break;
+    }
+    keys += c;
+  }
+  return keys;
+}
+
 /* Process JScript command-line arguments */
 function main(argc, argv) {
   var keys = "";
   for (var i = 1; i < argc; i++) {
     var arg = argv[i];
-    // WScript.Echo("JScript args[" + i + "] = " + arg);
-    /* Escape the reserved characters for use by SendKeys */
-    if (keys != "") keys += " ";
-    for (var j = 0; j < arg.length; j++) {
-      var c = arg.charAt(j);
-      switch (c) {
-      case '+':
-      case '~':
-      case '(':
-      case ')':
-      case '{':
-      case '}':
-	c = "{" + c + "}";
-	break;
-      case '^':
-      case '%':
-	c = "{" + c + "}";
-	c = c + c;
-	break;
-      }
-      keys += c;
+    switch (arg) {
+    case "-s":
+      var cmdline = "set " + argv[++i] + "=" + getenv(argv[++i]);
+      cmdline = EscapeKeys(cmdline); // Escape the reserved characters used by SendKeys
+      if (!shell) shell = WScript.CreateObject("WScript.Shell");
+      shell.SendKeys("{ESC}" + cmdline + "{ENTER}"); // The ESC character empties cmd's input buffer
+      return 0;
+    default:
+      WScript.Echo("Unexpected argument:" + arg);
+      return 1;
     }
   }
-  var shell = WScript.CreateObject("WScript.Shell");
-  shell.SendKeys("set " + keys + "{ENTER}");
 }
 
 /* Top level code, building a C-like environment */
