@@ -72,13 +72,14 @@
 :#   2018-06-13 JFL Added command md to create a key.			      #
 :#   2019-01-31 JFL Fixed the dir command when the pathname contains spaces.  #
 :#   2019-12-19 JFL Always force creating keys without confirmation.          #
+:#   2021-02-12 JFL Added options -se and -ue to easily manage env. variables.#
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-12-19"
+set "VERSION=2021-02-12"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1857,6 +1858,11 @@ echo.
 echo del, rd options:
 echo   -f               Force deletion without confirmation
 echo.
+echo del, dir, open, set, show, type options: 
+echo   -se [VARIABLE]   Generate [that] System Environment variable pathname
+echo   -ue [VARIABLE]   Generate [that] User Environment variable pathname
+echo   Note: Actually this works with all commands. Don't use with the rd command^^^!
+echo.
 echo set options:
 echo   -t TYPE          Value type. See (reg add /?) for types. Default: REG_SZ
 echo                    Ex: regx set HKCU\Console\InsertMode 1 -t REG_DWORD
@@ -1883,7 +1889,9 @@ if "!ARG!"=="-d" call :Debug.on & goto :next_arg
 if "!ARG!"=="-f" set "OPTS=!OPTS! -f" & goto :next_arg		&:# Force option
 if "!ARG!"=="-F" set "FULLPATH=1" & goto :next_arg
 if "!ARG!"=="-p" %POPARG% & set "OPTS=!OPTS! -p !"ARG"!" & goto :next_arg	&:# Pattern
+if "!ARG!"=="-se" %POPARG% & set "ARG=HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\!ARG!"	&:# System Environment Variable
 if "!ARG!"=="-t" %POPARG% & set "OPTS=!OPTS! /t !ARG!" & goto :next_arg		&:# Key type
+if "!ARG!"=="-ue" %POPARG% & set "ARG=HKCU:\Environment\!ARG!"							&:# User Environment Variable
 if "!ARG!"=="-v" call :Verbose.on & goto :next_arg
 if "!ARG!"=="-V" (echo.%VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.off & goto :next_arg
