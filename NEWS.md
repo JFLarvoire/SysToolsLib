@@ -5,6 +5,10 @@ Major changes for the System Tools Library are recorded here.
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
 ## [Unreleased] 2021-01-16
+### Changed
+- Batch/regx.bat: Added options -se and -ue to easily manage System and User Environment variables.
+
+## [Unreleased] 2021-01-16
 ### New
 - /Bash/profile.d/mcd.sh: A Posix Shell initialization script defining an mcd function, doing the same as Batch/mcd.bat.
 
