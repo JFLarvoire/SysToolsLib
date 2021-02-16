@@ -2362,19 +2362,21 @@ exit /b %1
 :Help
 echo %SCRIPT% - Configure Windows for running Python command-line scripts
 echo.
-echo Usage: %SCRIPT% [options] [N]
+echo Usage: %SCRIPT% [options] [VER]
 echo.
 echo Options:
 echo   -?        Display this help
 echo   -l        List all installed instances of python.exe
-echo   -s [N]    Setup Windows for running .py scripts with the latest python
-echo   -t [N]    Test the current setup. (Default). Tells if it's useful to use -s.
+echo   -s [VER]  Setup Windows for running .py scripts with the given python version
+echo   -t [VER]  Test the current setup. (Default). Tells if it's useful to use -s.
 echo   -v        Display verbose information
 echo   -V        Display this script version
-echo   -X        Display the setup commands, but do not run them.
+echo   -X        Display the setup commands, but do not run them
 echo.
-echo Optional arguments
-echo   N         Python version to use. Ex: 27 for Python27. Default: the latest.
+echo Optional arguments:
+echo   VER       Python folder version suffix to use. Ex: "27" for python27
+echo             Or "#N" for the Nth entry in the list displayed by option -l
+echo             Default: Use the latest version
 goto :EOF
 
 :Main
