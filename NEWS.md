@@ -4,9 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-01-16
+## [Unreleased] 2021-02-16
 ### Changed
 - Batch/regx.bat: Added options -se and -ue to easily manage System and User Environment variables.
+- Python/PySetup.bat:  
+  Option -l displays the index and version of each instance.  
+  Also search for python.exe in "%LOCALAPPDATA%\Programs".  
+  Options -s and -t can now specify an index, like "#3".
 
 ## [Unreleased] 2021-01-16
 ### New
