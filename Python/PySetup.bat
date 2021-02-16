@@ -33,13 +33,16 @@
 :#                  Bug fix: Allow running as non-administrator, to be able   #
 :#                  to at least update local settings.                        #
 :#   2020-11-03 JFL Fixed the PS call when there's a ' in the script path.    #
+:#   2021-02-16 JFL Option -l displays the index and version of each instance.#
+:#                  Also search for python.exe in "%LOCALAPPDATA%\Programs".  #
+:#                  Options -s and -t can now specify an index, like "#3".    #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-11-03"
+set "VERSION=2021-02-16"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1636,29 +1639,48 @@ goto :MasterPath.Set
 :#   2010-05-31 JFL Created this routine for Tcl.                             #
 :#   2017-01-13 JFL Adapted to Python, with an optional version.              #
 :#   2017-01-16 JFL Added argument %2=VARNAME.                                #
+:#   2021-02-16 JFL In list mode, display the index and version of each entry.#
+:#                  Also search in "%LOCALAPPDATA%\Programs".                 #
+:#                  %1 can now specify an index, like #3.                     #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:FindPython %1=Optional Python version. Ex: 27 or *. Default ""=* %2=VARNAME. Default=Display all
+:FindPython %1=Optional Python version. Ex: 27 or * or #3. Default ""=* %2=VARNAME. Default=Display all
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 
 :# Search in the list of drives, then in the possible \Python program directories.
 set "EXE="			&:# Executable pathname
 set "VER=%~1"			&:# Acceptable version suffix
 if not defined VER set "VER=*"
+set "WANT_INDEX="
+if "%VER:~0,1%"=="#" set "WANT_INDEX=%VER:~1%" & set "VER=*"
 set "ALL="
 if "%VER%"=="*" set "ALL=1"
 set "RETVAR=%~2"		&:# Variable where to store the result
+%ECHOVARS.D% VER ALL WANT_INDEX
 
 if defined RETVAR %UPVAR% %RETVAR%
 
+set "INDEX=0"
+set "PY_ARCH_CMD=import os ; print(os.environ[\"PROCESSOR_ARCHITECTURE\"])"
 for %%d in (%SEARCHDRIVES%) do (
-  for %%p in ("" "\Program Files" "\Program Files (x86)") do (
+  rem :# The default install dir is %LOCALAPPDATA%\Programs\Python\Python%VER% for the current user,
+  rem :# Or %ProgramFiles%\Python%VER% or %ProgramFiles(x86)%\Python%VER% for all users.
+  for %%p in ("" "%ProgramFiles:~2%" "%ProgramFiles(x86):~2%" "%LOCALAPPDATA:~2%\Programs") do (
     for /d %%b in ("%%d:%%~p\Python%VER%" "%%d:%%~p\Python\Python%VER%" "%%d:%%~p\Microsoft Visual Studio\Shared\Python%VER%") do (
       %ECHO.D% :# Looking in %%b
       if exist "%%~b\python.exe" (
-      	set "EXE=%%~b\python.exe"
-      	if not defined RETVAR %ECHO% !EXE!
+      	:# Check if it's runnable, with a compatible processor architecture
+      	"%%~b\python.exe" -c exit >NUL 2>NUL
+      	if not errorlevel 1 (
+	  set "EXE=%%~b\python.exe"
+	  set /A "INDEX+=1"
+	  for /f "tokens=2" %%v in ('"!EXE!" --version 2^>^&1') do set "EXEVER=%%v       "
+	  for /f "tokens=1" %%v in ('^""!EXE!" -c "!PY_ARCH_CMD!"^"') do set "ARCH=%%v       "
+	  set "INDEX2=!INDEX!       "
+	  if not defined RETVAR %ECHO% #!INDEX2:~0,3! !EXEVER:~0,8! !ARCH:~0,7! !EXE!
+	  if "%WANT_INDEX%"=="!INDEX!" goto :FindPython.done
+	)
       )
     )
     if not defined ALL if defined EXE ( :# The one that remains is the latest version found
@@ -1671,6 +1693,7 @@ for %%d in (%SEARCHDRIVES%) do (
 )
 :FindPython.done
 if defined RETVAR set "%RETVAR%=%EXE%"
+
 %RETURN%
 
 :#----------------------------------------------------------------------------#
