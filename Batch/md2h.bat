@@ -203,7 +203,7 @@ if errorlevel 9009 (
   >&2 echo curl.exe can be downloaded from https://curl.haxx.se/windows/
   exit /b 1
 )
-if errorlevel 1 ( :# curl sometimes fails silently, so add our won message
+if errorlevel 1 ( :# curl sometimes fails silently, so add our own message
   >&2 echo curl.exe failed with error %ERRORLEVEL%. Aborting.
   exit /b
 )
