@@ -15,13 +15,14 @@
 :#   2021-01-27 JFL Capture every line of output.                             *
 :#                  Quote lines that contain spaces, or other special chars.  *
 :#                  Added option -l to revert to the initial behavior.        *
+:#   2021-01-29 JFL Added option -V.                                          *
 :#                                                                            *
 :#        © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license: www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2021-01-27"
+set "VERSION=2021-01-29"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name without the extension
 set "SPATH=%~dp0"
@@ -230,6 +231,7 @@ if "%ARG%"=="-?" goto :help
 if "%ARG%"=="/?" goto :help
 if "%ARG%"=="-l" set "CAPTURE=:CaptureLast" & goto :next_arg
 if "%ARG%"=="-q" set "DO=do" & goto :next_arg
+if "%ARG%"=="-V" (echo %VERSION%) & exit /b 0
 if "%ARG%"=="-X" set "EXEC=echo" & set "SET=set" & goto :next_arg
 
 :start
