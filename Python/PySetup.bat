@@ -36,13 +36,16 @@
 :#   2021-02-16 JFL Option -l displays the index and version of each instance.#
 :#                  Also search for python.exe in "%LOCALAPPDATA%\Programs".  #
 :#                  Options -s and -t can now specify an index, like "#3".    #
+:#   2021-02-23 JFL Removed a dependency on my VMs host drive configuration.  #
+:#   2021-02-25 JFL Always list the default instance first, as index #0.      #
+:#                  Use short names to compare instances reliably.            #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2021-02-16"
+set "VERSION=2021-02-25"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1631,9 +1634,9 @@ goto :MasterPath.Set
 :#                                                                            #
 :#  Function        FindPython                                                #
 :#                                                                            #
-:#  Description     Find the latest python.exe in %SEARCHDRIVES%              #
+:#  Description     Find all python.exe instances, or a given one             #
 :#                                                                            #
-:#  Note            Stop searching if found one Python on the first C: drive. #
+:#  Notes                                                                     #
 :#                                                                            #
 :#  History                                                                   #
 :#   2010-05-31 JFL Created this routine for Tcl.                             #
@@ -1642,58 +1645,148 @@ goto :MasterPath.Set
 :#   2021-02-16 JFL In list mode, display the index and version of each entry.#
 :#                  Also search in "%LOCALAPPDATA%\Programs".                 #
 :#                  %1 can now specify an index, like #3.                     #
+:#   2021-02-16 JFL Restructured to always list the default instance first.   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:FindPython %1=Optional Python version. Ex: 27 or * or #3. Default ""=* %2=VARNAME. Default=Display all
+:# Get the first (#0) trailing argument
+:GetArg0 %1=VARNAME %2=ARG0 %3... ignored
+set "%~1=%~2"
+exit /b
+
+:# Append an element to a list. The list is walkable using a for %%e in (!LIST!) ...
+:lappend %1=LISTNAME %2=value
+if defined %~1 (
+  set %~1=!%~1! %2
+) else (
+  set %~1=%2
+)
+exit /b
+
+:# Get the short pathname corresponding to a long name
+:GetShortName %1=long pathname %2=Optional output variable name
+if not .%2==. (
+  set "%~2=%~s1"
+) else (
+  echo.%~s1
+)
+exit /b
+
+:# Get the command line used to open a given file type
+:GetOpenCommand %1=type %2=VARNAME
+set "%~2="
+for /f "delims== tokens=2" %%c in ('ftype %~1 2^>NUL') do set "%~2=%%c"
+exit /b
+
+:# Get the default python.exe executable
+:GetPythonExe %1=VARNAME
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+%UPVAR% %1
+call :GetOpenCommand Python.File %1
+if defined %~1 call :GetArg0 %1 !%~1!
+%ECHOVARS.D% %1
+%RETURN%
+
+:# Test if a python instance is usable
+:TestPythonExe %1=python.exe pathname. %2=Output variable name. Returns 0=Usable
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+if not exist %1 %RETURN% 1
+set "RETVAR=%~2"
+:# Check if it's known already
+for %%y in (!SHORT_LIST!) do if /i "%~s1"=="%%~y" %RETURN% 1
+:# Check if it's runnable, with a compatible processor architecture
+%1 -c exit >NUL 2>NUL
+if errorlevel 1 %RETURN% 1
+:# OK, it's usable
+%UPVAR% SHORT_LIST INDEX
+call :lappend SHORT_LIST "%~s1"
+set /A "INDEX+=1"
+set "FOUND=%~1"
+%ECHOVARS.D% FOUND
+:# Check if it matches the requested version
+if defined RETVAR if not defined !RETVAR! (
+  if "%WANT_INDEX%"=="!INDEX!" (
+    set "%RETVAR%=%~1"
+  ) else if defined WANT_INDEX (
+    rem This can't be the right one
+  ) else if "%VER%"=="*" ( :# Any version is acceptable
+    set "%RETVAR%=%~1"
+  ) else if not %INDEX%==0 ( :# Indexes > 0 are selected to match the requested version by the enclosing for /d
+    set "%RETVAR%=%~1"
+  ) else ( :# Check if the default matches the requested version
+    for %%d in ("%~dp1") do set "DIR=%%~d"
+    for %%d in ("!DIR:~0,-1!") do (
+      %ECHO.D% set "DIR=%%~d"
+      for /d %%p in ("%%~dpd\Python%VER%") do (
+%ECHO.D% if "%%~nxp"=="%%~nxd" set "%RETVAR%=%~1"
+      	 if "%%~nxp"=="%%~nxd" set "%RETVAR%=%~1"
+      )
+    )
+  )
+  if defined %RETVAR% %UPVAR% %RETVAR%
+)
+:# Get that instance characteristics
+for /f "tokens=2" %%v in ('%1 --version 2^>^&1') do set "EXEVER=%%v       "
+set "PY_ARCH_CMD=import os ; print(os.environ[\"PROCESSOR_ARCHITECTURE\"])"
+for /f "tokens=1" %%v in ('^"%1 -c "!PY_ARCH_CMD!"^"') do set "ARCH=%%v       "
+set "INDEX2=!INDEX!       "
+if not defined RETVAR %ECHO% #!INDEX2:~0,3! !EXEVER:~0,8! !ARCH:~0,7! %~1
+%RETURN% 0
+
+:# Find all python.exe instances, or the first one matching some criteria
+:FindPython %1=Optional Python version. Ex: 27 or * or #3. Default=*  %2=Output Variable name. Default=Display all
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 
-:# Search in the list of drives, then in the possible \Python program directories.
-set "EXE="			&:# Executable pathname
+:# Distinguish the possible search criteria
 set "VER=%~1"			&:# Acceptable version suffix
 if not defined VER set "VER=*"
 set "WANT_INDEX="
 if "%VER:~0,1%"=="#" set "WANT_INDEX=%VER:~1%" & set "VER=*"
 set "ALL="
 if "%VER%"=="*" set "ALL=1"
-set "RETVAR=%~2"		&:# Variable where to store the result
 %ECHOVARS.D% VER ALL WANT_INDEX
 
-if defined RETVAR %UPVAR% %RETVAR%
+set "RETVAR=%~2"		&:# Variable where to store the result
+if defined RETVAR (
+  %UPVAR% %RETVAR%
+  set "%RETVAR%="
+)
 
+set "SEARCHDRIVES=C:"		&:# List of drives where to search for python.exe.
+if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE% %SEARCHDRIVES%" &:# Prepend the home drive, if it's different.
+for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any.
+  if exist "%%d%ProgramFiles:~2%" set "SEARCHDRIVES=!SEARCHDRIVES! %%d"
+)
+%ECHOVARS.D% SEARCHDRIVES
+
+set "SHORT_LIST=" &:# List of instances found by :TestPythonExe. Used to avoid reporting one twice.
+
+:# First list the default instance
+set "INDEX=-1"
+call :GetPythonExe DEFAULT
+if defined DEFAULT (
+  call :TestPythonExe "%DEFAULT%" %RETVAR%
+  if defined RETVAR if defined !RETVAR! goto :FindPython.done
+)
+
+:# Then list all instances that match the given %VER%
 set "INDEX=0"
-set "PY_ARCH_CMD=import os ; print(os.environ[\"PROCESSOR_ARCHITECTURE\"])"
 for %%d in (%SEARCHDRIVES%) do (
   rem :# The default install dir is %LOCALAPPDATA%\Programs\Python\Python%VER% for the current user,
   rem :# Or %ProgramFiles%\Python%VER% or %ProgramFiles(x86)%\Python%VER% for all users.
   for %%p in ("" "%ProgramFiles:~2%" "%ProgramFiles(x86):~2%" "%LOCALAPPDATA:~2%\Programs") do (
-    for /d %%b in ("%%d:%%~p\Python%VER%" "%%d:%%~p\Python\Python%VER%" "%%d:%%~p\Microsoft Visual Studio\Shared\Python%VER%") do (
-      %ECHO.D% :# Looking in %%b
-      if exist "%%~b\python.exe" (
-      	:# Check if it's runnable, with a compatible processor architecture
-      	"%%~b\python.exe" -c exit >NUL 2>NUL
-      	if not errorlevel 1 (
-	  set "EXE=%%~b\python.exe"
-	  set /A "INDEX+=1"
-	  for /f "tokens=2" %%v in ('"!EXE!" --version 2^>^&1') do set "EXEVER=%%v       "
-	  for /f "tokens=1" %%v in ('^""!EXE!" -c "!PY_ARCH_CMD!"^"') do set "ARCH=%%v       "
-	  set "INDEX2=!INDEX!       "
-	  if not defined RETVAR %ECHO% #!INDEX2:~0,3! !EXEVER:~0,8! !ARCH:~0,7! !EXE!
-	  if "%WANT_INDEX%"=="!INDEX!" goto :FindPython.done
+    for %%y in ("Python" "Python\Python" "Microsoft Visual Studio\Shared\Python") do (
+      for /d %%b in ("%%d%%~p\%%~y%VER%") do (
+	%ECHO.D% :# Looking in %%~b
+	for %%x in ("%%~b\python.exe") do if exist "%%~x" (
+	  call :TestPythonExe "%%~x" %RETVAR% &:# Check if it matches the selection criteria
+	  if defined RETVAR if defined !RETVAR! goto :FindPython.done
 	)
       )
     )
-    if not defined ALL if defined EXE ( :# The one that remains is the latest version found
-      goto :FindPython.done
-    )
-  )
-  if defined RETVAR if defined EXE ( :# Don't search on network drives if a local Python was found
-    goto :FindPython.done
   )
 )
 :FindPython.done
-if defined RETVAR set "%RETVAR%=%EXE%"
-
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -2380,8 +2473,6 @@ echo             Default: Use the latest version
 goto :EOF
 
 :Main
-set "SEARCHDRIVES=C U"		&:# List of drives where to search for python.exe.
-if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE:~0,1% %SEARCHDRIVES%"
 set "PYTHONVER="		&:# Version to use. Default: The most recent one
 set "ACTION="
 set ">DEBUGOUT=>&2"	&:# Send debug output to stderr, so that it does not interfere with subroutines output capture
@@ -2402,6 +2493,8 @@ if "!ARG!"=="-s" set "ACTION=Setup" & goto nextarg
 if "!ARG!"=="-t" set "ACTION=TestSetup" & goto nextarg
 if "!ARG!"=="-tb" set "ACTION=TestBroadcast" & goto nextarg
 if "!ARG!"=="-tc" set "ACTION=TestColors" & goto nextarg
+if "!ARG!"=="-tf" %POPARG% & set "VER=!ARG!" & %POPARG% & set "VAR=!ARG!" & call :FindPython !VER! !VAR! & (if defined VAR call echo.%%!VAR!%%) & exit /b
+if "!ARG!"=="-ts" %POPARG% & call :GetShortName !"ARG"! & exit /b
 if "!ARG!"=="-v" call :Verbose.On & goto nextarg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
 if "!ARG!"=="-X" call :Exec.Off & goto nextarg

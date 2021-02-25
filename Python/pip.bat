@@ -16,13 +16,16 @@
 :#                  Added option -V.                                          #
 :#   2019-11-29 JFL Make the python instance number inheritable.              #
 :#   2020-02-27 JFL Search python.exe in more locations.                      #
+:#   2020-10-28 JFL Added option -d to enabled debugging.                     #
+:#   2021-02-25 JFL Removed a dependency on my VMs host drive configuration.  #
+:#                  Use short names to compare instances reliably.            #
 :#                                                                            #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2020-02-27"
+set "VERSION=2021-02-25"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -30,7 +33,28 @@ set "SPATH=%SPATH:~0,-1%"	&:# Script path, without the trailing \
 set "SFULL=%~f0"		&:# Script full pathname
 set ^"ARG0=%0^"			&:# Script invokation name
 set ^"ARGS=%*^"			&:# Argument line
+
+call :debug.off
 goto :main
+
+:debug.off
+set "DEBUG=0"
+goto :debug.common
+:debug.on
+set "DEBUG=1"
+:debug.common
+set "ECHO.D=if %DEBUG%==1 echo"
+set "ECHOVARS.D=if %DEBUG%==1 call :EchoVars"
+exit /b
+
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+:EchoVars.loop
+if "%~1"=="" endlocal & goto :eof
+%>DEBUGOUT% echo %INDENT%set "%~1=!%~1!"
+if defined LOGFILE %>>LOGFILE% echo %INDENT%set "%~1=!%~1!"
+shift
+goto EchoVars.loop
 
 :# Get the first (#0) trailing argument
 :GetArg0 %1=VARNAME %2=ARG0 %3... ignored
@@ -67,24 +91,43 @@ exit /b
 
 :# Get the default python.exe executable
 :GetPythonExe %1=VARNAME
+%ECHO.D% :GetPythonExe %1
 call :GetOpenCommand Python.File %1
 if defined %~1 call call :GetArg0 %%1 %%%~1%%
+%ECHOVARS.D% %1
 exit /b
 
 :# Get a list of all python.exe executables
 :GetAllPythonExe %1=LISTNAME
 setlocal EnableDelayedExpansion
-set "LIST=" &:# List of instances found. Used to avoid reporting one twice.
+set "SEARCHDRIVES=C:"		&:# List of drives where to search for python.exe.
+if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE% %SEARCHDRIVES%" &:# Prepend the home drive, if it's different.
+for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any.
+  if exist "%%d%ProgramFiles:~2%" set "SEARCHDRIVES=!SEARCHDRIVES! %%d"
+)
+%ECHOVARS.D% SEARCHDRIVES
+set "SHORT_LIST=" &:# List of instances found. Used to avoid reporting one twice.
+set "LIST=" &:# List of instances found.
 :# List first the default instance
 call :GetPythonExe PYTHON
-if defined PYTHON call :lappend LIST "%PYTHON%"
+if defined PYTHON (
+  for %%p in ("%PYTHON%") do call :lappend SHORT_LIST "%%~sp"
+  call :lappend LIST "%PYTHON%"
+)
 :# Then look for other instances in well known places
-for %%b in ("C:" "%ProgramFiles%" "%ProgramFiles(x86)%") do (
-  for /d %%p in ("%%~b\Python*" "%%~b\Python\Python*" "%%~b\Microsoft Visual Studio\Shared\Python*") do (
-    for %%x in ("%%~p\python.exe") do if exist "%%~x" (
-      set "FOUND=" &:# Avoid duplications, for example with the default instance
-      for %%y in (!LIST!) do if not defined FOUND if /i "%%~fx"=="%%~y" set "FOUND=1"
-      if not defined FOUND call :lappend LIST "%%~fx"
+for %%d in (%SEARCHDRIVES%) do (
+  rem :# The default install dir is %LOCALAPPDATA%\Programs\Python\Python%VER% for the current user,
+  rem :# Or %ProgramFiles%\Python%VER% or %ProgramFiles(x86)%\Python%VER% for all users.
+  for %%p in ("" "%ProgramFiles:~2%" "%ProgramFiles(x86):~2%" "%LOCALAPPDATA:~2%\Programs") do (
+    for %%y in ("Python" "Python\Python" "Microsoft Visual Studio\Shared\Python") do (
+      for /d %%b in ("%%d%%~p\%%~y*") do (
+        %ECHO.D% :# Looking in %%b
+	for %%x in ("%%~b\python.exe") do if exist "%%~x" (
+	  set "FOUND=" &:# Avoid duplications, for example with the default instance
+	  for %%s in (!SHORT_LIST!) do if not defined FOUND if /i "%%~sx"=="%%~s" set "FOUND=1"
+	  if not defined FOUND call :lappend SHORT_LIST "%%~sx" & call :lappend LIST "%%~fx"
+	)
+      )
     )
   )
 )
@@ -154,6 +197,7 @@ set "ARG=%~1"
 if "%ARG%"=="-?" call :usage & set "PYARGS=-h" & goto :go
 if "%ARG%"=="--" goto :next_pyarg &:# All remaining arguments are for pip.exe
 if "%ARG%"=="-#" set "PY#=%~2" & shift & goto :next_arg
+if "%ARG%"=="-d" call :debug.on & goto :next_arg
 if "%ARG:~0,1%"=="#" set "PY#=%ARG:~1%" & goto :next_arg
 if "%ARG%"=="-l" call :list & exit /b
 if "%ARG%"=="-V" (echo %SCRIPT% %VERSION%) & set "PYARGS=-V" & goto :go
