@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-02-25
+### Changed
+- Python/PySetup.bat, Python/python.bat Python/pip.bat:  
+  Make sure all 3 python batch scripts share the same python instance enumeration algorithm:
+  Removed a dependency on my VMs host drive configuration.  
+  Always list the default instance first, as index #0.  
+  Use short names to compare instances reliably.
+
 ## [Unreleased] 2021-02-16
 ### Changed
 - Batch/regx.bat: Added options -se and -ue to easily manage System and User Environment variables.
