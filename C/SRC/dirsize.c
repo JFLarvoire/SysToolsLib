@@ -67,6 +67,8 @@
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 3.3.4.					      *
 *    2020-04-20 JFL Added support for MacOS. Version 3.4.                     *
+*    2021-02-27 JFL Fixed another issue with Unix readdir() and d_type.       *
+*                   Version 3.4.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -74,8 +76,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.4"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "3.4.1"
+#define PROGRAM_DATE    "2021-02-27"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -647,6 +649,7 @@ int SelectFilesCB(const struct dirent *pDE, void *p) {
   struct stat sStat;
   int iErr;
 
+  /* Invoked by scandirX(), so d_type always valid, even under Unix */
   if (pDE->d_type != DT_REG) return FALSE;	/* We want only files */
 
 #if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
@@ -757,7 +760,12 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
 *                                                                             *
 ******************************************************************************/
 
-int SelectDirsCB(const struct dirent *pDE) {
+#ifdef _MSC_VER
+#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+#endif
+
+int SelectDirsCB(const struct dirent *pDE, void *pRef) {
+  /* Invoked by scandirX(), so d_type always valid, even under Unix */
   if (   (pDE->d_type == DT_DIR)	/* We want only directories */
       && (!streq(pDE->d_name, "."))	/* Except . */
       && (!streq(pDE->d_name, "..")))	/* and .. */
@@ -765,6 +773,10 @@ int SelectDirsCB(const struct dirent *pDE) {
   else
     return FALSE;
 }
+
+#ifdef _MSC_VER
+#pragma warning(default:4100) /* Ignore the "unreferenced formal parameter" warning */
+#endif
 
 /* Scan all subdirectories */
 total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
@@ -787,7 +799,7 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
 #endif
 
   /* Get all subdirectories */
-  nDE = scandir(".", &pDElist, SelectDirsCB, alphasort);
+  nDE = scandirX(".", &pDElist, SelectDirsCB, alphasort, NULL);
   if (nDE < 0) {
     finis(RETCODE_NO_MEMORY, "Out of directory handles");
   }
