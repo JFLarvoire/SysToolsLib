@@ -12,6 +12,7 @@
 #		    Added HardDisk.cpp and LogDisk.cpp rules for WIN95.	      #
 #    2016-09-30 JFL Rewrote clean rules for building C files that	      #
 #		    conditionally include other C files.		      #
+#    2021-03-01 JFL Compile R0Ios.c, Ring0.c, VxDCall.c only for WIN95.       #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -42,7 +43,7 @@ OBJECTS = \
     +$(O)\NetBios.obj		\
 !ENDIF
     +$(O)\SmBios.obj		\
-!IF ("$(T)"=="WIN32" || "$(T)"=="WIN95") && DEFINED(HAS_98DDK)
+!IF ("$(T)"=="WIN95") && DEFINED(HAS_98DDK)
     +$(O)\R0Ios.obj		\
     +$(O)\Ring0.obj		\
     +$(O)\VxDCall.obj		\
