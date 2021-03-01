@@ -5,6 +5,12 @@ Major changes for the System Tools Library are recorded here.
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
 ## [Unreleased] 2021-02-25
+### Fixed
+- C/SRC/dirsize.c: Fixed another issue with Unix readdir() and d_type, which caused it to report size 0 on XFS file systems.
+- C/SysLib/SysLib.mak: Compile R0Ios.c, Ring0.c, VxDCall.c only for WIN95, to avoid a build error with Win10 SDK >= 10.0.18362.0.
+- C/Include/WIN32.mak: Removed a misleading log message "Environment variable PROGRAM_ not defined".
+
+## [Unreleased] 2021-02-25
 ### Changed
 - Python/PySetup.bat, Python/python.bat Python/pip.bat:  
   Make sure all 3 python batch scripts share the same python instance enumeration algorithm:
