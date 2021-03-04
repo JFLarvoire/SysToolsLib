@@ -39,13 +39,23 @@
 :#   2021-02-23 JFL Removed a dependency on my VMs host drive configuration.  #
 :#   2021-02-25 JFL Always list the default instance first, as index #0.      #
 :#                  Use short names to compare instances reliably.            #
+:#   2021-03-02 JFL Restructured the instances enumeration, and made it faster.
+:#                  Allow selecting an instance by version.                   #
+:#                  Renamed hidden option -r as -tr.                          #
+:#                  Added option -r to register instances not found by py.exe.#
+:#   2021-03-03 JFL Work around issues with installations in C:\PROGRA~1\...  #
+:#                  Added support for configuring py.exe as version 0.        #
+:#                  In the end, make sure that both 'python' and 'python.exe' #
+:#                  start the selected python instance.                       #
+:#   2021-03-04 JFL Merged in the latest debug library.                       #
+:#                  Fixed %ECHO.V% and %ECHO.D% too agressive optimization.   #
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2021-02-25"
+set "VERSION=2021-03-04"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -464,7 +474,7 @@ goto :eof
 :#                  EchoVars	    Display a set of variables name=value     #
 :#                  EchoStringVars  Display a string, then a set of variables #
 :#                  EchoArgs	    Display all arguments name=value          #
-:#                  EchoVal	    Display the value of one variable         #
+:#                  EchoVals	    Display the value of multiple variables   #
 :#		    All functions in that series have two other derivatives,  #
 :#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
 :#                  These display only in debug and verbose mode respectively,#
@@ -504,8 +514,13 @@ goto :eof
 :#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
 :#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
 :#                                                                            #
-:#                  %ECHOVAL%       Echo the value of variable ARG1           #
-:#                  %ECHOVAL.D%     Idem, but display it in debug mode only   #
+:#                  %ECHOVALS%      Echo the value of multiple variables      #
+:#                  %ECHOVALS.V%    Idem, but display them in verb. mode only #
+:#                  %ECHOVALS.D%    Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOSTRINGS%   Echo the value of multiple quoted strings #
+:#                  %ECHOSTRINGS.V% Idem, but display them in verb. mode only #
+:#                  %ECHOSTRINGS.D% Idem, but display them in debug mode only #
 :#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
@@ -530,7 +545,8 @@ goto :eof
 :#                                  Inherited. Default=. (empty string)       #
 :#                                                                            #
 :#  Notes           All output from these routines is sent to the log file.   #
-:#                  In debug mode, the debug output is also sent to stderr.   #
+:#                  The debug output is sent stdout or stderr, depending on   #
+:#                  variable %>DEBUGOUT%.				      # 
 :#                                                                            #
 :#                  Traced functions are indented, based on the call depth.   #
 :#                  Use %ECHO% to get the same indentation of normal output.  #
@@ -667,10 +683,18 @@ set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
 set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
-set "ECHOVAL=%LCALL% :EchoVal"
-set "ECHOVAL.D=%LCALL% :EchoVal.Debug"
+set "ECHOVALS=%LCALL% :EchoVals"
+set "ECHOVALS.V=%LCALL% :EchoVals.Verbose"
+set "ECHOVALS.D=%LCALL% :EchoVals.Debug"
+set "ECHOSTRINGS=%LCALL% :EchoStrings"
+set "ECHOSTRINGS.V=%LCALL% :EchoStrings.Verbose"
+set "ECHOSTRINGS.D=%LCALL% :EchoStrings.Debug"
 set "+INDENT=%LCALL% :Debug.IncIndent"
 set "-INDENT=%LCALL% :Debug.DecIndent"
+set ">MSGOUT.V[0]=rem"
+set ">MSGOUT.V[1]="
+set ">MSGOUT.D[0]=rem"
+set ">MSGOUT.D[1]=%>DEBUGOUT%"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -695,7 +719,7 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string alternance #%%\n%
   if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
@@ -707,10 +731,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-debug mode
-if not defined LOGFILE set "ECHO.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.D=rem"
-if not defined LOGFILE set "ECHOVARS.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.D=rem"
+if not defined LOGFILE set "ECHO.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.D=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.D=echo >NUL"
 goto :eof
 
 :Debug.On
@@ -784,6 +808,16 @@ if defined LOGFILE %>>LOGFILE% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
 endlocal
 goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
 
+:# A lightweight alternative for the %RETURN% macro.
+:# Only traces the %ERRORLEVEL%, but not the variables returned.
+:# Trace the return from a subroutine, and do the actual return, in a single call
+:Return
+setlocal
+set "ERR=%~1"
+if not defined ERR set "ERR=%ERRORLEVEL%"
+%>DEBUGOUT% echo   exit /b %ERR%
+2>NUL (goto) & exit /b %ERR% &:# Endlocal and pop one call stack, then return to the upper level
+
 :# Routine to set the VERBOSE mode, in response to the -v argument.
 :Verbose.Off
 :Verbose.0
@@ -793,10 +827,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-verbose mode
-if not defined LOGFILE set "ECHO.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.V=rem"
-if not defined LOGFILE set "ECHOVARS.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.V=rem"
+if not defined LOGFILE set "ECHO.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.V=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.V=echo >NUL"
 goto :eof
 
 :Verbose.On
@@ -908,28 +942,57 @@ set /a N=N+1
 shift
 goto EchoArgs.loop
 
-:# Echo the value of a variable
-:EchoVal	%1=VARNAME
-setlocal EnableExtensions EnableDelayedExpansion
-%>DEBUGOUT% echo.%INDENT%!%~1!
-if defined LOGFILE %>>LOGFILE% echo %INDENT%!%~1!
+:# Echo the value of multiple variables on the same line
+:EchoVals	%1=VARNAME, %2=VARNAME, ...
+setlocal EnableDelayedExpansion
+set ">MSGOUT="
+:EchoVals.1
+set "EchoVals.LINE=" &:# Use a qualified name, in case the caller passes a variable called LINE
+for %%v in (%*) do set "EchoVals.LINE=!EchoVals.LINE! !%%v!"
+if not defined EchoVals.LINE set "EchoVals.LINE= " &:# Make sure there's a head space even if the variable list was empty
+%>MSGOUT% echo.%INDENT%!EchoVals.LINE:~1!
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%!EchoVals.LINE:~1!
 endlocal & exit /b
 
-:EchoVal.Debug
-%IF_DEBUG% (
-  call :EchoVal %*
-) else ( :# Make sure the variables are logged
-  call :EchoVal %* >NUL 2>NUL
-)
-exit /b
+:EchoVals.Verbose
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.V[%VERBOSE%]!"
+goto :EchoVals.1
 
-:EchoVal.Verbose
+:EchoVals.Debug
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.D[%DEBUG%]!"
+goto :EchoVals.1
+
+:# Echo the value of multiple strings on the same line. They must not contain double quotes.
+:EchoStrings	%1=Quoted_String, %2=Quoted_String, ...
+setlocal DisableDelayedExpansion
+set ">MSGOUT="
+:EchoStrings.1
+set "LINE=" &:# No need for a qualified name, since we don't use caller variables
+for %%v in (%*) do set "LINE=%LINE% %%~v"
+if not defined LINE set "LINE= " &:# Make sure there's a head space even if the string list was empty
+%>MSGOUT% echo.%INDENT%%LINE:~1%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%LINE:~1%
+endlocal & exit /b
+
+:EchoStrings.Verbose
+setlocal DisableDelayedExpansion
 %IF_VERBOSE% (
-  call :EchoVal %*
+  set ">MSGOUT="
 ) else ( :# Make sure the variables are logged
-  call :EchoVal %* >NUL 2>NUL
+  set ">MSGOUT=rem"
 )
-exit /b
+goto :EchoStrings.1
+
+:EchoString1.Debug
+setlocal DisableDelayedExpansion
+%IF_DEBUG% (
+  set ">MSGOUT=%>DEBUGOUT%"
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
 
 :Debug.End
 
@@ -1278,8 +1341,7 @@ for /l %%n in (1,1,24) do if not "!ECHO.FILE:~%%n!"=="" <nul set /p "=%ECHO.DEL%
 :# Remove the other unwanted characters "\..\: ##-"
 <nul set /p "=%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%%ECHO.DEL%"
 :# Append the optional CRLF
-set "TAIL=%3"
-if defined TAIL echo.%~3&if defined LOGFILE %>>LOGFILE% echo.%~3
+if not "%~3"=="" echo.&if defined LOGFILE %>>LOGFILE% echo.
 endlocal & endlocal & goto :eof
 
 :Echo.Color.Var %1=Color %2=StrVar [%3=/n]
@@ -1347,28 +1409,35 @@ goto :eof
 :#		    Added support for empty pathnames.                        #
 :#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#   2018-11-19 JFL Improved routine condquote2.                              #
+:#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
+:#   2021-03-04 JFL Use the non-instrumented condquote2 as the default version.
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Quote file pathnames that require it.
 :condquote	 %1=Input variable. %2=Opt. output variable.
-%FUNCTION% EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions Disabledelayedexpansion
 set "RETVAR=%~2"
 if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
-%UPVAR% %RETVAR%
-set "P=!%~1!"
-:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
-if defined P set ^"P=!P:"=!"
+call set "P=%%%~1%%"
 :# If the value is empty, don't go any further.
 if not defined P set "P=""" & goto :condquote_ret
-:# Look for any special character that needs "quoting". See list from (cmd /?).
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs quoting
 :# Added "@" that needs quoting ahead of commands.
 :# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
-echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
-if not errorlevel 1 set P="!P!"
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="%P%"
 :condquote_ret
-set "%RETVAR%=!P!"
-%RETURN%
+:# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
+:# because this interferes with the quoting already added above. This would
+:# fail if the quoted string contained an & character.
+:# But because of this, do not leave any space around & separators.
+endlocal&set %RETVAR%=%P%&exit /b 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -1422,6 +1491,93 @@ set "%VARNAME%=!%VARNAME%!::" &:# Note that :: cannot appear in a pathname
 set "%VARNAME%=!%VARNAME%:\::=::!"
 set "%VARNAME%=!%VARNAME%:::=!"
 %RETURN%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetRegistryValue					      #
+:#                                                                            #
+:#  Description     Get a registry value content.                             #
+:#                                                                            #
+:#  Arguments       KEY NAME [VALUEVAR [TYPEVAR]]			      #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-06-23 JFL Renamed GetValue as GetRegistryValue.                     #
+:#                  Fixed the default (nameless) value reading.               #
+:#                  Don't display errors, but return 1 if value not found.    #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Get a registry value content. Args: KEY NAME [VALUEVAR [TYPEVAR]]
+:GetRegistryValue
+%FUNCTION% enableextensions enabledelayedexpansion
+set "KEY=%~1"
+set "NAME=%~2"
+set "VALUEVAR=%~3"
+set "TYPEVAR=%~4"
+if not defined VALUEVAR set "VALUEVAR=VALUE"
+set "%VALUEVAR%="
+:# Returning the type is optional. Do not define a default for TYPEVAR.
+%ECHOVARS.D% KEY NAME VALUEVAR TYPEVAR
+%UPVAR% %VALUEVAR%
+if defined TYPEVAR %UPVAR% %TYPEVAR%
+if "%NAME%"=="" (
+  set CMD=reg query "%KEY%" /ve
+) else (
+  set CMD=reg query "%KEY%" /v "%NAME%"
+)
+%ECHO.D% %CMD%
+set "RETCODE=1"
+:# For each line in CMD output...
+%FOREACHLINE% %%i in ('%CMD% 2^>NUL') do (
+  set "RETCODE=0"
+  set "LINE=%%i"
+  %ECHOVARS.D% LINE
+  :# Values are indented by 4 spaces.
+  set "HEAD=!LINE:~0,4!"
+  set "LINE=!LINE:~4!"
+  :# But extra lines of multi-lined values are indented by >20 spaces.
+  set "HEAD2=!LINE:~0,4!"
+  if "!HEAD!"=="    " if not "!HEAD2!"=="    " (
+    :# Some versions of reg.exe use 4 spaces as field separator; others use a TAB. 
+    :# Change the 4-spaces around the REG_XX type word to a TAB.
+    set "TOKENS=!LINE:    =	!"
+    %ECHOVARS.D% TOKENS
+    :# Extract the value name as the first item before the first TAB.
+    :# Names can contain spaces, but assume they don't contain TABs.
+    for /f "tokens=1,2* delims=	" %%j in ("!TOKENS!") do (
+      set "NAME=%%j"
+      set "TYPE=%%k"
+      set "VALUE=%%l"
+      %ECHOVARS.D% NAME TYPE VALUE
+    )
+  )
+)
+set %VALUEVAR%=!VALUE!
+if defined TYPEVAR set %TYPEVAR%=%TYPE%
+%RETURN% %RETCODE%
+
+:#----------------------------------------------------------------------------#
+
+:# Convert a short or long pathname to a full long pathname
+:GetLongPathname %1=PATHNAME %2=Output variable name
+setlocal EnableDelayedExpansion
+set "FULL_SHORT=%~fs1"           &:# Make sure it really is short all the way through
+set "FULL_SHORT=%FULL_SHORT:~3%" &:# Remove the drive and initial \
+set "FULL_LONG=%~d1"             &:# Begin with just the drive
+if defined FULL_SHORT for %%x in ("!FULL_SHORT:\=" "!") do ( :# Loop on all short components
+  set "ATTRIB_OUTPUT=" &:# If the file does not exist, filter-out attrib.exe error message on stdout, with its - before the drive.
+  for /f "delims=" %%l in ('attrib "!FULL_LONG!\%%~x" 2^>NUL ^| findstr /v /c:" - %~d1"') do set "ATTRIB_OUTPUT=%%l"
+  if defined ATTRIB_OUTPUT ( :# Extract the long name from the attrib.exe output
+    for %%f in ("!ATTRIB_OUTPUT:*\=\!") do set "LONG_NAME=%%~nxf"
+  ) else (                   :# Use the short name (which does not exist)
+    set "LONG_NAME=%%~x"
+  )
+  set "FULL_LONG=!FULL_LONG!\!LONG_NAME!"
+) else set "FULL_LONG=%~d1\"
+endlocal & if not "%~2"=="" (set "%~2=%FULL_LONG%") else echo %FULL_LONG%
+exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -1530,9 +1686,9 @@ goto :LocalPath.Set
 
 :MasterPath.Get
 setlocal EnableExtensions DisableDelayedExpansion
-:# Note: The Path is usuallly in a REG_EXPAND_SZ, but sometimes in a REG_SZ. 
+:# Note: The Path is usually in a REG_EXPAND_SZ, but sometimes in a REG_SZ. 
 set MCMD=reg query "%MKEY%" /v "%PATHVAR%" 2^>NUL ^| findstr REG_
-%ECHOVAL.D% MCMD
+%ECHOVALS.D% MCMD
 for /f "tokens=1,2,*" %%a in ('"%MCMD%"') do set "MPATH=%%c"
 :MasterPath.Get.TrimR
 if "%MPATH:~-1%"==";" set "MPATH=%MPATH:~0,-1%" & goto :MasterPath.Get.TrimR
@@ -1689,75 +1845,102 @@ if defined %~1 call :GetArg0 %1 !%~1!
 
 :# Test if a python instance is usable
 :TestPythonExe %1=python.exe pathname. %2=Output variable name. Returns 0=Usable
+:#             %3=Optional version variable  %4=Optional architecture variable
 %FUNCTION% EnableExtensions EnableDelayedExpansion
-if not exist %1 %RETURN% 1
+if not exist %1 %ECHO.D% # Missing argument & %RETURN% 1
 set "RETVAR=%~2"
 :# Check if it's known already
-for %%y in (!SHORT_LIST!) do if /i "%~s1"=="%%~y" %RETURN% 1
+for %%y in (!SHORT_LIST!) do if /i "%~s1"=="%%~y" %ECHO.D% # Known already & %RETURN% 1
 :# Check if it's runnable, with a compatible processor architecture
-%1 -c exit >NUL 2>NUL
-if errorlevel 1 %RETURN% 1
+set "PY_VER=" & set "PY_ARCH="
+set ^"PY_VER_ARCH_CMD=import sys, os; print (sys.version.split()[0]+\" \"+os.environ[\"PROCESSOR_ARCHITECTURE\"])^"
+for /f "tokens=1,2" %%v in ('^"%1 -c "!PY_VER_ARCH_CMD!" 2^>NUL^"') do set "PY_VER=%%v" & set "PY_ARCH=%%w"
+%ECHOVARS.D% PY_VER_ARCH_CMD PY_VER PY_ARCH
+if not defined PY_VER %ECHO.D% # Version not found & %RETURN% 1
+if not defined PY_ARCH %ECHO.D% # Architecture not found & %RETURN% 1
 :# OK, it's usable
 %UPVAR% SHORT_LIST INDEX
 call :lappend SHORT_LIST "%~s1"
 set /A "INDEX+=1"
-set "FOUND=%~1"
-%ECHOVARS.D% FOUND
 :# Check if it matches the requested version
+for /f "delims=. tokens=1,2,3" %%v in ("%PY_VER%") do set "PY_MAJ=%%v" & set "PY_MIN=%%w" & set "PY_PAT=%%x"
+set "PY_MM=%PY_MAJ%.%PY_MIN%"
+set "PY_MMP=%PY_MAJ%.%PY_MIN%.%PY_PAT%"
 if defined RETVAR if not defined !RETVAR! (
+  set "FOUND="
   if "%WANT_INDEX%"=="!INDEX!" (
-    set "%RETVAR%=%~1"
+    set "FOUND=%~1"
   ) else if defined WANT_INDEX (
-    rem This can't be the right one
-  ) else if "%VER%"=="*" ( :# Any version is acceptable
-    set "%RETVAR%=%~1"
-  ) else if not %INDEX%==0 ( :# Indexes > 0 are selected to match the requested version by the enclosing for /d
-    set "%RETVAR%=%~1"
+    %ECHO.D% # Index !INDEX! is not the index %WANT_INDEX% we want
+  ) else if not "%~nx1"=="python.exe" (
+    %ECHO.D% # This %~nx1 is not the python.exe we want
+  ) else if "%WANT_VER%"=="!PY_MMP!" (
+    set "FOUND=%~1"
+  ) else if "%WANT_VER%"=="!PY_MM!" (
+    set "FOUND=%~1"
+  ) else if "%WANT_VER%"=="!PY_MAJ!" (
+    set "FOUND=%~1"
+  ) else if defined WANT_VER (
+    %ECHO.D% # Version %PY_VER% does not match the version %WANT_VER% we want
+  ) else if "%WANT_DIR%"=="*" ( :# Any version is acceptable
+    set "FOUND=%~1"
   ) else ( :# Check if the default matches the requested version
     for %%d in ("%~dp1") do set "DIR=%%~d"
     for %%d in ("!DIR:~0,-1!") do (
       %ECHO.D% set "DIR=%%~d"
-      for /d %%p in ("%%~dpd\Python%VER%") do (
-%ECHO.D% if "%%~nxp"=="%%~nxd" set "%RETVAR%=%~1"
-      	 if "%%~nxp"=="%%~nxd" set "%RETVAR%=%~1"
+      for /d %%p in ("%%~dpd\Python%WANT_DIR%") do (
+%ECHO.D% if "%%~nxp"=="%%~nxd" set "FOUND=%~1"
+      	 if "%%~nxp"=="%%~nxd" set "FOUND=%~1"
       )
     )
   )
-  if defined %RETVAR% %UPVAR% %RETVAR%
+  %ECHOVARS.D% FOUND
+  if defined FOUND (
+    call :GetLongPathname "!FOUND!" !RETVAR! &rem :# %1 may be a short pathname if python was installed in C:\PROGRA~1\...
+    %UPVAR% !RETVAR!
+    set "VER_VAR=%~3"
+    if defined VER_VAR set "!VER_VAR!=!PY_VER!" & %UPVAR% !VER_VAR!
+    set "ARCH_VAR=%~4"
+    if defined ARCH_VAR set "!ARCH_VAR!=!PY_ARCH!" & %UPVAR% !ARCH_VAR!
+  )
 )
 :# Get that instance characteristics
-for /f "tokens=2" %%v in ('%1 --version 2^>^&1') do set "EXEVER=%%v       "
-set "PY_ARCH_CMD=import os ; print(os.environ[\"PROCESSOR_ARCHITECTURE\"])"
-for /f "tokens=1" %%v in ('^"%1 -c "!PY_ARCH_CMD!"^"') do set "ARCH=%%v       "
-set "INDEX2=!INDEX!       "
-if not defined RETVAR %ECHO% #!INDEX2:~0,3! !EXEVER:~0,8! !ARCH:~0,7! %~1
+set "INDEX_=!INDEX!       "
+set "PY_VER_=!PY_VER!       "
+set "PY_ARCH_=!PY_ARCH!       "
+if not defined RETVAR %ECHO% #!INDEX_:~0,3! !PY_VER_:~0,8! !PY_ARCH_:~0,7! %~1
 %RETURN% 0
 
 :# Find all python.exe instances, or the first one matching some criteria
 :FindPython %1=Optional Python version. Ex: 27 or * or #3. Default=*  %2=Output Variable name. Default=Display all
+:#          %3=Optional version variable  %4=Optional architecture variable
 %FUNCTION% EnableExtensions EnableDelayedExpansion
 
 :# Distinguish the possible search criteria
-set "VER=%~1"			&:# Acceptable version suffix
+set "VER=%~1"			&:# The requested version
 if not defined VER set "VER=*"
-set "WANT_INDEX="
-if "%VER:~0,1%"=="#" set "WANT_INDEX=%VER:~1%" & set "VER=*"
-set "ALL="
-if "%VER%"=="*" set "ALL=1"
-%ECHOVARS.D% VER ALL WANT_INDEX
+set "WANT_INDEX="		&:# Search for index #INDEX
+set "WANT_VER="			&:# Search for version MAJOR[.MINOR[.PATCH]]
+set "WANT_DIR=*"		&:# Search for python directory suffix pythonDIR
+set "C0=%VER:~0,1%"
+set "C1=%VER:~1,1%"
+if "%C0%"=="#" if defined C1 set "WANT_INDEX=%VER:~1%"
+if "%VER%"=="2" set "WANT_VER=%VER%"
+if "%VER%"=="3" set "WANT_VER=%VER%"
+if "%C1%"=="." set "WANT_VER=%VER%"
+if not defined WANT_INDEX if not defined WANT_VER set "WANT_DIR=%VER%"
+%ECHOVARS.D% VER WANT_INDEX WANT_VER WANT_DIR
 
 set "RETVAR=%~2"		&:# Variable where to store the result
 if defined RETVAR (
-  %UPVAR% %RETVAR%
-  set "%RETVAR%="
+  %UPVAR% !RETVAR!
+  set "!RETVAR!="
 )
 
-set "SEARCHDRIVES=C:"		&:# List of drives where to search for python.exe.
-if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE% %SEARCHDRIVES%" &:# Prepend the home drive, if it's different.
-for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any.
-  if exist "%%d%ProgramFiles:~2%" set "SEARCHDRIVES=!SEARCHDRIVES! %%d"
-)
-%ECHOVARS.D% SEARCHDRIVES
+set "VER_VAR=%~3"
+if defined VER_VAR %UPVAR% !VER_VAR!
+set "ARCH_VAR=%~4"
+if defined ARCH_VAR %UPVAR% !ARCH_VAR!
 
 set "SHORT_LIST=" &:# List of instances found by :TestPythonExe. Used to avoid reporting one twice.
 
@@ -1768,25 +1951,60 @@ if defined DEFAULT (
   call :TestPythonExe "%DEFAULT%" %RETVAR%
   if defined RETVAR if defined !RETVAR! goto :FindPython.done
 )
-
-:# Then list all instances that match the given %VER%
 set "INDEX=0"
-for %%d in (%SEARCHDRIVES%) do (
+
+:# Then list py.exe if it's not the default
+if defined DEFAULT for %%p in ("%DEFAULT%") do if not "%%~nxp"=="py.exe" (
+  for %%x in (py.exe) do set "PY=%%~$PATH:x"
+  if defined PY (
+    call :TestPythonExe "!PY!" %RETVAR%
+    if defined RETVAR if defined !RETVAR! goto :FindPython.done
+  )
+)
+
+:# Then list all instances that match the requested criteria
+call :GetAllPythonDirs ALL_DIRS
+for %%d in (%ALL_DIRS%) do (
+  call :TestPythonExe "%%~d\python.exe" %RETVAR% %VER_VAR% %ARCH_VAR% &:# Check if it matches the selection criteria
+  if defined RETVAR if defined !RETVAR! goto :FindPython.done
+)
+:FindPython.done
+%RETURN%
+
+:# Get a list of all python.exe installation directories in well known places
+:GetAllPythonDirs %1=LISTNAME
+%FUNCTION% EnableDelayedExpansion
+set "LIST=%~1"
+set "DRIVES=C:"		&:# List of drives where to search for python.exe
+if not "%HOMEDRIVE%"=="C:" set "DRIVES=%HOMEDRIVE% %DRIVES%" &:# Prepend the home drive, if it's different
+for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any
+  if exist "%%d%ProgramFiles:~2%" set "DRIVES=!DRIVES! %%d"
+)
+%ECHOVARS.D% DRIVES
+if defined LIST (
+  %UPVAR% !LIST!
+  set "!LIST!="
+)
+if not defined ProgramFiles(x86) set "ProgramFiles(x86)=%ProgramFiles% (x86)" &:# For x86 VMs searching on amd64 hosts
+for %%d in (%DRIVES%) do (
   rem :# The default install dir is %LOCALAPPDATA%\Programs\Python\Python%VER% for the current user,
   rem :# Or %ProgramFiles%\Python%VER% or %ProgramFiles(x86)%\Python%VER% for all users.
   for %%p in ("" "%ProgramFiles:~2%" "%ProgramFiles(x86):~2%" "%LOCALAPPDATA:~2%\Programs") do (
     for %%y in ("Python" "Python\Python" "Microsoft Visual Studio\Shared\Python") do (
-      for /d %%b in ("%%d%%~p\%%~y%VER%") do (
+      for /d %%b in ("%%d%%~p\%%~y*") do (
 	%ECHO.D% :# Looking in %%~b
 	for %%x in ("%%~b\python.exe") do if exist "%%~x" (
-	  call :TestPythonExe "%%~x" %RETVAR% &:# Check if it matches the selection criteria
-	  if defined RETVAR if defined !RETVAR! goto :FindPython.done
+	  if defined LIST (
+	    call :lappend !LIST! "%%~b"
+	  ) else (
+	    set "B=%%~b"
+	    echo !B!
+	  )
 	)
       )
     )
   )
 )
-:FindPython.done
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -1836,14 +2054,49 @@ if not errorlevel 1 (
 set "MODE=%~1"
 set "VER=%~2"
 
-:# Locate the latest Python shell
+if "%VER%"=="*" set "VER="
+set "PYTHONCMD="
+
+:# Get the default instance
+call :GetPythonExe DEFAULT
+set "PY="
+if defined DEFAULT if exist "!DEFAULT!" (
+  for %%p in ("!DEFAULT!") do set "APP=%%~nxp"
+  if /i "!APP!"=="py.exe" ( :# If the default is py.exe
+    set "PY=!DEFAULT!"
+    if not defined VER set "VER=0" &rem :# Force using the latest version reported by py.exe
+  )
+)
+if not defined PY for %%p in (py.exe) do set "PY=%%~$PATH:p"
+%ECHOVARS.D% PY VER
+:DoSetup.RetryPy
+if "%VER%"=="0" (
+  if not defined PY >&2 echo Error: Can't find py.exe & %RETURN% 1
+  for /f "tokens=2" %%v in ('"!PY!" --version 2^>^&1') do set "VER=%%v" &rem :# Python 2 outputs the version on stderr
+  set PYTHONCMD="%PY%" "%%L" %%*
+)
+
+:# Locate the Python shell
 call :FindPython "%VER%" PYTHON
-echo.
 if "%PYTHON%"=="" (
   >&2 %ECHO% Failure. No Python shell found.
   %RETURN% 1
 )
-%ECHO% The Python shell is: "%PYTHON%"
+for %%p in ("!PYTHON!") do set "APP=%%~nxp"
+if /i "!APP!"=="py.exe" ( :# If the selected app is py.exe
+  if exist "!PYTHON!" set "PY=!PYTHON!"
+  set "VER=0" &:# Force using the latest version reported by py.exe
+  goto :DoSetup.RetryPy
+)
+
+:# Show what will be done
+echo.
+if %MODE%==test (
+  %ECHO% Testing the "%PYTHON%" configuration
+) else (
+  %ECHO% Configuring "%PYTHON%"
+)
+if defined PYTHONCMD %ECHO% Using %PY%
 
 :# Find the shell's directory
 for %%B in ("%PYTHON%") do set "PYTHONBIN=%%~dpB" &:# Deduce the Python bin path
@@ -1855,7 +2108,7 @@ call :TrimRightSlash PYTHONBIN &:# Remove the trailing \ in that path
 
 :# First configure the Python text mode interpreter
 %ECHO%
-set PYTHONCMD="%PYTHON%" "%%1" %%*
+if not defined PYTHONCMD set PYTHONCMD="%PYTHON%" "%%L" %%*
 call :Do1Setup py PYTHON PYTHONCMD Python.File
 
 :# Make sure the local PATH includes the Python's bin directory.
@@ -1867,55 +2120,59 @@ set "PATH1=;%PATH%;"
 set "PATH2=!PATH1:;%PYTHONBIN%\;=;!"	&:# Some versions append a trailing \.
 set "PATH2=!PATH2:;%PYTHONBIN%;=;!"	&:# Others do not.
 :# Also check if the right python.exe starts
-set CMD=python -c "import sys; print (sys.executable)"
-%ECHO.V% !CMD!
-%ECHO% Verifying that "%PYTHON%" is accessible in the PATH
-set "PYEXE="
-for /f "delims=" %%e in ('!CMD! 2^>NUL') do set "PYEXE=%%e"
-%ECHOVARS.D% PYEXE
-if "%PATH1%"=="%PATH2%" ( :# If the python dir is not in the path
-  if %MODE%==test (
-    :# set CMD=python -c "import sys; print (str(sys.version_info.major) + str(sys.version_info.minor))"
-    :# set CMD=python -c "import sys; import os.path; print (os.path.dirname(sys.executable))"
-    if not defined PYEXE (
-      call :Echo.Wrong " "
-      %ECHO% The python directory is missing in the local PATH.
-      set "NEEDSETUP=1"
-    ) else if "!PYEXE!"=="%PYTHON%" ( :# It's not in PATH, yet it runs!
-      :# This does happen, if the user has a batch that runs Python, whereever it is
-      call :Echo.Warning " "
-      %ECHO% It's not in the local PATH, but a script seems to run the python.exe there.
-    ) else ( :# It's not in PATH, and another version runs.
-      call :Echo.Wrong " "
-      %ECHO% "python" starts "!PYEXE!".
-      set "NEEDSETUP=1"
+for %%i in (python python.exe) do (
+  set CMD=%%i -c "import sys; print (sys.executable)"
+  %ECHO.V% !CMD!
+  %ECHO% Verifying that '%%i' starts "%PYTHON%"
+  set "PYEXE="
+  for /f "delims=" %%e in ('!CMD! 2^>NUL') do call :GetLongPathname "%%e" PYEXE &rem :# %%e may be a short pathname if python was installed in C:\PROGRA~1\...
+  %ECHOVARS.D% PYEXE
+  if "%PATH1%"=="%PATH2%" ( :# If the python dir is not in the path
+    if %MODE%==test (
+      :# set CMD=python -c "import sys; print (str(sys.version_info.major) + str(sys.version_info.minor))"
+      :# set CMD=python -c "import sys; import os.path; print (os.path.dirname(sys.executable))"
+      if not defined PYEXE (
+	call :Echo.Wrong " "
+	%ECHO% The python directory is missing in the local PATH.
+	set "NEEDSETUP=1"
+      ) else if "!PYEXE!"=="%PYTHON%" ( :# It's not in PATH, yet it runs!
+	:# This does happen, if the user has a batch that runs Python, whereever it is
+	call :Echo.Warning " "
+	%ECHO% It's not in the local PATH, but a script seems to run the python.exe there.
+      ) else ( :# It's not in PATH, and another version runs.
+	call :Echo.Wrong " "
+	%ECHO% '%%i' starts "!PYEXE!".
+	set "NEEDSETUP=1"
+      )
     )
-  )
-  if %MODE%==setup (
-    %ECHO% :# Adding "%PYTHONBIN%" to the local PATH
-    %EXEC% set "PATH=%PYTHONBIN%;%PATH%"
-  )
-) else ( :# The python.exe directory is in the path
-  :# if %MODE%==test (
-    :# set CMD=python -c "import sys; print (str(sys.version_info.major) + str(sys.version_info.minor))"
-    :# set CMD=python -c "import sys; import os.path; print (os.path.dirname(sys.executable))"
-    if "!PYEXE!"=="%PYTHON%" ( :# It's the right version that runs
-      set "MSG="
-      %IF_VERBOSE% set "MSG=It's there and it runs as expected"
-      call :Echo.OK " "
-      %ECHO% !MSG!
-    ) else ( :# It is in the PATH, but another version runs.
-      call :Echo.Wrong " "
-      %ECHO% "python" starts "!PYEXE!".
-      set "NEEDSETUP=1"
+    if %MODE%==setup (
+      %ECHO% :# Adding "%PYTHONBIN%" to the local PATH
+      %EXEC% set "PATH=%PYTHONBIN%;%PATH%"
     )
-  :# )
-  if %MODE%==setup if not "!PYEXE!"=="%PYTHON%" (
-    %ECHO% :# Moving "%PYTHONBIN%" ahead of the local PATH
-    set "PATH1=;!PATH!;"
-    set "PATH1=!PATH1:;%PYTHONBIN%\;=;!"	&:# Some versions append a trailing \.
-    set "PATH1=!PATH1:;%PYTHONBIN%;=;!"		&:# Others do not.
-    %EXEC% set "PATH=%PYTHONBIN%;!PATH1:~1,-1!"
+  ) else ( :# The python.exe directory is in the path
+    :# if %MODE%==test (
+      :# set CMD=python -c "import sys; print (str(sys.version_info.major) + str(sys.version_info.minor))"
+      :# set CMD=python -c "import sys; import os.path; print (os.path.dirname(sys.executable))"
+      if "!PYEXE!"=="%PYTHON%" ( :# It's the right version that runs
+	set "MSG="
+	%IF_VERBOSE% set "MSG=It's there and it runs as expected"
+	call :Echo.OK " "
+	%ECHO% !MSG!
+      ) else ( :# It is in the PATH, but another version runs.
+	call :Echo.Wrong " "
+	:# The Microsoft store redirection instance of python.exe is in %LOCALHOST%\Microsoft\WindowsApps, and displays NOTHING
+	if not defined PYEXE for %%x in (python.exe) do set "PYEXE=%%~$PATH:x"
+	%ECHO% '%%i' starts "!PYEXE!".
+	set "NEEDSETUP=1"
+      )
+    :# )
+    if %MODE%==setup if not "!PYEXE!"=="%PYTHON%" (
+      %ECHO% :# Moving "%PYTHONBIN%" ahead of the local PATH
+      set "PATH1=;!PATH!;"
+      set "PATH1=!PATH1:;%PYTHONBIN%\;=;!"	&:# Some versions append a trailing \.
+      set "PATH1=!PATH1:;%PYTHONBIN%;=;!"		&:# Others do not.
+      %EXEC% set "PATH=%PYTHONBIN%;!PATH1:~1,-1!"
+    )
   )
 )
 
@@ -2216,6 +2473,7 @@ if not "%PythonPath%"=="%PythonPath2%" (
 :# Check the local PATH
 set "PATHVAR=PATH" &:# The LocalPath.Xxx and GlobalPath.Xxx routines operate on this variable.
 set "WHERE=tail"   &:# And they put new variables at this location
+set "BEFORE="
 for %%e in ("!PYTHONBIN!") do set "PYDIRNAME=%%~nxe" &:# Directory name of the interpretor
 set "SCRIPTSDIR=%PYTHONBIN%\scripts"
 set "CONTAINS_P=does not contain"
@@ -2230,7 +2488,16 @@ for /f "delims=" %%p in ('"echo.%PATH:;=&echo.%"') do (
   ) else if not "!P:\scripts=!"=="!P!" (
     if exist "!P!\pip.exe" set OTHERS=!OTHERS! "!P!"
   ) else if not "!P:\python=!"=="!P!" (
-    if exist "!P!\python.exe" set OTHERS=!OTHERS! "!P!"
+    if exist "!P!\python.exe" (
+      if not "!P:python=!"=="!P!" (
+	set OTHERS=!OTHERS! "!P!"
+      ) else ( :# This is a homonym, like the Microsoft Store link in %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe
+      	if not defined BEFORE (
+	  set "WHERE=before"   &:# Put new variables before that one:
+	  set "BEFORE=!P!"
+	)
+      )
+    )
   )
 )
 %ECHO% The PATH !CONTAINS_P! !PYTHONBIN!
@@ -2278,6 +2545,7 @@ if not defined OTHERS (
 )
 
 :# Check the global system PATH
+set "WHERE=tail"   &:# Put new variables at this location
 set "MENVKEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
 set "OBJECT=MasterPath" & set "SETXOPT=-M" & set "MKEY=%MENVKEY%" & set "OWNER=system"
 :# set "UENVKEY=HKCU\Environment"
@@ -2441,6 +2709,67 @@ exit /b %1
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        RegisterForPy                                             #
+:#                                                                            #
+:#  Description     Register a Python instance for use by py.exe              #
+:#                                                                            #
+:#  Note            Useful for Old Python 2.x instances, that aren't detected #
+:#                  by py.exe.                                                #
+:#                                                                            #
+:#  History                                                                   #
+:#   2021-03-02 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Register a Python instance
+:RegisterForPy
+%POPARG%
+if not defined ARG (
+  >&2 echo Error: No python version specified.
+  exit /b 1
+)
+call :FindPython "%ARG%" PYTHON PY_VER PY_ARCH
+if not defined PYTHON (
+  >&2 echo Failed. No python interpreter found.
+  exit /b 1
+)
+:# Check if it's registered
+for /f "delims=. tokens=1,2" %%a in ("%PY_VER%") do set "PY_MM=%%a.%%b"
+set "PY_ARCH.x86=32"
+set "PY_ARCH.amd64=64"
+set "PY_SZ=!PY_ARCH.%PY_ARCH%!"
+%ECHOVARS.D% PY_MM PY_SZ
+if not defined PY_SZ (
+  >&2 echo Failed. Unexpected architecture: %PY_ARCH%
+  exit /b 1
+)
+set "SYS_KEY=HKLM\Software\Python\PythonCore"
+set "USER_KEY=HKCU\Software\Python\PythonCore"
+for %%p in ("%PYTHON%") do set "PY_DIR=%%~dpp" & set "PY_DIR=!PY_DIR:~0,-1!"
+for %%p in ("%PY_DIR%") do set "PY_PARENT=%%~dpp" & set "PY_PARENT=!PY_PARENT:~0,-1!"
+if "%PY_PARENT%"=="%LOCALAPPDATA%\Programs\Python" (
+  set "KEY=%USER_KEY%"
+) else (
+  set "KEY=%SYS_KEY%"
+)
+set "KEY=%KEY%\%PY_MM%\InstallPath"
+%ECHOVARS.D% PY_DIR PY_PARENT KEY
+call :GetRegistryValue "%KEY%" "" OLD_DIR
+call :GetRegistryValue "%KEY%" ExecutablePath OLD_EXE
+call :GetRegistryValue "%KEY%" WindowedExecutablePath OLD_WIN
+%ECHOVARS% OLD_DIR OLD_EXE OLD_WIN
+set "NEW_DIR=%PY_DIR%\"
+set "NEW_EXE=%PY_DIR%\python.exe"
+set "NEW_WIN=%PY_DIR%\pythonw.exe"
+set "CHANGED="
+if not "!OLD_DIR!"=="!NEW_DIR!" set "CHANGED=1" & %EXEC% -e reg add "%KEY%" /ve /d "%NEW_DIR%\" /f &:# Double the final \, to avoid escaping the "
+if not "!OLD_EXE!"=="!NEW_EXE!" set "CHANGED=1" & %EXEC% -e reg add "%KEY%" /v ExecutablePath /d "%NEW_EXE%" /f
+if not "!OLD_WIN!"=="!NEW_WIN!" set "CHANGED=1" & %EXEC% -e reg add "%KEY%" /v WindowedExecutablePath  /d "%NEW_WIN%" /f
+if not defined CHANGED echo :# Already correct
+exit /b
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        Main                                                      #
 :#                                                                            #
 :#  Description     Main routine                                              #
@@ -2460,6 +2789,7 @@ echo.
 echo Options:
 echo   -?        Display this help
 echo   -l        List all installed instances of python.exe
+echo   -r VER    Register an old python instance that's not detected by py.exe
 echo   -s [VER]  Setup Windows for running .py scripts with the given python version
 echo   -t [VER]  Test the current setup. (Default). Tells if it's useful to use -s.
 echo   -v        Display verbose information
@@ -2467,9 +2797,11 @@ echo   -V        Display this script version
 echo   -X        Display the setup commands, but do not run them
 echo.
 echo Optional arguments:
-echo   VER       Python folder version suffix to use. Ex: "27" for python27
-echo             Or "#N" for the Nth entry in the list displayed by option -l
-echo             Default: Use the latest version
+echo   VER       Python version. Ex: 3 or 3.7 or 3.7.2
+echo             Or 0 to configure py.exe as the default python
+echo             Or index in the list displayed by option -l. Ex: "#2"
+echo             Or suffix of the python folder. Ex: "27" for python27
+echo             Default: Use the active version, listed first at index "#0"
 goto :EOF
 
 :Main
@@ -2488,12 +2820,14 @@ if "!ARG!"=="-?" goto Help
 if "!ARG!"=="/?" goto Help
 if "!ARG!"=="-d" call :Debug.On & call :Verbose.On & goto nextarg
 if "!ARG!"=="-l" set "ACTION=FindPython" & goto nextarg
-if "!ARG!"=="-r" set "ACTION=RunPython" & goto :RunPython
+if "!ARG!"=="-r" set "ACTION=RegisterForPy" & goto :RegisterForPy
 if "!ARG!"=="-s" set "ACTION=Setup" & goto nextarg
 if "!ARG!"=="-t" set "ACTION=TestSetup" & goto nextarg
+if "!ARG!"=="-ta" %POPARG% & call :GetAllPythonDirs !"ARG"! & (if defined ARG call echo.%%!ARG!%%) & exit /b
 if "!ARG!"=="-tb" set "ACTION=TestBroadcast" & goto nextarg
 if "!ARG!"=="-tc" set "ACTION=TestColors" & goto nextarg
-if "!ARG!"=="-tf" %POPARG% & set "VER=!ARG!" & %POPARG% & set "VAR=!ARG!" & call :FindPython !VER! !VAR! & (if defined VAR call echo.%%!VAR!%%) & exit /b
+if "!ARG!"=="-tf" %POPARG% & set ^"VER=!"ARG"!^" & %POPARG% & set "VAR=!ARG!" & call :FindPython !VER! !VAR! & (if defined VAR call echo.%%!VAR!%%) & exit /b
+if "!ARG!"=="-tr" set "ACTION=RunPython" & goto :RunPython
 if "!ARG!"=="-ts" %POPARG% & call :GetShortName !"ARG"! & exit /b
 if "!ARG!"=="-v" call :Verbose.On & goto nextarg
 if "!ARG!"=="-V" (echo %VERSION%) & goto :eof
