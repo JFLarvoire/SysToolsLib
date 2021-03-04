@@ -10,6 +10,28 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SysLib/SysLib.mak: Compile R0Ios.c, Ring0.c, VxDCall.c only for WIN95, to avoid a build error with Win10 SDK >= 10.0.18362.0.
 - C/Include/WIN32.mak: Removed a misleading log message "Environment variable PROGRAM_ not defined".
 
+## [Unreleased] 2021-03-04
+### Changed
+- Python/PySetup.bat:
+  Added support for configuring py.exe as version 0.
+  Allow selecting an instance by python version.
+  Added option -r to register instances not found by py.exe.
+  Work around issues with installations in C:\PROGRA~1\...
+  In the end, make sure that both 'python' and 'python.exe' start the selected python instance.
+- Python/python.bat:
+  Restructured the instances enumeration to output the same list as PySetup.bat.
+- Python/pip.bat:  
+  Restructured the instances enumeration to output the same list as PySetup.bat.
+  List the pip instance corresponding to py.exe instances.
+  Use Scripts\pip.bat or Scripts\pip3.bat in the absence of Scripts\pip.exe.
+- Batch/Library.bat:
+  Use the non-instrumented condquote2 as the default condquote version.
+  Added routine :GetLongPathname.
+  Updated :GetRegistryValue to not output error messages, and return an exit code instead.
+
+### Fixed
+- Batch/Library.bat: Fixed %ECHO.V% and %ECHO.D% too agressive optimization.
+
 ## [Unreleased] 2021-02-25
 ### Changed
 - Python/PySetup.bat, Python/python.bat Python/pip.bat:  
