@@ -233,6 +233,7 @@
 :#   2020-06-03 JFL Added a new version of :basename.                         #
 :#   2020-06-04 JFL Split :noww into :Now.wmic and :GetWeekDay.               #
 :#   2020-06-03 JFL Added a :return routine, for lightweight debugging.       #
+:#   2021-03-04 JFL Fixed %ECHO.V% and %ECHO.D% too agressive optimization.   #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -953,10 +954,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-debug mode
-if not defined LOGFILE set "ECHO.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.D=rem"
-if not defined LOGFILE set "ECHOVARS.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.D=rem"
+if not defined LOGFILE set "ECHO.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.D=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.D=echo >NUL"
 goto :eof
 
 :Debug.On
@@ -1049,10 +1050,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-verbose mode
-if not defined LOGFILE set "ECHO.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.V=rem"
-if not defined LOGFILE set "ECHOVARS.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.V=rem"
+if not defined LOGFILE set "ECHO.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.V=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.V=echo >NUL"
 goto :eof
 
 :Verbose.On
@@ -2579,31 +2580,12 @@ exit /b
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
 :#   2018-11-19 JFL Improved routine condquote2.                              #
 :#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
+:#   2021-03-04 JFL Use the non-instrumented condquote2 as the default version.
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Quote file pathnames that require it.
 :condquote	 %1=Input variable. %2=Opt. output variable.
-%FUNCTION% EnableExtensions EnableDelayedExpansion
-set "RETVAR=%~2"
-if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
-%UPVAR% %RETVAR%
-set "P=!%~1!"
-:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
-if defined P set ^"P=!P:"=!"
-:# If the value is empty, don't go any further.
-if not defined P set "P=""" & goto :condquote_ret
-:# Look for any special character that needs "quoting". See list from (cmd /?).
-:# Added "@" that needs quoting ahead of commands.
-:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
-echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
-if not errorlevel 1 set P="!P!"
-:condquote_ret
-set "%RETVAR%=!P!"
-%RETURN% 0
-
-:# Simpler version not using the %FUNCTION%/%RETURN% macros
-:condquote2	 %1=Input variable. %2=Opt. output variable.
 setlocal EnableExtensions Disabledelayedexpansion
 set "RETVAR=%~2"
 if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
@@ -2625,6 +2607,29 @@ if not errorlevel 1 set P="%P%"
 :# fail if the quoted string contained an & character.
 :# But because of this, do not leave any space around & separators.
 endlocal&set %RETVAR%=%P%&exit /b 0
+
+:#----------------------------------------------------------------------------#
+:# Instrumented version, in case we want to trace it
+
+:# Quote file pathnames that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+%UPVAR% %RETVAR%
+set "P=!%~1!"
+:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
+if defined P set ^"P=!P:"=!"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs "quoting". See list from (cmd /?).
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="!P!"
+:condquote_ret
+set "%RETVAR%=!P!"
+%RETURN% 0
 
 :#----------------------------------------------------------------------------#
 :# Older implementation (More complex, but actually just as fast)
@@ -3338,6 +3343,27 @@ set "%~2=%~f1"
 exit /b
 
 :#----------------------------------------------------------------------------#
+
+:# Convert a short or long pathname to a full long pathname
+:GetLongPathname %1=PATHNAME %2=Output variable name
+setlocal EnableDelayedExpansion
+set "FULL_SHORT=%~fs1"           &:# Make sure it really is short all the way through
+set "FULL_SHORT=%FULL_SHORT:~3%" &:# Remove the drive and initial \
+set "FULL_LONG=%~d1"             &:# Begin with just the drive
+if defined FULL_SHORT for %%x in ("!FULL_SHORT:\=" "!") do ( :# Loop on all short components
+  set "ATTRIB_OUTPUT=" &:# If the file does not exist, filter-out attrib.exe error message on stdout, with its - before the drive.
+  for /f "delims=" %%l in ('attrib "!FULL_LONG!\%%~x" 2^>NUL ^| findstr /v /c:" - %~d1"') do set "ATTRIB_OUTPUT=%%l"
+  if defined ATTRIB_OUTPUT ( :# Extract the long name from the attrib.exe output
+    for %%f in ("!ATTRIB_OUTPUT:*\=\!") do set "LONG_NAME=%%~nxf"
+  ) else (                   :# Use the short name (which does not exist)
+    set "LONG_NAME=%%~x"
+  )
+  set "FULL_LONG=!FULL_LONG!\!LONG_NAME!"
+) else set "FULL_LONG=%~d1\"
+endlocal & if not "%~2"=="" (set "%~2=%FULL_LONG%") else echo %FULL_LONG%
+exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        touch						      #
 :#                                                                            #
@@ -4010,21 +4036,30 @@ set "SEPARATOR="
 %RETURN%
 
 :#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetRegistryValue					      #
+:#                                                                            #
+:#  Description     Get a registry value content.                             #
+:#                                                                            #
+:#  Arguments       KEY NAME [VALUEVAR [TYPEVAR]]			      #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-06-23 JFL Renamed GetValue as GetRegistryValue.                     #
+:#                  Fixed the default (nameless) value reading.               #
+:#                  Don't display errors, but return 1 if value not found.    #
+:#   2021-03-03 JFL Don't output error messages, and return an exit code.     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
 
 :# Get a registry value content. Args: KEY NAME [VALUEVAR [TYPEVAR]]
-:GetValue
+:GetRegistryValue
 %FUNCTION% enableextensions enabledelayedexpansion
-set "KEY="
-set "NAME="
-set "VALUEVAR="
-set "TYPEVAR="
-:get_value_args
-if "%~1"=="" goto got_value_args
-if not defined KEY set "KEY=%~1" & shift & goto get_value_args
-if not defined NAME set "NAME=%~1" & shift & goto get_value_args
-if not defined VALUEVAR set "VALUEVAR=%~1" & shift & goto get_value_args
-if not defined TYPEVAR set "TYPEVAR=%~1" & shift & goto get_value_args
-:got_value_args
+set "KEY=%~1"
+set "NAME=%~2"
+set "VALUEVAR=%~3"
+set "TYPEVAR=%~4"
 if not defined VALUEVAR set "VALUEVAR=VALUE"
 set "%VALUEVAR%="
 :# Returning the type is optional. Do not define a default for TYPEVAR.
@@ -4037,8 +4072,10 @@ if "%NAME%"=="" (
   set CMD=reg query "%KEY%" /v "%NAME%"
 )
 %ECHO.D% %CMD%
+set "RETCODE=1"
 :# For each line in CMD output...
-%FOREACHLINE% %%i in ('%CMD%') do (
+%FOREACHLINE% %%i in ('%CMD% 2^>NUL') do (
+  set "RETCODE=0"
   set "LINE=%%i"
   %ECHOVARS.D% LINE
   :# Values are indented by 4 spaces.
@@ -4063,7 +4100,7 @@ if "%NAME%"=="" (
 )
 set %VALUEVAR%=!VALUE!
 if defined TYPEVAR set %TYPEVAR%=%TYPE%
-%RETURN%
+%RETURN% %RETCODE%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
