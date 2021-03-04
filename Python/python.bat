@@ -20,13 +20,15 @@
 :#   2021-02-25 JFL Added option -d to enabled debugging.                     #
 :#                  Removed a dependency on my VMs host drive configuration.  #
 :#                  Use short names to compare instances reliably.            #
+:#   2021-03-02 JFL Restructured the instances enumeration like in PySetup.bat.
+:#   2021-03-04 JFL Synchronized changes with pip.bat.			      #
 :#                                                                            #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2021-02-25"
+set "VERSION=2021-03-04"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -40,12 +42,15 @@ goto :main
 
 :debug.off
 set "DEBUG=0"
+set "ECHO.D=echo >NUL"
+set "ECHOVARS.D=echo >NUL"
 goto :debug.common
 :debug.on
 set "DEBUG=1"
+set "ECHO.D=echo"
+set "ECHOVARS.D=call :EchoVars"
 :debug.common
-set "ECHO.D=if %DEBUG%==1 echo"
-set "ECHOVARS.D=if %DEBUG%==1 call :EchoVars"
+set "FUNCTION=call %ECHO.D% call %%0 %%*&setlocal"
 exit /b
 
 :EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
@@ -92,7 +97,7 @@ exit /b
 
 :# Get the default python.exe executable
 :GetPythonExe %1=VARNAME
-%ECHO.D% :GetPythonExe %1
+%ECHO.D% call :GetPythonExe %1
 call :GetOpenCommand Python.File %1
 if defined %~1 call call :GetArg0 %%1 %%%~1%%
 %ECHOVARS.D% %1
@@ -100,49 +105,95 @@ exit /b
 
 :# Get a list of all python.exe executables
 :GetAllPythonExe %1=LISTNAME
-setlocal EnableDelayedExpansion
-set "SEARCHDRIVES=C:"		&:# List of drives where to search for python.exe.
-if not "%HOMEDRIVE%"=="C:" set "SEARCHDRIVES=%HOMEDRIVE% %SEARCHDRIVES%" &:# Prepend the home drive, if it's different.
-for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any.
-  if exist "%%d%ProgramFiles:~2%" set "SEARCHDRIVES=!SEARCHDRIVES! %%d"
-)
-%ECHOVARS.D% SEARCHDRIVES
-set "SHORT_LIST=" &:# List of instances found. Used to avoid reporting one twice.
+%FUNCTION% EnableDelayedExpansion
 set "LIST=" &:# List of instances found.
-:# List first the default instance
-call :GetPythonExe PYTHON
-if defined PYTHON (
-  for %%p in ("%PYTHON%") do call :lappend SHORT_LIST "%%~sp"
-  call :lappend LIST "%PYTHON%"
+
+:# First list the default instance
+call :GetPythonExe DEFAULT
+set "SHORT_DEFAULT=" &:# Short version of the same, used to avoid reporting it twice.
+if defined DEFAULT for %%p in ("!DEFAULT!") do (
+  set "SHORT_DEFAULT=%%~sp"
+  call :lappend LIST "%%~fp"
 )
-:# Then look for other instances in well known places
-for %%d in (%SEARCHDRIVES%) do (
+
+:# Then list py.exe if it's not the default
+if defined DEFAULT for %%p in ("%DEFAULT%") do if not "%%~nxp"=="py.exe" (
+  for %%x in (py.exe) do set "PY=%%~$PATH:x"
+  if defined PY for %%p in ("!PY!") do (
+    call :lappend LIST "%%~fp"
+  )
+)
+
+:# Then list all instances that match the requested criteria
+call :GetAllPythonDirs ALL_DIRS
+for %%d in (%ALL_DIRS%) do (
+  for %%p in ("%%~d\python.exe") do (
+    if not "%%~sp"=="%SHORT_DEFAULT%" (
+      call :lappend LIST "%%~fp"
+    )
+  )
+)
+
+endlocal & set %~1=%LIST%
+%ECHOVARS.D% %~1
+exit /b
+
+:# Get a list of all python.exe installation directories in well known places
+:GetAllPythonDirs %1=LISTNAME
+%FUNCTION% EnableDelayedExpansion
+set "LISTNAME=%~1"
+set "DRIVES=C:"		&:# List of drives where to search for python.exe
+if not "%HOMEDRIVE%"=="C:" set "DRIVES=%HOMEDRIVE% %DRIVES%" &:# Prepend the home drive, if it's different
+for /f "tokens=1" %%d in ('net use ^| findstr /C:"\\vmware-host\Shared Folders\\"') do ( :# And append VM host drives, if any
+  if exist "%%d%ProgramFiles:~2%" set "DRIVES=!DRIVES! %%d"
+)
+%ECHOVARS.D% DRIVES
+set "LIST="
+if not defined ProgramFiles(x86) set "ProgramFiles(x86)=%ProgramFiles% (x86)" &:# For x86 VMs searching on amd64 hosts
+for %%d in (%DRIVES%) do (
   rem :# The default install dir is %LOCALAPPDATA%\Programs\Python\Python%VER% for the current user,
   rem :# Or %ProgramFiles%\Python%VER% or %ProgramFiles(x86)%\Python%VER% for all users.
   for %%p in ("" "%ProgramFiles:~2%" "%ProgramFiles(x86):~2%" "%LOCALAPPDATA:~2%\Programs") do (
     for %%y in ("Python" "Python\Python" "Microsoft Visual Studio\Shared\Python") do (
       for /d %%b in ("%%d%%~p\%%~y*") do (
-        %ECHO.D% :# Looking in %%b
+	%ECHO.D% :# Looking in %%~b
 	for %%x in ("%%~b\python.exe") do if exist "%%~x" (
-	  set "FOUND=" &:# Avoid duplications, for example with the default instance
-	  for %%s in (!SHORT_LIST!) do if not defined FOUND if /i "%%~sx"=="%%~s" set "FOUND=1"
-	  if not defined FOUND call :lappend SHORT_LIST "%%~sx" & call :lappend LIST "%%~fx"
+	  if defined LISTNAME (
+	    call :lappend LIST "%%~b"
+	  ) else (
+	    set "B=%%~b"
+	    echo !B!
+	  )
 	)
       )
     )
   )
 )
-endlocal & set %~1=%LIST%
+if defined LISTNAME (
+  set SET_RESULT=set %LISTNAME%=%LIST%
+  %ECHO.D% !SET_RESULT!
+) else (
+  set SET_RESULT=rem
+)
+endlocal & %SET_RESULT%
 exit /b
 
 :# List python.exe instances
 :list
-setlocal EnableDelayedExpansion
-call :GetAllPythonExe LIST
+%FUNCTION% EnableDelayedExpansion
+call :GetAllPythonExe ALL_PYTHON
 set "N=0"
-for %%e in (!LIST!) do (
-  echo #!N! %%~e
-  set /a "N+=1"
+set ^"PY_VER_ARCH_CMD=import sys, os; print (sys.version.split()[0]+\" \"+os.environ[\"PROCESSOR_ARCHITECTURE\"])^"
+for %%e in (!ALL_PYTHON!) do (
+  set "PY_VER=" & set "PY_ARCH="
+  for /f "tokens=1,2" %%v in ('^"%%e -c "!PY_VER_ARCH_CMD!" 2^>NUL^"') do set "PY_VER=%%v" & set "PY_ARCH=%%w"
+  if defined PY_VER if defined PY_ARCH (
+    set "INDEX_=!N!       "
+    set "PY_VER_=!PY_VER!       "
+    set "PY_ARCH_=!PY_ARCH!       "
+    echo #!INDEX_:~0,3! !PY_VER_:~0,8! !PY_ARCH_:~0,7! %%~e
+    set /a "N+=1"
+  )
 )
 endlocal
 exit /b
