@@ -73,16 +73,20 @@
 :#   2019-01-31 JFL Fixed the dir command when the pathname contains spaces.  #
 :#   2019-12-19 JFL Always force creating keys without confirmation.          #
 :#   2021-02-12 JFL Added options -se and -ue to easily manage env. variables.#
+:#   2021-03-08 JFL Updated the debug library.                                #
+:#                  Fixed an issue with the open command breaking the console.#
+:#   2021-03-11 JFL Fixed a bug when setting a value ending with a "\".       #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2021-02-12"
+set "VERSION=2021-03-11"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
-set  "ARG0=%~f0"				&:# Script full pathname
+set "SFULL=%~f0"				&:# Script full pathname
+set ^"ARG0=%0^"					&:# Script invokation name
 set ^"ARGS=%*^"					&:# Argument line
 
 :# Mechanism for calling subroutines in a second instance of a script, from its main instance.
@@ -110,6 +114,7 @@ call :Call.Init			&:# Function calls and argument extraction
 call :Macro.Init		&:# Inline macros generation
 call :Debug.Init		&:# Debug routines
 call :Exec.Init			&:# Conditional execution routines
+:# call :Echo.Color.Init
 
 :# FOREACHLINE macro. (Changes the delimiter to none to catch the whole lines.)
 set FOREACHLINE=for /f "delims="
@@ -172,6 +177,9 @@ goto :eof
 :#                  But call itself has a quirk, which requires a convoluted  #
 :#                  workaround to process the /? argument.                    #
 :#                                                                            #
+:#                  Known limitation: Special character ^ is preserved within #
+:#                  "quoted" arguments, but not within unquoted arguments.    #
+:#                                                                            #
 :#                  Known limitation: After using :PopArg, all consecutive    #
 :#                  argument separators in %ARGS% are replaced by one space.  #
 :#                  For example: "A==B" becomes "A B"                         #
@@ -203,13 +211,18 @@ goto :eof
 call :Call.Init
 goto Call.end
 
+:Sub.Init # Create a SUB variable containing a SUB (Ctrl-Z) character
+>NUL copy /y NUL + NUL /a "%TEMP%\1A.chr" /a
+for /f %%c in (%TEMP%\1A.chr) do set "SUB=%%c"
+exit /b
+
 :Call.Init
 if not defined LCALL set "LCALL=call"	&:# Macro to call functions in this library
 set "POPARG=%LCALL% :PopArg"
 set "POPSARG=%LCALL% :PopSimpleArg"
 
 :# Mechanism for calling subroutines in a second external instance of the top script.
-set ^"XCALL=call "!ARG0!" -call^"	&:# This is the top script's (or this lib's if called directly) ARG0
+set ^"XCALL=call "!SFULL!" -call^"	&:# This is the full path to the top script's (or this lib's if called directly) ARG0
 set ^"XCALL@=!XCALL! :CallVar^"		&:# Indirect call, with the label and arguments in a variable
 
 :# Define a LF variable containing a Line Feed ('\x0A')
@@ -269,6 +282,9 @@ if defined ARGS (
   setlocal EnableDelayedExpansion
   for /f "delims=" %%a in ("!ARGS:%%=%%%%!") do endlocal & set ^"PopArg.ARGS=%%a^"
 )
+:# Note: The following call doubles ^ within "quotes", but not those outside of quotes.
+:# So :PopArg.Helper will correctly record ^ within quotes, but miss those outside. (Unless quadrupled!)
+:# The only way to fix this would be to completely rewrite :PopArg as a full fledged batch parser written in batch!
 call :PopArg.Helper %PopArg.ARGS% >NUL 2>NUL &:# Output redirections ensure the call help is not actually output.
 :# Finding that impossible combination now is proof that the call was not executed.
 :# In this case, try again with the /? quoted, to prevent the call parser from processing it.
@@ -294,7 +310,7 @@ goto :PopArg.GetNext
 
 :PopArg.Eon
 setlocal DisableDelayedExpansion
-call :PopArg
+call :PopArg.Eoff
 call :Prep2ExpandVars ARG ^""ARG"^" ARGS
 setlocal EnableDelayedExpansion
 for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS!") do (
@@ -480,9 +496,16 @@ goto :eof
 :#                  Debug.Return    Log exit from a routine		      #
 :#                  Verbose.Off	    Disable the verbose mode                  #
 :#                  Verbose.On	    Enable the verbose mode		      #
+:#                                                                            #
 :#                  Echo	    Echo and log strings, indented            #
-:#                  EchoVars	    Display the values of a set of variables  #
-:#                  EchoArgs	    Display the values of all arguments       #
+:#                  EchoVars	    Display a set of variables name=value     #
+:#                  EchoStringVars  Display a string, then a set of variables #
+:#                  EchoArgs	    Display all arguments name=value          #
+:#                  EchoVals	    Display the value of multiple variables   #
+:#		    All functions in that series have two other derivatives,  #
+:#                  with the .debug and .verbose suffix. Ex: Echo.Debug       #
+:#                  These display only in debug and verbose mode respectively,#
+:#                  but always log the string (if a log file is defined).     #
 :#                                                                            #
 :#  Macros          %FUNCTION%	    Define and trace the entry in a function. #
 :#                  %UPVAR%         Declare a var. to pass back to the caller.#
@@ -514,12 +537,27 @@ goto :eof
 :#                  %ECHOVARS.V%    Idem, but display them in verb. mode only #
 :#                  %ECHOVARS.D%    Idem, but display them in debug mode only #
 :#                                                                            #
+:#                  %ECHOSVARS%	    Echo ARG1 before each variable.           #
+:#                  %ECHOSVARS.V%   Idem, but display them in verb. mode only #
+:#                  %ECHOSVARS.D%   Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOVALS%      Echo the value of multiple variables      #
+:#                  %ECHOVALS.V%    Idem, but display them in verb. mode only #
+:#                  %ECHOVALS.D%    Idem, but display them in debug mode only #
+:#                                                                            #
+:#                  %ECHOSTRINGS%   Echo the value of multiple quoted strings #
+:#                  %ECHOSTRINGS.V% Idem, but display them in verb. mode only #
+:#                  %ECHOSTRINGS.D% Idem, but display them in debug mode only #
+:#                                                                            #
 :#                  %IF_DEBUG%      Execute a command in debug mode only      #
 :#                  %IF_VERBOSE%    Execute a command in verbose mode only    #
 :#                                                                            #
 :#                  %FUNCTION0%	    Weak functions with no local variables.   #
 :#                  %RETURN0%       Return from a %FUNCTION0% and trace it    #
 :#                  %RETURN#%       Idem, with comments after the return      #
+:#                                                                            #
+:#                  %+INDENT%       Manually increase the debug INDENT        #
+:#                  %-INDENT%       Manually decrease the debug INDENT        #
 :#                                                                            #
 :#  Variables       %>DEBUGOUT%     Debug output redirect. Either "" or ">&2".#
 :#                  %LOGFILE%       Log file name. Inherited. Default=""==NUL #
@@ -534,7 +572,8 @@ goto :eof
 :#                                  Inherited. Default=. (empty string)       #
 :#                                                                            #
 :#  Notes           All output from these routines is sent to the log file.   #
-:#                  In debug mode, the debug output is also sent to stderr.   #
+:#                  The debug output is sent stdout or stderr, depending on   #
+:#                  variable %>DEBUGOUT%.				      # 
 :#                                                                            #
 :#                  Traced functions are indented, based on the call depth.   #
 :#                  Use %ECHO% to get the same indentation of normal output.  #
@@ -598,6 +637,7 @@ if exist echo >&2 echo WARNING: The file "echo" in the current directory will ca
 :# Initialize other debug variables
 set "ECHO=%LCALL% :Echo"
 set "ECHOVARS=%LCALL% :EchoVars"
+set "ECHOSVARS=%LCALL% :EchoStringVars"
 :# The FUNCTION, UPVAR, and RETURN macros should work with delayed expansion on or off
 set MACRO.GETEXP=(if "%'!2%%'!2%"=="" (set MACRO.EXP=EnableDelayedExpansion) else set MACRO.EXP=DisableDelayedExpansion)
 set UPVAR=call set DEBUG.RETVARS=%%DEBUG.RETVARS%%
@@ -627,12 +667,12 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
       ) %\n%
       call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
       if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-	%!%LCALL%!% :Echo.Eval2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
+	%LCALL% :Echo.Eval2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
       ) else ( %# Output directly here, which is faster #% %\n%
 	for /f "delims=" %%c in ("%'!%INDENT%'!%%'!%DEBUG.MSG%'!%") do echo %%c%# Use a for loop to do a double !variable! expansion #%%\n%
       ) %\n%
       if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-	%!%LCALL%!% :Echo.Eval2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
+	%LCALL% :Echo.Eval2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
       ) %\n%
     ) %\n%
     for %%r in (%!%DEBUG.EXITCODE%!%) do ( %# Carry the return values through the endlocal barriers #% %\n%
@@ -668,6 +708,20 @@ set "ECHO.V=%LCALL% :Echo.Verbose"
 set "ECHO.D=%LCALL% :Echo.Debug"
 set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
+set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
+set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "ECHOVALS=%LCALL% :EchoVals"
+set "ECHOVALS.V=%LCALL% :EchoVals.Verbose"
+set "ECHOVALS.D=%LCALL% :EchoVals.Debug"
+set "ECHOSTRINGS=%LCALL% :EchoStrings"
+set "ECHOSTRINGS.V=%LCALL% :EchoStrings.Verbose"
+set "ECHOSTRINGS.D=%LCALL% :EchoStrings.Debug"
+set "+INDENT=%LCALL% :Debug.IncIndent"
+set "-INDENT=%LCALL% :Debug.DecIndent"
+set ">MSGOUT.V[0]=rem"
+set ">MSGOUT.V[1]="
+set ">MSGOUT.D[0]=rem"
+set ">MSGOUT.D[1]=%>DEBUGOUT%"
 :# Variables inherited from the caller...
 :# Preserve INDENT if it contains just spaces, else clear it.
 for /f %%s in ('echo.%INDENT%') do set "INDENT="
@@ -692,7 +746,7 @@ set "IF_DEBUG=if .%DEBUG%.==.1."
 set "FUNCTION0=rem"
 set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   call set "FUNCTION.NAME=%%0" %\n%
-  call set ARGS=%%*%# Do not quote this, to keep string/non string aternance #%%\n%
+  call set ARGS=%%*%# Do not quote this, to keep string/non string alternance #%%\n%
   if defined ARGS set ARGS=%!%ARGS:^^^^^^^^^^^^^^^^=^^^^^^^^%!%%# ^carets are doubled in quoted strings, halved outside. => Quadruple them if using unquoted ones #%%\n%
   set "DEBUG.RETVARS=" %\n%
   if not defined MACRO.ARGS set "MACRO.ARGS=%'!%MACRO.EXP%'!%" %\n%
@@ -704,10 +758,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-debug mode
-if not defined LOGFILE set "ECHO.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.D=rem"
-if not defined LOGFILE set "ECHOVARS.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.D=rem"
+if not defined LOGFILE set "ECHO.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.D=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.D=echo >NUL"
 goto :eof
 
 :Debug.On
@@ -723,12 +777,12 @@ set FUNCTION=%MACRO.GETEXP% %&% %MACRO% ( %\n%
   if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
     set DEBUG.MSG=call %!%FUNCTION.NAME%!% %!%ARGS%!%%\n%
     if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
-      %!%LCALL%!% :Echo.2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
+      %LCALL% :Echo.2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
     ) else ( %# Output directly here, which is faster #% %\n%
       echo%!%INDENT%!% %!%DEBUG.MSG%!%%\n%
     ) %\n%
     if defined LOGFILE ( %# If we have to send a copy to a log file #% %\n%
-      %!%LCALL%!% :Echo.2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
+      %LCALL% :Echo.2LogFile DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
     ) %\n%
     call set "INDENT=%'!%INDENT%'!%  " %\n%
   ) %\n%
@@ -755,6 +809,7 @@ setlocal DisableDelayedExpansion
 %>DEBUGOUT% echo %INDENT%call %*
 if defined LOGFILE %>>LOGFILE% echo %INDENT%call %*
 endlocal
+:Debug.IncIndent
 set "INDENT=%INDENT%  "
 goto :eof
 
@@ -769,7 +824,8 @@ goto :eof
 :Debug.Return0 %1=Exit code
 %>DEBUGOUT% echo %INDENT%return %1
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %1
-set "INDENT=%INDENT:~0,-2%"
+:Debug.DecIndent
+if defined INDENT set "INDENT=%INDENT:~2%"
 exit /b %1
 
 :Debug.Return# :# %RETURN.ERR% %MACRO.ARGS%
@@ -778,6 +834,16 @@ setlocal DisableDelayedExpansion
 if defined LOGFILE %>>LOGFILE% echo %INDENT%return %RETURN.ERR% ^&:#%MACRO.ARGS%
 endlocal
 goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
+
+:# A lightweight alternative for the %RETURN% macro.
+:# Only traces the %ERRORLEVEL%, but not the variables returned.
+:# Trace the return from a subroutine, and do the actual return, in a single call
+:Return
+setlocal
+set "ERR=%~1"
+if not defined ERR set "ERR=%ERRORLEVEL%"
+%>DEBUGOUT% echo   exit /b %ERR%
+2>NUL (goto) & exit /b %ERR% &:# Endlocal and pop one call stack, then return to the upper level
 
 :# Routine to set the VERBOSE mode, in response to the -v argument.
 :Verbose.Off
@@ -788,10 +854,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-verbose mode
-if not defined LOGFILE set "ECHO.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.V=rem"
-if not defined LOGFILE set "ECHOVARS.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.V=rem"
+if not defined LOGFILE set "ECHO.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.V=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.V=echo >NUL"
 goto :eof
 
 :Verbose.On
@@ -846,7 +912,12 @@ setlocal EnableDelayedExpansion &:# Make sure that !variables! get expanded
 goto :eof
 
 :# Echo and log variable values, indented at the same level as the debug output.
-:EchoVars
+:EchoStringVars %1=string %2=VARNAME %3=VARNAME ...
+setlocal EnableExtensions EnableDelayedExpansion
+set "INDENT=%INDENT%%~1 "
+shift
+goto :EchoVars.loop
+:EchoVars	%1=VARNAME %2=VARNAME %3=VARNAME ...
 setlocal EnableExtensions EnableDelayedExpansion
 :EchoVars.loop
 if "%~1"=="" endlocal & goto :eof
@@ -871,6 +942,22 @@ goto :eof
 )
 goto :eof
 
+:EchoStringVars.Verbose
+%IF_VERBOSE% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
+:EchoStringVars.Debug
+%IF_DEBUG% (
+  call :EchoStringVars %*
+) else ( :# Make sure the variables are logged
+  call :EchoStringVars %* >NUL 2>NUL
+)
+goto :eof
+
 :# Echo a list of arguments.
 :EchoArgs
 setlocal EnableExtensions DisableDelayedExpansion
@@ -881,6 +968,58 @@ set /a N=N+1
 %>DEBUGOUT% echo %INDENT%set "ARG%N%=%1"
 shift
 goto EchoArgs.loop
+
+:# Echo the value of multiple variables on the same line
+:EchoVals	%1=VARNAME, %2=VARNAME, ...
+setlocal EnableDelayedExpansion
+set ">MSGOUT="
+:EchoVals.1
+set "EchoVals.LINE=" &:# Use a qualified name, in case the caller passes a variable called LINE
+for %%v in (%*) do set "EchoVals.LINE=!EchoVals.LINE! !%%v!"
+if not defined EchoVals.LINE set "EchoVals.LINE= " &:# Make sure there's a head space even if the variable list was empty
+%>MSGOUT% echo.%INDENT%!EchoVals.LINE:~1!
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%!EchoVals.LINE:~1!
+endlocal & exit /b
+
+:EchoVals.Verbose
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.V[%VERBOSE%]!"
+goto :EchoVals.1
+
+:EchoVals.Debug
+setlocal EnableDelayedExpansion
+set ">MSGOUT=!>MSGOUT.D[%DEBUG%]!"
+goto :EchoVals.1
+
+:# Echo the value of multiple strings on the same line. They must not contain double quotes.
+:EchoStrings	%1=Quoted_String, %2=Quoted_String, ...
+setlocal DisableDelayedExpansion
+set ">MSGOUT="
+:EchoStrings.1
+set "LINE=" &:# No need for a qualified name, since we don't use caller variables
+for %%v in (%*) do set "LINE=%LINE% %%~v"
+if not defined LINE set "LINE= " &:# Make sure there's a head space even if the string list was empty
+%>MSGOUT% echo.%INDENT%%LINE:~1%
+if defined LOGFILE %>>LOGFILE% echo.%INDENT%%LINE:~1%
+endlocal & exit /b
+
+:EchoStrings.Verbose
+setlocal DisableDelayedExpansion
+%IF_VERBOSE% (
+  set ">MSGOUT="
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
+
+:EchoString1.Debug
+setlocal DisableDelayedExpansion
+%IF_DEBUG% (
+  set ">MSGOUT=%>DEBUGOUT%"
+) else ( :# Make sure the variables are logged
+  set ">MSGOUT=rem"
+)
+goto :EchoStrings.1
 
 :Debug.End
 
@@ -907,6 +1046,7 @@ goto EchoArgs.loop
 :#                              usable tee.exe.                               #
 :#                              Known limitation: The exit code is always 0.  #
 :#                  -e          Always echo the command.		      #
+:#		    -f		Force executing the command, even in NOEXEC m.#
 :#                  -v          Trace the command in verbose mode. (Default)  #
 :#                  -V          Do not trace the command in verbose mode.     #
 :#                  %*          The command and its arguments                 #
@@ -982,6 +1122,7 @@ goto EchoArgs.loop
 :#		    Added routine :_Do.                                       #
 :#   2016-12-13 JFL Rewrote _DO as a pure macro.                              #
 :#   2016-12-15 JFL Changed the default to NOT redirecting the output to log. #
+:#   2017-01-13 JFL Added option -f to routine :Exec.                         #
 :#		                                                              #
 :#----------------------------------------------------------------------------#
 
@@ -1011,7 +1152,8 @@ set "XEXEC@=%XCALL% :Exec.ExecVar"
 for %%t in (tee.exe) do set "Exec.tee=%%~$PATH:t"
 :# Initialize ERRORLEVEL with known values
 set "TRUE.EXE=(call,)"	&:# Macro to silently set ERRORLEVEL to 0
-set "FALSE.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE0.EXE=(call)"	&:# Macro to silently set ERRORLEVEL to 1
+set "FALSE.EXE=((for /f %%i in () do .)||rem.)" &:# Faster macro to silently set ERRORLEVEL to 1
 goto :NoExec.%NOEXEC%
 
 :Exec.On
@@ -1068,6 +1210,8 @@ if .%NOREDIR%.==.1. set "Exec.2Redir="		&:# Several cases forbid redirection
 if not defined LOGFILE set "Exec.2Redir="
 if /i .%LOGFILE%.==.NUL. set "Exec.2Redir="
 set "Exec.IF_VERBOSE=%IF_VERBOSE%"		&:# Echo the command in verbose mode
+set "Exec.IF_EXEC=%IF_EXEC%"			&:# IF_EXEC macro
+set "Exec.IF_NOEXEC=%IF_NOEXEC%"		&:# IF_NOEXEC macro
 :# Record the command-line to execute.
 :# Never comment (set Exec.cmd) lines themselves, to avoid appending extra spaces.
 :# Use %*, but not %1 ... %9, because %N miss non-white argument separators like = , ;
@@ -1089,6 +1233,7 @@ if "%~1"=="-t" if defined Exec.2Redir ( :# Tee the output to the log file
   goto :Exec.NextArg
 )
 if "%~1"=="-e" set "Exec.IF_VERBOSE=if 1==1" & goto :Exec.NextArg :# Always echo the command
+if "%~1"=="-f" set "Exec.IF_EXEC=if 1==1" & set "Exec.IF_NOEXEC=if 0==1" & goto :Exec.NextArg :# Always execute the command
 if "%~1"=="-v" set "Exec.IF_VERBOSE=%IF_VERBOSE%" & goto :Exec.NextArg :# Echo the command in verbose mode
 if "%~1"=="-V" set "Exec.IF_VERBOSE=if 0==1" & goto :Exec.NextArg :# Do not echo the command in verbose mode
 :# Anything else is part of the command. Prepare to display it and run it.
@@ -1112,7 +1257,7 @@ set Exec.toEcho=%Exec.toEcho:"<"=^^^<%
 :# Finally create the usable command, by removing the last level of ^ escapes.
 set Exec.Cmd=%Exec.toEcho%
 set "Exec.Echo=rem"
-%IF_NOEXEC% set "Exec.Echo=echo"
+%Exec.IF_NOEXEC% set "Exec.Echo=echo"
 %IF_DEBUG% set "Exec.Echo=echo"
 %Exec.IF_VERBOSE% set "Exec.Echo=echo"
 %>DEBUGOUT% %Exec.Echo%.%INDENT%%Exec.toEcho%
@@ -1122,7 +1267,7 @@ if defined LOGFILE %>>LOGFILE% echo.%INDENT%%Exec.toEcho%
 :# The local variables must disappear before return.
 :# But the new variables created by the command must make it through.
 :# This should work whether :Exec is called with delayed expansion on or off.
-endlocal & if not .%NOEXEC%.==.1. (
+endlocal & %Exec.IF_EXEC% (
   set "NOREDIR=%Exec.NOREDIR%"
   %IF_DEBUG% set "INDENT=%INDENT%  "
   call :Exec.SetErrorLevel %Exec.ErrorLevel% &:# Restore the errorlevel we had on :Exec entrance
@@ -1745,6 +1890,16 @@ if "%NAME%"=="" (
 ) else (
   set CMD=reg add "!KEY!" /v "%NAME%"
 )
+:# Correct the quoted data if it ends with a single \
+if defined DATA (
+  for %%i in (0 -3 -2 -1) do set "C[%%i]=!DATA:~%%i,1!"
+  if "!C[0]!!C[-1]!"=="""" ( :# If the string is quoted
+    if not "!C[-3]!!C[-3]!"=="\\" if "!C[-2]!!C[-2]!"=="\\" ( :# And there's a single \ before the closing quote
+      set ^"DATA=!DATA:~0,-1!\"" &:# Then double that last \, so that it escapes itself, and not the quote
+      %ECHOVARS.D% DATA
+    )
+  )
+)
 set "CMD=!CMD! /d !DATA! /f"
 %EXEC% %CMD%
 %RETURN%
@@ -1774,7 +1929,7 @@ call :get "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Zone
 endlocal & set "COMPUTER=%COMPUTER%" &:# Restore the initial NOEXEC mode
 :# Change RegEdit's last used key, so that next time it opens that key "again".
 call :set "HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit\LastKey" "%COMPUTER%\!KEY!" >NUL
-%EXEC% start /b regedit
+%EXEC% start regedit.exe &:# Don't use 'start /b regedit' as a workaround for the possible presence of a regedit.bat, as this breaks the return stack
 %RETURN%
 
 :#----------------------------------------------------------------------------#
