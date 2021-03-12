@@ -232,6 +232,9 @@
 *    2020-12-13 JFL Report Linux Subsystem Symlinks and UWP App. Exec. links. *
 *    2020-12-14 JFL Use the whole screen width if listing a single directory. *
 *                   Version 3.6.                                              *
+*    2021-03-12 JFL Optionally display the compression ratio in Windows.      *
+*		    Display more readable sizes, with thousands separators.   *
+*                   Version 3.7.                                              *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -239,8 +242,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.6"
-#define PROGRAM_DATE    "2020-12-14"
+#define PROGRAM_VERSION "3.7"
+#define PROGRAM_DATE    "2021-03-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -486,6 +489,9 @@ typedef struct fif {	    /* OS-independant FInd File structure */
 #ifndef _MSDOS
   char *target; 		/* Link target name, for links */
 #endif
+#ifdef _WIN32
+  ULARGE_INTEGER qwComprSize;	/* The compressed file size */
+#endif
   int column;
   struct fif *next;
 } fif;
@@ -506,6 +512,9 @@ typedef struct {
   int cont:1;		/* Continue after errors */
   int dtime:1;		/* Report equal files with != times */
   int nobak:1;		/* Skip backup files */
+#ifdef _WIN32
+  int compression:1;	/* Report the compression ratio */
+#endif
   /* Caution: If more than 16 flags are defined, t_opts becomes a long in MS-DOS
               This would force to change DEBUG_ENTER() format strings for MS-DOS! */
 } t_opts;
@@ -658,6 +667,12 @@ int main(int argc, char *argv[]) {
 	opts.compare = 1;
 	continue;
       }
+#ifdef _WIN32
+      if (streq(opt, "C")) {
+	opts.compression = 1;
+	continue;
+      }
+#endif
       if (streq(opt, "ct")) {
 	opts.compare = 1;
 	opts.dtime = 1;
@@ -1013,6 +1028,10 @@ Switches:\n\
   -bd         Both.\n\
   -c          Compare the actual data of the files. May take a long time!\n\
   -ct         Compare data, and flag with a ~ equal files with different time.\n"
+#ifdef _WIN32
+"\
+  -C          Report the compression ratio.\n"
+#endif
 #ifdef _DEBUG
 "\
   -D          Output debug information.\n"
@@ -1377,6 +1396,12 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	  }
 	}
 #endif
+#if defined(_WIN32)
+	if (opts.compression) {
+	  pfif->qwComprSize.LowPart = GetCompressedFileSize(pname, &(pfif->qwComprSize.HighPart));
+	  if ((pfif->qwComprSize.LowPart == INVALID_FILE_SIZE) && (GetLastError() != NO_ERROR)) pfif->qwComprSize.QuadPart = 0;
+	}
+#endif
 	// Note: The pointer to the name is copied as well.
 	pfif->column = col;
 	pfif->next = firstfif;
@@ -1639,6 +1664,21 @@ void affichePaths(void) {
   printflf();
 }
 
+/* Display a huge integer with commas every three digits. */
+int Size2ReadableString(char *pBuf, intmax_t llSize) {
+  int n = 0;
+  char *pszFormat = "%" PRIdMAX;
+
+  if (llSize >= 1000) {
+    n = Size2ReadableString(pBuf, llSize/1000);
+    llSize = llSize % 1000;
+    pBuf[n++] = ',';
+    pszFormat = "%03" PRIdMAX; /*  Display leading 0s for the following groups */
+  }
+  n += sprintf(pBuf+n, pszFormat, llSize);
+  return n;
+}
+
 int affiche1(fif *pfif, int col, t_opts opts) {
   int seconde;
   int minute;
@@ -1737,9 +1777,10 @@ int affiche1(fif *pfif, int col, t_opts opts) {
 
   /* Output the size */
   if (iShowSize) { /* This is a normal file, and we need to display the size */
-    int nBytes = sizeof(pfif->st.st_size); /* Could this be made a compile-time constant? */
-    char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
-    nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
+    // int nBytes = sizeof(pfif->st.st_size); /* Could this be made a compile-time constant? */
+    // char *pszFormat = (nBytes == 4) ? "%"PRIu32 : "%"PRIu64;
+    // nSize = sprintf(szSize, pszFormat, pfif->st.st_size);
+    nSize = Size2ReadableString(szSize, pfif->st.st_size);
   } else {         /* This is a special file, do not display a size */
 #if !defined(_UNIX)
     if (S_ISDIR(pfif->st.st_mode)) { // This is a directory
@@ -1790,15 +1831,34 @@ int affiche1(fif *pfif, int col, t_opts opts) {
     }
 #endif // defined(S_ISSOCK)
   }
+#if defined(_WIN32)
+  if (opts.compression) {
+    nSize += 4; /* Reserve space for displaying the compression ratio after the size */
+  }
+#endif
   /* Make sure name+size fits in the column */
   if ((l+1+nSize) > iNamePlusSize) { /* It does not. Output the size on the next line */ 
     printflf();
     l = 0; /* Current offset on the next line */
     if (col == 2) printf("%*s", iColumnSize+3, ""); /* + 3 for separation */
   }
+  /* Display the name and size */
   printf("%*s %s", iNamePlusSize-(l+1+nSize), "", szSize);
 
-  /* Output the date and time */
+#if defined(_WIN32)
+  /* Optionally display the compression ratio */
+  if (opts.compression) {
+    // printf("%12"PRIu64, pfif->qwComprSize.QuadPart);
+    if (pfif->st.st_size && pfif->qwComprSize.QuadPart && (pfif->st.st_size != (off64_t)(pfif->qwComprSize.QuadPart))) {
+      int iRatio = (int)(((pfif->st.st_size - pfif->qwComprSize.QuadPart) * 100) / pfif->st.st_size);
+      printf("%3d%%", iRatio);
+    } else {
+      printf("    ");
+    }
+  }
+#endif
+
+  /* Display the date and time */
   if (iYearWidth == 2) {
     printf(" %02d-%02d-%02d %02d:%02d:%02d",
 	    an % 100, mois, jour, heure, minute, seconde);
