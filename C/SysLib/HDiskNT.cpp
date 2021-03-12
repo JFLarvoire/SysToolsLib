@@ -259,7 +259,7 @@ int HardDiskNTWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, void FAR *pBuf)
         printf("HardDiskNTWrite(hDrive=%p, LBA=%s, N=%X, Buf@=%Fp)\n", 
     			hDrive, qwtox(qwSector, szqw), wNum, pBuf);
 	}
-    if (iReadOnly) printf("Read-only! Write canceled.\n");
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n");
 #endif // _DEBUG
     if (iReadOnly) return 0;
 

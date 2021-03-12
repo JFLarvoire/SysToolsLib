@@ -270,7 +270,7 @@ int LogDiskWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, void far *pBuf)
         printf("LogDiskWrite(hDrive=%lX, Sector=%s, N=%X, Buf@=%Fp)\n", 
     			hDrive, qwtox(qwSector, szqw), wNum, pBuf);
 	}
-    if (iReadOnly) printf("Read-only! Write canceled.\n");
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n");
 #endif // _DEBUG
     if (iReadOnly) return 0;
     if ((int)(intptr_t)hDrive & 0x8000) return 3;	// Write protection error

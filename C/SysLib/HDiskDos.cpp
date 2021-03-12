@@ -175,7 +175,7 @@ char far *lpcBuffer)		/* Buffer for the data read */
     if (iDebug) printf("BiosDiskWriteChs(wDrive=%X, wCyl=%d, wHead=%d, wSect=%d, n=%d)\n",
     			wDrive, wCyl, wHead, wSect, n);
 
-    if (iReadOnly) printf("Read-only! Write canceled.\n");
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n");
 #endif // _DEBUG
     if (iReadOnly) return 0;
     if (wDrive & 0x8000) return 3;	// Write protection error
@@ -436,7 +436,7 @@ int BiosDiskWriteLba(int iDrive, QWORD qwSector, WORD wNum, void far *lpBuf)
         printf("BiosDiskWriteLba(iDrive=%X, LBA=%s, N=%X, Buf@=%Fp)\n",
     			iDrive, qwtox(qwSector, szqw), wNum, lpBuf);
 	}
-    if (iReadOnly) printf("Read-only! Write canceled.\n");
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n");
 #endif // _DEBUG
     if (iReadOnly) return 0;
     if (iDrive & 0x8000) return 3;	// Write protected error
@@ -829,7 +829,7 @@ int HardDiskWrite(HANDLE hDrive, QWORD qwSector, WORD wNum, void far *pBuf)
         printf("HardDiskWrite(hDrive=%lX, LBA=%s, N=%X, Buf@=%Fp)\n",
     			hDrive, qwtox(qwSector, szqw), wNum, pBuf);
 	}
-    // if (iReadOnly) { printf("Read-only! Write canceled.\n"); return 0; }
+    // if (iReadOnly) { printf("Read-only mode! Write canceled.\n"); return 0; }
     // Unnecessary as the Write security is actually done in BiosXxxx() routines.
 #endif // _DEBUG
 

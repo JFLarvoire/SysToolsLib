@@ -296,7 +296,7 @@ int FloppyDiskWrite(HANDLE hDrive, DWORD dwSector, WORD wNum, void far *pBuf) {
     printf("FloppyDiskWrite(hDrive=%p, LBA=%lX, N=%X, Buf@=%Fp)\n",
 		    hDrive, dwSector, wNum, pBuf);
   }
-  // if (iReadOnly) { printf("Read-only! Write canceled.\n"); return 0; }
+  // if (iReadOnly) { printf("Read-only mode! Write canceled.\n"); return 0; }
   // Unnecessary as the Write security is actually done in BiosXxxx() routines.
 #endif // _DEBUG
 

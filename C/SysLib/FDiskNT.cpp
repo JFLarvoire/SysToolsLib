@@ -265,7 +265,7 @@ int FloppyDiskNTWrite(HANDLE hDrive, DWORD dwSector, WORD wNum, void FAR *pBuf) 
     printf("FloppyDiskNTWrite(hDrive=%p, LBA=%lX, N=%X, Buf@=%Fp)\n",
 		    hDrive, dwSector, wNum, pBuf);
   }
-  if (iReadOnly) printf("Read-only! Write canceled.\n");
+  if (iReadOnly) printf("Read-only mode! Write canceled.\n");
 #endif // _DEBUG
   if (iReadOnly) return 0;
 

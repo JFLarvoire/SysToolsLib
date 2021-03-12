@@ -276,7 +276,7 @@ int FileW32Write(HANDLE hFile, QWORD qwOffset, size_t nToWrite, void FAR *pBuf)
 
 #ifdef _DEBUG
     if (iDebug) printf("FileW32Write(hFile=%p, Offset=%I64X, N=%IX, Buf@=%Fp)\n", hFile, qwOffset, nToWrite, pBuf);
-    if (iReadOnly) printf("Read-only! Write canceled.\n", hFile, qwOffset, nToWrite);
+    if (iReadOnly) printf("Read-only mode! Write canceled.\n", hFile, qwOffset, nToWrite);
 #endif // _DEBUG
     if (iReadOnly) return 0;
 #ifdef _DEBUG
