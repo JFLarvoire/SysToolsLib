@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-03-12
+### Changed
+- C/SRC/dirc.c:  
+  Optionally display the compression ratio in Windows.  
+  Display more readable sizes, with thousands separators.
+
 ## [Unreleased] 2021-03-11
 ### Fixed
 - Batch/regx.bat:  
