@@ -5,10 +5,20 @@ Major changes for the System Tools Library are recorded here.
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
 ## [Unreleased] 2021-03-12
+### New
+- .gitignore: List all the files that can safely be ignored.
+
 ### Changed
 - C/SRC/dirc.c:  
   Optionally display the compression ratio in Windows.  
   Display more readable sizes, with thousands separators.
+- C/SRC/sector.cpp:  
+  Added option -X as an alias for option -ro.  
+  Switched the order of the origin & number arguments.  
+  Changed ":" to mean dump, and removed the -D switch.
+
+### Fixed
+- C/SysLib/FileW32.cpp: Fixed FileW32Read() and FileW32Write(), which hung on errors, causing `sector.exe -z` to hang.
 
 ## [Unreleased] 2021-03-11
 ### Fixed
