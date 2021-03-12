@@ -108,6 +108,10 @@
 *		    Version 4.1.					      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.4.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 4.1.2.      *
+*    2021-03-12 JFL Added option -X as an alias for option -ro.               *
+*		    Switched the order of the origin & number arguments.      *
+*		    Changed ":" to mean dump, and removed the -D switch.      *
+*		    Version 5.0.                                              *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -115,8 +119,8 @@
 
 #define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
-#define PROGRAM_VERSION "4.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "5.0"
+#define PROGRAM_DATE    "2021-03-12"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -316,11 +320,6 @@ int _cdecl main(int argc, char *argv[]) {
 	  continue;
 	}
       )
-      if (streq(opt, "D")) {
-	iDump = TRUE;
-	iQuiet = TRUE; // We don't want any progress message in dump mode
-	continue;
-      }
       if (streq(opt, "fbs")) {
 	iFindBS = TRUE;
 	iAll = TRUE;
@@ -483,6 +482,10 @@ int _cdecl main(int argc, char *argv[]) {
 	cBase = 'X';
 	continue;
       }
+      if (streq(opt, "X")) {
+	iReadOnly = TRUE;
+	continue;
+      }
       if (streq(opt, "z")) {
 	iAppendZeros = TRUE;
 	continue;
@@ -494,22 +497,26 @@ int _cdecl main(int argc, char *argv[]) {
       pszFrom = argv[i];
       continue;
     }
-    if ((streq(arg, "-")) ||	// - is the standard place-holder for outputing data to stdout
-        (streq(arg, ":"))) {	// This was the old place-holder for outputing data to stdout
+    if (streq(arg, "-")) {	// - is the standard place-holder for outputing binary data to stdout
       iPipe = TRUE;
       iQuiet = TRUE; // We don't want any progress message while piping to stdout
       continue;
     }
-    if ((!pszTo) && (!iPipe)) {	// This must be after the comparison with ":" or "-"
-      pszTo = argv[i];
+    if (streq(arg, ":")) {	// : is our place-holder for dumping data to stdout
+      iDump = TRUE;
+      iQuiet = TRUE; // We don't want any progress message in dump mode
       continue;
     }
-    if (qwNSect == QWMAX) {
-      strtoqw(argv[i], qwNSect, iBase);
+    if ((!pszTo) && (!iPipe) && (!iDump)) {	// This must be after the comparison with ":" or "-"
+      pszTo = argv[i];
       continue;
     }
     if (qwFromSect == QWMAX) {
       strtoqw(argv[i], qwFromSect, iBase);
+      continue;
+    }
+    if (qwNSect == QWMAX) {
+      strtoqw(argv[i], qwNSect, iBase);
       continue;
     }
     if (qwToSect == QWMAX) {
@@ -1198,7 +1205,7 @@ void usage(void) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: sector [switches] {source} [destination [number [origin [origin]]]]\n\
+Usage: sector [switches] {source} [destination [origin [number [origin]]]]\n\
 \n\
 With...\n\
 \n\
@@ -1209,7 +1216,7 @@ With...\n\
   hdN: = Hard Disk number N. Example: \"hd0:\" for HD 0\n\
   filename = Any valid file pathname.\n\
 [destination] = Where to write to. Same format as {source}.\n\
-  Default: Dump the data read as hexadecimal on the standard output.\n\
+  Default or \":\": Dump the data read as hexadecimal on the standard output.\n\
   \"-\": Write the binary data read to the standard output.\n\
 [number] = The number of sectors to read, Default: 1\n\
 [origin] = Linear Block Address of the first sector. Default: Sector 0.\n\
@@ -1218,32 +1225,32 @@ With...\n\
   printf("\
 Switches:\n\
 \n\
-  -a    Copy all sectors from source.\n\
-  -bpb  Dump a boot sector Bios Parameter Block.\n"
+  -a     Copy all sectors from source.\n\
+  -bpb   Dump a boot sector Bios Parameter Block.\n"
 #ifdef _DEBUG
 "\
-  -d    Debug mode.\n\
+  -d     Debug mode.\n\
 "
 #endif
 "\
-  -D    Dump the output as hexadecimal. (Default when no destination is set)\n\
-  -fbs  Find boot sectors.\n\
-  -g    Display the source or destination drives geometry.\n\
-  -H    Display disk sizes in MB, GB, etc. (default)\n\
-  -I    Display disk sizes in MiB, GiB, etc.\n\
-  -ld   List available disks. (alias -l)\n\
-  -n N  Number of sectors to copy. Default: 1 for disks, all for files.\n\
-  -p    Force dumping the partition table.\n\
-  -ro   Read-only mode. Simulate commands execution without any write.\n\
-  -s N  Set sector size. Default: Biggest of the two. 1/files. ~512/disks.\n\
+  -fbs   Find boot sectors.\n\
+  -g     Display the source or destination drives geometry.\n\
+  -H     Display disk sizes in MB, GB, etc. (default)\n\
+  -I     Display disk sizes in MiB, GiB, etc.\n\
+  -ld    List available disks. (alias -l)\n\
+  -n N   Number of sectors to copy. Default: 1 for disks, all for files.\n\
+  -p     Force dumping the partition table.\n\
+  -ro    Read-only mode. Simulate commands execution without any write.\n\
+  -s N   Set sector size. Default: Biggest of the two. 1/files. ~512/disks.\n\
   -sb OFFSET VALUE  Set byte. Idem with -sw, -sdw, -sqw for word, dword, qword.\n\
-  -sh   Set the \"Hidden\" field in a boot sector BPB equal to the BS LBA.\n\
-  -spt N [Parameters]     Set partition table N (0 to 3) entry. Details below.\n\
-  -t    Use base 10 for input and output.\n\
-  -v    Display verbose information.\n\
-  -V    Display this program version and exit.\n\
-  -x    Use base 16 for input and output. (default)\n\
-  -z    Append zeros to the end of input data if needed.\n\
+  -sh    Set the \"Hidden\" field in a boot sector BPB equal to the BS LBA.\n\
+  -spt N [Parameters]    Set partition table N (0 to 3) entry. Details below.\n\
+  -t     Use base 10 for input and output.\n\
+  -v     Display verbose information.\n\
+  -V     Display this program version and exit.\n\
+  -x     Use base 16 for input and output. (default)\n\
+  -X|-ro Read-only mode. Simulate commands execution without any write.\n\
+  -z     Append zeros to the end of input data if needed.\n\
 \n");
     printf("\
 To update an entry in a partition table (PT): Use the -spt option.\n\
