@@ -11,12 +11,13 @@
 #    2017-07-31 JFL Created this script.                                      #
 #    2019-07-08 JFL Added options -a, -c, -l, and their inverse -o, -C, -L.   #
 #                   Added support for C \t \xXX etc sequences in substitutions.
+#    2021-03-22 JFL Fixed the input and output encoding in Windows.           #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-07-08"
+set version "2021-03-22"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -215,6 +216,39 @@ regsub -all {\\\\<([abefnrtuUvx])>} $sx {\\\1} sx ;# Don't support \0, as \0 ref
 regsub -all {\\\\<\\>} $sx {\\\\\\\\} sx
 regsub -all {\\\\<(.)>} $sx {\\\\\1} sx
 set sx [subst $sx]
+
+# Correct the input and output encodings in Windows.
+# This is necessary because Tcl uses the unicode encoding for I/Os to the console,
+# and the system encoding for any redirected I/Os on stdin or stdout.
+# But Windows uses the current console code page for pipes, and that console code page
+# is usually different from the system code page. Ex: CP437 and CP1252 resp. for USA.  
+if {$tcl_platform(platform) == "windows"} {
+  if [catch {	# First try getting the CP using twapi. This is faster.
+    package require twapi
+    set icp [twapi::get_console_input_codepage]
+  } msg] {	# Can't find twapi. Try running chcp.exe to get the info. (Slower)
+    if ![regexp {\d+} [exec chcp] icp] { # If chcp fails also
+      set icp 65001 ;# Then assume input is UTF-8
+    }
+  }
+  switch $icp {
+    65000 {
+      set cp "utf-7"
+    }
+    65001 {
+      set cp "utf-8"
+    }
+    default {
+      set cp "cp$icp"
+    }
+  }
+  # Correct the input and output encodings in Windows.
+  foreach handle [list stdin stdout] {
+    if {"[fconfigure $handle -encoding]" != "unicode"} { # If redirected
+      fconfigure $handle -encoding $cp ;# Change the encoding
+    }
+  }
+}
 
 if ($noexec) {
   set input -
