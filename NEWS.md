@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-03-11
+### Fixed
+- Tcl/regsub.tcl: Fixed the input and output encoding in Windows, which was breaking non-ASCII characters.
+
 ## [Unreleased] 2021-03-12
 ### New
 - .gitignore: List all the files that can safely be ignored.
