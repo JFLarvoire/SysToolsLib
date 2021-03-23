@@ -4,7 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-03-11
+## [Unreleased] 2021-03-22
+### Changed
+- Renamed the Bash directory as Shell, as it's now intended to contain Posix Shell scripts, and not just Bash scripts.
+- Changed all references to that directory in docs and makefiles.
+
+### Fixed
+- Makefile: Fixed an installation error on FreeBSD and MacOSX.
+
+## [Unreleased] 2021-03-22
 ### Fixed
 - Tcl/regsub.tcl: Fixed the input and output encoding in Windows, which was breaking non-ASCII characters.
 
