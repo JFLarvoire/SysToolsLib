@@ -146,7 +146,7 @@
 #    2019-02-09 JFL Added support for ARM64 target OS.			      #
 #    2020-12-16 JFL Added a dependency on NUL for all pseudo-targets. This    #
 #		    makes sure that they run, even if a file with that name   #
-#                   exists. We had the case with a new `clean` Bash script.   #
+#                   exists. We had the case with a new `clean` Shell script.  #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #

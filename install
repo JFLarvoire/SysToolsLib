@@ -391,7 +391,7 @@ fi
 stldir=$(realpath --relative-to=. "$SCRIPTDIR")
 cdir=$(realpath --relative-to=. "$SCRIPTDIR/C/SRC/bin/$(GetCOutputDir)")
 tcldir=$(realpath --relative-to=. "$SCRIPTDIR/Tcl")
-bashdir=$(realpath --relative-to=. "$SCRIPTDIR/Bash")
+shelldir=$(realpath --relative-to=. "$SCRIPTDIR/Shell")
 
 Help() {
   cat <<EOF
@@ -408,7 +408,7 @@ Options:
 Any other option will be passed through to the system's install command.
 
 Tool: One or more SysToolsLib tools. Their path is optional.
-      Default paths: $stldir, $cdir, $tcldir, $bashdir
+      Default paths: $stldir, $cdir, $tcldir, $shelldir
 
 Dir:  The installation directory. Default: $bindir
       (Default from \$bindir, else /usr/local/bin if in the PATH, else /usr/bin)
@@ -484,7 +484,7 @@ for tool in "${TOOLS[@]}" ; do
   fi
   # Look for alternate source locations if needed
   if [ ! -f "$tool" ] ; then
-    for dir in "$cdir" "$tcldir" "$bashdir" ; do
+    for dir in "$cdir" "$tcldir" "$shelldir" ; do
       if [ -f "$dir/$tool" ] ; then
       	tool=$dir/$tool
       	break

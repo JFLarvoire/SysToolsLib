@@ -13,7 +13,7 @@
 #		    Rewrote it using an inference rule.			      #
 #                   Added an uninstall target rule, also using inferences.    #
 #    2020-04-15 JFL Updated scripts enumeration for compatibility w. MacOS.   #
-#    2021-01-17 JFL Install files from Bash/profile.d/ into /etc/profile.d/.  #
+#    2021-01-17 JFL Install files from Shell/profile.d/ into /etc/profile.d/. #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -53,22 +53,22 @@ default: all
 
 # Enumerate the scripts to be installed
 # Avoid using `sed -r` because this option does not exist in FreeBSD's sed.
-BASH_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Bash\\' | sed 's/^Bash.//' | grep -v '^profile.d\\')
-PROFILE_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Bash\\profile.d\\' | sed 's/.*profile.d.//')
+SHELL_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Shell\\' | sed 's/^Shell.//' | grep -v '^profile.d\\')
+PROFILE_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Shell\\profile.d\\' | sed 's/.*profile.d.//')
 TCL_SCRIPTS = $(shell cat Scripts.lst | tr -d '\r' | grep '^Tcl\\.*tcl$$' | sed 's/^Tcl.\(.*\).tcl$$/\1/')
 
 # How to install all SysToolsLib scripts and programs
 $(DESTDIR)$(bindir)/: # Create the $(bindir) directory if it does not yet exist
 	install -d $(DESTDIR)$(bindir)/
 
-# How to install Bash scripts
-$(DESTDIR)$(bindir)/%: Bash/%
+# How to install Shell scripts
+$(DESTDIR)$(bindir)/%: Shell/%
 	install -p $< $@
 
-comment_bash_scripts:
-	$(info # Install Bash scripts)
+comment_shell_scripts:
+	$(info # Install Shell scripts)
 
-install_bash_scripts: comment_bash_scripts $(addprefix $(DESTDIR)$(bindir)/,$(BASH_SCRIPTS))
+install_shell_scripts: comment_shell_scripts $(addprefix $(DESTDIR)$(bindir)/,$(SHELL_SCRIPTS))
 
 # How to install Tcl scripts
 $(DESTDIR)$(bindir)/%: Tcl/%.tcl
@@ -80,32 +80,32 @@ comment_tcl_scripts:
 install_tcl_scripts: comment_tcl_scripts $(addprefix $(DESTDIR)$(bindir)/,$(TCL_SCRIPTS))
 
 # How to install Shell profile scripts
-/etc/profile.d/%: Bash/profile.d/%
+/etc/profile.d/%: Shell/profile.d/%
 	install -p -m=644 $< $@
 
 comment_profile_scripts:
-	$(info # Install shell profile scripts)
-
+	$(info # Install Shell Profile scripts)
+	
 install_profile_scripts: comment_profile_scripts $(addprefix /etc/profile.d/,$(PROFILE_SCRIPTS))
 
 # How to install all SysToolsLib scripts and programs
 .PHONY: install # Do not use `make -s` to get info about the directory change
-install: $(DESTDIR)$(bindir)/ install_bash_scripts install_profile_scripts install_tcl_scripts
+install: $(DESTDIR)$(bindir)/ install_shell_scripts install_profile_scripts install_tcl_scripts
 	$(info # Install C programs)
 	@$(MAKE) -C C $(MFLAGS) PWD="$(PWD)/C" install
 
 # How to uninstall all SysToolsLib scripts and programs
-dummy_uninstall_dir/%: Bash/%
+dummy_uninstall_dir/%: Shell/%
 	rm -f $(bindir)/$(@F)
 
 dummy_uninstall_dir/%: Tcl/%.tcl
 	rm -f $(bindir)/$(@F)
 
-dummy_profile_dir/%: Bash/profile.d/%
+dummy_profile_dir/%: Shell/profile.d/%
 	rm -f /etc/profile.d/$(@F)
 
 # List of scripts installed
-INSTALLED = $(wildcard $(addprefix $(bindir)/,$(BASH_SCRIPTS) $(TCL_SCRIPTS)))
+INSTALLED = $(wildcard $(addprefix $(bindir)/,$(SHELL_SCRIPTS) $(TCL_SCRIPTS)))
 PROFILED = $(wildcard $(addprefix /etc/profile.d/,$(PROFILE_SCRIPTS)))
 # But pretend they are in a dummy_uninstall_dir, to avoid having them first reinstalled if they're out of date.
 .PHONY: uninstall

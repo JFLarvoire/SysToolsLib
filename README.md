@@ -27,7 +27,7 @@ The common code is now in libraries, which can be reused in new programs and scr
 
 Major highlights:
 
-- A set of powerful script debugging and logging libraries for (in chronologic creation order) Tcl, Batch, Bash, PowerShell.  
+- A set of powerful script debugging and logging libraries for (in chronologic creation order) Tcl, Batch, Shell, PowerShell, Python.  
   They can be added easily to existing scripts, and make it much easier to debug complex interacting scripts.  
   More info [here](Docs/System Script Libraries.md).
 - A configure.bat/make.bat system for Microsoft Visual C++, allowing to build multiple versions of C tools from a common source, 
@@ -47,7 +47,7 @@ For more details on these C libraries, see [C/README.md](C/README.md), and the R
 Programming languages:
 
 Old tools were mostly written in C/C++. Then I started using scripting languages more often:  
-Batch and PowerShell for Windows-only tools; Tcl for cross-OS tools; Bash for Unix-only tools.
+Batch and PowerShell for Windows-only tools; Python and Tcl for cross-OS tools; Shell for Unix-only tools.
 
 Jean-François Larvoire  
 jf.larvoire@hpe.com  
@@ -71,12 +71,12 @@ You can also rebuild all C programs from sources. More details about this furthe
 ### Scripts and programs in Unix
 
 The C programs need to be rebuilt from source.  
-As for scripts, only the Bash and Tcl directories contain useful scripts in Unix.
+As for scripts, only the Shell and Tcl directories contain useful scripts in Unix.
 
 * Download the project sources archive.
 * Extract files from that archive, and put them in a new work directory.
 * Run `make` in that work directory to rebuild the C programs. (There's no ./configure script.)
-* Then run `sudo make install` to install them and the Tcl and Bash scripts.  
+* Then run `sudo make install` to install them and the Tcl and Shell scripts.  
   If you're on the cautious side, you can first dry-run the installation using `sudo make -n install`.  
   Individual scripts and programs can also be installed separately by running `sudo ./install PROGNAME`.
 
@@ -94,16 +94,16 @@ can share the same sources, and output executables in distinct target-OS-specifi
 See the README.txt or README.md file in each subdirectory for more details about that particular library,
 and further subdirectories.
 
-Name            | Description
---------------- | -------------------------------------------------
-C/		| Programs and libraries written in C or C++
-Bash/		| Scripts and libraries in the Bash or Posix Shell language
-Bash/profile.d/	| Posix Shell initialization scripts to install into /etc/profile.d
-Batch/		| Scripts and libraries in the Batch language
-Docs/		| Project documentation
-PowerShell/	| Scripts and libraries in the PowerShell language
-Python/		| Scripts and libraries in or for the Python language
-Tcl/		| Scripts and libraries in or for the Tcl language
+Name             | Description
+---------------- | -------------------------------------------------
+C/		 | Programs and libraries written in C or C++
+Batch/		 | Scripts and libraries in the Batch language
+Docs/		 | Project documentation
+PowerShell/	 | Scripts and libraries in the PowerShell language
+Python/		 | Scripts and libraries in or for the Python language
+Shell/		 | Scripts and libraries in the Posix Shell language
+Shell/profile.d/ | Posix Shell initialization scripts to install into /etc/profile.d
+Tcl/		 | Scripts and libraries in or for the Tcl language
 
 Particular files:
 

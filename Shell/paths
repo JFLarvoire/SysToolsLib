@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 ###############################################################################
 #                                                                             #
 #   Filename        paths                                                     #
@@ -10,18 +10,20 @@
 #   History                                                                   #
 #    2019-09-17 JFL Created this script.                                      #
 #    2020-11-24 JFL Use a shebang with the env command.                       #
+#    2021-03-22 JFL Converted to a Posix shell script.                        #
 #                                                                             #
 #         © Copyright 2019 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2020-11-24"
-ARGV=("$0" "$@")		# All arguments, as an array of strings
-ARGV0="$0"                      # Full script pathname
-SCRIPT="${ARGV0##*/}"           # Extract the script base name...
-SCRIPTDIR="$(cd $(dirname "$0") ; /bin/pwd)" # ... and its absolute path
-SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
+VERSION="2021-03-22"
+SCRIPT=`basename "$0"`	# Extract the script base name...
+
+# Get the value of a variable.
+VarValue() {
+  eval "echo \"\${${1}}\""
+}
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
@@ -56,7 +58,7 @@ EOF
 VARNAME=PATH
 ACTION=LIST
 
-while (( $# > 0 )) ; do
+while [ $# -gt 0 ] ; do
   # Pop the first argument off the head of the list
   arg="$1"
   shift
@@ -83,12 +85,13 @@ while (( $# > 0 )) ; do
   esac
 done
 
-# Explode the PATH into a Bash array
-IFS=':' read -r -a paths <<< "${!VARNAME}"
-
-# Display each path in turn
-for path in "${paths[@]}" ; do
-    echo "$path"
+VALUE=`VarValue $VARNAME`
+# Display each part in turn
+IFS=:
+set -o noglob # Avoid expanding * and ? in the value
+for path in $VALUE'' ; do
+  if [ -z "$path" -a "$VARNAME" = "PATH" ] ; then path=. ; fi # An empty path in $PATH is .
+  if [ -n "$path" ] ; then echo "$path" ; fi
 done
 
 exit 0

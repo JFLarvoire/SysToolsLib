@@ -1,7 +1,3 @@
-Bash\distrib
-Bash\paths
-Bash\truename
-Bash\profile.d\mcd.sh
 Batch\12.bat
 Batch\25.BAT
 Batch\2note2.bat
@@ -69,6 +65,10 @@ PowerShell\Window.ps1
 Python\PySetup.bat
 Python\python.bat
 Python\pip.bat
+Shell\distrib
+Shell\paths
+Shell\truename
+Shell\profile.d\mcd.sh
 Tcl\b64dec.tcl
 Tcl\b64enc.tcl
 Tcl\camel.tcl

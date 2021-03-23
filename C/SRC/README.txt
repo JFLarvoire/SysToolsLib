@@ -199,7 +199,7 @@ make "OS=DOS WIN95 WIN64"
 
 6) For Windows using MinGW
 
-Use the Linux procedure and bash scripts.
+Use the Linux procedure and shell scripts.
 The executables will be in a MINGW32 or MINGW64 subdirectory.
 Note that (as of 2014) MinGW has serious limitations in its support for
 symbolic links, and for code pages in Windows. So the programs built with it

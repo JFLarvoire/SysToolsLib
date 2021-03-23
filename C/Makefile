@@ -12,7 +12,7 @@
 #    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
 #                   `make check` now checks if $bindir is in the PATH.        #
 #    2017-08-30 JFL Make sure the installed scripts are executable.           #
-#    2020-01-06 JFL Install Bash scripts.                                     #
+#    2020-01-06 JFL Install Shell scripts.                                    #
 #                   Do not actually install files if NOEXEC=1.                #
 #    2020-01-09 JFL Move -C DIR before -$(MAKEFLAGS), because the latter also #
 #                   includes macro definitions, and the -C coming afterwards  #
@@ -51,10 +51,10 @@ bindir = $(exec_prefix)/bin
 libdir = $(exec_prefix)/lib
 
 # Prefer using PWD instead of CURDIR, as PWD does not expand links
-needed_before_using_Bash_scripts := $(shell for s in truename distrib ; do chmod +x ../Bash/$$s ; done)
+needed_before_using_truename := $(shell chmod +x ../Shell/truename)
 ifeq "$(PWD)" ""  # But some old shells don't define PWD
   PWD := $(CURDIR)# If it's not defined, fall back to using CURDIR
-else ifneq ($(shell ../Bash/truename -q "$(PWD)"), $(shell ../Bash/truename -q "$(CURDIR)"))
+else ifneq ($(shell ../Shell/truename -q "$(PWD)"), $(shell ../Shell/truename -q "$(CURDIR)"))
   PWD := $(CURDIR)# If it's ill defined, fall back to using CURDIR
 endif
 

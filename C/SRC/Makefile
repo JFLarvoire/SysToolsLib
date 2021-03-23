@@ -60,10 +60,10 @@ bindir = $(exec_prefix)/bin
 libdir = $(exec_prefix)/lib
 
 # Prefer using PWD instead of CURDIR, as PWD does not expand links
-needed_before_using_Bash_scripts := $(shell for s in truename distrib ; do chmod +x ../../Bash/$$s ; done)
+needed_before_using_truename := $(shell chmod +x ../../Shell/truename)
 ifeq "$(PWD)" ""  # But some old shells don't define PWD
   PWD := $(CURDIR)# If it's not defined, fall back to using CURDIR
-else ifneq ($(shell ../../Bash/truename -q "$(PWD)"), $(shell ../../Bash/truename -q "$(CURDIR)"))
+else ifneq ($(shell ../../Shell/truename -q "$(PWD)"), $(shell ../../Shell/truename -q "$(CURDIR)"))
   PWD := $(CURDIR)# If it's ill defined, fall back to using CURDIR
 endif
 
@@ -155,9 +155,9 @@ CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
 # Note: All this should be better done using autoconf/automake!
 ifndef CC_NOCARET_OPT
   CC_VERSION_LINE := $(shell cc -v 2>&1 | grep -i ' version ')
-  CC_NAME := $(shell echo "$(CC_VERSION_LINE)" | sed -e 's/\(.* \)\?\([^ ][^ ]*\) version .*/\2/')
+  CC_NAME := $(shell echo "$(CC_VERSION_LINE)" | sed -e 's/ *[Vv]ersion .*//' -e 's/.* //')# The compiler name is the last word before ' version '
   # $(info CC_NAME=$(CC_NAME))
-  CC_VERSION := $(shell echo "$(CC_VERSION_LINE)" | sed -e 's/\(.* \)\?version \([0-9][0-9.]*\).*/\2/')
+  CC_VERSION := $(shell echo "$(CC_VERSION_LINE)" | sed -e 's/.* [Vv]ersion *//' -e 's/ .*//')# The version is the first word after ' version '
   # $(info CC_VERSION=$(CC_VERSION))
   CC_VER := $(shell echo "$(CC_VERSION)" | sed -e 's/.*/&.0.0/' -e 's/\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/' -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g')
   # $(info CC_VER=$(CC_VER))
@@ -176,7 +176,7 @@ ifndef CC_NOCARET_OPT
     # $(info clang is fine in any version)
     CC_NOCARET_OPT := -fno-caret-diagnostics # -Wno-\#pragma-messages
   else
-    $(warning Unidentified compiler: $(CC_VERSION_LINE))
+    $(warning Unidentified compiler: "$(CC_NAME)")
     CC_NOCARET_OPT := 
   endif
 endif
