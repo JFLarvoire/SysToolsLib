@@ -81,12 +81,28 @@ install_tcl_scripts: comment_tcl_scripts $(addprefix $(DESTDIR)$(bindir)/,$(TCL_
 
 # How to install Shell profile scripts
 /etc/profile.d/%: Shell/profile.d/%
-	install -p -m=644 $< $@
+	install -p -m 0644 $< $@
 
 comment_profile_scripts:
 	$(info # Install Shell Profile scripts)
 	
-install_profile_scripts: comment_profile_scripts $(addprefix /etc/profile.d/,$(PROFILE_SCRIPTS))
+# FreeBSD and MacOSX do not have a /etc/profile.d directory
+/etc/profile.d:
+	mkdir $@
+
+.PHONY: /etc/profile
+/etc/profile: # Add the /etc/profile.d processing in /etc/profile if it's not there already
+	@grep /etc/profile.d /etc/profile >/dev/null 2>&1 || (		       \
+	  echo "# Add the /etc/profile.d processing in /etc/profile"          ;\
+	  chmod +w /etc/profile                                               ;\
+	  echo >>/etc/profile ''                                              ;\
+	  echo >>/etc/profile 'for PROFILE_SCRIPT in /etc/profile.d/*.sh ; do';\
+	  echo >>/etc/profile '  . $$PROFILE_SCRIPT'                          ;\
+	  echo >>/etc/profile 'done'                                          ;\
+	  echo >>/etc/profile 'unset PROFILE_SCRIPT'                          ;\
+	)
+
+install_profile_scripts: /etc/profile.d /etc/profile comment_profile_scripts $(addprefix /etc/profile.d/,$(PROFILE_SCRIPTS))
 
 # How to install all SysToolsLib scripts and programs
 .PHONY: install # Do not use `make -s` to get info about the directory change
