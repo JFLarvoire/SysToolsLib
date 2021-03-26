@@ -68,9 +68,10 @@ else ifneq ($(shell ../../Shell/truename -q "$(PWD)"), $(shell ../../Shell/truen
 endif
 
 # Identify the OS and processor, and generate an output base directory name from that
+needed_before_using_distrib := $(shell chmod +x ../../Shell/distrib)
 ifeq "$(OS)" ""    # If $(OS) is undefined or empty
   OS := $(shell uname -s)
-  PROC := $(shell uname -p)
+  PROC := $(shell ../../Shell/distrib processor)# Don't just use uname -p, which is unreliable
   MACHINE := $(shell uname -m)
   ifeq "$(OS)" "OSF1"
     ifeq "$(MACHINE)" "alpha"
