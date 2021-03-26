@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.20] 2020-12-17
+### Fixed
+- C/SRC/Makefile, C/SysLib/Makefile : Use the correct processor in the MacOSX builds.
+
 ## [Unreleased] 2021-03-22
 ### Changed
 - Renamed the Bash directory as Shell, as it's now intended to contain Posix Shell scripts, and not just Bash scripts.
