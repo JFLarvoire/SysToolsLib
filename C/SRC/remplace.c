@@ -150,6 +150,8 @@
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 3.0.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 3.1.                     *
+*    2021-04-18 JFL Do not change the file time if nothing changed.           *
+*                   Version 3.2.                                              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -157,8 +159,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "3.1"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "3.2"
+#define PROGRAM_DATE    "2021-04-18"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -768,50 +770,55 @@ try_next_set:
   if (df != stdout) fclose(df);
   DEBUG_FPRINTF((mf, "// Writing done\n"));
 
-  if (iSameFile || iBackup) {
-    if (iBackup) {	/* Create an *.bak file in the same directory */
+  if (iSameFile && !lnChanges) { /* Nothing changed */
+    iErr = unlink(pszTmpName); 	/* Remove the temporary output file */
+  } else {
+    if (iSameFile || iBackup) {
+      if (iBackup) {	/* Create an *.bak file in the same directory */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
+        DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
 #endif
-      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if ((iErr == -1) && (errno != ENOENT)) {
-	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
-      }
-      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
-      iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
-      if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
-      }
-    } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
+	iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+	if ((iErr == -1) && (errno != ENOENT)) {
+	  fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
+	}
+	DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
+	iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
+	if (iErr == -1) {
+	  fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
+	}
+      } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
+	DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
 #endif
-      iErr = unlink(pszInName); 	/* Remove the original file */
+	iErr = unlink(pszInName); 	/* Remove the original file */
+	if (iErr == -1) {
+	  fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	}
+      }
+      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
+      iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
       if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	fail("Can't create %s. %s\n", pszOutName, strerror(errno));
       }
     }
-    DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
-    iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
-    if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszOutName, strerror(errno));
+
+    /* Copy the file mode flags */
+    if (df != stdout) {
+      int iMode = sInTime.st_mode;
+      DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
+      iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
     }
-  }
 
-  /* Copy the file mode flags */
-  if (df != stdout) {
-    int iMode = sInTime.st_mode;
-    DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
-    iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
-    DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
-  }
-
-  /* Optionally copy the timestamp */
-  if ((sf != stdin) && (df != stdout) && iCopyTime) {
-    struct utimbuf sOutTime = {0};
-    sOutTime.actime = sInTime.st_atime;
-    sOutTime.modtime = sInTime.st_mtime;
-    utime(pszOutName, &sOutTime);
+    /* Optionally copy the timestamp */
+    if (!lnChanges) iCopyTime = TRUE; /* Always set the same time if there was no data change */
+    if ((sf != stdin) && (df != stdout) && iCopyTime) {
+      struct utimbuf sOutTime = {0};
+      sOutTime.actime = sInTime.st_atime;
+      sOutTime.modtime = sInTime.st_mtime;
+      utime(pszOutName, &sOutTime);
+    }
   }
 
   if (iVerbose) fprintf(mf, "// Remplace: %ld changes done.\n", lnChanges);
