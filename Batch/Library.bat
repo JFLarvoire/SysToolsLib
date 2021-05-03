@@ -3808,6 +3808,64 @@ goto :eof
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        compare_versions                                          #
+:#                                                                            #
+:#  Description     Compare software versions                                 #
+:#                                                                            #
+:#  Arguments       %1		MAJOR[.MINOR[.PATCH[...]]]                    #
+:#                  %2		MAJOR[.MINOR[.PATCH[...]]]                    #
+:#                  %3		Output variable name			      #
+:#                                                                            #
+:#  Returns         0=success, else invalid arguments			      #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2021-04-12 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+:# Compare versions (MAJOR[.MINOR[.PATCH[...]]])
+
+:compare_vernum %1=NUM1 %2=NUM2 %3=OUTVAR Returns < > = in OUTVAR
+setlocal EnableExtensions EnableDelayedExpansion
+%ECHO.D% call %0 %*
+set "NUM1="
+for /f "tokens=* delims=0" %%a in ("%~1") do set "NUM1=%%a" &:# Trim left 0s
+if not defined NUM1 set "NUM1=0"
+if not "%NUM1%"=="%~1" %ECHOVARS.D% NUM1
+set "NUM2="
+for /f "tokens=* delims=0" %%a in ("%~2") do set "NUM2=%%a" &:# Trim left 0s
+if not defined NUM2 set "NUM2=0"
+if not "%NUM2%"=="%~2" %ECHOVARS.D% NUM2
+if %NUM1% LSS %NUM2% endlocal & set "%~3=<" & exit /b 0
+if %NUM1% GTR %NUM2% endlocal & set "%~3=>" & exit /b 0
+endlocal & set "%~3==" & exit /b 0
+
+:compare_versions %1=Maj.Min.Patch... %2=Maj.Min.Patch... %3=OUTVAR
+setlocal EnableExtensions EnableDelayedExpansion
+%ECHO.D% call %0 %*
+for /f "delims=.-_ tokens=1,2,3" %%i in ("%~1") do (
+  set "V1MAJOR=%%~i"
+  set "V1MINOR=%%~j"
+  set "V1PATCH=%%~k"
+)
+for /f "delims=.-_ tokens=1,2,3" %%i in ("%~2") do (
+  set "V2MAJOR=%%~i"
+  set "V2MINOR=%%~j"
+  set "V2PATCH=%%~k"
+)
+if not defined V1MAJOR exit /b 1
+if not defined V2MAJOR exit /b 1
+call :compare_vernum "%V1MAJOR%" "%V2MAJOR%" DIF
+if not "%DIF%"=="=" endlocal & set "%~3=%DIF%" & exit /b 0
+call :compare_vernum "%V1MINOR%" "%V2MINOR%" DIF
+if not "%DIF%"=="=" endlocal & set "%~3=%DIF%" & exit /b 0
+call :compare_vernum "%V1PATCH%" "%V2PATCH%" DIF
+if not "%DIF%"=="=" endlocal & set "%~3=%DIF%" & exit /b 0
+endlocal  & set "%~3==" & exit /b 0
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        Firewall.GetRules                                         #
 :#                                                                            #
 :#  Description     Get a list of firewall rules, and their properties        #
