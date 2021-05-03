@@ -29,6 +29,7 @@
 #                   Added a 100ms delay before screen captures, to give time  #
 #                   to the system to redraw all fields that are reactivated.  #
 #    2019-12-03 JFL Avoid displaying an error if there is no matching window. #
+#    2020-04-23 JFL Avoid errors when modern apps (?) don't report a path.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -181,7 +182,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2019-12-03"
+$scriptVersion = "2020-04-23"
 if ($Version) {
   echo $scriptVersion
   return
@@ -444,7 +445,7 @@ Function Get-Windows {
     $windows += New-Object PSObject -Property @{
       hWnd = $hWnd
       Pathname = $_.Path
-      Program = (Get-Item $_.Path).Name
+      Program = if ($_.Path) {(Get-Item $_.Path).Name} else {$null} # Modern apps (?) sometimes don't report a path
       Title = $_.MainWindowTitle
       hParentWnd = [Win32WindowProcs]::GetParent($hWnd)
       hOwnerWnd = [Win32WindowProcs]::GetAncestor($hWnd, 3)
@@ -522,7 +523,7 @@ Function Get-Windows {
       $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($window, [ref]$processID)
       $process = Get-Process -id $processID
       $Pathname = $process.Path
-      $Program = (Get-Item $Pathname).Name
+      $Program = if ($Pathname) {(Get-Item $Pathname).Name} else {$null} # Modern apps (?) sometimes don't report a path
       # Another possible alternative: Try using GetWindowModuleFileName()
       $windows += New-Object PSObject -Property @{
 	hWnd = $window
