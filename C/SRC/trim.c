@@ -45,6 +45,8 @@
 *                   Version 1.5.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 1.6.                     *
 *    2021-01-06 JFL renamed lessive.c as trim.c. Version 2.0.                 *
+*    2021-05-03 JFL Do not change the file time if nothing changed.           *
+*                   Version 2.1.                                              *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,8 +54,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "trim"
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2021-01-06"
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2021-05-03"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -200,7 +202,7 @@ int main(int argc, char *argv[]) {
   char *pszOutName = NULL;	/* Destination file name */
   FILE *df = NULL;		/* Destination file pointer */
   char *pszTmpName = NULL;	/* Temporary file name */
-  int nChanged = 0;		/* Number of lines changed */
+  long lnChanges = 0;		/* Number of lines changed */
   char line[LINESIZE];
   char szBakName[FILENAME_MAX+1];
   int iBackup = FALSE;
@@ -386,7 +388,7 @@ open_df_failed:
     /* Make sure there's a final NUL */
     line[i] = '\0';
     /* Count lines changed */
-    if (i != l) nChanged += 1;
+    if (i != l) lnChanges += 1;
 
     fputs(line, df);
   }
@@ -395,53 +397,58 @@ open_df_failed:
   if (df != stdout) fclose(df);
   DEBUG_FPRINTF((mf, "// Writing done\n"));
 
-  if (iSameFile || iBackup) {
-    if (iBackup) {	/* Create an *.bak file in the same directory */
+  if (iSameFile && !lnChanges) { /* Nothing changed */
+    iErr = unlink(pszTmpName); 	/* Remove the temporary output file */
+  } else {
+    if (iSameFile || iBackup) {
+      if (iBackup) {	/* Create an *.bak file in the same directory */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
+        DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
 #endif
-      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if ((iErr == -1) && (errno != ENOENT)) {
-	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
-      }
-      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
-      iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
-      if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
-      }
-    } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
+	iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+	if ((iErr == -1) && (errno != ENOENT)) {
+	  fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
+	}
+	DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
+	iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
+	if (iErr == -1) {
+	  fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
+	}
+      } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
+	DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
 #endif
-      iErr = unlink(pszInName); 	/* Remove the original file */
+	iErr = unlink(pszInName); 	/* Remove the original file */
+	if (iErr == -1) {
+	  fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	}
+      }
+      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
+      iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
       if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	fail("Can't create %s. %s\n", pszOutName, strerror(errno));
       }
     }
-    DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
-    iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
-    if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszOutName, strerror(errno));
+
+    /* Copy the file mode flags */
+    if (df != stdout) {
+      int iMode = sInTime.st_mode;
+      DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
+      iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+    }
+
+    /* Optionally copy the timestamp */
+    if (!lnChanges) iCopyTime = TRUE; /* Always set the same time if there was no data change */
+    if ((sf != stdin) && (df != stdout) && iCopyTime) {
+      struct utimbuf sOutTime = {0};
+      sOutTime.actime = sInTime.st_atime;
+      sOutTime.modtime = sInTime.st_mtime;
+      utime(pszOutName, &sOutTime);
     }
   }
 
-  /* Copy the file mode flags */
-  if (df != stdout) {
-    int iMode = sInTime.st_mode;
-    DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
-    iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
-    DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
-  }
-
-  /* Optionally copy the timestamp */
-  if ((sf != stdin) && (df != stdout) && iCopyTime) {
-    struct utimbuf sOutTime = {0};
-    sOutTime.actime = sInTime.st_atime;
-    sOutTime.modtime = sInTime.st_mtime;
-    utime(pszOutName, &sOutTime);
-  }
-
-  if (iVerbose) fprintf(mf, "%d lines trimmed\n", nChanged);
+  if (iVerbose) fprintf(mf, "%ld lines trimmed\n", lnChanges);
 
   return 0;
 
@@ -472,7 +479,7 @@ void usage(void) {
     printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: trim [SWITCHES] [INFILE [OUTFILE|-same]]\n\
+Usage: trim [SWITCHES] [INFILE [OUTFILE|-=]]\n\
 \n\
 Switches:\n\
   -b|-bak  Create an *.bak backup file of existing output files\n"
@@ -481,8 +488,9 @@ Switches:\n\
   -d       Output debug information\n"
 #endif
 "\
-  -=|-same Modify the input file in place. (Default: Automatically detected)\n\
-  -st      Set the output file time to the same time as the input file.\n\
+  -=|-same Modify the input file in place. Default: Automatically detected\n\
+  -st      Set the output file time to the same time as the input file\n\
+  -v       Verbose mode\n\
 \n\
 Arguments:\n\
   INFILE   Input file pathname. Default or \"-\": stdin\n\

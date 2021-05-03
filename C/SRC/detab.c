@@ -44,6 +44,9 @@
 *                   Added options -=|--same as synonyms for -same.            *
 *                   Version 3.1.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 3.2.                     *
+*    2021-05-03 JFL Do not change the file time if nothing changed.           *
+*                   Report the number of tabs removed in verbose mode.        *
+*                   Version 3.3.                                              *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -51,8 +54,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert tabs to spaces"
 #define PROGRAM_NAME    "detab"
-#define PROGRAM_VERSION "3.2"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "3.3"
+#define PROGRAM_DATE    "2021-05-03"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -149,19 +152,20 @@ FILE *mf;			    /* Message output file */
 char usage[] = 
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: detab [OPTIONS] [INFILE [OUTFILE|-same [N]]]\n\
+Usage: detab [OPTIONS] [INFILE [OUTFILE|-= [N]]]\n\
 \n\
 Options:\n\
-  -a       Append a form feed and the output to the destination file.\n\
+  -a       Append a form feed and the output to the destination file\n\
   -b|-bak  Create an *.bak backup file of existing output files\n"
 #ifdef _DEBUG
 "\
   -d       Output debug information\n"
 #endif
 "\
-  -=|-same Modify the input file in place. (Default: Automatically detected)\n\
-  -st      Set the output file time to the same time as that of the input file.\n\
+  -=|-same Modify the input file in place. Default: Automatically detected\n\
+  -st      Set the output file time to the same time as that of the input file\n\
   -t N     Number of columns between tab stops. Default: 8\n\
+  -v       Verbose mode\n\
 \n\
 Arguments:\n\
   INFILE   Input file pathname. Default or \"-\": stdin\n\
@@ -189,6 +193,7 @@ int main(int argc, char *argv[]) {
   int iSameFile = FALSE;	/* Backup the input file, and modify it in place. */
   int iCopyTime = FALSE;	/* If true, set the out file time = in file time. */
   struct stat sInTime = {0};
+  long lnChanges = 0;		/* Number of changes done */
   char *pszPathCopy = NULL;
   char *pszDirName = NULL;	/* Output file directory */
   int iErr;
@@ -366,6 +371,7 @@ open_df_failed:
 	col++;
       } while (((col-1) % n) != 0);
       /* Must subtr. 1 since col++ is done BEFORE this check.  */
+      lnChanges += 1;			/* Count the # of tabs converted */
       break;
     case '\n':
       fputc('\n', df);
@@ -381,51 +387,58 @@ open_df_failed:
   if (df != stdout) fclose(df);
   DEBUG_FPRINTF((mf, "// Writing done\n"));
 
-  if (iSameFile || iBackup) {
-    if (iBackup) {	/* Create an *.bak file in the same directory */
+  if (iSameFile && !lnChanges) { /* Nothing changed */
+    iErr = unlink(pszTmpName); 	/* Remove the temporary output file */
+  } else {
+    if (iSameFile || iBackup) {
+      if (iBackup) {	/* Create an *.bak file in the same directory */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
+        DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
 #endif
-      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if ((iErr == -1) && (errno != ENOENT)) {
-	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
-      }
-      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
-      iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
-      if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
-      }
-    } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
+	iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+	if ((iErr == -1) && (errno != ENOENT)) {
+	  fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
+	}
+	DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
+	iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
+	if (iErr == -1) {
+	  fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
+	}
+      } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
 #if !defined(_MSVCLIBX_H_)
-      DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
+	DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
 #endif
-      iErr = unlink(pszInName); 	/* Remove the original file */
+	iErr = unlink(pszInName); 	/* Remove the original file */
+	if (iErr == -1) {
+	  fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	}
+      }
+      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
+      iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
       if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	fail("Can't create %s. %s\n", pszOutName, strerror(errno));
       }
     }
-    DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
-    iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
-    if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszOutName, strerror(errno));
+
+    /* Copy the file mode flags */
+    if (df != stdout) {
+      int iMode = sInTime.st_mode;
+      DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
+      iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
+    }
+
+    /* Optionally copy the timestamp */
+    if (!lnChanges) iCopyTime = TRUE; /* Always set the same time if there was no data change */
+    if ((sf != stdin) && (df != stdout) && iCopyTime) {
+      struct utimbuf sOutTime = {0};
+      sOutTime.actime = sInTime.st_atime;
+      sOutTime.modtime = sInTime.st_mtime;
+      utime(pszOutName, &sOutTime);
     }
   }
 
-  /* Copy the file mode flags */
-  if (df != stdout) {
-    int iMode = sInTime.st_mode;
-    DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
-    iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
-    DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
-  }
-
-  /* Optionally copy the timestamp */
-  if ((sf != stdin) && (df != stdout) && iCopyTime) {
-    struct utimbuf sOutTime = {0};
-    sOutTime.actime = sInTime.st_atime;
-    sOutTime.modtime = sInTime.st_mtime;
-    utime(pszOutName, &sOutTime);
-  }
+  if (iVerbose) fprintf(mf, "// Detab: %ld tabs removed.\n", lnChanges);
 
   return 0;
 

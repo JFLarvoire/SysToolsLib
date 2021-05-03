@@ -64,6 +64,9 @@
 *		    Version 2.3.					      *
 *    2020-08-29 JFL Removed unused routine ReportWin32Error(). Version 2.3.1. *
 *    2020-12-10 JFL Added option -= as a synonym for -same. Version 2.3.2.    *
+*    2021-05-03 JFL Do not change the file time if nothing changed.           *
+*		    Merged in the temp and backup file management code from   *
+*                   detab, trim, and remplace. Version 2.4.                   *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -71,8 +74,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.3.2"
-#define PROGRAM_DATE    "2020-12-10"
+#define PROGRAM_VERSION "2.4"
+#define PROGRAM_DATE    "2021-05-03"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -158,6 +161,7 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #define strcat lstrcat
 #define strlen lstrlen
 #define _tell(hf) _llseek(hf, 0, FILE_CURRENT)
+#define chmod	_chmod		/* This one is standard, but MSVC thinks it's not */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
@@ -207,8 +211,6 @@ HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT 
 
 int iVerbose = 0;
 FILE *mf;			/* Message output file */
-char *pszOutName = NULL;	/* Destination file name */
-FILE *df = NULL;		/* Destination file handle */
 
 void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving no traces behind */
   va_list vl;
@@ -218,12 +220,6 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
   n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
   va_end(vl);
   fprintf(stderr, "\n");
-
-  /* Remove the incomplete output file, if any */
-  if (df && (df != stdout)) {
-    fclose(df);
-    if (pszOutName) unlink(pszOutName);
-  }
 
   exit(1);
 }
@@ -240,6 +236,7 @@ int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
 int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
+int file_exists(const char *pszName);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -278,7 +275,7 @@ Options:\n\
 #endif
 "\
   -=|-same  Modify the input file in place. (Default: Automatically detected)\n\
-  -st       Set the output file time to the same time as the input file.\n\
+  -st       Set the output file time to the same time as the input file\n\
   -v        Display verbose information\n\
   -V        Display this program version\n\
   -z        Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
@@ -344,7 +341,11 @@ int __cdecl main(int argc, char *argv[]) {
   char   *pszDefaultType = "w";	/* Default encoding, if we don't know better */
   int     iBOM = 0;		/* 1=Output BOM; -1=Output NO BOM; 0=unchanged */
   FILE *sf = NULL;		/* Source file handle */
+  FILE *df = NULL;		/* Destination file handle */
   char *pszInName = NULL;	/* Source file name */
+  char *pszOutName = NULL;	/* Destination file name */
+  char *pszTmpName = NULL;	/* Temporary file name */
+  long lnChanges = 0;		/* Number of changes */
   char szBakName[FILENAME_MAX+1];
   int iSameFile = FALSE;	/* Modify the input file in place. */
   int iBackup = FALSE;		/* With iSameFile, back it up first. */
@@ -528,18 +529,38 @@ fail_no_mem:
     stat(pszInName, &sInTime);
   }
   if ((!pszOutName) || streq(pszOutName, "-")) {
-    if (!iSameFile) df = stdout;
-  } else { /* Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
+    if (pszOutName) iSameFile = FALSE;	/* If pszOutName is "-", iSameFile is meaningless */
+    if (!iSameFile) {
+      df = stdout;
+    } else {
+      pszOutName = pszInName;
+    }
+  } else { /*  Ignore the -iSameFile argument. Instead, verify if they're actually the same. */
     iSameFile = IsSameFile(pszInName, pszOutName);
+    if (iBackup && !file_exists(pszOutName)) iBackup = FALSE; /* There's nothing to backup */
   }
-  if (iSameFile) {
-    DEBUG_FPRINTF((mf, "// In and out files are the same. Writing to a temp file.\n"));
-    pszPathCopy = strdup(pszInName);
+  if (iSameFile || iBackup) { /* Then write to a temporary file */
+    int iFile;
+    /* But do as if we were writing directly to the target file.
+       Test the write rights before wasting time on the conversion */
+    df = fopen(pszOutName, "r+");
+    if (!df) goto open_df_failed;
+    fclose(df);
+    df = NULL;
+    /* OK, we have write rights, so go ahead with the conversion */
+    DEBUG_FPRINTF((mf, "// %s. Writing to a temp file.\n", iSameFile ? "In and out files are the same" : "Backup requested"));
+    pszPathCopy = strdup(pszOutName);
     if (!pszPathCopy) goto fail_no_mem;
     pszDirName = dirname(pszPathCopy);
-    pszOutName = tempnam(pszDirName, "conv.");
-    DEBUG_FPRINTF((mf, "tempnam(\"%s\", \"conv.\"); // \"%s\"\n", pszDirName, pszOutName));
-    if (iBackup) {	/* Create an *.bak file in the same directory */
+    pszTmpName = strdup(pszDirName);
+    if (pszTmpName) pszTmpName = realloc(pszTmpName, strlen(pszTmpName)+10);
+    if (!pszTmpName) goto fail_no_mem;
+    strcat(pszTmpName, DIRSEPARATOR_STRING "dtXXXXXX");
+    iFile = mkstemp(pszTmpName);
+    if (iFile == -1) fail("Can't create temporary file %s. %s\n", pszTmpName, strerror(errno));
+    df = fdopen(iFile, "wb+");
+    if (!df) goto open_df_failed;
+    if (iBackup) { /* Create the name of an *.bak file in the same directory */
       char *pszNameCopy = strdup(pszInName);
       char *pszBaseName = basename(pszNameCopy);
       char *pc;
@@ -563,6 +584,7 @@ fail_no_mem:
   if (!df) {
     df = fopen(pszOutName, "wb");
     if (!df) {
+open_df_failed:
       if (sf != stdout) fclose(sf);
       fail("Can't open file %s\n", pszOutName);
     }
@@ -739,18 +761,25 @@ fail_no_mem:
     /* Optionally decode mime encoded words left in */
     isEncoding(pszInType, NULL, &pszCharEnc);
     if (pszCharEnc) {
+      size_t nTotal0 = nTotal;
       if (streq(pszCharEnc, "utf-8")) { /* Workaround for the unknown \xC3\x20 sequence: Use \xC3\xA0 instead. */
 	size_t n;
 	for (n=0; n<(nTotal-1); n++) {
-	  if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) pszBuffer[++n] = '\xA0';
+	  if (memcmp(pszBuffer+n, "\xC3\x20", 2) == 0) {
+	    pszBuffer[++n] = '\xA0';
+	    lnChanges += 1;
+	  }
 	}
       }
       nTotal = MimeWordDecode(pszBuffer, nTotal, pszCharEnc);
+      if (nTotal != nTotal0) lnChanges += 1;
     }
 
     /* Use Windows' character set conversion routine. */
     nOutputSize = ConvertCharacterSet(pszBuffer, nTotal, pszOutBuf, nOutBufSize,
 					    pszInType, pszOutType, iBOM);
+    /* TO DO: Find a way to count the actual number of characters changed */
+    if ((nOutputSize != nTotal) || memcmp(pszBuffer, pszOutBuf, nTotal)) lnChanges += 1;
 
     if (!fwrite(pszOutBuf, nOutputSize, 1, df)) {
       WIN32FAIL("Cannot write to the output file.");
@@ -760,41 +789,60 @@ fail_no_mem:
 
   if (sf != stdin) fclose(sf);
   if (df != stdout) fclose(df);
+  DEBUG_FPRINTF((mf, "// Writing done\n"));
 
-  if (iSameFile) {
-    if (iBackup) {	/* Create an *.bak file in the same directory */
-      iErr = unlink(szBakName); 	/* Remove the .bak if already there */
-      if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
+  if (iSameFile && !lnChanges) { /* Nothing changed */
+    iErr = unlink(pszTmpName); 	/* Remove the temporary output file */
+  } else {
+    if (iSameFile || iBackup) {
+      if (iBackup) {	/* Create an *.bak file in the same directory */
+#if !defined(_MSVCLIBX_H_)
+        DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", szBakName));
+#endif
+	iErr = unlink(szBakName); 	/* Remove the .bak if already there */
+	if ((iErr == -1) && (errno != ENOENT)) {
+	  fail("Can't delete file %s. %s\n", szBakName, strerror(errno));
+	}
+	DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszOutName, szBakName));
+	iErr = rename(pszOutName, szBakName);	/* Rename the source as .bak */
+	if (iErr == -1) {
+	  fail("Can't backup %s. %s\n", pszOutName, strerror(errno));
+	}
+      } else {		/* iSameFile==TRUE && iBackup==FALSE. Don't keep a backup of the input file */
+#if !defined(_MSVCLIBX_H_)
+	DEBUG_FPRINTF((mf, "unlink(\"%s\");\n", pszInName));
+#endif
+	iErr = unlink(pszInName); 	/* Remove the original file */
+	if (iErr == -1) {
+	  fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	}
       }
-      DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszInName, szBakName));
-      iErr = rename(pszInName, szBakName);	/* Rename the source as .bak */
+      DEBUG_FPRINTF((mf, "rename(\"%s\", \"%s\");\n", pszTmpName, pszOutName));
+      iErr = rename(pszTmpName, pszOutName); /* Rename the temporary file as the destination */
       if (iErr == -1) {
-	fail("Can't backup %s. %s\n", pszInName, strerror(errno));
-      }
-    } else {		/* Don't keep a backup of the input file */
-      DEBUG_FPRINTF((mf, "// Remove \"%s\"\n", pszInName));
-      iErr = unlink(pszInName); 	/* Remove the original file */
-      if (iErr == -1) {
-	fail("Can't delete file %s. %s\n", pszInName, strerror(errno));
+	fail("Can't create %s. %s\n", pszOutName, strerror(errno));
       }
     }
-    DEBUG_FPRINTF((mf, "// Rename \"%s\" as \"%s\"\n", pszOutName, pszInName));
-    iErr = rename(pszOutName, pszInName);	/* Rename the destination as the source */
-    if (iErr == -1) {
-      fail("Can't create %s. %s\n", pszInName, strerror(errno));
+
+    /* Copy the file mode flags */
+    if (df != stdout) {
+      int iMode = sInTime.st_mode;
+      DEBUG_PRINTF(("chmod(\"%s\", 0x%X);\n", pszOutName, iMode));
+      iErr = chmod(pszOutName, iMode); /* Try making the target file writable */
+      DEBUG_PRINTF(("  return %d; // errno = %d\n", iErr, errno));
     }
-    pszOutName = pszInName;
+
+    /* Optionally copy the timestamp */
+    if (!lnChanges) iCopyTime = TRUE; /* Always set the same time if there was no data change */
+    if ((sf != stdin) && (df != stdout) && iCopyTime) {
+      struct utimbuf sOutTime = {0};
+      sOutTime.actime = sInTime.st_atime;
+      sOutTime.modtime = sInTime.st_mtime;
+      utime(pszOutName, &sOutTime);
+    }
   }
 
-  if ((sf != stdin) && (df != stdout) && iCopyTime) {
-    struct utimbuf sOutTime = {0};
-    sOutTime.actime = sInTime.st_atime;
-    sOutTime.modtime = sInTime.st_mtime;
-    utime(pszOutName, &sOutTime);
-  }
-
-  verbose((mf, "Exiting\n"));
+  verbose((mf, "Exiting. %s.\n", lnChanges ? "Data converted" : "Data unchanged"));
   return 0;
 }
 
@@ -1561,3 +1609,33 @@ DWORD GetTrueWindowsVersion(void) {
 }
 
 #endif /* defined(_WIN32) */
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    file_exists						      |
+|									      |
+|   Description     Check if a pathname refers to an existing file	      |
+|									      |
+|   Parameters:     char *pszPathname	    The pathname to check	      |
+|                   							      |
+|   Returns	    1 = It's a file; 0 = It does not exist, or it's not a file|
+|									      |
+|   Notes	    Uses stat, to check what's really behind links	      |
+|		    							      |
+|   History								      |
+|    2020-04-04 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int file_exists(const char *pszName) {	/* Does this file exist? (TRUE/FALSE) */
+  struct stat st;
+  int iErr;
+
+  DEBUG_ENTER(("file_exists(\"%s\");\n", pszName));
+
+  iErr = stat(pszName, &st);		/* Get the status of that file */
+  if (iErr) RETURN_CONST(FALSE);	/* It does not exist, or is inaccessible anyway */
+
+  RETURN_INT(S_ISREG(st.st_mode));
+}
+
