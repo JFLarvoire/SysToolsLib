@@ -4,6 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-05-03
+### Changed
+- C/SRC/conv.c, detab.c, trim.c: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
+- Batch/Library.bat: Added function :compare_versions.
+- PowerShell/Window.ps1: Avoid generating errors when modern apps (?) don't report a path.
+
 ## [Unreleased] 2021-04-18
 ### Changed
 - C/SRC/remplace.c: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
