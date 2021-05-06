@@ -33,6 +33,11 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.2.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.2.4.      *
 *    2020-04-20 JFL Added support for MacOS. Version 2.3.                     *
+*    2021-05-03 JFL Removed the -filter option, and use the standard - to     *
+*                   specify the input comes from stdin.			      *
+*                   Add -= and -same as equivalents of -self.		      *
+*                   Add an optional output file name.        		      *
+*		    Version 3.0.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -40,8 +45,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove Form Feeds from a text"
 #define PROGRAM_NAME    "deffeed"
-#define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "3.0"
+#define PROGRAM_DATE    "2021-05-03"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -129,6 +134,7 @@ char *buffer = NULL;
 /* Forward references */
 
 void usage(void);
+int IsSwitch(char *pszArg);
 int detab(char *line, int length, int tab);
 int output_line(int np, int nl, char *format, char *text, FILE *fdest);
 
@@ -153,458 +159,394 @@ int output_line(int np, int nl, char *format, char *text, FILE *fdest);
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 #endif
 
-int main(int argc, char *argv[])
-    {
-    int lpp = -1;       /* Lines per page (default: 60) */
-    int tab = -1;       /* Spaces per tab (default: 8) */
-    int nsp = 0;        /* Spaces before each line (default: 0) */
-    int extra = 0;      /* Extra lines after each page (default: 0) */
-    int modnp = 1;      /* Number of logical pages on a physical page */
-    int fptp = 0;       /* Number of logical full pages to print (0 = Off) */
-    int fptp0 = 0;      /* Same for physical pages in multicolumn operation */
-    char line[BUFSIZE]; /* Line buffer */
-    int length;         /* Length of above buffer */
-    char *pline;        /* Pointer on the beginning of the line */
-    int nl = 0;         /* Current line number (0 to lpp-1) */
-    int np = 0;         /* Current page number, modulo modnp */
-    int npt = 0;        /* Current page number */
-    char *format;       /* output format */
-    int top_without_ff = TRUE; /* TRUE if we've reached the top of page without a form-feed */
-    int i;
-    char *source=NULL;  /* Source file name */
-    FILE *fsource=stdin;/* Source file pointer */
-    FILE *fdest;        /* Destination file pointer */
-    char *pszSetup=NULL;/* Setup file name */
-    FILE *fsetup;       /* Setup file pointer */
-    char *cleanup=NULL; /* Cleanup file name */
-    FILE *fcleanup;	/* Cleanup file pointer */
-    int filter = FALSE; /* If TRUE, use stdin for the input */
-    int nerrors = 0;    /* Number of errors */
-    int nwarnings = 0;  /* Number of warnings */
-    int buffer_size;    /* Size of the multicolumn buffer */
-    int iSelf = FALSE;	/* If TRUE, output file = input file */
-    char szTempFileName[_MAX_PATH] = {0};
-    char *pc;
+int main(int argc, char *argv[]) {
+  int lpp = -1;       /* Lines per page (default: 60) */
+  int tab = -1;       /* Spaces per tab (default: 8) */
+  int nsp = 0;        /* Spaces before each line (default: 0) */
+  int extra = 0;      /* Extra lines after each page (default: 0) */
+  int modnp = 1;      /* Number of logical pages on a physical page */
+  int fptp = 0;       /* Number of logical full pages to print (0 = Off) */
+  int fptp0 = 0;      /* Same for physical pages in multicolumn operation */
+  char line[BUFSIZE]; /* Line buffer */
+  int length;         /* Length of above buffer */
+  char *pline;        /* Pointer on the beginning of the line */
+  int nl = 0;         /* Current line number (0 to lpp-1) */
+  int np = 0;         /* Current page number, modulo modnp */
+  int npt = 0;        /* Current page number */
+  char *format;       /* output format */
+  int top_without_ff = TRUE; /* TRUE if we've reached the top of page without a form-feed */
+  int i;
+  char *source=NULL;  /* Source file name */
+  FILE *fsource=stdin;/* Source file pointer */
+  char *dest=NULL;    /* Destination file name */
+  FILE *fdest;        /* Destination file pointer */
+  char *pszSetup=NULL;/* Setup file name */
+  FILE *fsetup;       /* Setup file pointer */
+  char *cleanup=NULL; /* Cleanup file name */
+  FILE *fcleanup;     /* Cleanup file pointer */
+  int nerrors = 0;    /* Number of errors */
+  int buffer_size;    /* Size of the multicolumn buffer */
+  int iSameFile = FALSE; /* If TRUE, output file = input file */
+  char szTempFileName[_MAX_PATH] = {0};
+  char *pc;
+  int isInt;          /* TRUE if the argument is an integer */
+  int iValue;         /* If isInt, the value of that integer */
 
-    for (i=1; i<argc; i++)          /* Process all command line arguments */
-        {
-        if (   (*(argv[i]) == '/')          /* Process switches first */
-            || (*(argv[i]) == '-') )
-            {
-	    if (   streq(argv[i]+1, "help")
-		|| streq(argv[i]+1, "h")
-		|| streq(argv[i]+1, "?"))
-                {
-                usage();
-                }
-	    if (streq(argv[i]+1, "cleanup"))
-                {
-                if ((i+1) < argc)
-                    {
-                    i += 1;
-		    cleanup = argv[i];
-                    }
-                else
-                    {
-		    fprintf(stderr, "Cleanup file not specified.\n");
-                    nwarnings += 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "extra"))
-                {
-                int temp;
-
-                /* Attemp to read the optionnal value following -extra */
-                if ( ((i+1) < argc) && (sscanf(argv[i+1], "%d", &temp) == 1) && (temp >= 0))
-                    {
-                    /* If there was indeed a value, and its conversion
-                    succeeded, then store it in the "extra" variable */
-                    extra = temp;
-                    i += 1;
-                    }
-                else
-                    {
-                    /* Else use the default number of extra lines */
-                    extra = 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "dcol"))
-                {
-                int temp1, temp2;
-
-                /* Attemp to read the value following -nsp */
-                temp1 = sscanf(argv[i+1], "%d", &temp2);
-                /* If there was a valid value, store it in "nsp" */
-                if ( ((i+1) < argc) && (temp1 == 1))
-                    {
-                    dcols = temp2;
-                    i += 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "filter"))
-                {
-                filter = TRUE;
-                continue;
-                }
-	    if (streq(argv[i]+1, "fp"))
-                {
-                int temp1, temp2;
-
-                /* Attemp to read the value following -page */
-                temp1 = sscanf(argv[i+1], "%d", &temp2);
-                /* If there was a valid value, store it in "fptp" */
-                if ( ((i+1) < argc) && (temp1 == 1))
-                    {
-                    fptp = temp2;
-                    i += 1;
-                    }
-                else
-                    {
-                    /* Else use the default number of full pages */
-                    fptp = 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "ncol"))
-                {
-                int temp1, temp2;
-
-                /* Attemp to read the value following -nsp */
-                temp1 = sscanf(argv[i+1], "%d", &temp2);
-                /* If there was a valid value, store it in "nsp" */
-                if ( ((i+1) < argc) && (temp1 == 1))
-                    {
-                    ncols = temp2;
-                    i += 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "nsp"))
-                {
-                int temp1, temp2;
-
-                /* Attemp to read the value following -nsp */
-                temp1 = sscanf(argv[i+1], "%d", &temp2);
-                /* If there was a valid value, store it in "nsp" */
-                if ( ((i+1) < argc) && (temp1 == 1))
-                    {
-                    nsp = temp2;
-                    i += 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "self"))
-                {
-                iSelf = TRUE;
-                continue;
-                }
-	    if (streq(argv[i]+1, "setup"))
-                {
-                if ((i+1) < argc)
-                    {
-                    i += 1;
-                    pszSetup = argv[i];
-                    }
-                else
-                    {
-                    fprintf(stderr, "Setup file not specified.\n");
-                    nwarnings += 1;
-                    }
-                continue;
-                }
-	    if (streq(argv[i]+1, "V"))		/* -V: Display version information */
-                {
-		puts(DETAILED_VERSION);
-		return 0;
-                }
-	    if (streq(argv[i]+1, "wcol"))
-                {
-                int temp1, temp2;
-
-                /* Attemp to read the value following -nsp */
-                temp1 = sscanf(argv[i+1], "%d", &temp2);
-                /* If there was a valid value, store it in "nsp" */
-                if ( ((i+1) < argc) && (temp1 == 1))
-                    {
-                    wcols = temp2;
-                    i += 1;
-                    }
-                continue;
-                }
-            fprintf(stderr, "Invalid switch %s\n", argv[i]);
-            nwarnings += 1;
-            continue;
-            }
-        /* Assign optionnal arguments in their official order (see usage) */
-        if (lpp == -1)
-            {
-            int temp1, temp2;
-
-            temp1 = sscanf(argv[i], "%d", &temp2);
-            if (temp1 == 1)
-                {
-                /* If there was a valid value, store it in "lpp" */
-                lpp = temp2;
-                continue;
-                }
-            else
-                {
-                /* Else use default, and assume argv[i] is a source name */
-                lpp = DEFLPP;
-                }
-            }
-        if (!source && !filter)
-            {
-            source = argv[i];
-            continue;
-            }
-        if (tab == -1)
-            {
-            sscanf(argv[i], "%d", &tab);
-            continue;
-            }
-        fprintf(stderr, "Too many arguments.\n");
-        nwarnings += 1;
-        }
-
-    if (source)
-        {
-        if (filter)
-            {
-            fprintf(stderr, "Too many arguments.\n");
-            nwarnings += 1;
-            }
-        else
-            {
-            /* If the source file name is provided, try to open the file */
-            fsource = fopen(source, "r");
-            if (!fsource)
-                {
-                fprintf(stderr, "Can't open input file %s.\n", source);
-                exit(1);
-                }
-            if (tab == -1)
-                {
-#if NEEDED
-                i = strlen(source);
-                if (   (strcmpi(source+i-2, ".C")==0)
-                    || (strcmpi(source+i-2, ".H")==0) )
-                    tab = 4;
-		else
-#endif
-                    tab = 8;
-                }
-            }
-        }
-    else
-        {
-        /* Else use standard input */
-        if (filter)
-            fsource = stdin;
-        else
-            nerrors += 1;
-        }
-
-    if (iSelf)
-	{
-	pc = getenv("TEMP");
-	if (pc)
-	    strcpy(szTempFileName, pc);
-	else
-	    strcpy(szTempFileName, getcwd(NULL, _MAX_PATH));
-	if (pc[strlen(szTempFileName)-1] != '\\') strcat(szTempFileName, "\\");
-	strcat(szTempFileName, "DEFFEED.TMP");
-	fdest = fopen(szTempFileName, "w");
-	if (!fdest)
-	    {
-	    printf("Can't open file %s.\n", szTempFileName);
-	    exit(1);
-	    }
+  for (i=1; i<argc; i++) {        /* Process all command line arguments */
+    char *pszArg = argv[i];
+    if (IsSwitch(pszArg)) {		/* It's a switch */
+      char *pszOpt = pszArg+1;
+      if (   streq(pszOpt, "help")
+	  || streq(pszOpt, "h")
+	  || streq(pszOpt, "?")) {
+	usage();
+      }
+      if (streq(pszOpt, "cleanup")) {
+	if ((i+1) < argc) {
+	  cleanup = argv[++i];
+	} else {
+	  fprintf(stderr, "Cleanup file not specified.\n");
+	  nerrors += 1;
 	}
-     else
-	{
-	fdest = stdout;
+	continue;
+      }
+      if (streq(pszOpt, "extra")) {
+	int temp;
+
+	/* Attemp to read the optionnal value following -extra */
+	if ( ((i+1) < argc) && (sscanf(argv[i+1], "%d", &temp) == 1) && (temp >= 0)) {
+	  /* If there was indeed a value, and its conversion
+	  succeeded, then store it in the "extra" variable */
+	  extra = temp;
+	  i += 1;
+	} else {
+	  /* Else use the default number of extra lines */
+	  extra = 1;
 	}
+	continue;
+      }
+      if (streq(pszOpt, "dcol")) {
+	int temp1, temp2;
 
-    if (nwarnings || nerrors)
-        fprintf(stderr,
-                "Type deffeed -help for a description of the arguments\n");
-
-    if (nerrors) exit(1);
-
-    /* Make sure defaults are set */
-    if (lpp == -1) lpp = DEFLPP;
-    if (tab == -1) tab = 8;
-
-    fprintf(stderr, "%d lines per page, %d lines between pages", lpp, extra);
-    if (fptp)
-        fprintf(stderr, ", fill a multiple of %d pages", fptp);
-    else
-        fprintf(stderr, ", do not fill the last page");
-    fprintf(stderr, ".\n");
-
-    if (ncols > 1) /* fptp must be set for multicolumn operation */
-        {
-        fptp0 = fptp;           /* Remember the original setting */
-        if (!fptp) fptp = 1;
-        fptp *= ncols;          /* One physical page is ncols logical pages */
-        }
-    if (fptp) modnp = fptp;     /* Else default 1 */
-
-    /* Allocate the buffer */
-    buffer_size = (wcols + dcols) * ncols * (lpp + extra);
-    buffer = malloc(buffer_size);
-    if (!buffer)
-        {
-        fprintf(stderr, "Not enough memory to run.\n");
-        exit(1);
-        }
-
-    /* Copy the setup file */
-    if (pszSetup)
-        {
-        fsetup = fopen(pszSetup, "rb");
-        if (!fsetup)
-            {
-            fprintf(stderr, "Can't open setup file %s.\n", pszSetup);
-            usage();
-            }
-        setmode(fileno(fdest), O_BINARY);
-        while ((i = (int)fread(line, 1, BUFSIZE, fsetup)))
-            fwrite(line, 1, i, fdest);
-        setmode(fileno(fdest), O_TEXT);
-        fclose(fsetup);
-        }
-
-    format = "          %s\n";		/* 10 spaces then the line then CRLF */
-    format += (10 - nsp);               /* keep only the required spaces */
-
-    while ((pline = fgets(line, BUFSIZE, fsource)))
-        {
-        if (nl > 0) top_without_ff = FALSE; /* It's not the top line anymore */
-        
-        /* Remove the trailing carrier-return(s) and linefeed */
-        i = (int)strlen(pline);
-        while ((i>0) && ((pline[i-1] == '\n') || (pline[i-1] == '\r')))
-            {
-            pline[--i]='\0';
-            }
-
-        length = BUFSIZE;
-
-        while (*pline == '\f')             /* If line begins with a form feed */
-            {
-            pline += 1;
-            length -= 1;
-            if (!top_without_ff)    /* Except in the case where we're at top line without a form-feed... */
-                {		    /*  ... fill-up the rest of the page with blank lines.		 */
-		DEBUG_CODE(fprintf(stderr, "Processing form-feed on page %d line %d.\n", npt, nl);)
-                while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
-                nl = 0;
-                np += 1;
-                np %= modnp;
-                npt += 1;
-                }
-            else
-                {
-		DEBUG_CODE(fprintf(stderr, "Skipping form-feed on page %d line %d.\n", npt, nl);)
-                }
-	    top_without_ff = FALSE; /* Do this exception only once. (We've had a form-feed now.) */
-            }
-        if ((nl == 0) && (!*pline) && (top_without_ff == FALSE)) continue; /* Ignore CRLF immediately following a FF */
-        if (*pline == '\b')
-            {
-            pline += 1;     /* Remove backspaces at column 0 */
-            length -= 1;
-            }
-        detab(pline, length, tab);
-        output_line(np, nl, format, pline, fdest);
-        nl += 1;
-        if (nl == lpp)
-            {
-            DEBUG_CODE(fprintf(stderr, "Reached end of page %d on line %d. Moving to top of next page.\n", npt, nl);)
-            for (i=0; i<extra; i++) output_line(np, nl+i, format, "", fdest);
-            nl = 0;
-            np += 1;
-            np %= modnp;
-            npt += 1;
-            top_without_ff = TRUE;	/* Flag the fact we automatically fed a page. */
-            }
-        }
-
-    if (fptp)
-        {
-        if (np || nl)
-            {
-            if (!ncols || fptp0)
-                {
-                while (np < fptp)
-                    {
-                    while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
-                    nl = 0;
-                    np += 1;
-                    }
-                }
-            else /* Do not output the very last line feed in multicolumn mode */
-                {
-                while (np < fptp - 1)
-                    {
-                    while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
-                    nl = 0;
-                    np += 1;
-                    }
-                while (nl < lpp+extra-1) output_line(np, nl++, format, "", fdest);
-                i = (int)strlen(format);
-                format[i-1] = ' ';      /* Remove the line feed */
-                output_line(np, nl++, format, "", fdest);
-                nl = 0;
-                np += 1;
-                }
-            np = 0;
-            }
-        }
-
-    /* Copy the cleanup file */
-    if (cleanup)
-        {
-	fcleanup = fopen(cleanup, "rb");
-	if (!fcleanup)
-            {
-	    fprintf(stderr, "Can't open cleanup file %s.\n", cleanup);
-            usage();
-            }
-        setmode(fileno(fdest), O_BINARY);
-	while ((i = (int)fread(line, 1, BUFSIZE, fcleanup)))
-            fwrite(line, 1, i, fdest);
-        setmode(fileno(fdest), O_TEXT);
-	fclose(fcleanup);
-        }
-
-    /* Close the input and output files */
-    if (fsource != stdin) fclose(fsource);
-    if (fdest != stdout) fclose(fdest);
-
-    /* Rename the temporary file */
-    if (szTempFileName[0])
-	{
-	char szBakName[_MAX_PATH];
-
-	strcpy(szBakName, source);
-	pc = strrchr(szBakName, '.');
-	if (pc && !strchr(pc, '\\'))	    /* If extension in name & not in path */
-	    strcpy(pc, ".BAK"); 	    /* Change extension to .BAK */
-	else
-	    strcat(szBakName, ".BAK");	    /* Set extension to .BAK */
-	unlink(szBakName);		    /* Remove the .bak if already there */
-	rename(source, szBakName);	    /* Rename the source as .BAK */
-	rename(szTempFileName, source);
+	/* Attemp to read the value following -nsp */
+	temp1 = sscanf(argv[i+1], "%d", &temp2);
+	/* If there was a valid value, store it in "nsp" */
+	if ( ((i+1) < argc) && (temp1 == 1)) {
+	  dcols = temp2;
+	  i += 1;
 	}
+	continue;
+      }
+      if (streq(pszOpt, "fp")) {
+	int temp1, temp2;
 
-    return 0;
+	/* Attemp to read the value following -page */
+	temp1 = sscanf(argv[i+1], "%d", &temp2);
+	/* If there was a valid value, store it in "fptp" */
+	if ( ((i+1) < argc) && (temp1 == 1)) {
+	  fptp = temp2;
+	  i += 1;
+	} else {
+	  /* Else use the default number of full pages */
+	  fptp = 1;
+	}
+	continue;
+      }
+      if (streq(pszOpt, "ncol")) {
+	int temp1, temp2;
+
+	/* Attemp to read the value following -nsp */
+	temp1 = sscanf(argv[i+1], "%d", &temp2);
+	/* If there was a valid value, store it in "nsp" */
+	if ( ((i+1) < argc) && (temp1 == 1)) {
+	  ncols = temp2;
+	  i += 1;
+	}
+	continue;
+      }
+      if (streq(pszOpt, "nsp")) {
+	int temp1, temp2;
+
+	/* Attemp to read the value following -nsp */
+	temp1 = sscanf(argv[i+1], "%d", &temp2);
+	/* If there was a valid value, store it in "nsp" */
+	if ( ((i+1) < argc) && (temp1 == 1)) {
+	  nsp = temp2;
+	  i += 1;
+	}
+	continue;
+      }
+      if (   streq(pszOpt, "=")
+      	  || streq(pszOpt, "same")
+      	  || streq(pszOpt, "self")) {
+	iSameFile = TRUE;
+	continue;
+      }
+      if (streq(pszOpt, "setup")) {
+	if ((i+1) < argc) {
+	  pszSetup = argv[++i];
+	} else {
+	  fprintf(stderr, "Setup file not specified.\n");
+	  nerrors += 1;
+	}
+	continue;
+      }
+      if (streq(pszOpt, "V")) {		/* -V: Display version information */
+	puts(DETAILED_VERSION);
+	return 0;
+      }
+      if (streq(pszOpt, "wcol")) {
+	int temp1, temp2;
+
+	/* Attemp to read the value following -nsp */
+	temp1 = sscanf(argv[i+1], "%d", &temp2);
+	/* If there was a valid value, store it in "nsp" */
+	if ( ((i+1) < argc) && (temp1 == 1)) {
+	  wcols = temp2;
+	  i += 1;
+	}
+	continue;
+      }
+      fprintf(stderr, "Invalid switch %s\n", pszArg);
+      nerrors += 1;
+      continue;
     }
+    /* Assign optionnal arguments in their official order (see usage) */
+    isInt = sscanf(pszArg, "%d", &iValue);
+    if (lpp == -1) {
+      if (isInt) {
+	/* If there was a valid value, store it in "lpp" */
+	lpp = iValue;
+	continue;
+      } else {
+	/* Else use default, and assume pszArg is a source name */
+	lpp = DEFLPP;
+      }
+    }
+    if ((!source) && !isInt) {
+      source = pszArg;
+      continue;
+    }
+    if ((!dest) && !isInt) {
+      int iTemp;
+      if (!sscanf(pszArg, "%d", &iTemp)) {
+	dest = pszArg;
+	continue;
+      }
+    }
+    if ((tab == -1) && isInt) {
+      sscanf(pszArg, "%d", &tab);
+      continue;
+    }
+    fprintf(stderr, "Unexpected argument: %s\n", pszArg);
+    nerrors += 1;
+  }
+
+  if (nerrors) {
+    fprintf(stderr,
+	    "Type deffeed -help for a description of the arguments\n");
+    exit(1);
+  }
+
+  if (source && !streq(source, "-")) {
+    /* If the source file name is provided, try to open the file */
+    fsource = fopen(source, "r");
+    if (!fsource) {
+      fprintf(stderr, "Can't open input file %s.\n", source);
+      exit(1);
+    }
+    if (tab == -1) {
+#if NEEDED
+      i = strlen(source);
+      if (   (strcmpi(source+i-2, ".C")==0)
+	  || (strcmpi(source+i-2, ".H")==0) ) {
+	tab = 4;
+      } else
+#endif
+	tab = 8;
+    }
+  } else {
+    /* Else use standard input */
+    fsource = stdin;
+  }
+
+  if (dest && !streq(dest, "-")) {
+    fdest = fopen(dest, "w");
+    if (!fdest) {
+      printf("Can't open file %s.\n", dest);
+      exit(1);
+    }
+  } else if (iSameFile) {
+    pc = getenv("TEMP");
+    if (pc) {
+      strcpy(szTempFileName, pc);
+    } else {
+      strcpy(szTempFileName, getcwd(NULL, _MAX_PATH));
+    }
+    if (pc[strlen(szTempFileName)-1] != '\\') strcat(szTempFileName, "\\");
+    strcat(szTempFileName, "DEFFEED.TMP");
+    fdest = fopen(szTempFileName, "w");
+    if (!fdest) {
+      printf("Can't open file %s.\n", szTempFileName);
+      exit(1);
+    }
+  } else {
+    fdest = stdout;
+  }
+
+  /* Make sure defaults are set */
+  if (lpp == -1) lpp = DEFLPP;
+  if (tab == -1) tab = 8;
+
+  fprintf(stderr, "%d lines per page, %d lines between pages", lpp, extra);
+  if (fptp) {
+    fprintf(stderr, ", fill a multiple of %d pages", fptp);
+  } else {
+    fprintf(stderr, ", do not fill the last page");
+  }
+  fprintf(stderr, ".\n");
+
+  if (ncols > 1) { /* fptp must be set for multicolumn operation */
+    fptp0 = fptp;           /* Remember the original setting */
+    if (!fptp) fptp = 1;
+    fptp *= ncols;          /* One physical page is ncols logical pages */
+  }
+  if (fptp) modnp = fptp;     /* Else default 1 */
+
+  /* Allocate the buffer */
+  buffer_size = (wcols + dcols) * ncols * (lpp + extra);
+  buffer = malloc(buffer_size);
+  if (!buffer) {
+    fprintf(stderr, "Not enough memory to run.\n");
+    exit(1);
+  }
+
+  /* Copy the setup file */
+  if (pszSetup) {
+    fsetup = fopen(pszSetup, "rb");
+    if (!fsetup) {
+      fprintf(stderr, "Can't open setup file %s.\n", pszSetup);
+      usage();
+    }
+    setmode(fileno(fdest), O_BINARY);
+    while ((i = (int)fread(line, 1, BUFSIZE, fsetup))) {
+      fwrite(line, 1, i, fdest);
+    }
+    setmode(fileno(fdest), O_TEXT);
+    fclose(fsetup);
+  }
+
+  format = "          %s\n";		/* 10 spaces then the line then CRLF */
+  format += (10 - nsp);               /* keep only the required spaces */
+
+  while ((pline = fgets(line, BUFSIZE, fsource))) {
+    if (nl > 0) top_without_ff = FALSE; /* It's not the top line anymore */
+    
+    /* Remove the trailing carrier-return(s) and linefeed */
+    i = (int)strlen(pline);
+    while ((i>0) && ((pline[i-1] == '\n') || (pline[i-1] == '\r'))) {
+      pline[--i]='\0';
+    }
+
+    length = BUFSIZE;
+
+    while (*pline == '\f') {            /* If line begins with a form feed */
+      pline += 1;
+      length -= 1;
+      if (!top_without_ff) { /* Except in the case where we're at top line without a form-feed... */
+	   		     /*  ... fill-up the rest of the page with blank lines.		 */
+	DEBUG_CODE(fprintf(stderr, "Processing form-feed on page %d line %d.\n", npt, nl);)
+	while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
+	nl = 0;
+	np += 1;
+	np %= modnp;
+	npt += 1;
+      } else {
+	DEBUG_CODE(fprintf(stderr, "Skipping form-feed on page %d line %d.\n", npt, nl);)
+      }
+      top_without_ff = FALSE; /* Do this exception only once. (We've had a form-feed now.) */
+    }
+    if ((nl == 0) && (!*pline) && (top_without_ff == FALSE)) continue; /* Ignore CRLF immediately following a FF */
+    if (*pline == '\b') {
+      pline += 1;     /* Remove backspaces at column 0 */
+      length -= 1;
+    }
+    detab(pline, length, tab);
+    output_line(np, nl, format, pline, fdest);
+    nl += 1;
+    if (nl == lpp) {
+      DEBUG_CODE(fprintf(stderr, "Reached end of page %d on line %d. Moving to top of next page.\n", npt, nl);)
+      for (i=0; i<extra; i++) output_line(np, nl+i, format, "", fdest);
+      nl = 0;
+      np += 1;
+      np %= modnp;
+      npt += 1;
+      top_without_ff = TRUE;	/* Flag the fact we automatically fed a page. */
+    }
+  }
+
+  if (fptp) {
+    if (np || nl) {
+      if (!ncols || fptp0) {
+	while (np < fptp) {
+	  while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
+	  nl = 0;
+	  np += 1;
+	}
+      } else { /* Do not output the very last line feed in multicolumn mode */
+	while (np < fptp - 1) {
+	  while (nl < lpp+extra) output_line(np, nl++, format, "", fdest);
+	  nl = 0;
+	  np += 1;
+	}
+	while (nl < lpp+extra-1) output_line(np, nl++, format, "", fdest);
+	i = (int)strlen(format);
+	format[i-1] = ' ';      /* Remove the line feed */
+	output_line(np, nl++, format, "", fdest);
+	nl = 0;
+	np += 1;
+      }
+      np = 0;
+    }
+  }
+
+  /* Copy the cleanup file */
+  if (cleanup) {
+    fcleanup = fopen(cleanup, "rb");
+    if (!fcleanup) {
+      fprintf(stderr, "Can't open cleanup file %s.\n", cleanup);
+      usage();
+    }
+    setmode(fileno(fdest), O_BINARY);
+    while ((i = (int)fread(line, 1, BUFSIZE, fcleanup))) {
+      fwrite(line, 1, i, fdest);
+    }
+    setmode(fileno(fdest), O_TEXT);
+    fclose(fcleanup);
+  }
+
+  /* Close the input and output files */
+  if (fsource != stdin) fclose(fsource);
+  if (fdest != stdout) fclose(fdest);
+
+  /* Rename the temporary file */
+  if (szTempFileName[0]) {
+    char szBakName[_MAX_PATH];
+
+    strcpy(szBakName, source);
+    pc = strrchr(szBakName, '.');
+    if (pc && !strchr(pc, '\\')) {  /* If extension in name & not in path */
+      strcpy(pc, ".BAK"); 	    /* Change extension to .BAK */
+    } else {
+      strcat(szBakName, ".BAK");	    /* Set extension to .BAK */
+    }
+    unlink(szBakName);		    /* Remove the .bak if already there */
+    rename(source, szBakName);	    /* Rename the source as .BAK */
+    rename(szTempFileName, source);
+  }
+
+  return 0;
+}
 
 #ifdef _MSC_VER
 #pragma warning(default:4706)
@@ -626,28 +568,26 @@ int main(int argc, char *argv[])
 *									      *
 \*---------------------------------------------------------------------------*/
 
-void usage(void)
-    {
+void usage(void) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: deffeed [lpp] [source] [tab] [switches] >destination\n\
+Usage: deffeed [OPTIONS] [LPP] [INFILE] [OUTFILE] [TAB]\n\
 \n\
-  lpp              Lines Per Page. Default: 60.\n\
-  source           Input file.\n\
-  tab              Spaces per tab. Default: 8 (4 for .C or .H files).\n\
-  >destination     Output file. Default: Display.\n\
+  LPP              Lines Per Page. Default: 60\n\
+  INFILE           Input file. Default or \"-\": stdin\n\
+  OUTFILE          Output file. Default or \"-\": stdout\n\
+  TAB              Spaces per tab. Default: 8\n\
 \n\
-Switches:\n\
-  -cleanup {file}  Finish by the given cleanup file. Default: None.\n\
+Options:\n\
+  -cleanup {file}  Finish by the given cleanup file. Default: None\n\
   -dcol n          Distance between columns. Default: 0\n\
   -extra [n]       Extra blank lines between pages. Default: 0\n\
-  -filter          Use stdin for the source.\n\
   -fp [n]          Fill a multiple of n pages. Default: 1\n\
   -ncol n          Number of columns. Default: 1\n\
   -nsp n           Add n spaces ahead of every line. Default: 0\n\
-  -self            Output file = Input file.\n\
-  -setup {file}    Output the given setup file first. Default: None.\n\
+  -=|-same         Output file = Input file\n\
+  -setup {file}    Output the given setup file first. Default: None\n\
   -wcol n          Column width. Default: 80\n\
 \n"
 "Author: Jean-Francois Larvoire"
@@ -656,8 +596,38 @@ Switches:\n\
 "\n"
 #endif
 );
-    exit(1);
-    }
+  exit(1);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    IsSwitch						      |
+|									      |
+|   Description     Test if a command line argument is a switch.	      |
+|									      |
+|   Parameters      char *pszArg					      |
+|									      |
+|   Returns	    TRUE or FALSE					      |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    1997-03-04 JFL Created this routine				      |
+|    2016-08-25 JFL "-" alone is NOT a switch.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int IsSwitch(char *pszArg) {
+  switch (*pszArg) {
+    case '-':
+#if defined(_WIN32) || defined(_MSDOS)
+    case '/':
+#endif
+      return (pszArg[1] != '\0');
+    default:
+      return FALSE;
+  }
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
