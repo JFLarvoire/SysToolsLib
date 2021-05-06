@@ -1,13 +1,17 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename:	    deffeed.c						      *
+*   Filename	    deffeed.c						      *
 *									      *
-*   Description:    Remove form feeds and tabs from a file		      *
+*   Description	    Remove form feeds and tabs from a file		      *
 *									      *
-*   Notes:								      *
-*									      *
-*   History:								      *
-*									      *
+*   Notes	    Initially created for printing Lattice C sources from     *
+*		    a PC to a shared printer on an HP 3000 server. And that   *
+*		    printer did not support the tab and form-feed characters. *
+*		    							      *
+*		    Supports printings multiple pages side-by-side in	      *
+*		    landscape mode, even in the printer does not support it.  *
+*		    							      *
+*   History								      *
 *    1988-01-21 JFL Created prep3000.c. 				      *
 *    1990-03-23 JFL Added detabulation to prep3000.c and renamed it with the  *
 *		    more generic name of deffeed.c			      *
@@ -38,7 +42,7 @@
 *                   Add -= and -same as equivalents of -self.		      *
 *                   Add an optional output file name.        		      *
 *		    Version 3.0.					      *
-*                                                                             *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -584,7 +588,8 @@ Options:\n\
   -dcol n          Distance between columns. Default: 0\n\
   -extra [n]       Extra blank lines between pages. Default: 0\n\
   -fp [n]          Fill a multiple of n pages. Default: 1\n\
-  -ncol n          Number of columns. Default: 1\n\
+  -ncol n          Number of columns. Default: 1 (values > 1 are useful for\n\
+                   printing multiple pages side-by-side in landscape mode.)\n\
   -nsp n           Add n spaces ahead of every line. Default: 0\n\
   -=|-same         Output file = Input file\n\
   -setup {file}    Output the given setup file first. Default: None\n\
