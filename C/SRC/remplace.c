@@ -630,8 +630,8 @@ open_df_failed:
     /* Now we need to convert the old and new strings to the input encoding */
     pszOld8 = strdup(old);
     pszNew8 = strdup(new);
-    ConvertString(old, sizeof(old), CP_UTF8, inputCP, NULL);
-    ConvertString(new, sizeof(new), CP_UTF8, inputCP, NULL);
+    ConvertString(old, sizeof(old), CP_UTF8, inputCP, NULL, NULL);
+    ConvertString(new, sizeof(new), CP_UTF8, inputCP, NULL, NULL);
     iNewSize = (int)strlen(new);
   }
 #endif
