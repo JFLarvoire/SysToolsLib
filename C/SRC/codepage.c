@@ -37,6 +37,11 @@
 *    2018-01-25 JFL Display console font information. V 1.2.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.2.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.2.2.      *
+*    2021-05-21 JFL Fixed the output of C0 & C1 control codes in MS Terminal. *
+*		    Corrected wrong comments about switching code pages.      *
+*		    Output the C cedilla in my first name in the help.	      *
+*		    Added option -l as an alias to -i to list installed CPs.  *
+*		    Version 1.3.					      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -44,8 +49,8 @@
 
 #define PROGRAM_DESCRIPTION "Get information about code pages on this system"
 #define PROGRAM_NAME    "codepage"
-#define PROGRAM_VERSION "1.2.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2021-05-21"
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
@@ -353,7 +358,8 @@ int main(int argc, char *argv[]) {
 	}
 	exit(0);
       }
-      if (streq(arg+1, "i")) {	/* List code pages installed */
+      if (   streq(arg+1, "i")	/* List code pages installed */
+      	  || streq(arg+1, "l")) {
 	dwFlags = CP_INSTALLED;
 	continue;
       }
@@ -407,7 +413,7 @@ int main(int argc, char *argv[]) {
     	On Windows XP, there are only 55 installed for 134 supported.
     	In all 4 OSs, code pages 65000 (UTF-7) and 65001 (UTF-8) are installed.
     */
-  } else if (iCP) {	/* Temporarily switch code page and display a string */
+  } else if (iCP) {	/* Temporarily switch to UTF-16 mode, and display the code page characters */
     CPINFOEX cpi = {0};
     int iCP0 = GetConsoleOutputCP();
     int j, k, b, kMin=8, kMax=16, nBlocks=1;
@@ -452,7 +458,7 @@ int main(int argc, char *argv[]) {
       	printf("Tentative information: (N)=Lead byte of N bytes (1)=Tail byte (X)=Invalid\n");
       }
     }
-    if (iVerbose) printf("Switching to wide mode.\n");
+    if (iVerbose) printf("Switching to 16-bit mode.\n");
     /* Make sure everything gets to the console before switching the mode */
     fflush(stdout); fflush(stderr);
     _setmode(fileno(stdout), _O_U16TEXT);
@@ -494,14 +500,19 @@ int main(int argc, char *argv[]) {
 	      }
 	    }
 	  }
-	  if (!wstr[0]) MultiByteToWideChar(iCP, 0, (LPCSTR)&c, 1, wstr, 3);
-	  if (wstr[0] < L' ') wstr[0] = L' '; /* Use a space instead */
+	  if (!wstr[0]) {
+	    /* XP and earlier silently drop invalid characters if MB_ERR_INVALID_CHARS is not used */
+	    if (!MultiByteToWideChar(iCP, MB_ERR_INVALID_CHARS, (LPCSTR)&c, 1, wstr, 3)) wstr[0] = (wchar_t)0xFFFD;
+	  }
+	  if (wstr[0] < L' ') wstr[0] += (wchar_t)0x2400; /* C0 control char. Use the corresponding control picture instead */
+	  if (wstr[0] == L'\x7F') wstr[0] = (wchar_t)0x2421; /* Delete char. Use the DEL control picture instead */
+	  if ((wstr[0] >= L'\x80') && (wstr[0] < L'\xA0')) wstr[0] = (wchar_t)0xFFFD; /* C1 control char. Use the undefined character instead */
 	  wprintf(L" %02X%c%s%c", n, c1, wstr, c2);
 	}
 	wprintf(L"\n");
       }
     }
-    if (iVerbose) wprintf(L"Returning to narrow mode.\n");
+    if (iVerbose) wprintf(L"Returning to 8-bit mode.\n");
     /* Make sure everything gets to the console before switching back the mode */
     fflush(stdout); fflush(stderr);
     _setmode(fileno(stdout), _O_U16TEXT);
@@ -535,6 +546,10 @@ int main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
+  wchar_t wcCCedilla = (wchar_t)0xE7; // 'ç';
+  char szCCedilla[4] = {0};
+  int iCCP = GetConsoleOutputCP();
+  if (!WideCharToMultiByte(iCCP, 0, &wcCCedilla, 1, szCCedilla, 3, NULL, NULL)) szCCedilla[0] = 'c';
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
@@ -543,15 +558,15 @@ Usage:\n\
 \n\
 Switches:\n\
   -?          Display this help message and exit\n\
-  -i          List code pages installed. (In XP, {installed} < {supported})\n\
+  -l          List code pages installed. (In XP, {installed} < {supported})\n\
   -s          List code pages supported\n\
   -v          Display verbose information\n\
   -V          Display this program version and exit\n\
 \n\
-Codepage: N = One of the installed code pages.\n\
-Temporarily switch to code page N and list its specific characters.\n\
+Codepage: N = One of the installed code pages:\n\
+Display a table with the specific characters for that code page.\n\
 (Visible only if the console font contains the requested characters.)\n\
-If N is 0, list ASCII characters.\n\
+If N is 0: List ASCII characters.\n\
 Default: Show the system and console code pages.\n\
 \n\
 Sample code page numbers:\n\
@@ -559,11 +574,11 @@ Sample code page numbers:\n\
   1252        ANSI Latin 1 codepage = Windows USA & west european code page\n\
   65001       UTF-8 codepage. Allows displaying any Unicode character\n\
 \n\
-Note that code pages other that 437 require cmd.exe using a TrueType font.\n\
+Note that code pages other than 437 require cmd.exe using a TrueType font.\n\
 The cmd.exe raster font only supports code page 437.\n\
 \n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+Author: Jean-Fran%sois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
+", szCCedilla);
 
   exit(0);
 }
