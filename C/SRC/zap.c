@@ -32,13 +32,15 @@
 *    2020-03-16 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 1.3.1.					      *
 *    2020-04-20 JFL Added support for MacOS. Version 1.4.                     *
+*    2020-04-28 JFL Fixed the recursion into linked subdirectories, and the   *
+*		    recursive deletion of fixed names. Version 1.4.1.         *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.4"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "1.4.1"
+#define PROGRAM_DATE    "2020-04-28"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -624,7 +626,7 @@ int zapFiles(const char *path, zapOpts *pzo) {
 
   if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
 
-  if (!strpbrk(path, "*?")) {	/* If there are no wild cards */
+  if ((!strpbrk(path, "*?")) && !(pzo->iFlags & FLAG_RECURSE)) {	/* If there are no wild cards */
     nErr = zapFile(path, pzo);	    /* Remove that file, and we're done */
     goto cleanup_and_return;
   }
@@ -664,6 +666,7 @@ fail:
     if (!pPathname) goto out_of_memory;
     switch (pDE->d_type) {
       case DT_DIR:
+zap_files_in_subdirectory:
       	if (streq(pDE->d_name, ".")) break;	/* Skip the . directory */
       	if (streq(pDE->d_name, "..")) break;	/* Skip the .. directory */
       	if (pzo->iFlags & FLAG_RECURSE) {
@@ -674,7 +677,12 @@ fail:
       	}
       	break;
       default:
-      	if (fnmatch(pName, pDE->d_name, iFNM) == FNM_NOMATCH) break;
+      	if (fnmatch(pName, pDE->d_name, iFNM) == FNM_NOMATCH) {
+      	  if (   (pDE->d_type == DT_LNK)
+      	      && (pzo->iFlags & FLAG_RECURSE)
+      	      && (isEffectiveDir(pPathname))) goto zap_files_in_subdirectory;
+      	  break;
+      	}
       	if (pzo->iFlags & FLAG_VERBOSE) printf("%s%s\n", pzo->pszPrefix, pPathname);
 	iErr = 0;
       	if (!(pzo->iFlags & FLAG_NOEXEC)) iErr = unlink(pPathname);
