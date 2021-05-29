@@ -4,12 +4,7 @@
 *									      *
 *   Contents	    Convert characters using Windows' conversion functions    *
 *									      *
-*   Notes:	    This file must be encoded with the Windows 1252 code page,*
-*		    due to the presence of non-ASCII characters in the help.  *
-*		    This allows building it without needing itself for	      *
-*		    converting UTF-8 back to CP 1252.			      *
-*		    							      *
-*		    The default character sets (w for input, . for output)    *
+*   Notes:	    The default character sets (w for input, . for output)    *
 *		    are chosen to allow typing a Windows file on the console, *
 *		    by running: type WINDOWS_FILE | conv		      *
 *		    or simply: conv <WINDOWS_FILE			      *
@@ -67,6 +62,15 @@
 *    2021-05-03 JFL Do not change the file time if nothing changed.           *
 *		    Merged in the temp and backup file management code from   *
 *                   detab, trim, and remplace. Version 2.4.                   *
+*    2021-05-28 JFL Added support for conversions from/to UTF-16 & UTF-32.    *
+*		    Added option -s to request a strict conversion.	      *
+*		    Removed support for the obsolete Symbol code page.	      *
+*		    Fixed the default encoding when writing to the console.   *
+*		    Moved the heuristic for detecting the input code page to  *
+*		    the new MsvcLibX routine GuessEncoding(), and improved it.*
+*    2021-05-29 JFL Added a workaround for Windows Terminal limitations on    *
+*		    displaying Unicode characters beyond \U10000.	      *
+*		    Version 2.5.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -74,8 +78,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.4"
-#define PROGRAM_DATE    "2021-05-03"
+#define PROGRAM_VERSION "2.5"
+#define PROGRAM_DATE    "2021-05-29"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -232,7 +236,7 @@ int is_pipe(FILE *f);		/* Check if a file handle is a pipe */
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszOutput, size_t nOutputSize,
 			char *pszInputSet, char *pszOutputSet,
-			int iBOM);
+			int iBOM, DWORD dwFlags);
 size_t MimeWordDecode(char *pszBuf, size_t nBufSize, char *pszCharEnc);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
 int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime);
@@ -274,6 +278,7 @@ Options:\n\
   -d        Output debug information\n"
 #endif
 "\
+  -F        Do not use best fit characters (Ex: é -> e) for missing ones\n\
   -=|-same  Modify the input file in place. (Default: Automatically detected)\n\
   -st       Set the output file time to the same time as the input file\n\
   -v        Display verbose information\n\
@@ -293,10 +298,12 @@ Character Sets: One of the following codes, or a code page number such as 1252\n
   w         Windows System CP  (CP %d on this system) (See note 1)\n\
   d         DOS default CP     (CP %d on this system)\n\
   m         Macintosh CP       (CP %d on this system)\n\
+  u         UTF-16             (CP 1200) (See note 1)\n\
+  a         US-ASCII           (CP 20127)\n\
   7         UTF-7              (CP 65000)\n\
   8         UTF-8              (CP 65001) (See note 1)\n\
-  u         UTF-16             (CP 1200) (See note 1)\n\
-  s         Symbol             (CP 42)\n\
+  16        UTF-16             (CP 1200) (See note 1)\n\
+  32        UTF-32             (CP 12000) (See note 1)\n\
 \n\
 Notes:\n\
 1) If not explicitely specified, the default output encoding is UTF-16 for\n\
@@ -356,6 +363,7 @@ int __cdecl main(int argc, char *argv[]) {
   int iErr;
   int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
   int iCtrlZ2 = FALSE;		/* If true, append a Ctrl-Z to the output */
+  DWORD dwFlags = 0;		/* Flags to pass to WideCharToMultiByte() */
 
   if (!pszBuffer) {
 fail_no_mem:
@@ -409,6 +417,10 @@ fail_no_mem:
 	continue;
       }
 #endif
+      if (streq(pszOpt, "F")) {		/* -F: No best fit characters */
+	dwFlags |= WC_NO_BEST_FIT_CHARS;
+	continue;
+      }
       if (streq(pszOpt, "O")) {		/* Output OEM type */
 	pszOutType = "o";
 	continue;
@@ -419,10 +431,21 @@ fail_no_mem:
 	iSameFile = TRUE;
 	continue;
       }
-      if (streq(pszOpt, "st")) {	/* -t: Copy the input file time to the output file */
+      if (streq(pszOpt, "st")) {	/* -st: Copy the input file time to the output file */
 	iCopyTime = TRUE;
 	continue;
       }
+#ifdef _DEBUG
+      if (streq(pszOpt, "tdc")) {	/* -tdc: Test DupAndConvert() */
+	if ((i+1) < argc) {
+	  pszArg = strdup(argv[++i]);
+	  printf("CP_UTF8: %s\n", pszArg);
+	  pszArg = DupAndConvertEx(pszArg, CP_UTF8, CP_ACP, dwFlags, NULL, NULL);
+	  printf("CP_ACP:  %s\n", pszArg);
+	}
+	return 0;
+      }
+#endif
       if (streq(pszOpt, "u")) {		/* Output UTF16 */
 	pszOutType = "u";
 	continue;
@@ -439,6 +462,13 @@ fail_no_mem:
 	puts(DETAILED_VERSION);
 	exit(0);
       }
+#ifdef _DEBUG
+      if (streq(pszOpt, "xd")) {
+	XDEBUG_ON();
+	iVerbose = TRUE;
+	continue;
+      }
+#endif
       if (streq(pszOpt, "z")) {		/* -z: Stop input on Ctrl-Z */
 	iCtrlZ = TRUE;
 	continue;
@@ -513,9 +543,21 @@ fail_no_mem:
   _setmode( _fileno( stdin ), _O_BINARY );
   fflush(stdout); /* Make sure any previous output is done in text mode */
   if ((*pszOutType == '.') && isatty(1)) {
+    DEBUG_FPRINTF((mf, "// Optimizing output to the console by forcing it to be UTF-8\n"));
     pszOutType = "8"; /* Convert to UTF-8 to output Unicode to the console, that MsvcLibX initialized in wide mode */
     if (!iBOM) iBOM = -1; /* Remove the BOM, which is not correctly interpreted by the console */
+    /* As of 2021-05-29 the Windows Terminal fails to output Unicode characters in supplemental planes
+       (i.e. characters beyond \U10000) when writing to the console in wide mode.
+       But this works in code page 65001 when writing UTF-8 in binary mode.
+       The old console fails to write them in all cases.
+       So switch to binary mode when in code page 65001, to at least correctly display 
+       supplemental characters in Windows Terminal. */
+    if (GetConsoleOutputCP() == 65001) {
+      DEBUG_FPRINTF((mf, "// Make sure Unicode chars beyond \\U10000 get displayed correctly\n"));
+      _setmode( _fileno( stdout ), _O_BINARY );
+    }
   } else {
+    DEBUG_FPRINTF((mf, "// Make sure the output is not translated by the C library\n"));
     _setmode( _fileno( stdout ), _O_BINARY );
   }
 #endif
@@ -654,104 +696,33 @@ open_df_failed:
   }
   /*
     A simple heuristic for selecting among the most common cases in Windows:
-    1) The Windows system code page; 2) UTF-8; 3) UTF-16
+    The Windows system code page; ASCII; UTF-7; UTF-8; UTF-16; UTF-32
   */
   if (*pszInType == '?') { /* Then use heuristics to detect the input data encoding */
-    char *pszMsg = NULL;
-    /* First look for a Unicode BOM: https://en.wikipedia.org/wiki/Byte_order_mark */
-    if ((nTotal >= 3) && !strncmp(pszBuffer, "\xEF\xBb\xBF", 3)) { /* UTF-8 BOM */
-      pszInType = "8";
-      pszMsg = "Detected UTF-8 BOM";
-    } else if ((nTotal >= 4) && (!strncmp(pszBuffer, "\x2B\x2F\x76", 3)) && strchr("\x38\x39\x2B\x2F", pszBuffer[3])) { /* UTF-7 BOM */
-      pszInType = "7";
-      pszMsg = "Detected UTF-7 BOM";
-    } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFF\xFE", 2)) { /* UTF-16 BOM */
-      pszInType = "u";
-      pszMsg = "Detected UTF-16 BOM";
-    } else if ((nTotal >= 2) && !strncmp(pszBuffer, "\xFE\xFF", 2)) { /* UTF-16 BE BOM */
-      pszInType = "1201";
-      pszMsg = "Detected UTF-16 BE BOM";
-    } else { /* No Unicode BOM. Try detecting UTF-8 or UTF-16 without BOM */
-      size_t n;
-      size_t nNonASCII = 0;
-      size_t nOddNUL = 0;
-      size_t nEvenNUL = 0;
-      int isValidUTF8 = TRUE;
-      for (n=0; n<nRead; n++) {
-      	char c = pszBuffer[n];
-	if (!c) {
-	  if (n & 1) {
-	    nOddNUL += 1;
-	  } else {
-	    nEvenNUL += 1;
-	  }
-	  continue;
-	}
-/* See https://en.wikipedia.org/wiki/UTF-8 */
-#define IS_ASCII(c)     ((c&0x80) == 0)
-#define IS_LEAD_BYTE(c) ((c&0xC0) == 0xC0)
-#define IS_TAIL_BYTE(c) ((c&0xC0) == 0x80)
-	if (IS_ASCII(c)) continue;
-	nNonASCII += 1;
-	if (isValidUTF8) { /* No need to keep validating if we already know it's invalid */
-	  if (IS_LEAD_BYTE(c)) {
-	    int nTailBytesExpected = 0;
-	    if ((c&0x20) == 0) {
-	      nTailBytesExpected = 1;
-	      if ((c == '\xC0') || (c == '\xC1')) isValidUTF8 = FALSE; /* Overlong encoding of 7-bits ASCII */
-	    } else if ((c&0x10) == 0) {
-	      nTailBytesExpected = 2;
-	    } else if ((c&0x08) == 0) {
-	      nTailBytesExpected = 3;
-	      if ((c >= '\xF5') && (c <= '\xF7')) isValidUTF8 = FALSE; /* Encoding of invalid Unicode chars > \u10FFFF */
-	    } else {	/* No valid Unicode character requires a 5-bytes or more encoding */
-	      isValidUTF8 = FALSE;
-	      continue;
-	    }
-	    /* Then make sure that the expected tail bytes are all there */
-	    for ( ; nTailBytesExpected && (++n < nRead); nTailBytesExpected--) {
-	      c = pszBuffer[n];
-	      if (!IS_ASCII(c)) nNonASCII += 1;
-	      if (!IS_TAIL_BYTE(c)) { /* Invalid UTF-8 sequence */
-		isValidUTF8 = FALSE;
-		break;
-	      }
-	    }
-	    if (nTailBytesExpected) isValidUTF8 = FALSE; /* Incomplete UTF-8 sequence at the end of the buffer */
-	  } else { /* Invalid UTF-8 tail byte not preceeded by a lead byte */
-	    isValidUTF8 = FALSE;
-	  } /* End if (IS_LEAD_BYTE(c)) */
-	} /* End if (isValidUTF8) */
-      } /* End for each byte in pszBuffer[] */
-      /* Heuristics for identifying an encoding from the information gathered so far.
-         Note that this choice is probabilistic. It may not be correct in all cases. */
-      if (nEvenNUL + nOddNUL) { /* There are NUL bytes, so it's probably a kind of UTF-16 */
-      	/* TO DO: Try distinguishing UTF-16 LE and UTF-16 BE */
-      	pszInType = "u"; /* Assume it's UTF-16 LE for now, which is the default in Windows */
-	pszMsg = "Detected UTF-16 without BOM";
-      } else if (nNonASCII && isValidUTF8) {
-      	pszInType = "8"; /* We've verified this is valid UTF-8 */
-	pszMsg = "Detected UTF-8 without BOM";
-      } else {
-      	/* Ideally we could default to the current console code page for input from a pipe,
-      	   and to the ANSI code page for input from a file.
-      	   But the most common use case being to correct the output to the console
-      	   when it's in the wrong code page, ie. NOT in the current console code page,
-      	   then defaulting to the ANSI code page now is the best choice. */
-	pszInType = "w"; /* Default to the Windows encoding */
-	pszMsg = "Default to the Windows ANSI code page";
-      }
-      DEBUG_FPRINTF((mf, "nOddNUL = %lu\n", (unsigned long)nOddNUL));
-      DEBUG_FPRINTF((mf, "nEvenNUL = %lu\n", (unsigned long)nEvenNUL));
-      DEBUG_FPRINTF((mf, "nNonASCII = %lu\n", (unsigned long)nNonASCII));
-      DEBUG_FPRINTF((mf, "isValidUTF8 = %d\n", isValidUTF8));
-    }
-    verbose((mf, "Heuristic detected input type: %s\n", pszMsg));
+    char szMsg[100];
+    char szValue[10];
+    UINT cp = GuessEncoding(pszBuffer, nRead); /* 2021-05-28 Moved to MsvcLibX */
+    /* Ideally we should default to the current console code page for input from a pipe,
+       and to the ANSI code page for input from a file.
+       But the most common use case being to correct the output to the console
+       when it's in the wrong code page, ie. NOT in the current console code page,
+       then defaulting to the ANSI code page now is the best choice.
+       Also we have the . argument to specify the current console code page. */
+     switch (cp) {
+       case CP_ACP: sprintf(szMsg, "Windows system code page %d", systemCodePage); pszInType="w"; break;
+       case CP_ASCII: sprintf(szMsg, "US-ASCII code page %d", CP_ASCII); pszInType="a"; break;
+       case CP_UTF7: sprintf(szMsg, "UTF-7 code page %d", CP_UTF7); pszInType="7"; break;
+       case CP_UTF8: sprintf(szMsg, "UTF-8 code page %d", CP_UTF8); pszInType="8"; break;
+       case CP_UTF16: sprintf(szMsg, "UTF-16 code page %d", CP_UTF16); pszInType="16"; break;
+       case CP_UTF32: sprintf(szMsg, "UTF-32 code page %d", CP_UTF32); pszInType="32"; break;
+       default: sprintf(szMsg, "Code page %d", cp); sprintf(szValue, "%u", cp); pszInType=szValue; break;
+     }
+    verbose((mf, "Heuristic detected input type: %s\n", szMsg));
   }
 
   /* Do the conversion */
   if (nTotal > 0) {
-    size_t nOutBufSize = 2*nTotal + 4;	/* Size may double for ansi -> utf8 cases */
+    size_t nOutBufSize = 4*nTotal + 4;	/* Size may double for ansi -> utf8 cases, or even quadruple for ascii->utf32 */
     size_t nOutputSize;		/* Size actually used in the out. buf. */
     char *pszOutBuf = (char*)malloc(nOutBufSize);
     char *pszCharEnc = NULL;	/* Character encoding */
@@ -777,7 +748,7 @@ open_df_failed:
 
     /* Use Windows' character set conversion routine. */
     nOutputSize = ConvertCharacterSet(pszBuffer, nTotal, pszOutBuf, nOutBufSize,
-					    pszInType, pszOutType, iBOM);
+					    pszInType, pszOutType, iBOM, dwFlags);
     /* TO DO: Find a way to count the actual number of characters changed */
     if ((nOutputSize != nTotal) || memcmp(pszBuffer, pszOutBuf, nTotal)) lnChanges += 1;
 
@@ -931,6 +902,13 @@ int is_pipe(FILE *f) {
 |   Description:    Convert the characters                      	      |
 |                                                                             |
 |   Parameters:     char *pszInput          The input buffer                  |
+|                   size_t nInputSize       Number of bytes in the input buf. |
+|                   char *pszOutput         The output buffer                 |
+|                   size_t nOutputSize      Number of bytes in the output buf.|
+|                   char *pszInputSet       The input buffer encoding         |
+|                   char *pszOutputSet      The output buffer encoding        |
+|                   int iBOM                0=Leave 1=Add -1=Remove BOM       |
+|                   DWORD dwFlags           Flags for WideCharToMultiByte()   |
 |                                                                             |
 |   Returns:	 	                                                      |
 |                                                                             |
@@ -954,89 +932,88 @@ int is_pipe(FILE *f) {
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
 			char *pszOutput, size_t nOutputSize,
 			char *pszInputSet, char *pszOutputSet,
-			int iBOM)
-    {
-    wchar_t *pszWideBuf;             /* Intermediate buffer for wide characters. */
-    size_t nWideSize = (2*nInputSize) + 4; /* Size in bytes of that wide buffer. */
-    UINT uCPin=0, uCPout=0;
-    int nWide, nOut;
+			int iBOM, DWORD dwFlags) {
+  wchar_t *pszWideBuf;             /* Intermediate buffer for wide characters. */
+  size_t nWideSize = (4*nInputSize) + 4; /* Size in bytes of that wide buffer. */
+  UINT uCPin=0, uCPout=0;
+  int nWide, nOut;
 
-    DEBUG_FPRINTF((mf, "ConvertCharacterSet(pszIn, %ld, pszOut, %ld, %s, %s, %d)\n", \
-           (long)nInputSize, (long)nOutputSize, pszInputSet, pszOutputSet, iBOM));
+  DEBUG_FPRINTF((mf, "ConvertCharacterSet(pszIn, %ld, pszOut, %ld, %s, %s, %d)\n", \
+	 (long)nInputSize, (long)nOutputSize, pszInputSet, pszOutputSet, iBOM));
+  DEBUG_CODE(iIndent += DEBUG_INDENT_STEP;)
 
-    if (!isEncoding(pszInputSet, &uCPin, NULL)) {
-      FAIL("Unknown input character set");
+  if (!isEncoding(pszInputSet, &uCPin, NULL)) {
+    FAIL("Unknown input character set");
+  }
+  if (!isEncoding(pszOutputSet, &uCPout, NULL)) {
+    FAIL("Unknown output character set");
+  }
+
+  verbose((mf, "uCPin = %d , uCPout = %d\n", (int)uCPin, (int)uCPout));
+  
+  /* Use MsvcLibX's ConvertBuf() routine for everything in one step if possible */
+  if (!iBOM) {
+    nOut = ConvertBufEx(pszInput, nInputSize, uCPin, pszOutput, nOutputSize, uCPout, dwFlags, NULL, NULL);
+    if (nOut == -1) {
+      FAIL("Conversion failed");
     }
-    if (!isEncoding(pszOutputSet, &uCPout, NULL)) {
-      FAIL("Unknown output character set");
-    }
+    RETURN_INT(nOut);
+  }
 
-    verbose((mf, "uCPin = %d , uCPout = %d\n", (int)uCPin, (int)uCPout));
+  /* Allocate a buffer for an intermediate UTF-16 string */
+  pszWideBuf = (wchar_t *)malloc(nWideSize);
+  pszWideBuf += 1;	/* Leave room for adding a BOM if needed */
+  nWideSize -= 2;
 
-    /* Allocate a buffer for an intermediate UTF-16 string */
-    pszWideBuf = (wchar_t *)malloc(nWideSize);
-    pszWideBuf += 1;	/* Leave room for adding a BOM if needed */
-    nWideSize -= 2;
+  /* Convert to intermediate wide characters */
+  DEBUG_FPRINTF((mf, "ConvertBuf(%p, %ld, %u, %p, %ld, %u)\n", \
+		    pszInput, (long)nInputSize, uCPin, (char *)pszWideBuf, (long)nWideSize, CP_UTF16));
+  nOut = ConvertBufEx(pszInput, nInputSize, uCPin, (char *)pszWideBuf, nWideSize, CP_UTF16, 0, NULL, NULL);
+  if (nOut == -1) FAIL("Cannot convert the input!");
+  nWide = (int)nOut / 2;
 
-    /* Convert to intermediate wide characters */
-    if (uCPin != CP_UTF16) {
-      nWide = MultiByteToWideChar(uCPin, 0, pszInput, (int)nInputSize, pszWideBuf, (int)nWideSize);
-      if (nWide == 0)
-	WIN32FAIL("Cannot convert the input!");
-      else if (nWide == ERROR_NO_UNICODE_TRANSLATION)
-	WIN32FAIL("Invalid UTF-8 input!");
-      else verbose((mf, "Input conversion to Unicode returned %d wide characters.\n", nWide));
-    } else {
-      memcpy((char *)pszWideBuf, pszInput, nInputSize);
-      nWide = (int)nInputSize / 2;
-    }
-
-    /* Add or remove the BOM if requested or needed */
-    switch (uCPout) {
-    case CP_UTF7:
-    case CP_UTF8:
-    case CP_UTF16:
-      break;	/* Apply the user request for all Unicode encodings */
-    default:	/* Any other code page requires removing the BOM, if any */
-      iBOM = -1;
-      break;
-    }
+  /* Add or remove the BOM if requested or needed */
+  switch (uCPout) {
+  case CP_UTF7:
+  case CP_UTF8:
+  case CP_UTF16:
+  case CP_UTF32:
+    break;	/* Apply the user request for all Unicode encodings */
+  default:	/* Any other code page requires removing the BOM, if any */
+    iBOM = -1;
+    break;
+  }
 #pragma warning(disable:4428)	/* Ignore the "universal-character-name encountered in source" warning */
-    switch (iBOM) {
-    case -1:
-      if (*pszWideBuf == L'\uFEFF') {	/* If there's a BOM, then remove it */
-      	pszWideBuf += 1;
-      	nWideSize -= 2;
-      	nWide -= 1;
-      }
-      break;
-    case 1:
-      if (*pszWideBuf != L'\uFEFF') {	/* If there's no BOM, then add one */
-      	pszWideBuf -= 1;
-      	nWideSize += 2;
-      	*pszWideBuf = L'\uFEFF';
-      	nWide += 1;
-      }
-      break;
-    case 0:				/* Leave the BOM (if present) unchanged */
-    default:
-      break;
+  switch (iBOM) {
+  case -1:
+    if (*pszWideBuf == L'\uFEFF') {	/* If there's a BOM, then remove it */
+      pszWideBuf += 1;
+      nWideSize -= 2;
+      nWide -= 1;
     }
+    break;
+  case 1:
+    if (*pszWideBuf != L'\uFEFF') {	/* If there's no BOM, then add one */
+      pszWideBuf -= 1;
+      nWideSize += 2;
+      *pszWideBuf = L'\uFEFF';
+      nWide += 1;
+    }
+    break;
+  case 0:				/* Leave the BOM (if present) unchanged */
+  default:
+    break;
+  }
 #pragma warning(default:4428)	/* Restore the "universal-character-name encountered in source" warning */
 
-    /* Convert back to ANSI characters */
-    if (uCPout != CP_UTF16) {
-      nOut = WideCharToMultiByte(uCPout, 0, pszWideBuf, nWide, pszOutput, (int)nOutputSize, NULL, NULL);
-      if (nOut == 0)
-	  WIN32FAIL("Cannot convert the output!");
-      else verbose((mf, "Output conversion from Unicode returned %d bytes.\n", nOut));
-    } else {
-      nOut = nWide * 2;
-      memcpy(pszOutput, (char *)pszWideBuf, nOut);
-    }
+  /* Convert back to ANSI characters */
+  DEBUG_FPRINTF((mf, "ConvertBuf(%p, %ld, %u, %p, %ld, %u)\n", \
+		    (char *)pszWideBuf, (long)nWide * 2, CP_UTF16, pszOutput, (long)nOutputSize, uCPout));
+  nOut = ConvertBufEx((char *)pszWideBuf, nWide * 2, CP_UTF16, pszOutput, nOutputSize, uCPout, dwFlags, NULL, NULL);
+  if (nOut == -1) FAIL("Cannot convert the output!");
 
-    return nOut;
-    }
+  RETURN_INT(nOut);
+}
 
 #endif
 
@@ -1447,7 +1424,6 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
       cp = GetConsoleOutputCP();
       break;
     case '0':			/* ANSI = Windows GUI CP */
-    case 'a':			/* ANSI = Windows GUI CP */
     case 'w':			/* ANSI = Windows GUI CP */
       cp = CP_ACP;		/* ANSI */
       pszMime = "windows-1252";
@@ -1463,9 +1439,8 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
       cp = CP_MACCP;		/* Mac */
       pszMime = "macintosh";
       break;
-    case 's':			/* Symbol CP */
-      cp = CP_SYMBOL;		/* Symbol */
-      pszMime = "symbol";
+    case 'a':			/* ASCII */
+      cp = CP_ASCII;		/* US-ASCII */
       break;
     case '7':			/* UTF-7 */
       cp = CP_UTF7;		/* UTF-7 */
@@ -1491,8 +1466,10 @@ int isEncoding(char *pszEncoding, UINT *pCP, char **ppszMime) {
     char buf[32];
     sprintf(buf, "%u", cp);
     if ((!strcmp(buf, pszEncoding)) && (cp <  65536)) {
+      if (cp == 16) cp = CP_UTF16; /* Special case: Not an actual code page, but a request for UTF-16 */
+      if (cp == 32) cp = CP_UTF32; /* Special case: Not an actual code page, but a request for UTF-32 */
       if (pCP) *pCP = cp;
-      if (ppszMime) *ppszMime = NULL;
+      if (ppszMime) *ppszMime = NULL; /* Do not decode MIME strings in this case */
       return TRUE;
     }
   }
