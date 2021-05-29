@@ -1,10 +1,27 @@
-# Change Log
+﻿# Change Log
 
 Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-05-03
+## [Unreleased] 2021-05-29
+### New
+- C/MsvcLibx/src/encoding.c: Heuristics for detecting the most common text encodings (ASCII/CP_ACP/UTF-8/UTF-16/UTF-32)
+
+### Changed
+- C/SRC/conv.c: Added support for conversions from/to UTF-16 & UTF-32.  
+  Added option -F to _not_ use best fit characters (Ex: ç -> c) when the correct ones are missing.   
+  Removed support for the obsolete Symbol code page.  
+  Added a workaround for Windows Terminal limitations on displaying Unicode characters beyond \U10000.
+- C/MsvcLibx/src/iconv.c: Added support for conversions from/to UTF-16 & UTF-32 in ConvertBuf() and associated routines.  
+- C/MsvcLibx/src/iconv.c, C/MsvcLibx/include/iconv.h: Added a third argument to ConvertBuf() etc;  
+  Renamed them with an Ex suffix; And added macros with the old name without the extra three arguments added recently.                       
+
+### Fixed
+- C/SRC/conv.c: Fixed the default encoding when writing to the console.
+- C/SRC/zap.c: Fixed the recursion into linked subdirectories, and the recursive deletion of fixed names.
+
+## [Unreleased] 2021-05-21
 ### Changed
 - C/SRC/codepage.c:  
   Fixed the output of C0 & C1 control codes in MS Terminal.  
