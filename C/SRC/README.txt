@@ -44,6 +44,7 @@ truename.exe    Resolve all links. For oldtimers who miss command.com's internal
 update.exe	Copy files only if newer.
 which.exe	Superset of Linux which, supporting Windows' PATHEXT and special PowerShell rules.
 whichinc.exe	Search for include files.
+zap.exe         Delete files and directories.
 
 # Text filtering and conversion [All]
 
@@ -54,6 +55,7 @@ conv.exe	Convert from/to various character sets.
 deffeed.exe	Remove form feeds, replacing then with new lines.
 detab.exe	Remove tabulations, replacing them with spaces.
 dump.exe	Hexadecimal dump.
+encoding.exe    Find the encoding of text files. Ex: Windows | UTF-8 | UTF-16
 remplace.exe	Replace characters. Very limited regular expressions subset.
 tee.exe		Duplicate stdin into two or more output streams.
 trim.exe	Remove blank characters from the end of lines.

@@ -4,9 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-05-29
+## [Unreleased] 2021-06-02
 ### New
-- C/MsvcLibx/src/encoding.c: Heuristics for detecting the most common text encodings (ASCII/CP_ACP/UTF-8/UTF-16/UTF-32)
+- C/MsvcLibx/src/GetEncoding.c: Heuristics for detecting the most common text encodings (Binary/ASCII/Windows/UTF-8/UTF-16/UTF-32).
+- C/SRC/encoding.c: New tool displaying the text encoding for one or more files.
 
 ### Changed
 - C/SRC/conv.c: Added support for conversions from/to UTF-16 & UTF-32.  

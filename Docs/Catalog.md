@@ -83,6 +83,7 @@ conv.exe	| -W-	| Convert from/to various character sets.						| `type winfile.tx
 deffeed.exe	| DWL	| Remove tabulations, form-feeds, etc.							|
 detab.exe	| DWL	| Remove tabulations, replacing them with spaces.					| `detab this.md -t 4` &:# Type a text file with 4-colums tabulations
 dump.exe	| DWL	| Hexadecimal dump.									| `1clip \| dump`
+encoding.exe	| -W-	| Display the text encoding for one or more files. Ex: Windows \| UTF-8 \| UTF-16 ...   | `encoding *.txt`
 halve.bat	| -W-	| Halve the number of new lines. (To cleanup text with double interline.)		| `12 halve`
 htmldec.tcl	| -WL	| Decode strings that contain HTML entities.						| `12 htmldec`
 htmlenc.tcl	| -WL	| Encode text strings with the 3 basic HTML entities for & < >.				| `12 htmlenc` or `htmlenc "R&D"`

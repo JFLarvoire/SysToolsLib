@@ -28,6 +28,8 @@ C\SRC\dos.mak
 C\SRC\driver.c
 C\SRC\driver.mak
 C\SRC\dump.c
+C\SRC\encoding.c
+C\SRC\encoding.mak
 C\SRC\exe
 C\SRC\exe.bat
 C\SRC\Files.mak
