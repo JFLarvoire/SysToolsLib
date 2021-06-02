@@ -71,6 +71,10 @@
 *    2021-05-29 JFL Added a workaround for Windows Terminal limitations on    *
 *		    displaying Unicode characters beyond \U10000.	      *
 *		    Version 2.5.					      *
+*    2021-05-29 JFL Added debug option -tdi to test DetectInputCodepage().    *
+*    2021-06-01 JFL Added debug option -tge to test GetBufferEncoding().      *
+*    2021-06-02 JFL Fixed the COM API result analysis. Still poor though.     *
+*		    Version 2.5.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -78,8 +82,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.5"
-#define PROGRAM_DATE    "2021-05-29"
+#define PROGRAM_VERSION "2.5.1"
+#define PROGRAM_DATE    "2021-06-02"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -364,6 +368,13 @@ int __cdecl main(int argc, char *argv[]) {
   int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
   int iCtrlZ2 = FALSE;		/* If true, append a Ctrl-Z to the output */
   DWORD dwFlags = 0;		/* Flags to pass to WideCharToMultiByte() */
+  DEBUG_CODE(
+  int iTestGuess = FALSE;	/* If TRUE, test GuessEncoding() & exit */
+  int iTestDic = FALSE;		/* If TRUE, test DetectInputCodepage() & exit */
+  )
+  DWORD dwDicFlags = 0;		/* Flags to pass to DetectInputCodepage() test */
+  DWORD cpDicPref = 0;		/* Preferred code page to pass to "" */
+  
 
   if (!pszBuffer) {
 fail_no_mem:
@@ -438,12 +449,26 @@ fail_no_mem:
 #ifdef _DEBUG
       if (streq(pszOpt, "tdc")) {	/* -tdc: Test DupAndConvert() */
 	if ((i+1) < argc) {
+	  BOOL bUsedDef;
 	  pszArg = strdup(argv[++i]);
 	  printf("CP_UTF8: %s\n", pszArg);
-	  pszArg = DupAndConvertEx(pszArg, CP_UTF8, CP_ACP, dwFlags, NULL, NULL);
+	  pszArg = DupAndConvertEx(pszArg, CP_UTF8, CP_ACP, dwFlags, NULL, &bUsedDef);
 	  printf("CP_ACP:  %s\n", pszArg);
+	  printf("bUsedDef = %s\n", bUsedDef ? "TRUE" : "FALSE");
 	}
 	return 0;
+      }
+      if (streq(pszOpt, "tdi")) {	/* -tdc: Test DetectInputCodepage() */
+      	iTestDic = TRUE;
+      	pszInType = "*";
+	if ((i+1) < argc) dwDicFlags = (DWORD)strtol(argv[++i], NULL, 16);
+	if ((i+1) < argc) cpDicPref = (DWORD)atoi(argv[++i]);
+	continue;
+      }
+      if (streq(pszOpt, "tge")) {	/* -tdc: Test GetBufferEncoding() */
+      	iTestGuess = TRUE;
+      	pszInType = "?";
+	continue;
       }
 #endif
       if (streq(pszOpt, "u")) {		/* Output UTF16 */
@@ -634,6 +659,7 @@ open_df_failed:
 
   /* Go for it */
 
+  DEBUG_FPRINTF((mf, "// Reading the input from %s\n", (sf == stdin) ? "stdin" : pszInName));
   while (!feof(sf)) {
     if (!iCtrlZ) {
       nRead = fread(pszBuffer+nTotal, 1, BLOCKSIZE, sf);
@@ -667,32 +693,34 @@ open_df_failed:
   */
   if (*pszInType == '*') { /* Then use the COM API IMultiLanguage2::DetectInputCodepage() */
     HRESULT hr;
-    UINT cp = 0; /* I tried setting this to GetACP(), but the end results are even worse */
-    int iSize = (int)nRead;
+    UINT cp = cpDicPref; /* I tried setting this to GetACP(), but the end results are even worse */
+    int iSize = (int)nTotal;
     DetectEncodingInfo dei[10];
     int iCount = sizeof(dei) / sizeof(DetectEncodingInfo); // # of elements of dei
-    int iMaxConf = 0;
+    int iMaxConf = -32767; /* For very small texts, iConfidence == -1 */
     static char szCP[6];
 
     DEBUG_FPRINTF((mf, "Assuming the input to be CP %u\n", (unsigned int)cp));
-    hr = DetectInputCodepage(0, cp, pszBuffer, &iSize, dei, &iCount);
+    hr = DetectInputCodepage(dwDicFlags, cp, pszBuffer, &iSize, dei, &iCount);
     if (FAILED(hr)) {
       fprintf(stderr, "IMultiLanguage2::DetectInputCodepage() failed\n");
       pszInType = "?"; /* Fall back to using our simple heuristics */
     } else {
       DEBUG_FPRINTF((mf, "IMultiLanguage2::DetectInputCodepage(%u, ...) found in the first %d bytes:\n", (unsigned int)cp, iSize));
       for (i=0; i<iCount; i++) {
-      	int iConfidence = (int)(dei[i].nConfidence);
+      	int iConfidence = (int)(dei[i].nConfidence); /* For very small texts, iConfidence == -1 */
       	cp = (unsigned int)(dei[i].nCodePage);
 	DEBUG_FPRINTF((mf, "CP %u, in %d%% of the text, with %d%% confidence.\n", cp, (int)(dei[i].nDocPercent), iConfidence));
-	if (iConfidence < 0) iConfidence = 100; /* For very small texts, iConfidence == -1 */
 	if (iConfidence > iMaxConf) {
+	  iMaxConf = iConfidence;
 	  sprintf(szCP, "%u", cp);
 	  pszInType = szCP;
 	}
       }
     }
+    DEBUG_CODE(if (iTestDic) iVerbose = TRUE;)
     verbose((mf, "Windows' IMultiLanguage2 COM API detected CP: %s\n", pszInType));
+    DEBUG_CODE(if (iTestDic) return 0;)
   }
   /*
     A simple heuristic for selecting among the most common cases in Windows:
@@ -701,7 +729,7 @@ open_df_failed:
   if (*pszInType == '?') { /* Then use heuristics to detect the input data encoding */
     char szMsg[100];
     char szValue[10];
-    UINT cp = GuessEncoding(pszBuffer, nRead); /* 2021-05-28 Moved to MsvcLibX */
+    UINT cp = GetBufferEncoding(pszBuffer, nTotal, 0); /* 2021-05-28 Moved to MsvcLibX */
     /* Ideally we should default to the current console code page for input from a pipe,
        and to the ANSI code page for input from a file.
        But the most common use case being to correct the output to the console
@@ -709,6 +737,7 @@ open_df_failed:
        then defaulting to the ANSI code page now is the best choice.
        Also we have the . argument to specify the current console code page. */
      switch (cp) {
+       case CP_UNDEFINED: sprintf(szMsg, "Unrecognized encoding, possibly binary"); pszInType="w"; break;
        case CP_ACP: sprintf(szMsg, "Windows system code page %d", systemCodePage); pszInType="w"; break;
        case CP_ASCII: sprintf(szMsg, "US-ASCII code page %d", CP_ASCII); pszInType="a"; break;
        case CP_UTF7: sprintf(szMsg, "UTF-7 code page %d", CP_UTF7); pszInType="7"; break;
@@ -717,7 +746,9 @@ open_df_failed:
        case CP_UTF32: sprintf(szMsg, "UTF-32 code page %d", CP_UTF32); pszInType="32"; break;
        default: sprintf(szMsg, "Code page %d", cp); sprintf(szValue, "%u", cp); pszInType=szValue; break;
      }
+    DEBUG_CODE(if (iTestGuess) iVerbose = TRUE;)
     verbose((mf, "Heuristic detected input type: %s\n", szMsg));
+    DEBUG_CODE(if (iTestGuess) return 0;)
   }
 
   /* Do the conversion */
