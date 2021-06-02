@@ -53,7 +53,6 @@ OBJECTS = \
     +debugv.obj			\
     +dirent.obj			\
     +dirname.obj		\
-    +encoding.obj		\
     +err2errno.obj		\
     +filetime.obj		\
     +fnmatch.obj		\
@@ -97,6 +96,7 @@ OBJECTS = \
 WIN32_OBJECTS = \
     +aswprintf.obj		\
     +daswprintf.obj		\
+    +GetEncoding.obj		\
     +GetFileAttributes.obj	\
     +GetFileAttributesEx.obj	\
     +GetFullPathName.obj	\

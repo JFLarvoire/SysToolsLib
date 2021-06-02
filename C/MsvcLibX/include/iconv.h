@@ -65,7 +65,13 @@ char *DupAndConvertEx(const char *string, UINT cpFrom, UINT cpTo, DWORD dwFlags,
 #define DupAndConvert(string, cpFrom, cpTo) DupAndConvertEx(string, cpFrom, cpTo, 0, NULL, NULL)
 WCHAR *MultiByteToNewWideStringEx(UINT cp, DWORD dwFlags, const char *string);
 #define MultiByteToNewWideString(cp, string) MultiByteToNewWideStringEx(cp, 0, string)
-UINT GuessEncoding(char *pszBuffer, size_t nBufSize);
+UINT GetBufferEncoding(const char *pszBuffer, size_t nBufSize, DWORD dwFlags); /* If dwFlags is 0, test everything, else test only the specified encodings + Windows' own */
+#define BE_TEST_BINARY	0x0001	/* Test if the buffer contains binary data, and if so return CP_UNDEFINED */
+#define BE_TEST_ASCII	0x0002	/* Test if the buffer contains ASCII text, and if so return CP_ASCII */
+#define BE_TEST_SYSTEM	0x0004	/* Test if the buffer contains Windows text, and if so return CP_ACP */
+#define BE_TEST_UTF8	0x0008	/* Test if the buffer contains UTF-8 text, and if so return CP_UTF8 */
+#define BE_TEST_UTF16	0x0010	/* Test if the buffer contains UTF-16 text, and if so return CP_UTF16 */
+#define BE_TEST_UTF32	0x0020	/* Test if the buffer contains UTF-32 text, and if so return CP_UTF32 */
 
 /* MsvcLibX internal routines */
 int initWideFiles(void);	/* Initialize the UTF-8 output handlers */
