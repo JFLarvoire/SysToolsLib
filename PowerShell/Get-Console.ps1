@@ -30,6 +30,8 @@
 #    2018-01-10 JFL Use the same font and font size for HTML and RTF.         #
 #    2021-07-16 JFL Use pixels instead of points for the HTML font size,      #
 #                   to get a better rendering in Chrome.                      #
+#                   Bug fix: The Get-Console invocation was not removed when  #
+#                   invoked indirectly via the Get-Console.bat front end.     #
 #                                                                             #
 #         © Copyright 2018 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -316,7 +318,13 @@ function Get-ConsoleBuffer {
     $c = $buffer[$iLastLine, $j].Character
     $LastLine += "$c"
   }
-  $jStopLast = $LastLine.IndexOf($script:MyInvocation.Line) # -1 if not found
+  # Write-Host "LastLine = `"$LastLine`""
+  $MyInvocationLine = $script:MyInvocation.Line
+  $jStopLast = $LastLine.IndexOf($MyInvocationLine) # -1 if not found
+  if ($jStopLast -eq -1) { # When invoked by Get-Console.bat, the command does not match this PowerShell script name
+    $LastLine2 = $LastLine -replace "Get-Console(\.bat)?", "Get-Console.ps1" # Pretent we typed this ps1 script name
+    $jStopLast = $LastLine2.IndexOf($MyInvocationLine) # -1 if not found
+  }
 
   # Iterate through the lines in the console buffer.
   $utf8 = [System.Text.Encoding]::UTF8
