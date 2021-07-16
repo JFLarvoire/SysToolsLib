@@ -28,6 +28,8 @@
 #                   the dependency on 2clip.exe.                              #
 #                   Fixed Unicode characters in HTML and RTF output.          #
 #    2018-01-10 JFL Use the same font and font size for HTML and RTF.         #
+#    2021-07-16 JFL Use pixels instead of points for the HTML font size,      #
+#                   to get a better rendering in Chrome.                      #
 #                                                                             #
 #         © Copyright 2018 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -102,7 +104,7 @@ Param (
 )
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2018-01-10"
+$scriptVersion = "2021-07-16"
 if ($Version) {
   echo $scriptVersion
   return
@@ -273,7 +275,9 @@ function Get-ConsoleBuffer {
   # Initialize document name and object
   if ($HTML) {
     $htmlBuilder = new-object system.text.stringbuilder
-    $null = $htmlBuilder.Append("<pre style='margin: 0; padding: 0; font-family: $fontName, Courier New, Courier; font-size: $($fontSize)pt; line-height: $($fontSize)pt'>" + $crlf)
+    # Don't use "$($fontSize)pt": This works in Outlook, but this loses the lowest pixel in each line in Chrome.
+    $fontPixels = [Math]::Floor($fontSize * 1.4) # Non-integer values cause white lines to occasionally appear in Firefox.
+    $null = $htmlBuilder.Append("<pre style='margin: 0; padding: 0; font-family: $fontName, Courier New, Courier; font-size: $($fontPixels)px; line-height: $($fontPixels)px'>" + $crlf)
     $RTF = $false
   } elseif ($RTF) {
     New-RtfBuilder
