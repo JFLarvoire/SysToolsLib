@@ -69,6 +69,9 @@
 *    2020-04-20 JFL Added support for MacOS. Version 3.4.                     *
 *    2021-02-27 JFL Fixed another issue with Unix readdir() and d_type.       *
 *                   Version 3.4.1.					      *
+*    2021-09-06 JFL Fixed "out of directory handles" error with the -i option.*
+*                   Report the # of inaccessible dirs if any err. was ignored.*
+*                   Version 3.4.2.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -76,8 +79,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.4.1"
-#define PROGRAM_DATE    "2021-02-27"
+#define PROGRAM_VERSION "3.4.2"
+#define PROGRAM_DATE    "2021-09-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -229,6 +232,7 @@ typedef struct _scanOpts {	/* Options for scanning the directory tree */
   int total;			    /* If TRUE, totalize size of all subdirs */
   int subdirs;			    /* If TRUE, start scanning in each subdirectory */
   int depth;			    /* Current depth in the scan tree */
+  int nErrors;			    /* Number of errors that were ignored */
 } scanOpts;
 
 /* Global variables */
@@ -282,6 +286,7 @@ int main(int argc, char *argv[]) {
     FALSE,			/* total: If TRUE, totalize size of all subdirs */
     FALSE,			/* subdirs: If TRUE, start scanning in each subdirectory */
     0,				/* Initial depth in the search tree */
+    0,				/* Number of errors that were ignored */
   };
   char *dateminarg = NULL;	/* Minimum date argument */
   char *datemaxarg = NULL;	/* Maximum date argument */
@@ -500,6 +505,11 @@ int main(int argc, char *argv[]) {
     size = ScanDirs(&sOpts, &fConstraints);
   }
 
+  /* Report if some errors were ignored */
+  if (sOpts.nErrors) {
+    finis(RETCODE_INACCESSIBLE, "Incomplete totals: Missing data for %d directories", sOpts.nErrors);
+  }
+
   /* Restores the initial drive and directory and exit */
   finis(RETCODE_SUCCESS);
   return 0;
@@ -697,7 +707,21 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
   /* Scan all files */
   nDE = scandirX(".", &pDElist, SelectFilesCB, NULL, pConstraints);
   if (nDE < 0) {
-    finis(RETCODE_NO_MEMORY, "Out of directory handles");
+    iErr = errno;
+    if (iVerbose || !iContinue) {
+      char *pszSeverity = iContinue ? "Warning" : "Error";
+      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+      if (!pcd) {
+	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+      }
+      fprintf(stderr, "%s: Failed to scan files in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
+    }
+    if ((iErr == EACCES) && iContinue) {
+      pOpts->nErrors += 1;
+      return 0;
+    }
+    iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
+    finis(iErr, NULL); /* The error message has already been displayed */
   }
   for (ppDE = pDElist; nDE--; ppDE++) {
     pDE = *ppDE;
@@ -801,7 +825,21 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
   /* Get all subdirectories */
   nDE = scandirX(".", &pDElist, SelectDirsCB, alphasort, NULL);
   if (nDE < 0) {
-    finis(RETCODE_NO_MEMORY, "Out of directory handles");
+    iErr = errno;
+    if (iVerbose || !iContinue) {
+      char *pszSeverity = iContinue ? "Warning" : "Error";
+      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+      if (!pcd) {
+	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+      }
+      fprintf(stderr, "%s: Failed to scan directories in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
+    }
+    if ((iErr == EACCES) && iContinue) {
+      pOpts->nErrors += 1;
+      return 0;
+    }
+    iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
+    finis(iErr, NULL); /* The error message has already been displayed */
   }
   for (ppDE = pDElist; nDE--; ppDE++) {
     pDE = *ppDE;
@@ -826,6 +864,7 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
       	fprintf(stderr, "%s: Cannot access directory %s" DIRSEPARATOR_STRING "%s. %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
       }
       if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
+      pOpts->nErrors += 1;
     } else {
       dSize = ScanFiles(pOpts, pConstraints);
       if (!pOpts->depth) {
