@@ -71,7 +71,8 @@
 *                   Version 3.4.1.					      *
 *    2021-09-06 JFL Fixed "out of directory handles" error with the -i option.*
 *                   Report the # of inaccessible dirs if any err. was ignored.*
-*                   Version 3.4.2.					      *
+*                   Continue by default for all recursive operations.	      *
+*                   Version 3.5.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -79,7 +80,7 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.4.2"
+#define PROGRAM_VERSION "3.5"
 #define PROGRAM_DATE    "2021-09-06"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
@@ -241,7 +242,7 @@ char init_dir[PATHNAME_SIZE];       /* Initial directory */
 char init_drive;                    /* Initial drive */
 long csz=0;			    /* Cluster size. 0=Unknown. */
 int band = FALSE;		    /* If TRUE, skip a line every 5 lines */
-int iContinue = FALSE;              /* If TRUE, continue after having an error */
+int iContinue = -1;                 /* If TRUE, continue after directory access errors */
 int iQuiet = FALSE;		    /* If TRUE, only display major errors */
 int iVerbose = FALSE;		    /* If TRUE, display additional information */
 int iHuman = TRUE;		    /* If TRUE, display human-friendly values with a comma every 3 digits */
@@ -374,6 +375,10 @@ int main(int argc, char *argv[]) {
 	sOpts.total = TRUE;
 	continue;
       }
+      if (streq(opt, "T")) {
+	sOpts.total = FALSE;
+	continue;
+      }
       if (streq(opt, "to")) {
 	datemaxarg = argv[++i];
 	if (!parse_date(datemaxarg, &fConstraints.datemax)) {
@@ -401,6 +406,10 @@ int main(int argc, char *argv[]) {
     }
     fprintf(stderr, "Warning: Unexpected argument \"%s\" ignored.", arg);
   }
+
+  /* If not explicitely defined, set iContinue based on context */
+  if ((iContinue == -1) && (sOpts.total || sOpts.recur)) iContinue = TRUE; /* For all recursive operations, default to TRUE */
+  if (iContinue == -1) iContinue = FALSE; /* Fon non-recusive operations, default to FALSE */
 
   /* Extract the search pattern if provided as part of the target pathname */
   if (from) {
@@ -507,7 +516,7 @@ int main(int argc, char *argv[]) {
 
   /* Report if some errors were ignored */
   if (sOpts.nErrors) {
-    finis(RETCODE_INACCESSIBLE, "Incomplete totals: Missing data for %d directories", sOpts.nErrors);
+    finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d directories", sOpts.nErrors);
   }
 
   /* Restores the initial drive and directory and exit */
@@ -523,25 +532,26 @@ Usage: dirsize [SWITCHES] [TARGET]\n\
 \n\
 Switches:\n\
   -?|-h       Display this help message and exit.\n\
-  -b	      Skip a line every 5 lines, to improve readability.\n\
-  -c	      Use the actual cluster size to compute the total size.\n\
+  -b          Skip a line every 5 lines, to improve readability.\n\
+  -c          Use the actual cluster size to compute the total size.\n\
   -c size     Use the specified cluster size to compute the total size.\n\
-  -D	      Compare every subdirectory of the target directory.\n"
+  -D          Measure every subdirectory of the target directory.\n"
 #ifdef _DEBUG
 "\
   -d          Output debug information.\n"
 #endif
 "\
   -from Y-M-D List only files starting from that date.\n\
-  -g	      Display sizes in Giga bytes.\n\
-  -H	      Display sizes without the human-friendly commas.\n\
-  -i	      Ignore directory access errors.\n\
-  -I	      Stop in case of directory access error. (Default)\n\
-  -k	      Display sizes in Kilo bytes.\n\
-  -m	      Display sizes in Mega bytes.\n\
+  -g          Display sizes in Giga bytes.\n\
+  -H          Display sizes without the human-friendly commas.\n\
+  -i          Report only the number of access errors (Dflt for recursive ops.)\n\
+  -I          Stop in case of directory access error (Default for other ops.)\n\
+  -k          Display sizes in Kilo bytes.\n\
+  -m          Display sizes in Mega bytes.\n\
   -q          Quiet mode: Do not display minor errors.\n\
-  -r|-s	      Display the sizes of all subdirectories too.\n\
-  -t	      Count the total size of all files plus that of all subdirs.\n\
+  -r|-s       Display the sizes of all subdirectories too.\n\
+  -t          Count the total size of all files plus that of all subdirs.\n\
+  -T          Do not count the size of subdirs. (Default)\n\
   -to Y-M-D   List only files up to that date.\n\
   -v          Display verbose information.\n\
   -V          Display this program version and exit.\n\
