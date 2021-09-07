@@ -35,14 +35,16 @@
 #    2018-09-18 JFL If the mail has double interline, halve interlines.       #
 #    2018-10-09 JFL Decode many common Unicode emoticons to ASCII art.        #
 #    2019-05-13 JFL Remove URL defense call wrappers.			      #
-#    2020-06-19 JFL Also reformat Yammer threads.
+#    2020-06-19 JFL Also reformat Yammer threads.                             #
+#    2021-09-06 JFL Improved the mail separator detection.                    #
+#    2021-09-07 JFL Remove 0-width spaces, sometimes preventing the above.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #-----------------------------------------------------------------------------#
 
 # Set global defaults
-set version "2020-06-22"
+set version "2021-09-07"
 
 # Force running the script as UTF-8, if executed in a system with a different encoding.
 # This is necessary because we have Unicode strings in this script encoded as UTF-8.
@@ -1763,8 +1765,11 @@ if {$yammer && [regexp {LIKE like this message  REPLY reply to this message  SHA
   set input [FormatYammerThread $input]
 }
 
+# Remove 0-width spaces
+regsub -all "\u200B" $input "" input
+
 # Recognize mail separators
-set rxSeparator1 {[[:blank:]]*---+[[:blank:]]*[[:upper:]][[:print:]]+[[:lower:]][[:blank:]]*---+[[:blank:]]*}
+set rxSeparator1 {[[:blank:]]*---+[[:blank:]]*[[:upper:]][[:print:]]+[[:lower:]](?:[[:blank:]]+[[:print:]]+[[:lower:]])*[[:blank:]]*---+[[:blank:]]*}
 set rxSeparator2 {[[:blank:]]*------+[[:blank:]]*}
 set rxSeparator3 {[[:blank:]]*______+[[:blank:]]*}
 set rxSeparator "$rxSeparator1|$rxSeparator2|$rxSeparator3|\r?\n"
