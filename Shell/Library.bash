@@ -17,13 +17,15 @@
 #    2020-03-23 JFL Updated the help screen.               		      #
 #    2020-04-01 JFL Fixed cd & export in Exec().           		      #
 #    2020-11-24 JFL Use a shebang with the env command.                       #
+#    2021-09-09 JFL Always indent the output to the log file.                 #
+#                   Added routines DoExec() and SetLogFile().                 #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2020-11-24"
+VERSION="2021-09-09"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -32,18 +34,12 @@ SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
 
 ###############################################################################
 #                                                                             #
-#                              Debugging library                              #
+#                              Debugging Library                              #
 #                                                                             #
 ###############################################################################
 
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 EXEC=1				# 1=Execute commands; 0=Don't
-
-# LOGDIR=/var/log		# Preferred log file location with root rights
-# LOGDIR=~/log			# Alternate location for non-root users
-# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Where to log what was done and results
-LOGFILE=/dev/null		# Default: Do not write to an actual log file
-LOGDIR=$(dirname "$LOGFILE")
 
 # Helper routines to test verbosity levels
 Quiet() {
@@ -61,46 +57,65 @@ Debug() {
 NoExec() {
   [[ $EXEC == 0 ]]
 }
+DoExec() {
+  [[ $EXEC != 0 ]]
+}
+
+# Manage output indentation in debug mode proportionally to the call depth
+CALL_DEPTH=0
+CallIndent() { # $1: -f=Force indentation. Default: Indent in debug mode only
+  if Debug || [[ "$1" = "-f" ]] ; then
+    printf '%*s' $CALL_DEPTH ''
+  fi
+}
+
+# Global variables defining the current log file
+# LOGDIR=/var/log		# Preferred log file location with root rights
+# LOGDIR=~/log			# Alternate location for non-root users
+# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Recommended name for the log file
+LOGFILE=/dev/null		# Default: Do not write to an actual log file
+LOGDIR=/dev
+
+# Set the log file
+SetLogFile() { # $1 = New log file pathname. Use /dev/null to disable logging.
+  LOGFILE="$1"
+  LOGDIR=$(dirname "$LOGFILE")
+}
 
 # Log a message into the log file
-Log() { # $last=string to log
+Log() { # $*=strings to log
   if [[ ! -d $LOGDIR ]] ; then
     mkdir -p $LOGDIR
   fi
-  echo "$@" >> $LOGFILE
+  echo "$(CallIndent -f)$*" >> $LOGFILE	 # Always indent output to the log file
 }
 
 # Display a message and log it in the log file
-Echo() { # $last=string to display and log
+Echo() { # $*=strings to display and log
   Log "$@"
-  echo "$@"
+  echo "$(CallIndent)$*"
 }
 
 # Display a string in verbose mode
-EchoV() { # $*=echo arguments
+EchoV() { # $*=strings to display and log
   Log "$@"
   if Verbose ; then
-    echo "$@"
+    echo "$(CallIndent)$*"
   fi
 }
 
-CALL_DEPTH=0
-CallIndent() {
-  printf '%*s' $CALL_DEPTH ''
-}
-
 # Display a string in debug mode
-EchoD() { # $*=echo arguments
+EchoD() { # $*=strings to display and log
   Log "$@"
   if Debug ; then
-    >&2 echo "$(CallIndent)$*"
+    >&2 echo "$(CallIndent)$*" # Don't output to stdin, else the output of traced routines can't be used by other routines
   fi
 }
 
 # Display a string in NoExec mode
-EchoX() { # $*=echo arguments
+EchoX() { # $*=strings to display and log
   if NoExec ; then
-    Echo "$(CallIndent)$*"
+    Echo "$@"
   fi
 }
 
@@ -295,13 +310,12 @@ Exec() { # $1=command $2=argument1 [...] [>|>>output_file]
     local redirect=""
     local cmdline="$(QuoteArgs "$@")"
   fi
-  if Verbose || [[ $EXEC == 0 ]] ; then
-    echo "$cmdline"
+  if (Verbose || NoExec) && ! Debug ; then
+    echo "$cmdline"	# This line is never indented
   fi
-  Log ""
-  EchoD "$cmdline"
+  EchoD "$cmdline"	# This line is indented in debug mode, and always in the log file
   local ERR=0
-  if [[ $EXEC != 0 ]] ; then
+  if DoExec ; then
     case "$1" in
       cd|export)
 	# Do not pipe output, as this creates a sub-shell, and thus the command
@@ -320,16 +334,16 @@ Exec() { # $1=command $2=argument1 [...] [>|>>output_file]
 	ERR=${PIPESTATUS[0]} # Get the exit code from the _first_ command.
       ;;
     esac
+    EchoD "  return $ERR"
   fi
-  EchoD "  return $ERR"
   return $ERR
 }
 
-#-----------------------------------------------------------------------------#
+###############################################################################
 #                                                                             #
-#                         End of Debugging functions                          #
+#                           General Purpose Library                           #
 #                                                                             #
-#-----------------------------------------------------------------------------#
+###############################################################################
 
 # Check if a variable exists.
 VarExists() {
@@ -346,6 +360,7 @@ IsInteger() { # $1 = Value to test. Returns: 0=Fully numeric; 1=Nope
   echo "$1" | grep -P '^-?[0-9]+$' >/dev/null 2>&1
 }
 
+# Get the current time as an ISO 8601 date/time string
 Now() { # $1 = Date-time separator. Default: " ". (Strict ISO 8601 is "T")
 	# $2 = hour-minute-second separator. Default: "h" & "m". Use ":" for ISO 8601
   date +"%04Y-%02m-%02d${1:- }%02H${2:-h}%02M${2:-m}%02S"
@@ -677,9 +692,11 @@ while (( $# > 0 )) ; do
       exit 0
     ;;
     -l|--logfile)
-      LOGFILE=$1
-      LOGDIR=$(dirname "$LOGFILE")
+      SetLogFile "$1"
       shift
+    ;;
+    -L|--nologfile)
+      SetLogFile /dev/null
     ;;
     -q|--quiet)
       VERBOSITY=0
