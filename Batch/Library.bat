@@ -234,6 +234,12 @@
 :#   2020-06-04 JFL Split :noww into :Now.wmic and :GetWeekDay.               #
 :#   2020-06-03 JFL Added a :return routine, for lightweight debugging.       #
 :#   2021-03-04 JFL Fixed %ECHO.V% and %ECHO.D% too agressive optimization.   #
+:#   2021-07-09 JFL Added routine :Prep2ExpandVar.			      #
+:#		    New %^1!% ... %^6!% expand to (2^n)-1 hats before a !.    #
+:#		    Fixed the :Return routine in Windows XP.                  #
+:#   2021-09-15 JFL Renamed character entities from DEBUG.entity to @entity.  #
+:#		    Rewrote :Prep2ExpandVars based on :Prep2ExpandVar.	      #
+:#		    Added routine :ConvertEntitiesNoDebug & use it for -c, -C.#
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -249,7 +255,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
-set "VERSION=2020-06-05"
+set "VERSION=2021-09-15"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -439,29 +445,29 @@ set "BS=%DEL:~0,1%"
 for /f %%A in ('cls') do set "FF=%%A"
 
 :# Define variables for problematic characters, that cause parsing issues.
-:# Use the ASCII control character name, or the html entity name.
+:# Use the ASCII control character name, or the HTML entity name.
 :# Warning: The excl and hat characters need different quoting depending on context.
-set  "DEBUG.percnt=%%"	&:# One percent sign
-set  "DEBUG.excl=^!"	&:# One exclamation mark
-set  "DEBUG.hat=^"	&:# One caret, aka. circumflex accent, or hat sign
-set ^"DEBUG.quot=""	&:# One double quote
-set  "DEBUG.apos='"	&:# One apostrophe
-set  "DEBUG.amp=&"	&:# One ampersand
-set  "DEBUG.vert=|"	&:# One vertical bar
-set  "DEBUG.gt=>"	&:# One greater than sign
-set  "DEBUG.lt=<"	&:# One less than sign
-set  "DEBUG.lpar=("	&:# One left parenthesis
-set  "DEBUG.rpar=)"	&:# One right parenthesis
-set  "DEBUG.lbrack=["	&:# One left bracket
-set  "DEBUG.rbrack=]"	&:# One right bracket
-set  "DEBUG.sp= "	&:# One space
-set  "DEBUG.tab=	"	&:# One tabulation
-set  "DEBUG.quest=?"	&:# One question mark
-set  "DEBUG.ast=*"	&:# One asterisk
-set  "DEBUG.cr=!CR!"	&:# One carrier return
-set  "DEBUG.lf=!LF!"	&:# One line feed
-set  "DEBUG.bs=!BS!"	&:# One backspace
-set  "DEBUG.ff=!FF!"	&:# One form feed
+set  "@percnt=%%"	&:# One percent sign
+set  "@excl=^!"		&:# One exclamation mark
+set  "@hat=^"		&:# One caret, aka. circumflex accent, or hat sign
+set ^"@quot=""		&:# One double quote
+set  "@apos='"		&:# One apostrophe
+set  "@amp=&"		&:# One ampersand
+set  "@vert=|"		&:# One vertical bar
+set  "@gt=>"		&:# One greater than sign
+set  "@lt=<"		&:# One less than sign
+set  "@lpar=("		&:# One left parenthesis
+set  "@rpar=)"		&:# One right parenthesis
+set  "@lbrack=["	&:# One left bracket
+set  "@rbrack=]"	&:# One right bracket
+set  "@sp= "		&:# One space
+set  "@tab=	"	&:# One tabulation
+set  "@quest=?"		&:# One question mark
+set  "@ast=*"		&:# One asterisk
+set  "@cr=!CR!"		&:# One carrier return
+set  "@lf=!LF!"		&:# One line feed
+set  "@bs=!BS!"		&:# One backspace
+set  "@ff=!FF!"		&:# One form feed
 goto :eof
 
 :PopArg
@@ -521,30 +527,46 @@ for /f %%a in ("-!ARG!") do for /f %%b in ("-!"ARG"!") do for /f %%c in ("-!ARGS
 )
 goto :eof
 
-:# Prepare variables to return from the local scope (with expansion on or off) to a parent scope with expansion on
-:Prep2ExpandVars VAR [VAR ...]
-if "!!"=="" goto :Prep2ExpandVars.Eon
-:Prep2ExpandVars.Eoff	:# The local scope has expansion off
-setlocal EnableDelayedExpansion
-set "VALUE=!%~1!"
-call :Prep2ExpandVars.Eon VALUE
-endlocal & set "%~1=%VALUE%"
-if not [%2]==[] shift & goto :Prep2ExpandVars.Eoff
-goto :eof
-
-:# Prepare variables, assuming the local scope itself has expansion on
-:Prep2ExpandVars.Eon VAR [VAR ...]
-if defined %1 (
-  for %%e in (sp tab cr lf quot amp vert lt gt hat percnt) do ( :# Encode named character entities
-    for %%c in ("!DEBUG.%%e!") do (
-      set "%~1=!%~1:%%~c= DEBUG.%%e !"
+:# Prepare one variable, in a local scope with !expansion! either on or off, for %expansion% in another scope with !expansion! on
+:Prep2ExpandVar     INVAR [OUTVAR]
+if "!!"=="" (	:# The local scope has expansion on
+  :# Prepare one variable, in a local scope with !expansion! on, for %expansion% in another scope with !expansion! on
+  :Prep2ExpandVar.Eon INVAR [OUTVAR]
+  if not "%~2"=="" set "%~2=!%~1!" & shift
+  if defined %1 (
+    for %%e in (sp tab cr lf quot amp vert lt gt hat percnt) do ( :# Encode named character entities
+      for %%c in ("!@%%e!") do (
+	set "%~1=!%~1:%%~c= @%%e !"
+      )
     )
+    call set "%~1=%%%~1:^!= @excl %%" 	& rem :# Encode exclamation points                          
+    call set "%~1=%%%~1: =^!%%"		& rem :# Encode final expandable entities
   )
-  call set "%~1=%%%~1:^!= DEBUG.excl %%" 	& rem :# Encode exclamation points
-  call set "%~1=%%%~1: =^!%%"			& rem :# Encode final expandable entities
+  exit /b
+) else (	:# The local scope has expansion off
+  :# Prepare one variable, in a local scope with !expansion! off, for %expansion% in another scope with !expansion! on
+  :Prep2ExpandVar.Eoff INVAR [OUTVAR]
+  setlocal EnableDelayedExpansion
+  set "VALUE=!%~1!"
+  call :Prep2ExpandVar.Eon VALUE
+  if not "%~2"=="" shift
+  endlocal & set "%~1=%VALUE%"
+  exit /b
 )
-if not [%2]==[] shift & goto :Prep2ExpandVars.Eon
-goto :eof
+
+:# Prepare variables, in a local scope with !expansion! either on or off, for %expansion% in another scope with !expansion! on
+:Prep2ExpandVars VAR [VAR ...]
+if "!!"=="" (	:# The local scope has expansion on
+  :# Prepare variables, in a local scope with !expansion! on, for %expansion% in another scope with !expansion! on
+  :Prep2ExpandVars.Eon VAR [VAR ...]
+  for %%v in (%*) do call :Prep2ExpandVar.Eon %%v
+  exit /b
+) else (	:# The local scope has expansion off
+  :# Prepare variables, in a local scope with !expansion! off, for %expansion% in another scope with !expansion! on
+  :Prep2ExpandVars.Eoff
+  for %%v in (%*) do call :Prep2ExpandVar.Eoff %%v
+  exit /b
+)
 
 :# Prepare variables containing pathnames that will be passed as "arguments"
 :PrepArgVars
@@ -653,6 +675,13 @@ set "&=^^^&"		&:# Insert a command separator in a macro
 set "^!2=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!"
 set "'^!2=^^^^^^^!"
 set "&2=^^^^^^^^^^^^^^^&"
+:# Define a ! protected by an exponential number of hats
+set "^^1^!=^^^!"					&:# %^1!% expands to (2^1)-1 hats before the !
+set "^^2^!=^^^^^^^!"					&:# %^2!% expands to (2^2)-1 hats before the !
+set "^^3^!=^^^^^^^^^^^^^^^!"				&:# %^3!% expands to (2^3)-1 hats before the !
+set "^^4^!=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!"		&:# %^4!% expands to (2^4)-1 hats before the !
+set "^^5^!=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!" &:# Etc...
+set "^^6^!=^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^!"
 
 set "MACRO=for %%$ in (1 2) do if %%$==2"				&:# Prolog code of a macro
 set "/MACRO=else setlocal enableDelayedExpansion %&% set MACRO.ARGS="	&:# Epilog code of a macro
@@ -846,22 +875,22 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
     for %%v in (%!%DEBUG.RETVARS%!%) do ( %\n%
       set "DEBUG.VALUE=%'!%%%v%'!%" %# We must remove problematic characters in that value #% %\n%
       if defined DEBUG.VALUE ( %# Else the following lines will generate phantom characters #% %\n%
-	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%DEBUG.percnt%%%'!%"	%# Encode percent #% %\n%
-	for %%e in (sp tab cr lf quot amp vert lt gt) do for %%c in ("%'!%DEBUG.%%e%'!%") do ( %# Encode named character entities #% %\n%
-	  set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%DEBUG.%%e%%%'!%" %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%=%%@percnt%%%'!%"	%# Encode percent #% %\n%
+	for %%e in (sp tab cr lf quot amp vert lt gt) do for %%c in ("%'!%@%%e%'!%") do ( %# Encode named character entities #% %\n%
+	  set "DEBUG.VALUE=%'!%DEBUG.VALUE:%%~c=%%@%%e%%%'!%" %\n%
 	) %\n%
-	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%DEBUG.hat%%%'!%"	%# Encode carets #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^=%%@hat%%%'!%"	%# Encode carets #% %\n%
 	call set "DEBUG.VALUE=%%DEBUG.VALUE:%!%=^^^^%%" 		%# Encode exclamation points #% %\n%
-	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%DEBUG.excl%%%'!%"	%# Encode exclamation points #% %\n%
+	set "DEBUG.VALUE=%'!%DEBUG.VALUE:^^^^=%%@excl%%%'!%"	%# Encode exclamation points #% %\n%
       ) %\n%
       set DEBUG.SETARGS=%!%DEBUG.SETARGS%!% "%%v=%'!%DEBUG.VALUE%'!%"%\n%
     ) %\n%
     if %!%DEBUG%!%==1 ( %# Build the debug message and display it #% %\n%
       set "DEBUG.MSG=return %'!%DEBUG.EXITCODE%'!%" %\n%
       for /f "delims=" %%v in ("%'!%DEBUG.SETARGS: =%%~l%'!%") do if not %%v=="" ( %# for /f avoids issues with ? and * #% %\n%
-	set "DEBUG.MSG=%'!%DEBUG.MSG%'!% %%DEBUG.amp%% set %%v" %!% %\n%
+	set "DEBUG.MSG=%'!%DEBUG.MSG%'!% %%@amp%% set %%v" %!% %\n%
       ) %\n%
-      call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+      call set "DEBUG.MSG=%'!%DEBUG.MSG:%%=%%@excl%%%'!%" %# Change all percent to ! #%  %\n%
       if defined ^^%>%DEBUGOUT ( %# If we use a debugging stream distinct from stdout #% %\n%
 	%LCALL% :Echo.Eval2DebugOut DEBUG.MSG %# Use a helper routine, as delayed redirection does not work #% %\n%
       ) else ( %# Output directly here, which is faster #% %\n%
@@ -876,7 +905,7 @@ set RETURN=call set "DEBUG.ERRORLEVEL=%%ERRORLEVEL%%" %&% %MACRO% ( %\n%
 	endlocal %&% endlocal %&% endlocal %# Exit the RETURN and FUNCTION local scopes #% %\n%
 	set "DEBUG.SETARGS=%%a" %\n%
 	if "%'!%%'!%"=="" ( %# Delayed expansion is ON #% %\n%
-	  call set "DEBUG.SETARGS=%'!%DEBUG.SETARGS:%%=%%DEBUG.excl%%%'!%" %# Change all percent to ! #%  %\n%
+	  call set "DEBUG.SETARGS=%'!%DEBUG.SETARGS:%%=%%@excl%%%'!%" %# Change all percent to ! #%  %\n%
 	  for /f "delims=" %%v in ("%'!%DEBUG.SETARGS: =%%~l%'!%") do if not %%v=="" ( %# for /f avoids issues with ? and * #% %\n%
 	    set %%v %# Set each upvar variable in the caller's scope #% %\n%
 	  ) %\n%
@@ -1035,10 +1064,10 @@ goto :eof &:# %RETURN.ERR% will be processed in the %DEBUG#% macro.
 :# Only traces the %ERRORLEVEL%, but not the variables returned.
 :# Trace the return from a subroutine, and do the actual return, in a single call
 :Return
-setlocal
-set "ERR=%~1"
-if not defined ERR set "ERR=%ERRORLEVEL%"
-%>DEBUGOUT% echo   exit /b %ERR%
+:# gotcha: setlocal sometimes clears %ERRORLEVEL%, so the reading must be on same line
+setlocal & set "ERR=%~1" & if not defined ERR set "ERR=%ERRORLEVEL%"
+%IF_DEBUG% %>DEBUGOUT% echo   exit /b %ERR%
+:# An explicit endlocal isn't required, as (goto) does it automatically.
 2>NUL (goto) & exit /b %ERR% &:# Endlocal and pop one call stack, then return to the upper level
 
 :# Routine to set the VERBOSE mode, in response to the -v argument.
@@ -1646,7 +1675,7 @@ set ^"evar='!edx!'"
 if "!dvar!" equ "!evar!" (call;) else (call) & goto :eof
 
 :#----------------------------------------------------------------------------#
-:#batchTee.bat  OutputFile  [+]
+:#  batchTee.bat  OutputFile  [+]
 :#
 :#  Write each line of stdin to both stdout and outputFile.
 :#  The default behavior is to overwrite any existing outputFile.
@@ -2178,6 +2207,7 @@ exit /b
 :#                  - Supports strings including special characters & and |   #
 :#                                                                            #
 :#  History                                                                   #
+:#   2021-09-15 JFL Added the missing %UPVAR% instructions.                   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -2186,8 +2216,8 @@ exit /b
 :# %2 = Source variable name
 :strcpy
 %FUNCTION%
+%UPVAR% %~1
 if not "%~1"=="%~2" call set "%~1=%%%~2%%"
-%ECHOVARS.D% "%~1"
 %RETURN%
 
 :# Append the content of a variable to another one
@@ -2195,8 +2225,8 @@ if not "%~1"=="%~2" call set "%~1=%%%~2%%"
 :# %2 = Source variable name
 :strcat
 %FUNCTION%
+%UPVAR% %~1
 call set "%~1=%%%~1%%%%%~2%%"
-%ECHOVARS.D% "%~1"
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -2210,6 +2240,7 @@ call set "%~1=%%%~1%%%%%~2%%"
 :#  Notes 	    Inspired from C string management routines                #
 :#                                                                            #
 :#  History                                                                   #
+:#   2021-09-15 JFL Added the missing %UPVAR% instructions.                   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -2218,6 +2249,7 @@ call set "%~1=%%%~1%%%%%~2%%"
 :strlwr
 %FUNCTION%
 if not defined %~1 %RETURN%
+%UPVAR% %~1
 for %%a in ("A=a" "B=b" "C=c" "D=d" "E=e" "F=f" "G=g" "H=h" "I=i"
             "J=j" "K=k" "L=l" "M=m" "N=n" "O=o" "P=p" "Q=q" "R=r"
             "S=s" "T=t" "U=u" "V=v" "W=w" "X=x" "Y=y" "Z=z" "Ç=ç"
@@ -2225,7 +2257,6 @@ for %%a in ("A=a" "B=b" "C=c" "D=d" "E=e" "F=f" "G=g" "H=h" "I=i"
             "Ô=ô" "Ö=ö" "Ù=ù" "Û=û" "Ü=ü" "Ñ=ñ" "Ø=ø" "Å=å") do (
   call set "%~1=%%%~1:%%~a%%"
 )
-%ECHOVARS.D% "%~1"
 %RETURN%
 
 :# Convert a variable content to upper case
@@ -2233,6 +2264,7 @@ for %%a in ("A=a" "B=b" "C=c" "D=d" "E=e" "F=f" "G=g" "H=h" "I=i"
 :strupr
 %FUNCTION%
 if not defined %~1 %RETURN%
+%UPVAR% %~1
 for %%a in ("a=A" "b=B" "c=C" "d=D" "e=E" "f=F" "g=G" "h=H" "i=I"
             "j=J" "k=K" "l=L" "m=M" "n=N" "o=O" "p=P" "q=Q" "r=R"
             "s=S" "t=T" "u=U" "v=V" "w=W" "x=X" "y=Y" "z=Z" "ç=Ç"
@@ -2240,7 +2272,6 @@ for %%a in ("a=A" "b=B" "c=C" "d=D" "e=E" "f=F" "g=G" "h=H" "i=I"
             "ô=Ô" "ö=Ö" "ù=Ù" "û=Û" "ü=Ü" "ñ=Ñ" "ø=Ø" "å=Å") do (
   call set "%~1=%%%~1:%%~a%%"
 )
-%ECHOVARS.D% "%~1"
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -4511,7 +4542,7 @@ if not defined OUTVAR set "OUTVAR=%1"
 set "ARG=!%1!"
 %ECHOSVARS.D% 1 ARG
 for %%e in (quot lt gt amp vert rpar lpar rbrack lbrack sp bs cr lf hat) do (
-  for %%c in ("!DEBUG.%%e!") do set "ARG=!ARG:[%%e]=%%~c!"
+  for %%c in ("!@%%e!") do set "ARG=!ARG:[%%e]=%%~c!"
 )
 %ECHOSVARS.D% 2 ARG
 :# Then convert special characters that need special attention
@@ -4544,6 +4575,19 @@ call :ConvertEntities.internal %1 %2
 call :EscapeCmdString ARG ARG 1 %CallerExp%
 endlocal & set ^"%OUTVAR%=%ARG%^" ! &:# The ! forces always having !escaping ^ removal in delayed expansion mode
 goto :eof
+
+:ConvertEntitiesNoDebug %1=INPUTVAR [%2=OUTPUTVAR]
+%IF_DEBUG% (	 :# Temporarily disable debugging
+  call :Debug.off
+  set "CE.DEBUG.RESTORE=call :Debug.on & set "CE.DEBUG.RESTORE=""
+) else (
+  set "CE.DEBUG.RESTORE="
+)
+call :ConvertEntities %*
+%CE.DEBUG.RESTORE%
+if not [%2]==[] shift
+%ECHOVARS.D% %1 &:# Only report the result string
+exit /b
 
 :TestConvertEntities %1=VAR [%2=0|1=Disable|Enable Delayed Expansion]
 setlocal EnableDelayedExpansion
@@ -4589,7 +4633,7 @@ exit /b
 :exec_cmd_line
 %CMD_BEFORE%
 set ^"CMDLINE=!ARGS!^"
-call :ConvertEntities CMDLINE
+call :ConvertEntitiesNoDebug CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do %EXEC% !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
@@ -4605,7 +4649,7 @@ goto :eof
 :call_cmd_line
 %CMD_BEFORE%
 set ^"CMDLINE=!ARGS!^"
-call :ConvertEntities CMDLINE
+call :ConvertEntitiesNoDebug CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
 if not %NLOOPS%==1 echo End at %TIME% & set "T1=%TIME%"
@@ -4617,7 +4661,7 @@ goto :eof
 %CMD_BEFORE%
 %POPARG%
 set ^"CMDLINE=%%%ARG%%% !ARGS!^"
-call :ConvertEntities CMDLINE
+call :ConvertEntitiesNoDebug CMDLINE
 %ECHOVARS.D% CMDLINE
 if not %NLOOPS%==1 echo Start at %TIME% & set "T0=%TIME%"
 for /l %%n in (1,1,%NLOOPS%) do call !CMDLINE!
@@ -4639,7 +4683,7 @@ set NCMDS=0
 %POPARG%
 if not defined "ARG" goto :call_all_cmds.done_args
 set /a NCMDS+=1
-call :ConvertEntities ARG
+call :ConvertEntitiesNoDebug ARG
 %IF_XDLEVEL% 2 set ARG | findstr ARG=
 set "CMD[%NCMDS%]=!ARG!"
 goto :call_all_cmds.next_arg
@@ -4852,13 +4896,21 @@ endlocal
 %FUNCTION% EnableDelayedExpansion
 :# set "STRING=@(())^^^^,,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!"
 :# set STRING=!STRING!"@||&&(())<<>>^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
-set "STRING0=@||&&(())<<>>^^^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
-set "STRING1=@(()),,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!" &:# Remove ||&&^^<<>> that cause problems when not quoted
-set STRING=!STRING1! "!STRING0!"
+set "_STRING0=@||&&(())<<>>^^^^,,;;  %%%%^!^!**??[[]]==~~''%%CD%%_^!CD^!"
+set "_STRING1=@(()),,;;  %%%%^!^!**??[[]]==~~''""%%CD%%_^!CD^!" &:# Remove ||&&^^<<>> that cause problems when not quoted
+set STRING=!_STRING1! "!_STRING0!"
+echo :# The initial string
 set STRING
 setlocal DisableDelayedExpansion
+echo :# Prepared with expansion off
 call :Prep2ExpandVars STRING
+set STRING
 endlocal
+echo :# The initial string
+set STRING
+echo :# Prepared with expansion on
+call :Prep2ExpandVars STRING
+set STRING
 %RETURN%
 
 :#----------------------------------------------------------------------------#
@@ -4982,6 +5034,92 @@ exit /b
 :test_errorlevel %1=label %2...=args
 call %*
 echo ERRORLEVEL=%ERRORLEVEL%
+exit /b
+
+:#----------------------------------------------------------------------------#
+
+:test_enter
+set ^"GET_CALLER_EXPANSION=set "DELAYED_EXP_WAS_OFF=%^3!%%^3!%"^" &:# If defined, then the caller had delayed expansion disabled
+set GET_CALLER_EXPANSION
+set "ENTER=%GET_CALLER_EXPANSION%"
+set ENTER
+setlocal EnableDelayedExpansion
+%ENTER%
+set DELAYED_EXP_WAS_OFF
+endlocal
+setlocal DisableDelayedExpansion
+%ENTER%
+set DELAYED_EXP_WAS_OFF
+endlocal
+exit /b
+
+:#----------------------------------------------------------------------------#
+:# Test the :Return routine
+
+:test_return.sub1	:# With setlocal/endlocal
+setlocal
+set "SCOPE=2"
+set "VAR=Modified by sub1"
+%ECHOSVARS% #2 SCOPE VAR
+call :Return
+:test_return.error
+echo "Error: Fell through the call :Return"
+endlocal
+exit /b
+
+:test_return.sub2	:# Without setlocal/endlocal
+set "VAR=Modified by sub2"
+%ECHOSVARS% #4 SCOPE VAR
+call :Return
+goto :test_return.error
+
+:test_return.set_errorlevel
+exit /b %1
+
+:test_return.return
+call :Return %1
+
+:test_return	:# Test the :Return routine
+set "SCOPE=0"
+%ECHOSVARS% #0 SCOPE VAR
+setlocal
+set "SCOPE=1"
+set "VAR=Before"
+%ECHOSVARS% #1 SCOPE VAR
+
+call :test_return.sub1
+%ECHOSVARS% #3 SCOPE VAR
+
+call :test_return.sub2
+%ECHOSVARS% #5 SCOPE VAR
+
+endlocal
+%ECHOSVARS% #6 SCOPE VAR
+
+call :test_return.set_errorlevel 0
+call :test_return.return
+echo Expected 0 Got %ERRORLEVEL%
+
+call :test_return.set_errorlevel 1
+call :test_return.return
+echo Expected 1 Got %ERRORLEVEL%
+
+call :test_return.set_errorlevel 0
+call :test_return.return 0
+echo Expected 0 Got %ERRORLEVEL%
+
+call :test_return.set_errorlevel 0
+call :test_return.return 1
+echo Expected 1 Got %ERRORLEVEL%
+
+call :test_return.set_errorlevel 1
+call :test_return.return 0
+echo Expected 0 Got %ERRORLEVEL%
+
+call :test_return.set_errorlevel 1
+call :test_return.return 1
+echo Expected 1 Got %ERRORLEVEL%
+
 exit /b
 
 :#----------------------------------------------------------------------------#
