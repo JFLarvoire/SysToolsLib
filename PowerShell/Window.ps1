@@ -30,6 +30,20 @@
 #                   to the system to redraw all fields that are reactivated.  #
 #    2019-12-03 JFL Avoid displaying an error if there is no matching window. #
 #    2020-04-23 JFL Avoid errors when modern apps (?) don't report a path.    #
+#    2021-09-28 JFL Added WIN32 API RealGetWindowType().                      #
+#                   Option -V displays the window Class and RealClass.        #
+#                   Avoid listing Windows twice.                              #
+#    2021-09-30 JFL Added the ability to select real File Explorer windows.   #
+#    2021-10-01 JFL Added a ShellIndex field for File Explorer windows.       #
+#    2021-10-02 JFL Improved the File Explorer/Control Panel distinction.     #
+#    2021-10-04 JFL Added a Visible field. List only visible windows by dflt. #
+#    2021-10-07 JFL Rewrote the siblings enumeration in C# to improve perf.   #
+#    2021-10-08 JFL Moved all File Explorer-specific code to new ShellApp.ps1.#
+#                   Factored-out the new Window object creation.              #
+#                   Added back the hRootWnd and hTopWnd fields.               #
+#                   Improved performance when receiving windows handles.      #
+#                   Fixed the -Ontop operation.                               #
+#                   Added a -Popups option to list popups.                    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -41,26 +55,32 @@
   Manage windows (the rectangular screen areas, not the Windows OS)
 
   .DESCRIPTION
-  Options for listing windows, moving them around, and resizing them.
+  List windows, move them around, resize them, etc.
 
   .PARAMETER Get
   Command switch.
-  Enumerate windows.
+  This is the default action in the absence of other command arguments.
+  Enumerate the main visible windows.
+  In Verbose mode, also list non-visible windows.
 
   .PARAMETER MoveTo
+  Command argument, optional.
   A pair of integers defining a screen coordinate: $left, $top
   Move the window top-left corner to that location. 
   Alias: -MT
 
   .PARAMETER Resize
+  Command argument, optional.
   A pair of integers defining a size in pixels: $width, $height
   Set the window size. 
   Alias: -R
 
   .PARAMETER OnTop
+  Command argument, optional.
   Redraw the window on top of the others.
 
   .PARAMETER Step
+  Command argument, optional.
   A pair of integers: $horizonal, $vertical
   How much to shift each window top-left corner when moving several windows. 
   Alias: -S
@@ -74,24 +94,36 @@
   Alias: -C
 
   .PARAMETER Children
-  Switch forcing the Get command to enumerate first level child windows.
+  Switch forcing the Get command to also enumerate the first level child windows.
+
+  .PARAMETER Popups
+  Switch forcing the Get command to also enumerate popup windows.
 
   .PARAMETER All
   Switch forcing the Get command to enumerate all top-level windows.
+  This lists many minor windows not listed by default, like tray icons.
   Caution: This outputs a lot of data, and can take a significant amount of time.
-  Note: Ignores windows with 0 or 1 pixels, as these usually are hidden windows
-  used for internal events processing.
+  Note: Still ignores windows with 0 or 1 pixels, as these usually are hidden
+  windows used for internal events processing.
 
   .PARAMETER InputObject
   A list of input objects defining the windows to work on. One of:
   - PSObjects returned by this script's -Get command.
-  - A string defining the window title. Wildcards allowed.
-  - A string defining the program name. Wildcards allowed.
-  - An integer defining the window handle.
+  - Integers defining the window handle. 0 = Alias for the desktop window.
+  - Strings defining the window title. Wildcards allowed.
+  - Strings defining the program name. Wildcards allowed.
   Can also come from the input pipeline.
 
+  .PARAMETER D
+  Debug mode. Display lots of internal data about the windows enumeration.
+  Alias: -Debug
+
+  .PARAMETER V
+  Verbose mode. Eumerate more windows, and display additional fields by default.
+  Alias: -Verbose
+
   .PARAMETER X
-  Display what windows would be moved, but don't move them.
+  No-eXec mode. Display what windows would be moved, but don't move them.
   Alias: -WhatIf
 
   .PARAMETER Version
@@ -114,20 +146,12 @@
   Move the Internet Explorer window to location (200,100), and put it on top.
 
   .EXAMPLE
-  .\Window.ps1 *notepad* -MoveTo 200,100 -OnTop
+  .\Window.ps1 notepad* -MoveTo 200,100 -OnTop
   Move all Notepad windows, spacing them regularly, starting from location (200,100), and put them on top.
 
   .EXAMPLE
   .\Window.ps1 irc.exe | sort Title | .\Window.ps1 -MoveTo 200,100 -OnTop
   Idem for all iLO Remote Consoles, sorting them by title (= iLO name) first.
-
-  .EXAMPLE
-  .\Window.ps1 outlook.exe -Capture
-  Capture the OutLook top window, and copy the image to the clipboard.
-
-  .EXAMPLE
-  .\Window.ps1 -All | where {$_.Title -like "*initiator*"} | .\Window.ps1 -capture
-  Capture a floating dialog box, with a title containing "initiator", and copy it to the clipboard.
 #>
 
 [CmdletBinding(DefaultParameterSetName='Get')]
@@ -135,9 +159,9 @@ Param (
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
   [Switch]$Get = $($PSCmdlet.ParameterSetName -eq 'Get'),	# Enumerate all windows
 
-  [Parameter(ParameterSetName='Get', Mandatory=$false, ValueFromPipeline=$true, Position=0)]
-  [Parameter(ParameterSetName='Move', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
-  [Parameter(ParameterSetName='Capture', Mandatory=$true, ValueFromPipeline=$true, Position=0)]
+  [Parameter(ParameterSetName='Get', Mandatory=$false, ValueFromPipeline=$true, Position=0)]	# Default $InputObject is all in this case
+  [Parameter(ParameterSetName='Move', Mandatory=$true, ValueFromPipeline=$true, Position=0)]	# Default $InputObject would be none in this case
+  [Parameter(ParameterSetName='Capture', Mandatory=$true, ValueFromPipeline=$true, Position=0)] # Default $InputObject would be none in this case
   [AllowEmptyCollection()]
   [Object[]]$InputObject = @(),		# Windows to work on, or criteria for selecting them
 
@@ -160,17 +184,20 @@ Param (
   [Switch]$Children,			# Also list child windows
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
-  [Switch]$All,				# List all windows
+  [Switch]$Popups,			# Also list popup windows
+
+  [Parameter(ParameterSetName='Get', Mandatory=$false)]
+  [Switch]$All,				# List all top windows
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
   [Parameter(ParameterSetName='Move', Mandatory=$false)]
   [Parameter(ParameterSetName='Capture', Mandatory=$false)]
   [Switch]$D,				# If true, display debug information
 
-  # [Parameter(ParameterSetName='Get', Mandatory=$false)]
-  # [Parameter(ParameterSetName='Move', Mandatory=$false)]
-  # [Parameter(ParameterSetName='Capture', Mandatory=$false)]
-  # [Switch]$V,				# If true, display verbose information
+  [Parameter(ParameterSetName='Get', Mandatory=$false)]
+  [Parameter(ParameterSetName='Move', Mandatory=$false)]
+  [Parameter(ParameterSetName='Capture', Mandatory=$false)]
+  [Switch]$V,				# If true, display verbose information
 
   [Parameter(ParameterSetName='Move', Mandatory=$false)]
   [Switch][alias("WhatIf")]$X,		# If true, display commands, but don't execute them
@@ -182,7 +209,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2020-04-23"
+$scriptVersion = "2021-10-08"
 if ($Version) {
   echo $scriptVersion
   return
@@ -263,6 +290,10 @@ Add-Type @"
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -270,15 +301,26 @@ Add-Type @"
     public static extern bool BringWindowToTop(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetDesktopWindow();
+
+    [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
+    public static extern bool SetForegroundWindow(IntPtr hWnd); // Returns success, but does nothing
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AllowSetForegroundWindow(uint pid);
+    public static extern bool AllowSetForegroundWindow(uint pid); // Requires having the priviledge for granting it to others
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LockSetForegroundWindow(uint action); // 1=Lock 2=Unlock
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -306,33 +348,57 @@ Add-Type @"
     public static extern uint GetWindowModuleFileName(IntPtr hWnd, StringBuilder lpszFileName, uint cchMax);
 
     [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-    public static extern uint GetClassName(IntPtr hWnd, StringBuilder lpszClassName, uint cchMax);
+    public static extern uint GetClassName(IntPtr hWnd, StringBuilder lpszClassName, int cchMax);
+
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+    public static extern uint RealGetWindowClass(IntPtr hwnd, StringBuilder lpszClassName, uint cchMax);
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetWindow(IntPtr hWnd, uint wCmd);	// 0=First  1=Last  2=Below  3=Above  4=Owner  5=Child  6=Popup
 
-    public static List<IntPtr> GetChildWindows(IntPtr parent) {
-      List<IntPtr> result = new List<IntPtr>();
-      GCHandle listHandle = GCHandle.Alloc(result);
-      try {
-	 EnumWindowProc childProc = new EnumWindowProc(EnumWindow);
-	 EnumChildWindows(parent, childProc,GCHandle.ToIntPtr(listHandle));
-      } finally {
-	 if (listHandle.IsAllocated) listHandle.Free();
-      }
-      return result;
-    }
-    private static bool EnumWindow(IntPtr handle, IntPtr pointer) {
+    public delegate bool EnumWindowProc(IntPtr hWnd, IntPtr parameter);
+
+    private static bool EnumAllWindows(IntPtr handle, IntPtr pointer) {
       GCHandle gch = GCHandle.FromIntPtr(pointer);
       List<IntPtr> list = gch.Target as List<IntPtr>;
       if (list == null) {
 	throw new InvalidCastException("GCHandle Target could not be cast as List<IntPtr>");
       }
       list.Add(handle);
-      //  You can modify this to check to see if you want to cancel the operation, then return a null here
-      return true;
+      return true; // Continue the enumeration
     }
-    public delegate bool EnumWindowProc(IntPtr hWnd, IntPtr parameter);
+    public static List<IntPtr> GetChildWindows(IntPtr parent) {
+      List<IntPtr> result = new List<IntPtr>();
+      GCHandle listHandle = GCHandle.Alloc(result);
+      try {
+	 EnumWindowProc childProc = new EnumWindowProc(EnumAllWindows);
+	 EnumChildWindows(parent, childProc, GCHandle.ToIntPtr(listHandle));
+      } finally {
+	 if (listHandle.IsAllocated) listHandle.Free();
+      }
+      return result;
+    }
+
+    // Find all sibling windows of the same class, belonging to the same process
+    // 2021-10-07 Rewrote this as C#, as the initial PS version was way too slow
+    public static List<IntPtr> GetSiblingWindows(IntPtr hWnd) {
+      List<IntPtr> result = new List<IntPtr>();
+      result.Add(hWnd);
+      StringBuilder sb = new StringBuilder(1024);
+      String FirstClass = "";
+      if (GetClassName(hWnd, sb, sb.Capacity) > 0) FirstClass = sb.ToString();
+      IntPtr FirstParent = GetParent(hWnd);
+      while ((hWnd = GetWindow(hWnd, 2)) != IntPtr.Zero) {
+        String ThisClass = "";
+        sb.Clear();
+        if (GetClassName(hWnd, sb, sb.Capacity) > 0) ThisClass = sb.ToString();
+        IntPtr ThisParent = GetParent(hWnd);
+        if ((ThisClass == FirstClass) && (ThisParent == FirstParent)) {
+          result.Add(hWnd);
+        }
+      }
+      return result;
+    }
   }
 
   public struct RECT
@@ -409,6 +475,55 @@ Function Get-WindowClass($hWnd) {
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
+#   Function        Get-RealWindowClass                                       #
+#                                                                             #
+#   Description     Get the real window class name                            #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2021-09-28 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Get-RealWindowClass($hWnd) {
+  $length = 1024
+  $sb = New-Object text.stringbuilder -ArgumentList ($length + 1)
+  $length = [Win32WindowProcs]::RealGetWindowClass($hWnd, $sb, $sb.Capacity)
+  $sb.toString()
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Set-ForegroundWindow                                      #
+#                                                                             #
+#   Description     Redisplay a window on top of all others                   #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2021-09-28 JFL Created this routine.                                     #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Function Set-ForegroundWindow($hWnd) {
+  # $Done = [Win32WindowProcs]::BringWindowToTop($hWnd) # This returns success, but does not work
+
+  # $Done = [Win32WindowProcs]::LockSetForegroundWindow(2) # Unlock that capability
+  # $Done = [Win32WindowProcs]::SetForegroundWindow($hWnd) # This always throws an error
+
+  # if (!$Done) {
+  #   throw "Failed to bring $($window.Program) window `"$($window.hWnd)`" on top of others. $lastError"
+  # }
+
+  # $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 8) # Show No Activate
+  $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 2) # Minimize the window
+  $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 4) # Restore the window
+  Start-Sleep -Milliseconds 100 # Give time to each window to redisplay itself
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
 #   Function        Get-Windows                                               #
 #                                                                             #
 #   Description     Enumerate all windows                                     #
@@ -420,152 +535,150 @@ Function Get-WindowClass($hWnd) {
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
-Function Get-Windows {
-  param(
-    [Parameter(Mandatory=$false)]
-    [Switch]$All,			# Enumerate all top-level windows
-    [Parameter(Mandatory=$false)]
-    [Switch]$Children			# Also list child windows
+# Create a Window PSObject based on a window handle
+Function Get-Window {
+  Param(
+    [IntPtr]$hWnd
   )
 
   $rect = New-Object RECT
+  
+  if ($hWnd -eq [IntPtr]::zero) {
+    $hWnd = [Win32WindowProcs]::GetDesktopWindow()
+    Write-Debug "The desktop windows is Window $hWnd"
+  }
 
-  # Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
-  # Title should be the last field, as it may be very long, and else it prevents other fields from being displayed in table mode.
-  $DefaultFieldsToDisplay = 'hWnd','Program', 'Left', 'Top', 'Width', 'Height','Title'
-  $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
-    'DefaultDisplayPropertySet',[string[]]$DefaultFieldsToDisplay
+  $done = [Win32WindowProcs]::GetWindowRect($hWnd, [ref]$rect)
+  if (!$done) { # No such window
+    return
+  }
+  $width = $rect.Right - $rect.Left
+  $height = $rect.Bottom - $rect.Top
+
+  # Now find the process owning the window, which in turn will give us the program name
+  $processID = [uint32]0
+  $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
+  $process = Get-Process -id $processID
+  $pathname = $process.Path
+  $Program = if ($pathname) {(Get-Item $pathname).Name} else {$null} # Modern apps (?) sometimes don't report a path
+  # Another possible alternative: Try using GetWindowModuleFileName() # Randomly returns either Powershell.exe or nothing
+  if (!$Program) {
+    $Program = $process.name + ".exe" # This seems to be defined even when the pathname is not
+  }
+
+  $window = New-Object PSObject -Property @{
+    hWnd = [int] $hWnd
+    Visible = [Win32WindowProcs]::IsWindowVisible($hWnd)
+    Class = Get-WindowClass($hWnd)
+    RealClass = Get-RealWindowClass($hWnd) # Rarely different from Class
+
+    Left = $rect.Left
+    Top = $rect.Top
+    Width = $width
+    Height = $height
+
+    Title = Get-WindowTitle($hWnd)
+    Pathname = [string]$pathname
+    Program = $Program
+    PID = $processID
+    # ThreadID = $threadID
+    # Module = Get-WindowModule($hWnd) # Randomly returns either Powershell.exe or nothing
+
+    hParentWnd = [int] [Win32WindowProcs]::GetParent($hWnd) # == GetAncestor($hWnd, 1)
+    hRootWnd = [int] [Win32WindowProcs]::GetAncestor($hWnd, 2)
+    hOwnerWnd = [int] [Win32WindowProcs]::GetAncestor($hWnd, 3)
+    hTopWnd = [int] [Win32WindowProcs]::GetTopWindow($hWnd)
+    # hNextWnd = [Win32WindowProcs]::GetWindow($hWnd, 3)
+  }
+  # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
+  $window | Add-Member MemberSet PSStandardMembers $PSStandardMembers -Force
+  # Give this object a unique typename
+  $window.PSObject.TypeNames.Insert(0, $WindowTypeName)
+
+  $window
+}
+
+# Decide if a window is worth enumerating
+Function Want-Window {
+  Param(
+    $Window
   )
-  $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
+  # Ignore 0 or 1-pixel sized windows, which usually are hidden worker windows
+  if (($Window.Width + $Window.Height) -le 2) {
+    return $false
+  }
+  # In general, we want only visible windows, unless in verbose mode where we want them all
+  return ($Window.Visible -and $Window.Title) -or $Verbose
+}
 
-  $windows = @()
-  # Enumerate Processes with a visible window
-  Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | % {
-    $hWnd = $_.MainWindowHandle
-    $windows += New-Object PSObject -Property @{
-      hWnd = $hWnd
-      Pathname = $_.Path
-      Program = if ($_.Path) {(Get-Item $_.Path).Name} else {$null} # Modern apps (?) sometimes don't report a path
-      Title = $_.MainWindowTitle
-      hParentWnd = [Win32WindowProcs]::GetParent($hWnd)
-      hOwnerWnd = [Win32WindowProcs]::GetAncestor($hWnd, 3)
-      PID = $_.Id
-    }
-  }
-  # Enumerate Windows Explorer windows
-  (New-Object -com "Shell.Application").windows() | % {
-    $hWnd = $_.HWND
-    $processID = [uint32]0
-    $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
-    $windows += New-Object PSObject -Property @{
-      hWnd = $hWnd
-      Pathname = $_.FullName
-      Program = (Get-Item $_.FullName).Name
-      Title = $_.LocationName
-      hParentWnd = [Win32WindowProcs]::GetParent($hWnd)
-      hOwnerWnd = [Win32WindowProcs]::GetAncestor($hWnd, 3)
-      PID = $processId
-    }
-  }
-  # Enumerate popup windows of all the above
-  foreach ($window in $windows) {
-    $popup = [Win32WindowProcs]::GetWindow($window.hWnd, 6)
-    if ($popup -ne 0) {
-      $Title = Get-WindowTitle($popup)
-      $windows += New-Object PSObject -Property @{
-	hWnd = $popup
-	Pathname = $window.Pathname
-	Program = $window.Program
-	Title = $Title
-	hParentWnd = [Win32WindowProcs]::GetParent($popup)
-	hOwnerWnd = [Win32WindowProcs]::GetAncestor($popup, 3)
-	PID = $window.PID
+
+# Enumerate major windows
+Function Get-Windows {
+  $windows = @{} # Use a dictionary, to avoid duplicates if a window is listed twice by different methods below
+
+  if ($All) {	# Enumerate all top level windows. This lists many minor apps, like tray icons.
+    Write-Debug "Enumerating all top level windows"
+    foreach ($hWnd in ([Win32WindowProcs]::GetChildWindows(0))) {
+      $window = Get-Window $hWnd
+      if (Want-Window $Window) {
+        $windows[$hWnd] = $window
       }
     }
-  }
-  # Enumerate Child windows of all the above
-  if ($Children) {
-    $topWindows = $windows
-    $windows = @()
-    foreach ($window in $topWindows) {
-      foreach ($child in ([Win32WindowProcs]::GetChildWindows($window.hWnd))) {
-	$Title = Get-WindowTitle($child)
-	if ($Title.Length) {
-	  $windows += New-Object PSObject -Property @{
-	    hWnd = $child
-	    Pathname = $window.Pathname
-	    Program = $window.Program
-	    Title = $Title
-	    hParentWnd = $window.hWnd
-	    hOwnerWnd = [Win32WindowProcs]::GetAncestor($child, 3)
-	    PID = $window.PID
-	  }
+  } else {	# Enumerate major processes with a visible top-level window.
+    Write-Debug "Enumerating processes with a visible window"
+    Get-Process | Where-Object {$_.MainWindowHandle -and $_.MainWindowTitle} | % {
+      $hWnd = $_.MainWindowHandle # $hWnd type is System.IntPtr
+      # Get-Process returns only the top-most window for the process.
+      # Enumerate all the top-level windows for that process.
+      $hWnds = @([Win32WindowProcs]::GetSiblingWindows($hWnd))
+      $nWindows = $hWnds.Count
+      Write-Debug "GetSiblingWindows($hWnd) returned $nWindows $Program windows"
+      foreach ($hWnd in $hWnds) {
+	$window = Get-Window $hWnd
+	if (Want-Window $window) {
+	  $windows[$hWnd] = $window
 	}
       }
     }
   }
-  # If requested to enumerate all windows, use the above information as a reference to the owner programs
-  if ($All) {
-    $topWindows = $windows
-    $windows = @()
-    foreach ($window in ([Win32WindowProcs]::GetChildWindows(0))) {
-      $done = [Win32WindowProcs]::GetWindowRect($window, [ref]$rect)
-      $Width = $rect.Right - $rect.Left
-      $Height = $rect.Bottom - $rect.Top
-      if (($Width + $Height) -le 2) {continue} # Ignore 0 or 1-pixel sized windows, which usually are hidden worker windows 
-      $parentWnd = [Win32WindowProcs]::GetParent($window)
-      $ownerWnd = [Win32WindowProcs]::GetAncestor($window, 3)
-      # $topWnd = [Win32WindowProcs]::GetTopWindow($window)
-      # $rootWnd = [Win32WindowProcs]::GetAncestor($window, 2)
-      # $nextWnd = [Win32WindowProcs]::GetWindow($window, 3)
-      # Now find the process owning the window, which in turn will give us the program name
-      $processID = [uint32]0
-      $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($window, [ref]$processID)
-      $process = Get-Process -id $processID
-      $Pathname = $process.Path
-      $Program = if ($Pathname) {(Get-Item $Pathname).Name} else {$null} # Modern apps (?) sometimes don't report a path
-      # Another possible alternative: Try using GetWindowModuleFileName()
-      $windows += New-Object PSObject -Property @{
-	hWnd = $window
-        Title = Get-WindowTitle($window)
-	Pathname = $Pathname
-	Program = $Program
-	hParentWnd = $parentWnd
-	hOwnerWnd = $ownerWnd
-	# hTopWnd = $topWnd
-	# hRootWnd = $rootWnd
-	# hNextWnd = $nextWnd
-	PID = $processID
-	# ThreadID = $threadID
+
+  # Output the objects
+  foreach ($window in $windows.Values) {
+    if ($Debug) {
+      $window | gm -f | Out-String | Write-Debug
+    }
+    $window
+  }
+}
+
+# Enumerate major windows, and optionally their family
+Function Get-WindowsFamily {
+  Param(
+    [PSObject[]]$windows
+  )
+  foreach ($window in $windows) {
+    $window
+
+    # Enumerate its popup windows
+    if ($Popups) {
+      Write-Debug "Enumerating popup windows of $($window.hWnd)"
+      $hPopup = [Win32WindowProcs]::GetWindow($window.hWnd, 6)
+      if ($hPopup -ne 0) {
+	$popup = Get-Window $hPopup
+	# Don't use Want-Window: We want all popups, even without a title
+	$popup
       }
     }
-  }
 
-  # Add location and defaults
-  foreach ($window in $windows) {
-    $done = [Win32WindowProcs]::GetWindowRect($window.hWnd, [ref]$rect)
-    # $module = Get-WindowModule($window.hWnd)
-    $class = Get-WindowClass($window.hWnd)
-    # In PowerShell v3, this can be simplified as $window | Add-Member @{...}
-    $newProps = @{
-      Left = $rect.Left
-      Top = $rect.Top
-      Width = $rect.Right - $rect.Left
-      Height = $rect.Bottom - $rect.Top
-      # Module = $module # Always returns PowerShell.exe for all apps!?!
-      Class = $class
+    # Enumerate its child windows
+    if ($Children) {
+      Write-Debug "Enumerating child windows of all the above"
+      foreach ($hChild in @([Win32WindowProcs]::GetChildWindows($window.hWnd))) {
+	$child = Get-Window $hChild
+	# Don't use Want-Window: We want all children, even without a title
+	$child
+      }
     }
-    foreach ($Name in $newProps.Keys) {
-      $Value = $newProps.$Name
-      $Window | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
-    }
-    # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
-    $window | Add-Member MemberSet PSStandardMembers $PSStandardMembers -Force
-    # Give this object a unique typename
-    $window.PSObject.TypeNames.Insert(0,'Window')
-    # Output the object
-    $Window | gm -f | Out-String | Write-Debug
-    $window
   }
 }
 
@@ -618,7 +731,9 @@ Function Move-Window {
       $Height = $Resize[1]
       if ($Height -eq $null) { $Height = $window.Height }
     }
-    $msg = "Would move $($window.Program) window $($window.hWnd)"
+    $verb = "leave"
+    $adverb = "at"
+    $msg = "$($window.Program) window $($window.hWnd)"
     if ($NeedMove) {
       if (!$NoExec) {
 	$Done = [Win32WindowProcs]::MoveWindow($hWnd, $Left, $Top, $Width, $Height, $true)
@@ -626,22 +741,24 @@ Function Move-Window {
 	  throw "Failed to move $($window.Program) window `"$($window.hWnd)`"."
 	}
       } else {
-      	$msg += " to ($Left, $Top) size ($Width, $Height)"
+      	if (($window.Left -ne $Left) -or ($window.Left -ne $Left) -or
+      	    ($window.Width -ne $Width) -or ($window.Height -ne $Height)) {
+      	  $verb = "move"
+      	  $adverb = "to"
+      	}
+      	$msg += " $adverb ($Left, $Top) size ($Width, $Height)"
       }
     }
     if ($OnTop) {
       if (!$NoExec) {
-	# $Done = [Win32WindowProcs]::BringWindowToTop($hWnd) # This does not seem to work. (Returns success, but no visible effect.)
-	$Done = [Win32WindowProcs]::SetForegroundWindow($hWnd)
-	if (!$Done) {
-	  throw "Failed to bring $($window.Program) window `"$($window.hWnd)`" on top of others. $lastError"
-	}
+      	Set-ForegroundWindow $hWnd
       } else {
+	$verb = "move"
       	$msg += " on top of others"
       }
     }
     if ($NoExec) {
-      Write-Host "$msg (`"$($window.Title)`")"
+      Write-Host "Would $verb $msg `"$($window.Title)`""
     }
   }
   if ($PassWhereArrived) { # Pass the final location back to the caller
@@ -678,13 +795,9 @@ Function Capture-Window {
   $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
 
   # Make sure the window is on top, else we'll capture whatever covers it now.
-  $Done = [Win32WindowProcs]::SetForegroundWindow($hWnd)
-  if (!$Done) {
-    throw "Failed to bring $($window.Program) window `"$($window.hWnd)`" on top of others. $lastError"
+  if ($Window.hOwnerWnd) { # For all windows except the desktop window
+    Set-ForegroundWindow($hWnd)
   }
-  # Give time to the system to redraw all controls, reactivating those that
-  # that had been deactivated when running this script in a PowerShell window.
-  Start-Sleep -Milliseconds 100 
 
   # Capture the screen area where the window is.
   $graphic.CopyFromScreen($Left, $Top, 0, 0, $bitmap.Size)
@@ -708,6 +821,20 @@ Function Capture-Window {
 
   Write-Debug "Window.Begin()"
 
+  # Global properties of the Window objects
+  $WindowTypeName = 'Window'	# This object type name
+  # Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
+  # Title should be the last field, as it may be very long, and else it prevents other fields from being displayed in table mode.
+  $DefaultFieldsToDisplay = 'hWnd', 'Program', 'PID', 'Left', 'Top', 'Width', 'Height', 'Title'
+  if ($Verbose) {
+    $DefaultFieldsToDisplay += 'Visible', 'hParentWnd', 'Class'
+  }
+  # Other fields: 'Pathname', 'RealClass', 'hRootWnd', 'hTopWnd'
+  $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
+    'DefaultDisplayPropertySet',[string[]]$DefaultFieldsToDisplay
+  )
+  $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
+
   # Workaround for PowerShell v2 bug: $PSCmdlet Not yet defined in Param() block
   $Get = ($PSCmdlet.ParameterSetName -eq 'Get')
 
@@ -717,15 +844,9 @@ Function Capture-Window {
     $OnTop = $true # We'll need to bring the windows on top
   }
 
-  if ($OnTop) {
-    # We must give ourselves the right to move windows on top,
-    # else we'll lose that right after moving the first window
-    $Done = [Win32WindowProcs]::AllowSetForegroundWindow($pid)
-  }
-
   $nInputObjects = 0
   $Move = ($MoveTo.Count -or $Resize.Count -or $OnTop)
-  $allWindows = Get-Windows -Children:$Children -All:$All
+  $allWindows = $null # Initialize it only if necessary, as this might take a lot of time
 } ; # End of the Begin block
 
 Process {
@@ -733,22 +854,22 @@ Process {
   $InputObject | % {
     $nInputObjects += 1 # Count the number of objects we received from the input pipe
 
-    if (($_ -is [PSObject]) -and ($_.hWnd)) {
+    if (($_ -is [PSObject]) -and ($_.psobject.typenames -contains $WindowTypeName)) {
       $windows = @($_)
-    } elseif ($_ -is [int]) {
+    } elseif (($_ -is [int]) -or ($_ -is [long]) -or ($_ -is [IntPtr])) {
       $hWnd = $_
-      $windows = @($allWindows | where {$_.hWnd -eq $hWnd})
+      $windows = @(Get-Window $hWnd)
     } else {
       $name = "$_"
-      $windows = @($allWindows | where {$_.Title -like $name})
-      if (!$windows.count) {
-	$windows = @($allWindows | where {$_.Program -like $name})
-      }
+      if (!$allWindows) { $allWindows = Get-Windows }
+      $windows = @($allWindows | where {
+        ($_.Title -like $name) -or ($_.Program -like $name)
+      })
     }
 
     # Enumerate windows
     if ($Get) {
-      $Windows
+      Get-WindowsFamily $Windows
     }
 
     # Move or resize windows
@@ -768,9 +889,12 @@ Process {
 End {
   Write-Debug "Window.End() # `$nInputObjects = $nInputObjects   `$nWindows = $($allWindows.Count)   `$Get = $Get"
   if ($nInputObjects -eq 0) { # If no object or object specifier was passed in
+    if (!$allWindows) { $allWindows = Get-Windows }
+    
     if ($Get) {
-      $allWindows	# By default, list all windows
+      Get-WindowsFamily $allWindows	# By default, list all windows
     }
+    
     # All other actions should do nothing, as the input pipe filtering left no window object to work on.
   }
 }
