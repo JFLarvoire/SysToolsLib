@@ -8,6 +8,7 @@
 #                                                                             #
 #   History                                                                   #
 #    2021-10-07 JFL Created this script based on window.ps1                   #
+#    2021-10-10 JFL Renamed variables, and output a few more fields.          #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -83,7 +84,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2021-10-08"
+$scriptVersion = "2021-10-10"
 if ($Version) {
   echo $scriptVersion
   return
@@ -170,52 +171,52 @@ Function Get-ShellApps {
     # $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
     # Identify what kind of Explorer provider this is
     $Self = $_.Document.Folder.Self
-    $shClassID = $Self.ExtendedProperty("System.NamespaceCLSID") # See: https://docs.microsoft.com/en-us/windows/win32/properties/shell-bumper
+    $ClassID = $Self.ExtendedProperty("System.NamespaceCLSID") # See: https://docs.microsoft.com/en-us/windows/win32/properties/shell-bumper
     # For "Shell File System Folder", $Self.Path is the directory pathnane;
     # For everything else, it's the hierarchy of UUIDs leading to that virtual folder.
     # For Control Panels, the first UUID is that of the Control Panel itself.
-    $shBaseClassID = $null
+    $BaseClassID = $null
     $Path = $Self.Path
     if (($Path.Length -ge 40) -and ($Path.Substring(0,3) -eq "::{") -and ($Path[39] -eq "}")) {
-      $shBaseClassID = $Path.Substring(2,38)
+      $BaseClassID = $Path.Substring(2,38)
     }
-    if (!$shClassID) {
-      $shClassID = $shBaseClassID
+    if (!$ClassID) {
+      $ClassID = $BaseClassID
     }
 
     # Some instances return a guid string; Others return a byte[] array
-    if ($shClassID -is "byte[]") {
-      $shClassID = ([guid]$shClassID).ToString().ToUpper()
-      $shClassID = "{$shClassID}"
+    if ($ClassID -is "byte[]") {
+      $ClassID = ([guid]$ClassID).ToString().ToUpper()
+      $ClassID = "{$ClassID}"
     }
 
     # Get the class name for the class ID
-    $shClassName = $null
-    if ($shClassID -ne $null) {
-      $props = Get-ItemProperty "HKLM:\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\$shClassID" -ErrorAction SilentlyContinue
+    $ClassName = $null
+    if ($ClassID -ne $null) {
+      $props = Get-ItemProperty "HKLM:\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\$ClassID" -ErrorAction SilentlyContinue
       if ($props) {
-	$shClassName = $props."(default)"
+	$ClassName = $props."(default)"
       }
-      if (!$shClassName) {
-      	$shClassName = $Self.Name
+      if (!$ClassName) {
+      	$ClassName = $Self.Name
       }
-      $shClassID = [guid]$shClassID # Finally convert the string to an actual GUID
+      $ClassID = [guid]$ClassID # Finally convert the string to an actual GUID
     }
-Write-Debug "shClassID=$shClassID"
+
     # Our own classification
-    $shAppType = $null
+    $AppType = $null
     if ($Self.IsFileSystem) {
-      $shAppType = "File Explorer"
-    } elseif ($shBaseClassID -eq "{26EE0668-A00A-44D7-9371-BEB064C98683}") {
-      $shAppType = "Control Panel"
-    } elseif ("{$shClassID}" -eq "{D20EA4E1-3957-11D2-A40B-0C5020524153}") {
-      $shAppType = "Control Panel" # Actually: Administrative Tools
-    } elseif ($FileExplorerIDs -contains "$shClassID") {
-      $shAppType = "File Explorer"
+      $AppType = "File Explorer"
+    } elseif ($BaseClassID -eq "{26EE0668-A00A-44D7-9371-BEB064C98683}") {
+      $AppType = "Control Panel"
+    } elseif ("{$ClassID}" -eq "{D20EA4E1-3957-11D2-A40B-0C5020524153}") {
+      $AppType = "Control Panel" # Actually: Administrative Tools
+    } elseif ($FileExplorerIDs -contains "$ClassID") {
+      $AppType = "File Explorer"
     } elseif ($Self.Name -eq $Self.Path) { # TODO: Improve this test, which is very weak
-      $shAppType = "Search Results"	   # Ex: "Search Results in Indexed Locations"
+      $AppType = "Search Results"	   # Ex: "Search Results in Indexed Locations"
     } else {
-      $shAppType = "Unknown"
+      $AppType = "Unknown"
     }
 
     # Conclusion
@@ -225,11 +226,13 @@ Write-Debug "shClassID=$shClassID"
       hWnd = [IntPtr]$hWnd
       Pathname = [string]$_.FullName
       Program = (Get-Item $_.FullName).Name
-      ClassName = $shClassName
-      ClassID = $shClassID
-      AppType = $shAppType
+      ClassName = $ClassName
+      ClassID = $ClassID
+      AppType = $AppType
       Location = $_.LocationName
+      LocationUrl = $_.LocationUrl
       # PID = $processId
+      IsFileSystem = $Self.IsFileSystem
     }
 
     # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
