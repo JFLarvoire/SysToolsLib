@@ -44,6 +44,7 @@
 #                   Improved performance when receiving windows handles.      #
 #                   Fixed the -Ontop operation.                               #
 #                   Added a -Popups option to list popups.                    #
+#    2021-10-11 JFL Added the thread start time.                              #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -209,7 +210,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2021-10-08"
+$scriptVersion = "2021-10-11"
 if ($Version) {
   echo $scriptVersion
   return
@@ -565,6 +566,9 @@ Function Get-Window {
   if (!$Program) {
     $Program = $process.name + ".exe" # This seems to be defined even when the pathname is not
   }
+  # Find the start time
+  $thread = $process | % { $_.Threads } | ? { $_.Id -eq $threadID }
+  $StartTime = $thread.StartTime
 
   $window = New-Object PSObject -Property @{
     hWnd = [int] $hWnd
@@ -581,7 +585,8 @@ Function Get-Window {
     Pathname = [string]$pathname
     Program = $Program
     PID = $processID
-    # ThreadID = $threadID
+    Thread = $threadID
+    StartTime = $StartTime
     # Module = Get-WindowModule($hWnd) # Randomly returns either Powershell.exe or nothing
 
     hParentWnd = [int] [Win32WindowProcs]::GetParent($hWnd) # == GetAncestor($hWnd, 1)
