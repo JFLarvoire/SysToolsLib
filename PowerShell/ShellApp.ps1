@@ -9,6 +9,7 @@
 #   History                                                                   #
 #    2021-10-07 JFL Created this script based on window.ps1                   #
 #    2021-10-10 JFL Renamed variables, and output a few more fields.          #
+#    2021-10-11 JFL Minor tweaks and experiments.                             #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -84,7 +85,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2021-10-10"
+$scriptVersion = "2021-10-11"
 if ($Version) {
   echo $scriptVersion
   return
@@ -147,14 +148,24 @@ if ($X -or $WhatIfPreference) {
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
+Function Get-ClassID($Self) {
+  # See: https://docs.microsoft.com/en-us/windows/win32/properties/shell-bumper
+  $ID = $Self.ExtendedProperty("System.NamespaceCLSID")
+  # Some instances return nothing; Ohters a "{GUID}" String; Others return a byte[] array
+  if ($ID -is "byte[]") {
+    $ID = "{$(([guid]$ID).ToString().ToUpper())}"
+  }
+  return $ID # Either $null or a "{GUID}" String
+}
+
 Function Get-ShellApps {
   # Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
   # Location should be the last field, as it may be very long, and else it prevents other fields from being displayed in table mode.
   $DefaultFieldsToDisplay = 'Index', 'AppType', 'ClassName', 'hWnd', 'Location'
   if ($Verbose) {
-    $DefaultFieldsToDisplay += 'Program', 'ClassID'
+    $DefaultFieldsToDisplay += 'IsFileSystem', 'Program', 'ClassID', 'LocationURL'
   }
-  # Other less useful fields: 'PID'
+  # Other less useful fields: 'PID', 'Left', 'Top', 'Width', 'Height'
   $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
     'DefaultDisplayPropertySet', [string[]]$DefaultFieldsToDisplay
   )
@@ -171,7 +182,16 @@ Function Get-ShellApps {
     # $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
     # Identify what kind of Explorer provider this is
     $Self = $_.Document.Folder.Self
-    $ClassID = $Self.ExtendedProperty("System.NamespaceCLSID") # See: https://docs.microsoft.com/en-us/windows/win32/properties/shell-bumper
+    $ClassID = Get-ClassID $Self
+
+    # This works, but is noticeably slower than the next implementation below.
+    # Everything goes up to the Desktop. Stop at the base, one level below the Desktop.
+    # for ($BaseFolder = $_.Document.Folder;
+    #      $BaseFolder.ParentFolder -and $BaseFolder.ParentFolder.ParentFolder;
+    #      $BaseFolder = $BaseFolder.ParentFolder) {}
+    # $BaseName = $BaseFolder.Title
+    # $BaseClassID = Get-ClassID $BaseFolder.Self
+
     # For "Shell File System Folder", $Self.Path is the directory pathnane;
     # For everything else, it's the hierarchy of UUIDs leading to that virtual folder.
     # For Control Panels, the first UUID is that of the Control Panel itself.
@@ -180,14 +200,10 @@ Function Get-ShellApps {
     if (($Path.Length -ge 40) -and ($Path.Substring(0,3) -eq "::{") -and ($Path[39] -eq "}")) {
       $BaseClassID = $Path.Substring(2,38)
     }
+
+    # If the ClassID isn't defined, try using the base class instead
     if (!$ClassID) {
       $ClassID = $BaseClassID
-    }
-
-    # Some instances return a guid string; Others return a byte[] array
-    if ($ClassID -is "byte[]") {
-      $ClassID = ([guid]$ClassID).ToString().ToUpper()
-      $ClassID = "{$ClassID}"
     }
 
     # Get the class name for the class ID
@@ -207,12 +223,12 @@ Function Get-ShellApps {
     $AppType = $null
     if ($Self.IsFileSystem) {
       $AppType = "File Explorer"
+    } elseif ($FileExplorerIDs -contains "$ClassID") {
+      $AppType = "File Explorer"
     } elseif ($BaseClassID -eq "{26EE0668-A00A-44D7-9371-BEB064C98683}") {
       $AppType = "Control Panel"
     } elseif ("{$ClassID}" -eq "{D20EA4E1-3957-11D2-A40B-0C5020524153}") {
       $AppType = "Control Panel" # Actually: Administrative Tools
-    } elseif ($FileExplorerIDs -contains "$ClassID") {
-      $AppType = "File Explorer"
     } elseif ($Self.Name -eq $Self.Path) { # TODO: Improve this test, which is very weak
       $AppType = "Search Results"	   # Ex: "Search Results in Indexed Locations"
     } else {
@@ -223,7 +239,12 @@ Function Get-ShellApps {
     Write-Debug ("$hWnd explorer.exe / ${shClassName}: " + $_.LocationName)
     $window = New-Object PSObject -Property @{
       Index = $index++
-      hWnd = [IntPtr]$hWnd
+      hWnd = [Int]$hWnd
+      # Title = $_.Document.Folder.Title # Same as $_.LocationName
+      # Left = $_.Left
+      # Top = $_.Top
+      # Width = $_.Width
+      # Height = $_.Height
       Pathname = [string]$_.FullName
       Program = (Get-Item $_.FullName).Name
       ClassName = $ClassName
