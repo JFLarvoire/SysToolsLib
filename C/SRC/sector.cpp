@@ -114,6 +114,7 @@
 *		    Version 5.0.                                              *
 *    2021-10-18 JFL Fixed the -ld option to report drives with no media inside.
 *		    Added option -lp to just list the available partitions.   *
+*		    In verbose mode, report free space between partitions.    *
 *		    Version 5.1.                                              *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -229,7 +230,7 @@ char *version(int iVerbose);
 void usage(void);
 int IsSwitch(char *pszArg);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
-int dump_part(MASTERBOOTSECTOR *pMbs);
+int dump_part(MASTERBOOTSECTOR *pMbs, QWORD qwDiskSectors);
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB);
 
 /*---------------------------------------------------------------------------*\
@@ -1004,7 +1005,7 @@ geometry_failure:
 	// Dump its contents
 	DumpBuf(pBuf, 0, (WORD)iSSize);
 	// For the boot sector, decode the partition table
-	if (IsMBR(pBuf)) dump_part((MASTERBOOTSECTOR *)pBuf);
+	if (IsMBR(pBuf)) dump_part((MASTERBOOTSECTOR *)pBuf, BlockCount(hFrom));
 	// Stop to let the user review the dump.
 	printf("\nPress any key to seach further, or ESC to stop.\n");
 	while (_kbhit()) _getch(); // Flush the input buffer.
@@ -1125,14 +1126,14 @@ geometry_failure:
 	DumpBuf(pBuf+i, 0, (WORD)iSSize);
 	// For the boot sector, decode the partition table
 	if (iPart) {
-	  dump_part((MASTERBOOTSECTOR *)pBuf+i);
+	  dump_part((MASTERBOOTSECTOR *)pBuf+i, BlockCount(hFrom));
 	  iPart = FALSE;	// Don't dump it for subsequent sectors
 	}
 	printf("\n");
       }
     }
     if (iListParts) {
-      dump_part((MASTERBOOTSECTOR *)pBuf);
+      dump_part((MASTERBOOTSECTOR *)pBuf, BlockCount(hFrom));
       break;
     }
 
@@ -1466,6 +1467,7 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
 |   Description	    Dump a partition table on screen			      |
 |									      |
 |   Parameters	    pb      Pointer to a copy of the disk sector 0	      |
+|		    qwTotal Optional # of sectors on the disk. 0=ignore.      |
 |									      |
 |   Returns	    TRUE/FALSE	   TRUE if the partition table is valid	      |
 |		    							      |
@@ -1476,6 +1478,8 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
 |     1994-12-15 JFL Changed RomSetup-specific types to standard Windows types|
 |     1999-02-17 JFL Added recognition of FAT32 partitions, hidden ones, etc. |
 |     2016-07-07 JFL Use new routine FormatSize to display a friendly size.   |
+|     2021-10-18 JFL Changed type 0x27 from MS Service to MS Recovery.        |
+|		     In verbose mode, also display free space between parts.  |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -1521,7 +1525,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x23, "Reserved" },		    // officially listed as reserved
   { 0x24, "NEC MS-DOS 3.x" },	    // NEC MS-DOS 3.x
   { 0x26, "Reserved" },		    // officially listed as reserved
-  { 0x27, "MS Service" },	    // Hidden NTFS partition with Windows kernel
+  { 0x27, "MS Recovery" },	    // Hidden NTFS partition with Windows Recovery WIM image
   { 0x31, "Reserved" },		    // officially listed as reserved
   { 0x33, "Reserved" },		    // officially listed as reserved
   { 0x34, "Reserved" },		    // officially listed as reserved
@@ -1660,25 +1664,38 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
 
 #define KNOWN_TYPES (sizeof(type_name)/sizeof(TYPENAME))
 
-int dump_part(MASTERBOOTSECTOR *pb) {
+int dump_part(MASTERBOOTSECTOR *pb, QWORD qwDiskSectors) {
   PARTITION *pp;
   int i, j;
   WORD bcyl, ecyl;
   WORD type;
   char *pszPartitionName;
   char *pszFormat;
+  char *pszFormat2;
   char szSize[8];
   QWORD qwSize;
+  QWORD qwLast = 1;
 
   printf("\nBoot sector ID marker %04X (%s).\n", pb->mbsSignature,
 	  (pb->mbsSignature == 0xAA55) ? "Correct" : "Should be AA55");
   printf("\
-Partitions             | Beginning  |     End     |       Sectors      |   Size\n");
+Partitions             | Beginning  |    End     |       Sectors      |   Size\n");
   printf("\
-Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\n");
+Type              Boot | Cyl  Hd Se | Cyl  Hd Se |   First     Number |  Bytes\n");
+
+  /* Free spaces format */
+  pszFormat2 = "    {%-16s}   |            |            |{%9I64{%c}} {%9I64{%c}} |{%7s}\n";
 
   pp = &(pb->mbsPart[0]);
   for (i = 0; i < 4; i++, pp++) {
+    if (iVerbose && ((QWORD)pp->first_sector > qwLast)) { /* Display free space between partitions */
+      /* Assumes that the partitions are ordered sequentially */
+      QWORD qwNSect = (QWORD)pp->first_sector - qwLast;
+      qwSize = qwNSect << 9;
+      FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+      oprintf(pszFormat2, "Free Space", cBase, qwLast, cBase, qwNSect, szSize);
+    }
+
     bcyl = pp->beg_lcyl + ((WORD)(pp->beg_hcyl) << 8);
     ecyl = pp->end_lcyl + ((WORD)(pp->end_hcyl) << 8);
     type = pp->type;
@@ -1692,12 +1709,13 @@ Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\
 
     qwSize = (QWORD)(pp->n_sectors) << 9; /* multiply by 512 */
     FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+    /* Partition entries format */
     if (cBase == 'u') {
-      pszFormat = "%3u %-16s %c |%4u %3u%3u | %4u %3u%3u |%8lu %10lu |%7s\n";
+      pszFormat = "%3u %-16s %c |%4u %3u%3u |%4u %3u%3u |%9lu %9lu |%7s\n";
       if (pp->n_sectors == 0xFFFFFFFF) // Force displaying -1 here v
-      pszFormat = "%3u %-16s %c |%4u %3u%3u | %4u %3u%3u |%8lu %10ld |%7s\n";
+      pszFormat = "%3u %-16s %c |%4u %3u%3u |%4u %3u%3u |%9lu %9ld |%7s\n";
     } else { // Assume iBase == 16
-      pszFormat = " %02X %-16s %c |%4X %3X%3X | %4X %3X%3X |%8lX %10lX |%7s\n";
+      pszFormat = " %02X %-16s %c |%4X %3X%3X |%4X %3X%3X |%9lX %9lX |%7s\n";
     }
 
     printf(pszFormat,
@@ -1706,6 +1724,22 @@ Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\
 	    ecyl, pp->end_head, pp->end_sect,
 	    pp->first_sector, pp->n_sectors,
 	    /* pp->n_sectors / 1953 */ szSize);
+
+    if (type) { /* If this is an actual partition */
+      if (pp->n_sectors != 0xFFFFFFFF) {
+	qwLast = (QWORD)(pp->first_sector) + pp->n_sectors;
+      } else {
+	qwLast = QWMAX; /* It goes to the end of the drive */
+      }
+    }
+  }
+
+  if (iVerbose && (qwDiskSectors > qwLast)) { /* Display free space in the end */
+    /* Assumes that the partitions are ordered sequentially */
+    QWORD qwNSect = qwDiskSectors - qwLast;
+    qwSize = qwNSect << 9;
+    FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+    oprintf(pszFormat2, "Free Space", cBase, qwLast, cBase, qwNSect, szSize);
   }
 
   return 0;
