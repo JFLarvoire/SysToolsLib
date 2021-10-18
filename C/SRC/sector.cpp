@@ -112,6 +112,9 @@
 *		    Switched the order of the origin & number arguments.      *
 *		    Changed ":" to mean dump, and removed the -D switch.      *
 *		    Version 5.0.                                              *
+*    2021-10-18 JFL Fixed the -ld option to report drives with no media inside.
+*		    Added option -lp to just list the available partitions.   *
+*		    Version 5.1.                                              *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -119,8 +122,8 @@
 
 #define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
-#define PROGRAM_VERSION "5.0"
-#define PROGRAM_DATE    "2021-03-12"
+#define PROGRAM_VERSION "5.1"
+#define PROGRAM_DATE    "2021-10-18"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -253,7 +256,7 @@ int _cdecl main(int argc, char *argv[]) {
   QWORD qw;
   int iErr = 0;
   int iDump = FALSE;		// If TRUE, dump the sector
-  int iPart = FALSE;		// If TRUE, dump a partition table
+  int iPart = FALSE;		// If TRUE, dump a partition table along with the sector
   int iPipe = FALSE;		// If TRUE, write the output to stdout
   int iSPT = FALSE;		// If TRUE, update partition table
   long lPTParms[11];		// PartN, Type, Cyl0, Hd0, Sec0, Cyl1, Hd1, Sec1
@@ -286,6 +289,7 @@ int _cdecl main(int argc, char *argv[]) {
   int nHeads = 0;		// Hard disk geometry: Number of heads
   int nSectPerTrack = 0;	// Hard disk geometry: Number of sectors/track
   int iListDrives = FALSE;	// If TRUE, display a list of available drives.
+  int iListParts = FALSE;	// If TRUE, display a list of available partitions.
   int iAppendZeros = FALSE;	// If TRUE, append zeros as needed beyond the end of the source data copied.
   int iFindBS = FALSE;	        // If TRUE, scan the disk looking for boot sectors.
   DWORD dwKB, dwKB0;		// Used for computing the progress report
@@ -339,6 +343,10 @@ int _cdecl main(int argc, char *argv[]) {
       }
       if (streq(opt, "l") || streq(opt, "ld")) {
 	iListDrives = TRUE;
+	continue;
+      }
+      if (streq(opt, "lp")) { /* List just the main partition table */
+	iListParts = TRUE;
 	continue;
       }
       if (streq(opt, "p")) {
@@ -538,13 +546,17 @@ int _cdecl main(int argc, char *argv[]) {
       }
       // Get the drive characteristics
       iErr = HardDiskGetGeometry(hDisk, &sHdGeometry);
-      QWORD qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
-      FormatSize(qwSize, szSize, sizeof(szSize), iKB); /* Compute the size in MiB or GiB ... */
-      oprintf("Hard Disk hd{%d}: #Sect={%I64{%c}} ({%s})", i, cBase, sHdGeometry.qwSectors, szSize);
-      oprintf("  Phys({%l{%c}}/{%l{%c}}/{%l{%c}})",
-	     cBase, (long)sHdGeometry.dwCyls, cBase, (long)sHdGeometry.dwHeads, cBase, (long)sHdGeometry.dwSects);
-      oprintf(" / Xlat({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
-	     cBase, (long)sHdGeometry.dwXlatCyls, cBase, (long)sHdGeometry.dwXlatHeads, cBase, (long)sHdGeometry.dwXlatSects);
+      if (!iErr) {
+	QWORD qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
+	FormatSize(qwSize, szSize, sizeof(szSize), iKB); /* Compute the size in MiB or GiB ... */
+	oprintf("Hard Disk hd{%d}: #Sect={%I64{%c}} ({%s})", i, cBase, sHdGeometry.qwSectors, szSize);
+	oprintf("  Phys({%l{%c}}/{%l{%c}}/{%l{%c}})",
+	       cBase, (long)sHdGeometry.dwCyls, cBase, (long)sHdGeometry.dwHeads, cBase, (long)sHdGeometry.dwSects);
+	oprintf(" / Xlat({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
+	       cBase, (long)sHdGeometry.dwXlatCyls, cBase, (long)sHdGeometry.dwXlatHeads, cBase, (long)sHdGeometry.dwXlatSects);
+      } else { // No disk in the drive
+	oprintf("Hard Disk hd{%d}: No media in the drive\n", i);
+      }
       HardDiskClose(hDisk);
       nMissing = 0; // Reset the missing drive counter
     }
@@ -659,7 +671,10 @@ int _cdecl main(int argc, char *argv[]) {
   }
 
   /* Open the files */
-  if (!pszFrom) usage();
+  if (!pszFrom) {
+    fprintf(stderr, "Error: No drive specified. Use option -? to get help.\n");
+    exit(1);
+  }
   if (pszFrom) {
     hFrom = BlockOpen(pszFrom, "rb");
     if (!hFrom) {
@@ -680,7 +695,7 @@ int _cdecl main(int argc, char *argv[]) {
     if ((iSSize != -1) && (qwToSect != QWMAX)) {
       qwToSect *= iSSize / BlockSize(hTo);
     }
-  } else if (!iPipe) {
+  } else if ((!iPipe) && (!iListParts)) {
     iDump = TRUE;	// Default: Dump if no target is specified
   }
 
@@ -1116,6 +1131,10 @@ geometry_failure:
 	printf("\n");
       }
     }
+    if (iListParts) {
+      dump_part((MASTERBOOTSECTOR *)pBuf);
+      break;
+    }
 
     if (iBPB && (qwFromSect == qwSect0)) {	// Get Bios Parameter Block (1st sector only)
       BOOTSECTOR *pbs = (BOOTSECTOR *)pBuf;
@@ -1238,8 +1257,9 @@ Switches:\n\
   -H     Display disk sizes in MB, GB, etc. (default)\n\
   -I     Display disk sizes in MiB, GiB, etc.\n\
   -ld    List available disks. (alias -l)\n\
+  -lp    List available partitions in the master partition table.\n\
   -n N   Number of sectors to copy. Default: 1 for disks, all for files.\n\
-  -p     Force dumping the partition table.\n\
+  -p     Force dumping the partition table in addition to the sector content.\n\
   -ro    Read-only mode. Simulate commands execution without any write.\n\
   -s N   Set sector size. Default: Biggest of the two. 1/files. ~512/disks.\n\
   -sb OFFSET VALUE  Set byte. Idem with -sw, -sdw, -sqw for word, dword, qword.\n\
