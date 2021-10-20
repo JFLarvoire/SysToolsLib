@@ -27,6 +27,10 @@
 *    2017-08-15 JFL Fixed warnings in Visual Studio 2015. Version 1.1.5.      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.6.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.7.      *
+*    2021-10-20 JFL Display the correct partition size when it's 0xFFFFFFFF.  *
+*		    Correctly display 64-bit LBAs.			      *
+*                   Skip drives with no media inside. Report it in verb. mode.*
+*		    Version 1.2.                                              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,8 +38,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump GUID Partition Tables"
 #define PROGRAM_NAME    "gpt"
-#define PROGRAM_VERSION "1.1.7"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2021-10-20"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -97,7 +101,7 @@ int iKB = 1000;		// Base for hard disk sizes KB, MB, etc. 1000 or 1024
 
 void usage(void);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
-int dump_part(MASTERBOOTSECTOR *pMbs);
+int dump_part(MASTERBOOTSECTOR *pMbs, QWORD qwDiskSectors);
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB);
 
 /*---------------------------------------------------------------------------*\
@@ -211,16 +215,26 @@ int _cdecl main(int argc, char *argv[]) {
       	continue;		/* And keep searching, as one drive may have been recently unplugged */
       }
 
+      iErr = HardDiskGetGeometry(hDrive, &sHdGeometry);
+      if (iErr) {
+      	if (iVerbose) {
+	  printf("\n");
+	  if (iHDisk) {
+	    printf("-------------------------------------------------------------------------------\n\n");
+	  }
+	  printf("Hard Disk #%d: No media in the drive\n", iHDisk);
+	}
+	continue;
+      }
       printf("\n");
       if (iHDisk) {
 	printf("-------------------------------------------------------------------------------\n\n");
       }
   
-      HardDiskGetGeometry(hDrive, &sHdGeometry);
       qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
       FormatSize(qwSize, szSize, sizeof(szSize), iKB);
-      oprintf("Hard disk #{%d}: {%s}  ({%l{%c}}/{%l{%c}}/{%l{%c}})\n", iHDisk,
-	      /* (long)((Qword2Double(sHdGeometry.qwSectors) * sHdGeometry.wSectorSize) / 1000000) */ szSize,
+      oprintf("Hard disk #{%d}: {%s} in {%I64{%c}} sectors", iHDisk, szSize, cBase, sHdGeometry.qwSectors);
+      oprintf(" ({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
 	      cBase, sHdGeometry.dwXlatCyls, cBase, sHdGeometry.dwXlatHeads, cBase, sHdGeometry.dwXlatSects);
   
       // Dump the legacy partition table.
@@ -236,7 +250,7 @@ int _cdecl main(int argc, char *argv[]) {
       if (iErr) fail(("Error %d reading the MBR.\n", iErr));
   
       if (iVerbose) DumpBuf(pBuf, 0x1BE, 0x200);
-      dump_part((MASTERBOOTSECTOR *)pBuf);
+      dump_part((MASTERBOOTSECTOR *)pBuf, sHdGeometry.qwSectors);
   
       // Dump the GPT, if any
       sprintf(szHdName, "hd%d:", iHDisk);
@@ -254,14 +268,14 @@ int _cdecl main(int argc, char *argv[]) {
 	pGptHdr = hGpt->pGptHdr;
 	if (iVerbose) DumpBuf(pGptHdr, 0, sizeof(EFI_PARTITION_TABLE_HEADER));
   
-	oprintf("Main GPT LBA = {%{%c}}\n", cBase, pGptHdr->MyLBA);
-	oprintf("Alt. GPT LBA = {%{%c}}\n", cBase, pGptHdr->AlternateLBA);
-	oprintf("First LBA = {%{%c}}\n", cBase, pGptHdr->FirstUsableLBA);
-	oprintf("Last LBA = {%{%c}}\n", cBase, pGptHdr->LastUsableLBA);
+	oprintf("Main GPT LBA = {%I64{%c}}\n", cBase, pGptHdr->MyLBA);
+	oprintf("Alt. GPT LBA = {%I64{%c}}\n", cBase, pGptHdr->AlternateLBA);
+	oprintf("First LBA = {%I64{%c}}\n", cBase, pGptHdr->FirstUsableLBA);
+	oprintf("Last LBA = {%I64{%c}}\n", cBase, pGptHdr->LastUsableLBA);
 	oprintf("Disk GUID = ");
 	PrintUuid((uuid_t *)&(pGptHdr->DiskGUID));
 	printf("\n");
-	oprintf("Part. LBA = {%{%c}}\n", cBase, pGptHdr->PartitionEntryLBA);
+	oprintf("Part. LBA = {%I64{%c}}\n", cBase, pGptHdr->PartitionEntryLBA);
 	oprintf("# of entries = {%{%c}}\n", cBase, pGptHdr->NumberOfPartitionEntries);
 	oprintf("Entry size = {%{%c}}\n", cBase, pGptHdr->SizeOfPartitionEntry);
   
@@ -276,8 +290,8 @@ int _cdecl main(int argc, char *argv[]) {
 	  FormatSize(qwSize, szSize, sizeof(szSize), iKB);
 	  printf("%3u ", n);
 	  printf("%8s  ", szSize);
-	  oprintf("{%16{%c}}  ", cBase, pPartEntry->StartingLBA);
-	  oprintf("{%16{%c}}  ", cBase, pPartEntry->EndingLBA);
+	  oprintf("{%16I64{%c}}  ", cBase, pPartEntry->StartingLBA);
+	  oprintf("{%16I64{%c}}  ", cBase, pPartEntry->EndingLBA);
 	  for (i=0; i<36; i++) { // Convert the Unicode string to ASCII
 	    CHAR16 uc;
 	    uc = pPartEntry->PartitionName[i];
@@ -592,6 +606,7 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
 |   Description	    Dump a partition table on screen			      |
 |									      |
 |   Parameters	    pb      Pointer to a copy of the disk sector 0	      |
+|		    qwTotal Optional # of sectors on the disk. 0=ignore.      |
 |									      |
 |   Returns	    TRUE/FALSE	   TRUE if the partition table is valid	      |
 |		    							      |
@@ -602,6 +617,8 @@ int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB) {
 |     1994-12-15 JFL Changed RomSetup-specific types to standard Windows types|
 |     1999-02-17 JFL Added recognition of FAT32 partitions, hidden ones, etc. |
 |     2016-07-07 JFL Use new routine FormatSize to display a friendly size.   |
+|     2021-10-18 JFL Changed type 0x27 from MS Service to MS Recovery.        |
+|		     In verbose mode, also display free space between parts.  |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -647,7 +664,7 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
   { 0x23, "Reserved" },		    // officially listed as reserved
   { 0x24, "NEC MS-DOS 3.x" },	    // NEC MS-DOS 3.x
   { 0x26, "Reserved" },		    // officially listed as reserved
-  { 0x27, "MS Service" },	    // Hidden NTFS partition with Windows kernel
+  { 0x27, "MS Recovery" },	    // Hidden NTFS partition with Windows Recovery WIM image
   { 0x31, "Reserved" },		    // officially listed as reserved
   { 0x33, "Reserved" },		    // officially listed as reserved
   { 0x34, "Reserved" },		    // officially listed as reserved
@@ -786,25 +803,38 @@ TYPENAME type_name[] = {       /* "type" field in partition structure */
 
 #define KNOWN_TYPES (sizeof(type_name)/sizeof(TYPENAME))
 
-int dump_part(MASTERBOOTSECTOR *pb) {
+int dump_part(MASTERBOOTSECTOR *pb, QWORD qwDiskSectors) {
   PARTITION *pp;
   int i, j;
   WORD bcyl, ecyl;
   WORD type;
   char *pszPartitionName;
   char *pszFormat;
+  char *pszFormat2;
   char szSize[8];
   QWORD qwSize;
+  QWORD qwLast = 1;
 
   printf("\nBoot sector ID marker %04X (%s).\n", pb->mbsSignature,
 	  (pb->mbsSignature == 0xAA55) ? "Correct" : "Should be AA55");
   printf("\
-Partitions             | Beginning  |     End     |       Sectors      |   Size\n");
+Partitions             | Beginning  |    End     |       Sectors      |   Size\n");
   printf("\
-Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\n");
+Type              Boot | Cyl  Hd Se | Cyl  Hd Se |    First    Number |  Bytes\n");
+
+  /* Free spaces format */
+  pszFormat2 = "    {%-16s}   |            |            |{%9I64{%c}} {%9I64{%c}} |{%7s}\n";
 
   pp = &(pb->mbsPart[0]);
   for (i = 0; i < 4; i++, pp++) {
+    if (iVerbose && ((QWORD)pp->first_sector > qwLast)) { /* Display free space between partitions */
+      /* Assumes that the partitions are ordered sequentially */
+      QWORD qwNSect = (QWORD)pp->first_sector - qwLast;
+      qwSize = qwNSect << 9;
+      FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+      oprintf(pszFormat2, "Free Space", cBase, qwLast, cBase, qwNSect, szSize);
+    }
+
     bcyl = pp->beg_lcyl + ((WORD)(pp->beg_hcyl) << 8);
     ecyl = pp->end_lcyl + ((WORD)(pp->end_hcyl) << 8);
     type = pp->type;
@@ -816,14 +846,19 @@ Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\
       }
     }
 
-    qwSize = (QWORD)(pp->n_sectors) << 9; /* multiply by 512 */
+    qwSize = pp->n_sectors;
+    if ((pp->n_sectors == 0xFFFFFFFF) && (qwDiskSectors != (QWORD)0)) {
+      qwSize = qwDiskSectors - pp->first_sector;
+    }
+    qwSize <<= 9; /* multiply by 512 */
     FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+    /* Partition entries format */
     if (cBase == 'u') {
-      pszFormat = "%3u %-16s %c |%4u %3u%3u | %4u %3u%3u |%8lu %10lu |%7s\n";
+      pszFormat = "%3u %-16s %c |%4u %3u%3u |%4u %3u%3u |%9lu %9lu |%7s\n";
       if (pp->n_sectors == 0xFFFFFFFF) // Force displaying -1 here v
-      pszFormat = "%3u %-16s %c |%4u %3u%3u | %4u %3u%3u |%8lu %10ld |%7s\n";
+      pszFormat = "%3u %-16s %c |%4u %3u%3u |%4u %3u%3u |%9lu %9ld |%7s\n";
     } else { // Assume iBase == 16
-      pszFormat = " %02X %-16s %c |%4X %3X%3X | %4X %3X%3X |%8lX %10lX |%7s\n";
+      pszFormat = " %02X %-16s %c |%4X %3X%3X |%4X %3X%3X |%9lX %9lX |%7s\n";
     }
 
     printf(pszFormat,
@@ -832,6 +867,22 @@ Type              Boot | Cyl  Hd Se | Cyl.  Hd Se |   First     Number |  Bytes\
 	    ecyl, pp->end_head, pp->end_sect,
 	    pp->first_sector, pp->n_sectors,
 	    /* pp->n_sectors / 1953 */ szSize);
+
+    if (type) { /* If this is an actual partition */
+      if (pp->n_sectors != 0xFFFFFFFF) {
+	qwLast = (QWORD)(pp->first_sector) + pp->n_sectors;
+      } else {
+	qwLast = qwDiskSectors; /* It goes to the end of the drive */
+      }
+    }
+  }
+
+  if (iVerbose && (qwDiskSectors > qwLast)) { /* Display free space in the end */
+    /* Assumes that the partitions are ordered sequentially */
+    QWORD qwNSect = qwDiskSectors - qwLast;
+    qwSize = qwNSect << 9;
+    FormatSize(qwSize, szSize, sizeof(szSize), iKB);
+    oprintf(pszFormat2, "Free Space", cBase, qwLast, cBase, qwNSect, szSize);
   }
 
   return 0;
