@@ -1842,6 +1842,56 @@ endlocal & exit /b 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        GetEchoState                                              #
+:#                                                                            #
+:#  Description     Check if echo is on or off                                #
+:#                                                                            #
+:#  Arguments       %1          Name of the output variable                   #
+:#                                                                            #
+:#  Notes           This cannot be done with creating a temporary file,       #
+:#		    because any use of pipes will create a sub-shell that     #
+:#		    will have echo ON by default.			      #
+:#                                                                            #
+:#		    Reference: https://stackoverflow.com/a/69569291/2215591   #
+:#                                                                            #
+:#  History                                                                   #
+:#   2021-10-14 JFL Created this routine, based on examples in the above      #
+:#		    StackOverflow page.					      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Example of use:
+:# @setlocal
+:# @call :GetEchoState PREVIOUS_ECHO_STATE
+:# @echo off
+:# ...
+:# endlocal & echo %PREVIOUS_ECHO_STATE% & @exit /b
+
+:GetEchoState %1=OUTVAR
+@for /f %%F in ("%TEMP%\EchoState%PID%.tmp") do @(
+  (for %%. in (.) do call,) > "%%F"
+  for %%S in ("%%F") do @if %%~zS==0 (set "%1=OFF") else (set "%1=ON")
+  del "%%F"
+)
+@exit /b
+
+:# Shorter version that returns the result in the errorlevel.
+:# Example of use:
+:# @setlocal
+:# @call :GetEchoLevel
+:# @echo off
+:# if errorlevel 1 (set RESTORE_ECHO=echo on) else (set RESTORE_ECHO=echo off)
+:# ...
+:# endlocal & %RESTORE_ECHO% & @exit /b
+
+:GetEchoLevel # Returns errorlevel 0 if echo is off
+@for /f %%F in ("%TEMP%\EchoLevel%PID%.tmp") do @(
+  (for %%. in (.) do call,) > "%%F"
+  for %%S in ("%%F") do @del "%%F" & exit /b %%~zS
+)
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        Echo-n                                                    #
 :#                                                                            #
 :#  Description     Output a string with no newline                           #
