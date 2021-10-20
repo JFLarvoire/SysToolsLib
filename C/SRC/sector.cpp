@@ -115,6 +115,7 @@
 *    2021-10-18 JFL Fixed the -ld option to report drives with no media inside.
 *		    Added option -lp to just list the available partitions.   *
 *		    In verbose mode, report free space between partitions.    *
+*    2021-10-20 JFL Display the correct partition size when it's 0xFFFFFFFF.  *
 *		    Version 5.1.                                              *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -124,7 +125,7 @@
 #define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
 #define PROGRAM_VERSION "5.1"
-#define PROGRAM_DATE    "2021-10-18"
+#define PROGRAM_DATE    "2021-10-20"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -217,8 +218,8 @@ void CtrlCHandler(int signal) {		// New Control-C handler
 }
 }
 
-// QWORD qwMax = _QWORD(-1L, -1L);	// Initialization prevents building a .COM
-QWORD qwMax;
+// QWORD qwMax = _QWORD(0xFFFFFFFF, 0xFFFFFFFF); // Static initialization prevents building a .COM
+QWORD qwMax;				// Initialized in main()
 #define QWMAX qwMax
 
 PATCH *pFirstPatch = NULL;		// Head of patch linked list.
@@ -550,8 +551,8 @@ int _cdecl main(int argc, char *argv[]) {
       if (!iErr) {
 	QWORD qwSize = sHdGeometry.qwSectors * (DWORD)(sHdGeometry.wSectorSize);
 	FormatSize(qwSize, szSize, sizeof(szSize), iKB); /* Compute the size in MiB or GiB ... */
-	oprintf("Hard Disk hd{%d}: #Sect={%I64{%c}} ({%s})", i, cBase, sHdGeometry.qwSectors, szSize);
-	oprintf("  Phys({%l{%c}}/{%l{%c}}/{%l{%c}})",
+	oprintf("Hard Disk hd{%d}: {%s} in {%I64{%c}} sectors", i, szSize, cBase, sHdGeometry.qwSectors);
+	oprintf(" - Phys({%l{%c}}/{%l{%c}}/{%l{%c}})",
 	       cBase, (long)sHdGeometry.dwCyls, cBase, (long)sHdGeometry.dwHeads, cBase, (long)sHdGeometry.dwSects);
 	oprintf(" / Xlat({%l{%c}}/{%l{%c}}/{%l{%c}})\n",
 	       cBase, (long)sHdGeometry.dwXlatCyls, cBase, (long)sHdGeometry.dwXlatHeads, cBase, (long)sHdGeometry.dwXlatSects);
@@ -1681,7 +1682,7 @@ int dump_part(MASTERBOOTSECTOR *pb, QWORD qwDiskSectors) {
   printf("\
 Partitions             | Beginning  |    End     |       Sectors      |   Size\n");
   printf("\
-Type              Boot | Cyl  Hd Se | Cyl  Hd Se |   First     Number |  Bytes\n");
+Type              Boot | Cyl  Hd Se | Cyl  Hd Se |    First    Number |  Bytes\n");
 
   /* Free spaces format */
   pszFormat2 = "    {%-16s}   |            |            |{%9I64{%c}} {%9I64{%c}} |{%7s}\n";
@@ -1707,7 +1708,11 @@ Type              Boot | Cyl  Hd Se | Cyl  Hd Se |   First     Number |  Bytes\n
       }
     }
 
-    qwSize = (QWORD)(pp->n_sectors) << 9; /* multiply by 512 */
+    qwSize = pp->n_sectors;
+    if ((pp->n_sectors == 0xFFFFFFFF) && (qwDiskSectors != (QWORD)0)) {
+      qwSize = qwDiskSectors - pp->first_sector;
+    }
+    qwSize <<= 9; /* multiply by 512 */
     FormatSize(qwSize, szSize, sizeof(szSize), iKB);
     /* Partition entries format */
     if (cBase == 'u') {
@@ -1729,7 +1734,7 @@ Type              Boot | Cyl  Hd Se | Cyl  Hd Se |   First     Number |  Bytes\n
       if (pp->n_sectors != 0xFFFFFFFF) {
 	qwLast = (QWORD)(pp->first_sector) + pp->n_sectors;
       } else {
-	qwLast = QWMAX; /* It goes to the end of the drive */
+	qwLast = qwDiskSectors; /* It goes to the end of the drive */
       }
     }
   }
