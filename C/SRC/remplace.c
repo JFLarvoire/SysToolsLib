@@ -152,6 +152,9 @@
 *    2020-04-20 JFL Added support for MacOS. Version 3.1.                     *
 *    2021-04-18 JFL Do not change the file time if nothing changed.           *
 *                   Version 3.2.                                              *
+*    2021-10-27 JFL Increased the max string size from 80 to 255.             *
+*		    Fixed warnings in ConvertString macros calls.	      *
+*                   Version 3.2.1.                                            *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -159,8 +162,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "3.2"
-#define PROGRAM_DATE    "2021-04-18"
+#define PROGRAM_VERSION "3.2.1"
+#define PROGRAM_DATE    "2021-10-27"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -180,7 +183,7 @@
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-#define SZ 80               /* Strings size */
+#define SZ 255               /* Strings size */
 
 #define TRUE 1
 #define FALSE 0
@@ -630,8 +633,8 @@ open_df_failed:
     /* Now we need to convert the old and new strings to the input encoding */
     pszOld8 = strdup(old);
     pszNew8 = strdup(new);
-    ConvertString(old, sizeof(old), CP_UTF8, inputCP, NULL, NULL);
-    ConvertString(new, sizeof(new), CP_UTF8, inputCP, NULL, NULL);
+    ConvertString(old, sizeof(old), CP_UTF8, inputCP);
+    ConvertString(new, sizeof(new), CP_UTF8, inputCP);
     iNewSize = (int)strlen(new);
   }
 #endif
