@@ -10,6 +10,8 @@
 #    2021-10-07 JFL Created this script based on window.ps1                   #
 #    2021-10-10 JFL Renamed variables, and output a few more fields.          #
 #    2021-10-11 JFL Minor tweaks and experiments.                             #
+#    2021-10-12 JFL More consistent fields names, matching the originals.     #
+#                   Added option -Object to add a ComObject property.         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -29,6 +31,11 @@
   .PARAMETER hWindow
   Switch to output only the window handles.
   (The default is to output ShellApp objects.)
+
+  .PARAMETER Object
+  Switch to add a ComObject property with the original COM object.
+  This allows accessing all properties and methods not reported in this object.
+  The drawback is that this significantly slows down the script.
 
   .PARAMETER FileExplorer
   Switch for selecting the "real" File Explorer instances listing files, but not
@@ -70,6 +77,9 @@ Param (
   [Switch]$hWindow,			# Output only the window handles
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
+  [Switch]$Object,			# Also output the original COM object
+
+  [Parameter(ParameterSetName='Get', Mandatory=$false)]
   [Switch][alias("FE")]$FileExplorer,	# List only real File Explorer instances
 
   [Parameter(ParameterSetName='Get', Mandatory=$false)]
@@ -85,7 +95,7 @@ Param (
 Begin {
 
 # If the -Version switch is specified, display the script version and exit.
-$scriptVersion = "2021-10-11"
+$scriptVersion = "2021-10-12"
 if ($Version) {
   echo $scriptVersion
   return
@@ -160,12 +170,13 @@ Function Get-ClassID($Self) {
 
 Function Get-ShellApps {
   # Define a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
-  # Location should be the last field, as it may be very long, and else it prevents other fields from being displayed in table mode.
-  $DefaultFieldsToDisplay = 'Index', 'AppType', 'ClassName', 'hWnd', 'Location'
+  # The Name and Path should be the last fields, as they may be very long, and else it prevents other fields from being displayed in table mode.
+  $DefaultFieldsToDisplay = 'Index', 'hWnd', 'AppType', 'ClassName', 'Name'
   if ($Verbose) {
-    $DefaultFieldsToDisplay += 'IsFileSystem', 'Program', 'ClassID', 'LocationURL'
+    $DefaultFieldsToDisplay += 'IsFileSystem', 'ClassID', 'Path'
   }
-  # Other less useful fields: 'PID', 'Left', 'Top', 'Width', 'Height'
+  # Fields not needed by default: 'ExeName', 'ExeFullName', 'LocationURL', 'Type', 'ComObject'
+  # Possible fields: 'PID', 'Left', 'Top', 'Width', 'Height'
   $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(
     'DefaultDisplayPropertySet', [string[]]$DefaultFieldsToDisplay
   )
@@ -181,7 +192,9 @@ Function Get-ShellApps {
     # $processID = [uint32]0
     # $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
     # Identify what kind of Explorer provider this is
-    $Self = $_.Document.Folder.Self
+    $Document = $_.Document
+    $Folder = $Document.Folder
+    $Self = $Folder.Self
     $ClassID = Get-ClassID $Self
 
     # This works, but is noticeably slower than the next implementation below.
@@ -235,25 +248,36 @@ Function Get-ShellApps {
       $AppType = "Unknown"
     }
 
-    # Conclusion
-    Write-Debug ("$hWnd explorer.exe / ${shClassName}: " + $_.LocationName)
+    # Generate the output object
     $window = New-Object PSObject -Property @{
+      # Computed fields specific to this script
       Index = $index++
+      ClassID = $ClassID
+      ClassName = $ClassName
+      AppType = $AppType
+      # Fields copied from the COM objects tree
+      # Use local field names as close to the original name as possible
       hWnd = [Int]$hWnd
-      # Title = $_.Document.Folder.Title # Same as $_.LocationName
+      # The window location is slightly off-topic.
+      # Title = $Folder.Title # Same as $_.LocationName and $Self.Name
       # Left = $_.Left
       # Top = $_.Top
       # Width = $_.Width
       # Height = $_.Height
-      Pathname = [string]$_.FullName
-      Program = (Get-Item $_.FullName).Name
-      ClassName = $ClassName
-      ClassID = $ClassID
-      AppType = $AppType
-      Location = $_.LocationName
-      LocationUrl = $_.LocationUrl
-      # PID = $processId
+      LocationURL = $_.LocationUrl
+      # LocationName = $_.LocationName # Same as $Self.Name
+      ExeFullName = [string]$_.FullName
+      ExeName = (Get-Item $_.FullName).Name # Always explorer.exe ?
+      Name = $Self.Name # The folder name
+      Path = $Self.Path # The folder full pathname
       IsFileSystem = $Self.IsFileSystem
+      Type = $Self.Type
+      # PID = $processId
+    }
+    
+    # Optionally add the COM object
+    if ($Object) { # Allows exploring all other available properties, but slows the enumeration significantly
+      $window | Add-Member ComObject $_
     }
 
     # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
@@ -292,7 +316,7 @@ Function Get-ShellApps {
     # Windows 7
     "031e4825-7b94-4dc3-b131-e946b44c8dd5"  # Libraries
   )
-  $OtherFileExplorerIDs = ( # These are already flagged as $Self.IsFileSystem
+  $OtherFileExplorerIDs = ( # Left for reference, as these are already flagged as $Self.IsFileSystem
     # Windows 10
     "b4bfcc3a-db2c-424c-b029-7fe99a87c641", # Desktop
     "d3162b92-9365-467a-956b-92703aca08af", # Documents
@@ -330,15 +354,15 @@ Process {
     if (($_ -is [PSObject]) -and ($_.psobject.typenames -contains $ShellAppTypeName)) {
       $ShellApps = @($_)
     } elseif (($_ -is [int]) -or ($_ -is [long]) -or ($_ -is [IntPtr])) {
-      $Index = $_
-      $ShellApps = @($allShellApps[$Index])
+      $Index = [int]$_
+      $ShellApps = @($allShellApps | where {$_.Index -eq $Index})
     } elseif ($_ -is [guid]) {
       $ClassID = $_
       $ShellApps = @($allShellApps | where {$_.ClassID -eq $ClassID})
     } else {
       $name = "$_"
       $ShellApps = @($allShellApps | where {
-        ($_.Location -like $name) -or ($_.Program -like $name) -or
+        ($_.Name -like $name) -or ($_.ExeName -like $name) -or
         ($_.ClassName -like $name) -or ($_.ClassID -like $name)
       })
     }
