@@ -176,7 +176,7 @@ Param (
   [Switch]$OnTop,			# Redraw it on top of the others
 
   [Parameter(ParameterSetName='Move', Mandatory=$false)]
-  [Int[]][alias("S")]$Step = (100, 30),	# Step when moving multiple windows
+  [Int[]][alias("S")]$Step = (100, 30),	# Step when moving multiple windows. Windows 10 defaults to (26, 26) when creating windows.
 
   [Parameter(ParameterSetName='Capture', Mandatory=$true)]
   [Switch][alias("C")]$Capture,		# Capture the window image and copy it to the clipboard
