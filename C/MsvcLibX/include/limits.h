@@ -9,6 +9,7 @@
 *   History:								      *
 *    2014-06-30 JFL Created this file.					      *
 *    2018-04-24 JFL Define PATH_MAX and NAME_MAX for all OSs.		      *
+*    2021-11-07 JFL Added TS 18661-1:2014 integer types widths macros.        *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -37,6 +38,16 @@
 
 #define FILESIZEBITS 32
 
+#define CHAR_WIDTH	8
+#define SCHAR_WIDTH	8
+#define UCHAR_WIDTH	8
+#define SHRT_WIDTH	16
+#define USHRT_WIDTH	16
+#define INT_WIDTH	16
+#define UINT_WIDTH	16
+#define LONG_WIDTH	32
+#define ULONG_WIDTH	32
+
 #endif /* defined(_MSDOS) */
 
 /************************ Win32-specific definitions *************************/
@@ -63,6 +74,18 @@
 #endif
 
 #define FILESIZEBITS 64
+
+#define CHAR_WIDTH	8
+#define SCHAR_WIDTH	8
+#define UCHAR_WIDTH	8
+#define SHRT_WIDTH	16
+#define USHRT_WIDTH	16
+#define INT_WIDTH	32
+#define UINT_WIDTH	32
+#define LONG_WIDTH	32
+#define ULONG_WIDTH	32
+#define LLONG_WIDTH	64
+#define ULLONG_WIDTH	64
 
 #endif /* defined(_WIN32) */
 

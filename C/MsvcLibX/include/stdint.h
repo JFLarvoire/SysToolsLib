@@ -41,6 +41,7 @@
 *    2011-05-28 JFL Added support for 16-bits compilers for MS-DOS.           *
 *    2012-01-18 JFL Added error messages if target is not DOS or Windows.     *
 *    2015-12-04 JFL Define _UINTPTR_T_DEFINED to tell MSVC99 it's done already*
+*    2021-11-09 JFL Added TS 18661-1:2014 integer types widths macros.        *
 *                                                                             *
 \*****************************************************************************/
 
@@ -318,5 +319,21 @@ typedef uint32_t  uintmax_t;
 
 #endif /* __STDC_CONSTANT_MACROS */
 
+/* TS 18661-1:2014 macros */
+#define  INTPTR_WIDTH _POINTER_BITS
+#define UINTPTR_WIDTH _POINTER_BITS
+#if defined(_MSDOS)	/* _MSDOS */
+#  if defined(_M_I86HM) /* Huge memory models */
+#    define SIZE_WIDTH 32
+#  else /* Tiny, Small, Compact, Medium, Large memory models */
+#    define SIZE_WIDTH 16
+#  endif
+#else			/* Windows */
+#  define SIZE_WIDTH    _POINTER_BITS
+#endif
+#define PTRDIFF_WIDTH SIZE_WIDTH
+/* #define SIG_ATOMIC_WIDTH */
+#define WCHAR_WIDTH   2			/* wchar_t is unsigned short */
+#define WINT_WIDTH    2			/* wint_t is unsigned short */
 
 #endif /* _MSC_STDINT_H_ */
