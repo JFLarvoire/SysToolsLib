@@ -8,6 +8,7 @@
 *									      *
 *   History:								      *
 *    2016-04-27 JFL Split this file off of uuid.c.			      *
+*    2021-11-05 JFL Fixed warnings with gcc.				      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,7 +43,7 @@ int PrintUuid(uuid_t *pUuid)
     int n=0;
     int i;
 
-    n = printf("%08lX-%04X-%04X-", pdw[0], pw[2], pw[3]);
+    n = printf("%08lX-%04X-%04X-", (unsigned long)(pdw[0]), (unsigned int)(pw[2]), (unsigned int)(pw[3]));
     for (i=8; i<10; i++) n += printf("%02X", BYTE_AT(pUuid,i));
     n += printf("-");
     for (i=10; i<16; i++) n += printf("%02X", BYTE_AT(pUuid,i));
