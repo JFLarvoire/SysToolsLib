@@ -35,6 +35,7 @@
 *    2015-08-18 JFL Added operator<< and operator>>.                          * 
 *    2015-11-04 JFL Fixed mul4x4() in the large memory model.                 * 
 *    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              *
+*    2021-11-08 JFL Add QWORD oprintf support for Unix.                       *
 *									      *
 \*****************************************************************************/
 
@@ -461,7 +462,7 @@ QWORD::operator double() const		// Conversion operator: Cast (double)QWORD
 char* qwtox(const QWORD& qw, char *pBuf)	// Convert to hexadecimal string - Buffer provided.
     {
     qwtostr(qw, pBuf, 16);
-    return pBuf; // Allows to use ToHex() as an argument to printf() in the calling routine.
+    return pBuf; // Allows to use qwtox() as an argument to printf() in the calling routine.
     }
 
 #ifndef NO_OPRINTF
@@ -578,20 +579,69 @@ QWORD::operator OPFARG()
 
 #endif // !defined(NO_OPRINTF)
 
-#endif // defined(_MSDOS)
-
-#ifdef _WIN32	// 32-bits WIN32 programs
-
-// #pragma message("Using QWORD WIN32 __int64 definition.")
+#else // !defined(_MSDOS)
 
 // Formatting functions
+
+#ifdef _WIN32	// 32-bits WIN32 programs
 
 char* qwtox(const QWORD& qw, char *pBuf)	// Convert to hexadecimal string - Buffer provided.
     {
     return _ui64toa(qw, pBuf, 16);			// Use stdlib.h routine _ui64toa(), in base 16.
     }
 
+#else
+
+char* qwtox(const QWORD& qw, char *pBuf)	// Convert to hexadecimal string - Buffer provided.
+    {
+    // snprintf(pBuf, 20, "%llX", (unsigned long long)qw);
+    qwtostr(qw, pBuf, 16);
+    return pBuf; // Allows to use qwtox() as an argument to printf() in the calling routine.
+    }
+
 #endif // defined(_WIN32)
+
+#if QWORD_DEFINED == QWORD_CLASS
+
+#ifdef _WIN32
+
+int QWORD::opfFormat(char *pszOut, size_t uSize, const char *pszForm, const OPFARG *popfArg) {
+  return snprintf(pszOut, uSize, pszForm, *(unsigned __int64 *)(popfArg->pObj));
+}
+
+#else // For Unix, convert the I64 size specifier to an ll (long long) specifier
+
+int QWORD::opfFormat(char *pszOut, size_t uSize, const char *pszForm, const OPFARG *popfArg) {
+  char *pszForm2 = strdup(pszForm);
+  const char *pi = pszForm;
+  char *po = pszForm2;
+  for ( ; *pi; pi++, po++) { // Convert all instances of I64 to ll
+    if (!strncmp(pi, "I64", 3)) {
+      pi += 2;
+      strcpy(po, "ll");
+      po += 1;
+    } else {
+      *po = *pi;
+    }
+  }
+  *po = '\0';
+  // printf("QWORD::opfFormat(\"%s\", %p)\n" , pszForm, popfArg);
+  // printf("QWORD::opfFormat(\"%s\", %p)\n" , pszForm2, popfArg);
+  int n = snprintf(pszOut, uSize, pszForm2, *(unsigned long long *)(popfArg->pObj));
+  free(pszForm2);
+  return n;
+}
+
+#endif
+
+QWORD::operator OPFARG()
+    {
+    return OPFARG(QWORD::opfFormat, this);
+    }
+    
+#endif // QWORD_DEFINED == QWORD_CLASS
+
+#endif // !defined(_MSDOS)
 
 // Then functions implemented identically in 16-bits and 32-bits C++ :
 
@@ -602,25 +652,6 @@ int printfx(char *pszFormat, const QWORD &qw)	// Print as hexadecimal string - %
     return printf(pszFormat, qwtox(qw, szBuf));
     }
 
-#if 0
-int qwtostr(const QWORD &qw, char *pszString, int iBase)
-    {
-    return 0;
-    char *digits = "0123456789ABCDEF";
-    int iLen = 0;
-    QWORD qw2 = qw;	// Local copy, that can be modifed, without memory leaks.
-    
-    if (qw2 >= (DWORD)iBase) 
-        {
-        qw2 /= (DWORD)iBase;
-        iLen = qwtostr(qw2, pszString, iBase);
-        qw2 = qw;
-        }
-    pszString[iLen++] = digits[(int)(qw2%(DWORD)iBase)];
-    pszString[iLen] = '\0';
-    return iLen;
-    }
-#else
 int qwtostr(QWORD qw, char *pszString, int iBase)
     {
     const char *digits = "0123456789ABCDEF";
@@ -635,8 +666,8 @@ int qwtostr(QWORD qw, char *pszString, int iBase)
     pszString[iLen] = '\0';
     return iLen;
     }
-#endif 
-    
+
+
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function:	    strtoqw	 					      |
@@ -819,9 +850,7 @@ int xtoqw(char *psz, QWORD *pqw)
     return iLen;
     }
 
-#endif
-
-#ifdef _WIN32
+#else
 
 int strtoqw(char *pszString, QWORD *pqw, int iBase)
     {
@@ -861,8 +890,8 @@ int xtoqw(char *psz, QWORD *pqw)
 |   Notes:	    Allows to use qwtox() as an argument to printf().	      |
 |									      |
 |   History:								      |
-|									      |
-|     2001/09/07 JFL Initial implementation.				      |
+|     2001-09-07 JFL Initial implementation.				      |
+|     2021-11-09 JFL Bugfix, which proves the function has never been used!   |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -874,7 +903,7 @@ char* qwtox(const QWORD qw, char *pBuf)	// Convert to hexadecimal string - Buffe
     if (qw.dw1) 
 	{
 	n = sprintf(pBuf, "%lX", qw.dw1);
-	n += sprintf(pBuf, "%08lX", qw.dw0);
+	n += sprintf(pBuf+n, "%08lX", qw.dw0);
 	}
     else
 	{

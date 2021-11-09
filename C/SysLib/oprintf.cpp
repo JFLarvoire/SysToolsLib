@@ -45,6 +45,8 @@
 *                                                                             *
 *   History:								      *
 *    2001/03/21 JFL Created this module.				      *
+*    2021-11-05 JFL Add support for QWORD in all operating systems.	      *
+*    2021-11-08 JFL Add support for shorts, and long longs if defined.        *
 *                                                                             *
 \*****************************************************************************/
 
@@ -147,12 +149,17 @@ OPFARG::OPFARG(OPFPROC *popf, void *po, size_t u)
 
 OPFMANAGE(OPF_CHAR);
 OPFMANAGE(OPF_UCHAR);
+OPFMANAGE(OPF_SHORT);
+OPFMANAGE(OPF_USHORT);
 OPFMANAGE(OPF_INT);
 OPFMANAGE(OPF_UINT);
 OPFMANAGE(OPF_LONG);
 OPFMANAGE(OPF_ULONG);
-#ifdef _WIN32
+#if defined(_WIN32) && (QWORD_DEFINED != QWORD_CLASS)
 OPFMANAGE(OPF_QWORD);
+#elif defined(ULLONG_MAX)
+OPFMANAGE(OPF_LLONG);
+OPFMANAGE(OPF_ULLONG);
 #endif
 OPFMANAGE(OPF_PVOID);
 // OPFMANAGE(OPF_PCHAR);

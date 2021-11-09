@@ -12,16 +12,21 @@
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2020-04-19 JFL Added support for MacOS.                                  *
-*									      *
+*    2021-11-05 JFL Add support for up to 10 arguments.                       *
+*		    Add support for QWORD in all operating systems.	      *
+*		    Allow including qword.h and oprintf.h in any order.	      *
+*    2021-11-08 JFL Add support for shorts, and long longs if defined.        *
+*		    							      *
 \*****************************************************************************/
 
 #ifndef _OPRINTF_H	// Prevent multiple inclusions
 #define _OPRINTF_H
 
-#ifdef HAS_SYSLIB
+#if HAS_SYSLIB
 #include "SysLib.h"	/* SysLib Library core definitions */
 #endif
 
+#include <limits.h>	// For the optional ULLONG_MAX
 #include <stddef.h>	// For size_t
 
 #define OPF_TRACE 0	// 1=Print trace of execution; 0=Don't.
@@ -166,6 +171,10 @@ OPFCONVERT(type)
 
 class OPFARG;   // oprintf() family argument type.
 
+#if HAS_SYSLIB && defined(_WIN32)
+#include "qword.h"	// Must be included after the OPFARG class definition
+#endif
+
 // Generic formatting method.
 typedef int OPFPROC(char *pszOut, size_t uSize, const char *pszForm, const OPFARG *popfArg);
 
@@ -186,12 +195,17 @@ public:		// The members must be public, as they will be accessed by user-provide
     // Conversion constructors, for built-in C types.
     OPFDECLARE(char, OPF_CHAR);
     OPFDECLARE(unsigned char, OPF_UCHAR);
+    OPFDECLARE(short, OPF_SHORT);
+    OPFDECLARE(unsigned short, OPF_USHORT);
     OPFDECLARE(int, OPF_INT);
     OPFDECLARE(unsigned int, OPF_UINT);
     OPFDECLARE(long, OPF_LONG);
     OPFDECLARE(unsigned long, OPF_ULONG);
-#ifdef _WIN32
+#if defined(_WIN32) && defined(QWORD_DEFINED) && (QWORD_DEFINED != QWORD_CLASS)
     OPFDECLARE(unsigned __int64, OPF_QWORD);
+#elif defined(ULLONG_MAX)
+    OPFDECLARE(long long, OPF_LLONG);
+    OPFDECLARE(unsigned long long, OPF_ULLONG);
 #endif
     OPFDECLARE(void *, OPF_PVOID);  // Will be good for any pointer, such as <char *>.
 
@@ -215,6 +229,8 @@ int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, O
 int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5);
 int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6);
 int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7);
+int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7, OPFA oa8);
+int CDECL oprintf(const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7, OPFA oa8, OPFA oa9);
 
 // Generalized routine, akin to Standard C library's vprintf().
 int ovprintf(const char *pszForm, const OPFARG **ppoa, int nArgs);
@@ -234,6 +250,8 @@ int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, O
 int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5);
 int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6);
 int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7);
+int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7, OPFA oa8);
+int CDECL osnprintf(char *pszBuf, size_t iSize, const char *pszForm, OPFA oa0, OPFA oa1, OPFA oa2, OPFA oa3, OPFA oa4, OPFA oa5, OPFA oa6, OPFA oa7, OPFA oa8, OPFA oa9);
 
 // Generalized routine, akin to Microsoft C _vsnprintf().
 int ovsnprintf(char *pszBuf, size_t iSize, const char *pszForm, const OPFARG **ppoa, int nArgs);

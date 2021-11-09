@@ -56,14 +56,46 @@
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2017-06-28 JFL Disable warning "function 'QWORD::operator=' not expanded"*
 *    2020-04-19 JFL Define and use consistently DWORD_DEFINED & QWORD_DEFINED.*
+*    2021-11-05 JFL Make sure all definitions for Unix use stdint.h defs.     *
+*		    Allow including qword.h and oprintf.h in any order.	      *
+*    2021-11-07 JFL Add QWORD_WIDTH definition, and all 2014-standard widths. *
 *									      *
 \*****************************************************************************/
 
 #ifndef _QWORD_H_	/* Prevent multiple inclusions */
 #define _QWORD_H_
 
-#ifdef HAS_SYSLIB
+#if HAS_SYSLIB
 #include "SysLib.h"	/* SysLib Library core definitions */
+#endif
+
+/* Integer width definitions, like the 2014 standard ones in limits.h */
+#define BYTE_WIDTH  8
+#define WORD_WIDTH  16
+#define DWORD_WIDTH 32
+#define QWORD_WIDTH 64
+
+/* Standard C integer types widths definitions from TS 18661-1:2014 */
+/* This allows comparing QWORDs widths to that of standard types, without
+   using the sizeof() keyword, which is not usable by the preprocessor */
+#define __STDC_WANT_IEC_60559_BFP_EXT__ /* We want *_WIDTH macros from TS 18661-1:2014 */
+#include <limits.h>
+#ifndef ULONG_WIDTH /* If we did not get it, try recreating it using older macros, more likely to be defined */
+#  if ULONG_MAX == 4294967295UL
+#    define ULONG_WIDTH 32 /* The common case in Windows, and in Unix x86 systems */
+#  elif ULONG_MAX == 18446744073709551615UL
+#    define ULONG_WIDTH 64 /* The common case in Unix x86_64 systems */
+#  else
+#    define ULONG_WIDTH 0  /* Unusual case. Can this actually happen? */
+#    pragma warning("qword.h: Unknown ULONG width. Please check and correct")
+#  endif
+/*
+#define QWORD_STRINGIZE(x) #x // Convert the raw argument to a string
+#define QWORD_VALUEIZE(x) QWORD_STRINGIZE(x) // Substitute the argument, then convert its value to a string
+#  pragma message("qword.h: ULONG_WIDTH = " QWORD_VALUEIZE(ULONG_WIDTH))
+#else
+#  pragma message("limits.h: ULONG_WIDTH = " QWORD_VALUEIZE(ULONG_WIDTH))
+*/
 #endif
 
 /* There are 3 possible types of QWORD definitions */
@@ -75,9 +107,16 @@
 #ifndef DWORD_DEFINED
 #define DWORD_DEFINED
 
+#if defined(_MSDOS) || defined(_WIN32)
 typedef unsigned char   BYTE;   /*  8-bits unsigned integer */
 typedef unsigned short	WORD;	/* 16-bits unsigned integer */
 typedef unsigned long	DWORD;	/* 32-bits unsigned integer */
+#else /* Ex: defined(__unix__) */
+#include <stdint.h>
+typedef uint8_t  BYTE;
+typedef uint16_t WORD;
+typedef uint32_t DWORD;
+#endif
 
 /* Define the FAR qualifier for DOS, but not for Windows */
 #ifdef _H2INC
@@ -131,19 +170,21 @@ typedef DWORD FAR *	LPDWORD;
 
 #ifdef __cplusplus
 
-#ifndef NO_OPRINTF
-#include "oprintf.h"
-#endif /* !defined(NO_OPRINTF) */
-
 #ifdef _MSC_VER
 #pragma warning(disable:4505) /* Avoid warnings "unreferenced local function has been removed" */
 #pragma warning(disable:4710) /* Avoid warnings "function 'QWORD::operator=' not expanded" */
 #endif
 
+/* -------------------- C++ class definition for MS-DOS -------------------- */
+
 #ifdef _MSDOS	/* 16-bits program */
 
 #pragma message("Using QWORD C++ class definition.")
 #define QWORD_DEFINED QWORD_CLASS
+
+#if HAS_SYSLIB && !defined(NO_OPRINTF)
+#include "oprintf.h"	/* Must be included after defining QWORD_DEFINED */
+#endif /* HAS_SYSLIB && !defined(NO_OPRINTF) */
 
 class QWORD
     {
@@ -280,26 +321,244 @@ public:
 
 #endif	/* defined(_MSDOS) */
 
+/* ---------------- unsigned __int64 definition for Windows ---------------- */
 
 #ifdef _WIN32	/* 32-bits or 64-bits Windows program */
 
+#if 1
+
 #pragma message("Using QWORD WIN32 unsigned __int64 C++ definition.")
-typedef unsigned __int64 QWORD;
 #define QWORD_DEFINED QWORD_UINT64
+
+typedef unsigned __int64 QWORD;
+
+#else /* Unsuccessful attempt at defining QWORD as a class, sharing the Unix implementation */
+      /* The problem is that the CPP programs compilation fails, saying it can't choose between multiple operator overloads */
+#if HAS_MSVCLIBX
+#include <stdint.h>
+#else /* !HAS_MSVCLIBX */
+typedef __int8            int8_t;
+typedef __int16           int16_t;
+typedef __int32           int32_t;
+typedef __int64           int64_t;
+typedef unsigned __int8   uint8_t;
+typedef unsigned __int16  uint16_t;
+typedef unsigned __int32  uint32_t;
+typedef unsigned __int64  uint64_t;
+#endif /* HAS_MSVCLIBX */
+
+/* Then use the common [#if !defined(QWORD_DEFINED)] section below to define the QWORD class */
+
+#endif /* 0 */
 
 #endif /* defined(_WIN32) */
 
+/* --------------------- uint64_t definition for Unix ---------------------- */
 
-#ifndef QWORD_DEFINED	/* Anything else, for example Unix programs */
+#if !defined(_MSDOS) && !defined(_WIN32) /* Anything else, for example Unix programs */
 
 #include <stdint.h>
 
+#if 0 /* Unsuccessful attempt at using a simple uint64_t like in WIN32 */
+      /* The problem is that for the oprintf() support, this forces adding
+         an OPFDECLARE block in class OPFARG definition in oprintf.h, and an
+         OPFMANAGE-style implementation implementation in oprintf.cpp, and
+         there were conflicts with the unsigned long and unsigned long long
+         definitions there that I never managed to resolve */
 /* #pragma message("Using <stdint.h> uint64_t definition.") */
-typedef uint64_t QWORD;
 #define QWORD_DEFINED QWORD_UINT64
+
+typedef uint64_t QWORD;
+
+#endif /* 0 */
+
+#endif /* !defined(_MSDOS) && !defined(_WIN32) */
+
+/* ----------------------- uint64_t class definition ----------------------- */
+
+#if !defined(QWORD_DEFINED)
+
+/* #pragma message("Using <stdint.h> uint64_t based class.") */
+#define QWORD_DEFINED QWORD_CLASS
+
+#if HAS_SYSLIB && !defined(NO_OPRINTF)
+#include "oprintf.h"	/* Must be included after defining QWORD_DEFINED */
+#endif /* HAS_SYSLIB && !defined(NO_OPRINTF) */
+
+class QWORD {
+protected:
+    uint64_t qw;
+public:
+    /* Replace constructors by friend functions. */
+    friend QWORD& _QWORD();
+    friend QWORD& _QWORD(DWORD dw);
+    friend QWORD& _QWORD(DWORD dw0, DWORD dw1);
+    friend QWORD& _QWORD(uint64_t qw2);
+    friend QWORD& _QWORD(const QWORD& qw2);
+    /* Constructors. Only defined if QWORD_CONSTRUCTORS is pre-defined. */
+#ifndef NO_QWORD_CONSTRUCTORS
+    #define TEMP_QWORD(arg) QWORD(arg)
+    inline QWORD() {}; /* Do not initialize contents. It's useless. */
+    inline QWORD(int16_t  v2) {qw = v2;};
+    inline QWORD(int32_t  v2) {qw = v2;};
+    inline QWORD(int64_t  v2) {qw = v2;};
+    inline QWORD(uint16_t v2) {qw = v2;};
+    inline QWORD(DWORD v2) {qw = v2;};
+    inline QWORD(uint64_t v2) {qw = v2;};
+    inline QWORD(DWORD lo, DWORD hi) {qw = hi; qw <<= 32; qw |= lo;};
+    /* Use the default copy constructor. */
+#else /* defined(NO_QWORD_CONSTRUCTORS) ==> Use _QWORD instead. */
+    #define TEMP_QWORD(arg) _QWORD(arg)
+#endif /* !defined(NO_QWORD_CONSTRUCTORS) */
+    /* Assignment operators */
+    inline QWORD& operator=(int16_t  v2) { qw = v2; return *this; };
+    inline QWORD& operator=(int32_t  v2) { qw = v2; return *this; };
+    inline QWORD& operator=(int64_t  v2) { qw = v2; return *this; };
+    inline QWORD& operator=(uint16_t v2) { qw = v2; return *this; };
+    inline QWORD& operator=(DWORD v2) { qw = v2; return *this; };
+    inline QWORD& operator=(uint64_t v2) { qw = v2; return *this; };
+    /* Arithmetic operators */
+#ifndef ALL_OPERATORS_NEEDED	/* Used for experimentation with C++ classes */
+#define ALL_OPERATORS_NEEDED 1	/* Default: Do define all arithmetic operators */
+#endif
+
+#if ALL_OPERATORS_NEEDED
+    inline QWORD operator+(const QWORD& qw2) const { QWORD qw3 = qw2; return qw3 += *this; };
+    inline QWORD operator+(uint64_t v2) const { QWORD qw3 = v2; return qw3 += *this; };
+    inline QWORD operator+(DWORD    v2) const { QWORD qw3 = v2; return qw3 += *this; };
+    inline QWORD operator+(uint16_t v2) const { QWORD qw3 = v2; return qw3 += *this; };
+    inline QWORD operator+(int64_t  v2) const { QWORD qw3 = v2; return qw3 += *this; };
+    inline QWORD operator+(int32_t  v2) const { QWORD qw3 = v2; return qw3 += *this; };
+    inline QWORD operator+(int16_t  v2) const { QWORD qw3 = v2; return qw3 += *this; };
+#endif /* ALL_OPERATORS_NEEDED */
+    inline QWORD& operator+=(const QWORD& qw2) { qw += qw2.qw; return *this; };
+    inline QWORD& operator+=(uint64_t v2) { qw += v2; return *this; };
+    inline QWORD& operator+=(DWORD    v2) { qw += v2; return *this; };
+    inline QWORD& operator+=(uint16_t v2) { qw += v2; return *this; };
+    inline QWORD& operator+=(int64_t  v2) { qw += v2; return *this; };
+    inline QWORD& operator+=(int32_t  v2) { qw += v2; return *this; };
+    inline QWORD& operator+=(int16_t  v2) { qw += v2; return *this; };
+    
+    inline QWORD& operator++() { qw += 1; return *this; };	/* Prefix operator ++ */
+    inline QWORD& operator++(int) { qw += 1; return *this; };	/* Postfix operator ++ */
+    
+#if ALL_OPERATORS_NEEDED
+    inline QWORD operator-(const QWORD& qw2) const { QWORD qw3 = *this; return qw3 -= qw2; };
+    inline QWORD operator-(int16_t  v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+    inline QWORD operator-(uint16_t v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+    inline QWORD operator-(int32_t  v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+    inline QWORD operator-(DWORD    v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+    inline QWORD operator-(int64_t  v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+    inline QWORD operator-(uint64_t v2) const { QWORD qw3 = *this; return qw3 -= v2; };
+#endif /* ALL_OPERATORS_NEEDED */
+    inline QWORD& operator-=(const QWORD& qw2) { qw -= qw2.qw; return *this; }
+    inline QWORD& operator-=(int16_t  v2) { qw -= v2; return *this; };
+    inline QWORD& operator-=(uint16_t v2) { qw -= v2; return *this; };
+    inline QWORD& operator-=(int32_t  v2) { qw -= v2; return *this; };
+    inline QWORD& operator-=(DWORD    v2) { qw -= v2; return *this; };
+    inline QWORD& operator-=(int64_t  v2) { qw -= v2; return *this; };
+    inline QWORD& operator-=(uint64_t v2) { qw -= v2; return *this; };
+    
+    inline QWORD& operator--() { qw -= 1; return *this; };	/* Prefix operator -- */
+    inline QWORD& operator--(int) { qw -= 1; return *this; };	/* Postfix operator -- */
+
+#if ALL_OPERATORS_NEEDED
+    inline QWORD operator*(int16_t  v2) const { QWORD qw3 = *this; return qw3 *= v2; };
+    inline QWORD operator*(uint16_t v2) const { QWORD qw3 = *this; return qw3 *= v2; };
+    inline QWORD operator*(int32_t  v2) const { QWORD qw3 = *this; return qw3 *= v2; };
+    inline QWORD operator*(DWORD    v2) const { QWORD qw3 = *this; return qw3 *= v2; };
+#endif /* ALL_OPERATORS_NEEDED */
+    inline QWORD& operator*=(int16_t  v2) { qw *= v2; return *this; };
+    inline QWORD& operator*=(uint16_t v2) { qw *= v2; return *this; };
+    inline QWORD& operator*=(int32_t  v2) { qw *= v2; return *this; };
+    inline QWORD& operator*=(DWORD    v2) { qw *= v2; return *this; };
+    
+#if ALL_OPERATORS_NEEDED
+    inline QWORD operator/(int16_t  v2) const { QWORD qw3 = *this; return qw3 /= v2; };
+    inline QWORD operator/(uint16_t v2) const { QWORD qw3 = *this; return qw3 /= v2; };
+    inline QWORD operator/(int32_t  v2) const { QWORD qw3 = *this; return qw3 /= v2; };
+    inline QWORD operator/(DWORD    v2) const { QWORD qw3 = *this; return qw3 /= v2; };
+#endif /* ALL_OPERATORS_NEEDED */
+    inline QWORD& operator/=(int16_t  v2) { qw /= v2; return *this; };
+    inline QWORD& operator/=(uint16_t v2) { qw /= v2; return *this; };
+    inline QWORD& operator/=(int32_t  v2) { qw /= v2; return *this; };
+    inline QWORD& operator/=(DWORD    v2) { qw /= v2; return *this; };
+
+    inline DWORD operator%(DWORD dw) const { return (DWORD)(qw % dw); };
+    inline QWORD& operator%=(DWORD dw) { qw %= dw; return *this; };
+
+    inline QWORD& operator<<=(int i) { qw <<= i; return *this; };
+    inline QWORD& operator>>=(int i) { qw >>= i; return *this; };
+#if ALL_OPERATORS_NEEDED
+    QWORD operator<<(int i) const { QWORD qw3 = *this; return qw3 <<= i; };
+    QWORD operator>>(int i) const { QWORD qw3 = *this; return qw3 >>= i; };
+#endif /* ALL_OPERATORS_NEEDED */
+    
+    /* Comparison operators */
+    inline int operator!(void) const { return qw != 0; };
+    
+    inline int operator==(const QWORD& qw2) const { return qw == qw2.qw; };
+    inline int operator==(uint64_t v2) const { return qw == v2; };
+    inline int operator==(DWORD v2) const { return qw == v2; };
+    inline int operator==(uint16_t v2) const { return qw == v2; };
+
+    inline int operator!=(const QWORD& qw2) const { return qw != qw2.qw; };
+    inline int operator!=(uint64_t v2) const { return qw != v2; };
+    inline int operator!=(DWORD v2) const { return qw != v2; };
+    inline int operator!=(uint16_t v2) const { return qw != v2; };
+
+    inline int operator>(const QWORD& qw2) const { return qw > qw2.qw; };
+    inline int operator>(uint64_t v2) const { return qw > v2; };
+    inline int operator>(DWORD v2) const { return qw > v2; };
+    inline int operator>(uint16_t v2) const { return qw > v2; };
+
+    inline int operator>=(const QWORD& qw2) const { return qw >= qw2.qw; };
+    inline int operator>=(uint64_t v2) const { return qw >= v2; };
+    inline int operator>=(DWORD v2) const { return qw >= v2; };
+    inline int operator>=(uint16_t v2) const { return qw >= v2; };
+    
+    inline int operator<(const QWORD& qw2) const { return qw < qw2.qw; };
+    inline int operator<(uint64_t v2) const { return qw < v2; };
+    inline int operator<(DWORD v2) const { return qw < v2; };
+    inline int operator<(uint16_t v2) const { return qw < v2; };
+    
+    inline int operator<=(const QWORD& qw2) const { return qw <= qw2.qw; };
+    inline int operator<=(uint64_t v2) const { return qw <= v2; };
+    inline int operator<=(DWORD v2) const { return qw <= v2; };
+    inline int operator<=(uint16_t v2) const { return qw <= v2; };
+
+    /* Conversion operators */
+    inline operator double() const { return (double)qw; };
+    inline operator unsigned long() const { return (unsigned long)qw; };
+    inline operator long() const { return (long)qw; };
+    inline operator unsigned int() const { return (unsigned int)qw; };
+    inline operator int() const { return (int)qw; };
+    inline operator unsigned short() const { return (unsigned short)qw; };
+    inline operator short() const { return (short)qw; };
+#ifdef ULLONG_MAX
+    inline operator unsigned long long() const { return (unsigned long long)qw; };
+    inline operator long long() const { return (long long)qw; };
+#endif
+
+    /* Formatting functions */
+    friend char *qwtox(const QWORD &qw, char *pBuf);
+    friend int printfx(char *pszFormat, const QWORD &qw);
+    friend int xtoqw(char *pBuf, QWORD &qw);
+#ifndef NO_OPRINTF
+    static int opfFormat(char *pszOut, size_t iSize, const char *pszForm, const OPFARG *popfArg);
+    operator OPFARG();
+#endif /* !defined(NO_OPRINTF) */
+    };
+
+inline QWORD& _QWORD() { QWORD *pqw = new QWORD(0); return *pqw; }
+inline QWORD& _QWORD(DWORD dw) { QWORD *pqw = new QWORD(dw); return *pqw; }
+inline QWORD& _QWORD(DWORD dw0, DWORD dw1) { QWORD *pqw = new QWORD(dw0, dw1); return *pqw; }
+inline QWORD& _QWORD(uint64_t qw2) { QWORD *pqw = new QWORD(qw2); return *pqw; }
+inline QWORD& _QWORD(const QWORD& qw2) { QWORD *pqw = new QWORD(qw2); return *pqw; }
 
 #endif /* !defined(QWORD_DEFINED) */
 
+/* ----------------- Helper functions for Windows and Unix ----------------- */
 
 #if QWORD_DEFINED != QWORD_CLASS
 
@@ -312,8 +571,8 @@ int xtoqw(char *pBuf, QWORD &qw);
 /*  which generate compilation errors if any constructor is defined. */
 
 inline QWORD& _QWORD() { QWORD *pqw = new QWORD; return *pqw = 0; }
-inline QWORD& _QWORD(unsigned long dw) { QWORD *pqw = new QWORD; return *pqw = dw; }
-inline QWORD& _QWORD(unsigned long dw0, unsigned long dw1) { QWORD *pqw = new QWORD; return *pqw = ((QWORD)(DWORD)(dw0) + ((QWORD)(DWORD)(dw1) << 32)); }
+inline QWORD& _QWORD(DWORD dw) { QWORD *pqw = new QWORD; return *pqw = dw; }
+inline QWORD& _QWORD(DWORD dw0, DWORD dw1) { QWORD *pqw = new QWORD; return *pqw = ((QWORD)(DWORD)(dw0) + ((QWORD)(DWORD)(dw1) << 32)); }
 
 inline double Qword2Double(QWORD qw)
     { return ((2*((double)(QWORD)((qw)/2)))+((int)(qw)&1)); }	/* Unsigned __qword conversion not implemented! */
@@ -398,7 +657,7 @@ int xtoqw(char *pBuf, QWORD *pqw);
 *            End of makeshift implementation for plain C.                    *
 \*****************************************************************************/
 
-#endif /* !defined(cplusplus) */
+#endif /* !defined(__cplusplus) */
 
 DWORD xtodw(char *psz);
 
