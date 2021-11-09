@@ -23,6 +23,7 @@
 #    2020-04-19 JFL Corrected the C/C++ "Compiling xxxx.c" message.	      #
 #    2020-11-18 JFL Disable diagnostics carets for gcc and clang that have it.#
 #    2020-11-21 JFL Avoid displaying entering/leaving directory for same dir. #
+#    2021-11-08 JFL Define C macro HAS_SYSLIB.				      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -197,6 +198,10 @@ ifdef STINCLUDE
 CFLAGS := $(CFLAGS) -I $(STINCLUDE)
 CXXFLAGS := $(CXXFLAGS) -I $(STINCLUDE)
 endif
+
+# Always define the C macro HAS_SYSLIB
+CFLAGS := $(CFLAGS) -DHAS_SYSLIB=1
+CXXFLAGS := $(CXXFLAGS) -DHAS_SYSLIB=1
 
 # Make file messages control
 TRACE_MSGS = $(or $(filter-out 0, $(VERBOSE)), $(filter-out 0, $(DEBUG)))
