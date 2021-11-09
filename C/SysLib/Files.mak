@@ -32,6 +32,8 @@ COMMON_OBJECTS = \
     +$(O)/oprintf6.obj		\
     +$(O)/oprintf7.obj		\
     +$(O)/oprintf8.obj		\
+    +$(O)/oprintf9.obj		\
+    +$(O)/oprintf10.obj		\
     +$(O)/PcUuid.obj		\
     +$(O)/PrintUuid.obj		\
     +$(O)/qword.obj		\
@@ -141,6 +143,10 @@ $(S)/OPrintf6.cpp: $(S)/OPrintf.h
 $(S)/OPrintf7.cpp: $(S)/OPrintf.h
 
 $(S)/OPrintf8.cpp: $(S)/OPrintf.h
+
+$(S)/OPrintf9.cpp: $(S)/OPrintf.h
+
+$(S)/OPrintf10.cpp: $(S)/OPrintf.h
 
 $(S)/PcUuid.c: $(S)/Uuid.h $(S)/smbios.h
 
