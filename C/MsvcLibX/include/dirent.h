@@ -26,6 +26,7 @@
 *    2017-10-02 JFL Removed struct _dirhandle dependency on MAX_PATH.	      *
 *		    Renamed it as struct _DIR.				      *
 *    2018-04-24 JFL Use PATH_MAX and NAME_MAX from limits.h.		      *
+*    2021-11-10 JFL Added routines dirfd() and FD2dir().    		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -256,7 +257,8 @@ extern _dirent *readdirM(DIR *pDir, UINT cp);	    /* Read a directory entry. Ret
 /* extern void rewinddir(DIR *pDir); /* Rewind DIRP to the beginning of the directory. */
 /* extern void seekdir(DIR *pDir, long lPos); /* Seek to position POS on DIRP. */
 /* extern long telldir(DIR *pDir); /* Return the current position of DIRP. */
-/* extern int dirfd(DIR *pDir); /* Return the file descriptor used by DIRP. */
+extern int dirfd(DIR *pDir); /* Return the file descriptor used by DIRP. */
+extern DIR *FD2dir(int iFD); /* MsvcLibX-specific routine for doing the inverse conversion */
 
 /* Scan the directory dir, calling cbSelect() on each directory entry.
    Entries for which cbSelect() returns nonzero are individually malloc'd,

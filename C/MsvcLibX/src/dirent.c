@@ -37,6 +37,7 @@
 *    2018-02-28 JFL Fixed alphasort() when files differ only by case.	      *
 *    2018-03-06 JFL Fixed a warning with Visual Studio 2015.         	      *
 *    2020-12-15 JFL Added support for IO_REPARSE_TAG_APPEXECLINK.             *
+*    2021-11-10 JFL Added integer directory handles, and function dirfd().    *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,6 +61,49 @@
 #include <unistd.h>	/* For readlink() */
 #include <sys/stat.h>	/* For Filetime2String() */
 #include "debugm.h"	/* Use our house debugging framework */
+
+/* Manage pseudo integer directory file descriptors */
+static int nDirFDs = 0;
+static DIR **ppDirs = NULL; /* The index of each pointer is its pseudo file descriptor */
+
+DIR *FD2dir(int iFD) {			/* Convert a file descriptorFD to a DIR* */
+  if ((iFD < 0) || (iFD >= nDirFDs)) return NULL;
+  return ppDirs[iFD];
+}
+
+static int FindDirFD(DIR *pDir) {	/* Convert a DIR* to a file descriptor */
+  int i;
+  for (i=0; i<nDirFDs; i++) if (ppDirs[i] == pDir) return i; /* Found */
+  return -1;
+}
+
+static int NewDirFD(DIR *pDir) {	/* Allocate a new file descriptor */
+  int i = FindDirFD(NULL);
+  if (i == -1) { /* No free entry. Allocate a new block of directory pointers */
+    int nNeeded = nDirFDs + 5;
+    DIR **ppDirs2 = (DIR **)realloc(ppDirs, nNeeded  * sizeof(DIR *));
+    if (!ppDirs2) return -1;
+    for (i=nDirFDs+1; i<nNeeded; i++) ppDirs2[i] = NULL;
+    i = nDirFDs; /* And use the first entry allocated */
+    nDirFDs = nNeeded;
+    ppDirs = ppDirs2;
+  }
+  ppDirs[i] = pDir;
+  return i;
+}
+
+static void FreeDirFD(DIR *pDir) {	/* Free a file descriptor */
+  int i = FindDirFD(pDir);
+  if (i >= 0) ppDirs[i] = NULL; /* Found. Free it. */
+  return;
+}
+
+/* Standard routine for converting a DIR * to an integer directory handle */
+int dirfd(DIR *pDir) {
+  int i = FindDirFD(pDir);
+  if (i == -1) errno = EINVAL;
+  return i;
+}
 
 /*****************************************************************************\
 *                                                                             *
@@ -187,12 +231,13 @@ opendir_noent:
     errno = ENOENT;
 opendir_failed:
     if (!_sys_errlist[ENOTDIR][0]) _sys_errlist[ENOTDIR] = "Not a directory"; /* Workaround for the missing entry in MSVC list */
-    if (pDir) free(pDir);
+    free(pDir);
     DEBUG_LEAVE(("return NULL; // errno=%d - %s\n", errno, strerror(errno)));
     return NULL;
   }
   pDir = (DIR *)malloc(sizeof(DIR) + lName + 5); /* + 5 for wildcards suffix */
   if (!pDir) goto opendir_failed;
+  if (NewDirFD(pDir) == -1) goto opendir_failed;
   /* Work on a copy of the directory name */
   pszCopy = (char *)(pDir + 1);
   strcpy(pszCopy, name);
@@ -212,7 +257,10 @@ opendir_failed:
 
 int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if not. */
   DEBUG_PRINTF(("closedir(0x%p);\n", pDir));
-  if (pDir) free(pDir);
+  if (pDir) {
+    FreeDirFD(pDir);
+    free(pDir);
+  }
   return 0;
 }
 
@@ -303,6 +351,10 @@ return_ENOMEM:
     errno = ENOMEM;
     goto return_err;
   }
+  if (NewDirFD(pDir) == -1) { /* Failed to allocate a new file descriptor */
+    free(pDir);
+    goto return_err;
+  }
   lName = lstrlenW(wszName);
   pDir->pwszDirName = malloc(sizeof(WCHAR) * (lName + 1));
   if (!pDir->pwszDirName) {
@@ -331,6 +383,7 @@ DIR *opendirM(const char *pszName, UINT cp) { /* Open a directory - MultiByte ch
 int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if not. */
   DEBUG_PRINTF(("closedir(0x%p);\n", pDir));
   if (pDir) {
+    FreeDirFD(pDir);
     free(pDir->pwszDirName);
     if (pDir->hFindFile != INVALID_HANDLE_VALUE) FindClose(pDir->hFindFile);
     pDir->hFindFile = INVALID_HANDLE_VALUE;
@@ -612,6 +665,12 @@ DIR *opendir(const char *name) { /* Open a directory */
   }
   pDir = malloc(sizeof(DIR));
   if (pDir) {
+    if (NewDirFD(pDir) == -1) { /* Failed to allocate a new file descriptor */
+      free(pDir);
+      pDir = NULL;
+    }
+  }
+  if (pDir) {
     pDir->hDir = -1;
     pDir->bAttrReq = _A_HIDDEN | _A_SYSTEM | _A_SUBDIR;
     pDir->bAttrCmp = 0;
@@ -625,6 +684,7 @@ int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if 
   DEBUG_PRINTF(("closedir(0x%p);\n", pDir));
   if (pDir) {
     srchdone(pDir);
+    FreeDirFD(pDir);
     free(pDir);
   }
   return 0;
