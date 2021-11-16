@@ -194,13 +194,14 @@
 :#   2019-04-16 JFL Merged in the 2019-01-20 change made for Ag.              *
 :#   2019-06-12 JFL Added the user full name and email to %CONFIG.BAT%.	      *
 :#   2020-06-30 JFL Added the 7-Zip LZMA SDK to the list of known SDKs.       *
+:#   2021-11-16 JFL Added support for Visual Studio 17/2022.                  *
 :#                                                                            *
 :#      © Copyright 2016-2020 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-06-30"
+set "VERSION=2021-11-16"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -1575,7 +1576,7 @@ set "BIN[amd64,amd64]=bin\amd64 bin\x86_amd64"
 set "BIN[amd64,arm]=bin\amd64_arm bin\x86_arm"
 set "BIN[amd64,arm64]=bin\amd64_arm64 bin\x86_arm64"
 
-:# VS 15 era: More regular naming system, but much deeper
+:# VS 15 era and later: More regular naming system, but much deeper
 set "BIN15[x86,x86]=bin\HostX86\x86"
 set "BIN15[x86,amd64]=bin\HostX86\x64"
 set "BIN15[x86,arm]=bin\HostX86\arm"
@@ -1606,6 +1607,7 @@ set "PROC[MIPS]=mips"	&:# SysToolsLib and VC 8 name
 set "PROC[IA64]=ia64"	&:# SysToolsLib and VC 8 name
 
 :# List of Visual Studio aliases and paths
+set "VSN[2022]=17"  & set "VSA[17]=17/2022"   & set "VSP[17]=Microsoft Visual Studio\2022"		
 set "VSN[2019]=16"  & set "VSA[16]=16/2019"   & set "VSP[16]=Microsoft Visual Studio\2019"		
 set "VSN[2017]=15"  & set "VSA[15]=15/2017"   & set "VSP[15]=Microsoft Visual Studio\2017"		
 set "VSN[2015]=14"  & set "VSA[14]=14/2015"   & set "VSP[14]=Microsoft Visual Studio 14.0"		
@@ -1615,8 +1617,9 @@ set "VSN[2010]=10"  & set "VSA[10]=10/2010"   & set "VSP[10]=Microsoft Visual St
 set "VSN[2008]=9"   & set "VSA[9]=9/2008"     & set "VSP[9]=Microsoft Visual Studio 9.0"		
 set "VSN[2005]=8"   & set "VSA[8]=8/2005"     & set "VSP[8]=Microsoft Visual Studio 8"		
 set "VSN[2003]=7.1" & set "VSA[7.1]=7.1/2003" & set "VSP[7.1]=Microsoft Visual Studio .NET 2003"	
-set "VSN[.NET]=7"   & set "VSA[7]=7/.NET"     & set "VSP[7]=Microsoft Visual Studio .NET"		
-set "VSN[Studio]=6" & set "VSA[6]=6/"         & set "VSP[6]=Microsoft Visual Studio"			
+set "VSN[2002]=7"   & set "VSA[7]=7/.NET"     & set "VSP[7]=Microsoft Visual Studio .NET"	  & set "VSN[.NET]=7"		
+set "VSN[98]=6"     & set "VSA[6]=6/98"       & set "VSP[6]=Microsoft Visual Studio"			
+set "VSN[97]=5"     & set "VSA[5]=5/97"       & set "VSP[5]=Microsoft Visual Studio"			
 
 :# Space-separated list of VC subdirectories to search
 set "VC15S=Enterprise\VC Professional\VC Community\VC Preview\VC"
@@ -1683,54 +1686,50 @@ set "BINSELF=!%~5[%ARCH%]!"
 :# set "BINSELF=!%~5[x86]!"
 :# %ECHOVARS.D% \* BINDIRS
 :# Scan the Program Files tree, looking for cl.exe instances
-for %%p in ("%PF32%") do ( :# All versions of VS up to VS16 are installed in PF32, even on 64-bits machines
-  %ECHO.D% :# Searching VS in "%%~p\%~3"
-  for %%v in ("%~3") do (    :# Visual Studio directory
-    if exist "%%~p\%%~v" for %%c in (%~4) do (    :# VC subdirectories
-      %ECHO.D% :# Searching VC in "%%~p\%%~v\%%~c"
-      if exist "%%~p\%%~v\%%~c" (
-      	set "VCDIRS="
-      	:# Infos from https://github.com/Microsoft/vswhere/wiki/Find-VC
-	if exist "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt" (
-	  %ECHO.D% :# Reading version in "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
-	  set /p VCVER=<"%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
-	  set "VCDIRS=%%~p\%%~v\%%~c\Tools\MSVC\!VCVER: =!"
-	)
-	if not defined VCDIRS if exist "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt" (
-	  :# Preview versions have a Microsoft.VCToolsVersion.v142.default.txt, that's not detected above.
-	  :# Try using the Microsoft.VCRedistVersion.default.txt, which seems to contain the same version.
-	  %ECHO.D% :# Reading version in "%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
-	  set /p VCVER=<"%%~p\%%~v\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
-	  set "VCDIRS=%%~p\%%~v\%%~c\Tools\MSVC\!VCVER: =!"
-	  if not exist "!VCDIRS!\%BINDIRS%\cl.exe" set "VCDIRS="
-	  set "VCVER="
-	)
-	if not defined VCDIRS if exist "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat" (
-	  setlocal
-	  %ECHO.D% :# Locating VC using "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat"
-	  set "VCToolsInstallDir="
-	  call "%%~p\%%~v\%%~c\Common7\Tools\vsdevcmd.bat" >NUL 2>&1
-	  for %%z in ("!VCToolsInstallDir!") do endlocal & set "VCDIRS=%%~z"
-	  if defined VCDIRS set "VCDIRS=!VCDIRS:~0,-1!"
-	  set "VCVER="
-	)
-	if not defined VCDIRS set "VCDIRS=%%~p\%%~v\%%~c%\*%"
-	for /d %%s in ("!VCDIRS!") do (
-	  %ECHO.D% :# Searching BIN in "%%~s"
-	  for %%b in (%BINDIRS%) do (
-	    %ECHO.D% :# Searching CL in "%%~s\%%b"
-	    if exist "%%~s\%%b\cl.exe" (
-	      for %%z in ("%%~p\%%~v\%%~c") do set "%VS%=%%~dpz" &rem :# Remove the VC* subdir name
-	      set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
-	      set "%VC%=%%~s" &:# Do not set to "%%~p\%%~v\%%~c", which is wrong for VS15+
-	      set "%VC%.BIN=%%~s\%%b"
-	      set "%VC%.BIN2=%%~s\!BINSELF!"
-	      set "%VC%.CC="%%~s\%%b\cl.exe""
-	      %ECHOVARS.D% %VS% %VC% %VC%.BIN %VC%.CC
-	      set "VCDIRS="
-	      exit /b 0
-	    )
-	  )
+%ECHO.D% :# Searching VS in "%~3"
+if exist "%~3" for %%c in (%~4) do (    :# VC subdirectories
+  %ECHO.D% :# Searching VC in "%~3\%%~c"
+  if exist "%~3\%%~c" (
+    set "VCDIRS="
+    :# Infos from https://github.com/Microsoft/vswhere/wiki/Find-VC
+    if exist "%~3\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt" (
+      %ECHO.D% :# Reading version in "%~3\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
+      set /p VCVER=<"%~3\%%~c\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt"
+      set "VCDIRS=%~3\%%~c\Tools\MSVC\!VCVER: =!"
+    )
+    if not defined VCDIRS if exist "%~3\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt" (
+      :# Preview versions have a Microsoft.VCToolsVersion.v142.default.txt, that's not detected above.
+      :# Try using the Microsoft.VCRedistVersion.default.txt, which seems to contain the same version.
+      %ECHO.D% :# Reading version in "%~3\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
+      set /p VCVER=<"%~3\%%~c\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
+      set "VCDIRS=%~3\%%~c\Tools\MSVC\!VCVER: =!"
+      if not exist "!VCDIRS!\%BINDIRS%\cl.exe" set "VCDIRS="
+      set "VCVER="
+    )
+    if not defined VCDIRS if exist "%~3\%%~c\Common7\Tools\vsdevcmd.bat" (
+      setlocal
+      %ECHO.D% :# Locating VC using "%~3\%%~c\Common7\Tools\vsdevcmd.bat"
+      set "VCToolsInstallDir="
+      call "%~3\%%~c\Common7\Tools\vsdevcmd.bat" >NUL 2>&1
+      for %%z in ("!VCToolsInstallDir!") do endlocal & set "VCDIRS=%%~z"
+      if defined VCDIRS set "VCDIRS=!VCDIRS:~0,-1!"
+      set "VCVER="
+    )
+    if not defined VCDIRS set "VCDIRS=%~3\%%~c%\*%"
+    for /d %%s in ("!VCDIRS!") do (
+      %ECHO.D% :# Searching BIN in "%%~s"
+      for %%b in (%BINDIRS%) do (
+	%ECHO.D% :# Searching CL in "%%~s\%%b"
+	if exist "%%~s\%%b\cl.exe" (
+	  for %%z in ("%~3\%%~c") do set "%VS%=%%~dpz" &rem :# Remove the VC* subdir name
+	  set "%VS%=!%VS%:~0,-1!" &:# Remove the trailing '\'.
+	  set "%VC%=%%~s" &:# Do not set to "%~3\%%~c", which is wrong for VS15+
+	  set "%VC%.BIN=%%~s\%%b"
+	  set "%VC%.BIN2=%%~s\!BINSELF!"
+	  set "%VC%.CC="%%~s\%%b\cl.exe""
+	  %ECHOVARS.D% %VS% %VC% %VC%.BIN %VC%.CC
+	  set "VCDIRS="
+	  exit /b 0
 	)
       )
     )
@@ -1746,22 +1745,24 @@ pedump WIN32\winver.exe | findstr subsystem	&:# Default link.exe SUBSYSTEM
 make -a "OS=WIN32" "WINVER=4.0" winver.exe	&:# Check the possibility of building for 95/NT4
 pedump WIN32\winver.exe | findstr subsystem	&:# 4.00 if supported, else the default SUBSYSTEM
 ...
-												     :#        Link SUBSYSTEM (Not the same as windows.h WINVER, which is set in the WINSDK)
-:lastvs	&:#  VS Alias	VS Installation directory	     VC subdirs	  BIN database		      _MSC_VER	Min   Default	Notes
-%SEARCH_IN%  16/2019	"Microsoft Visual Studio\2019"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1920	5.01	6.00	Preview tested and known to work fine
-%SEARCH_IN%  15/2017	"Microsoft Visual Studio\2017"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1910	5.01	6.00	Tested and known to work fine
-%SEARCH_IN%  14/2015	"Microsoft Visual Studio 14.0"		VC	  BIN	&& goto :foundvs    &:# 1900	5.01	6.00	Tested and known to work fine
-:# %SEARCH_IN%  13/?	"Microsoft Visual Studio 13.0"		VC	  BIN	&& goto :foundvs    &:# 
-:lastvsXP                                               	                                        
-%SEARCH_IN%  12/2013	"Microsoft Visual Studio 12.0"		VC	  BIN	&& goto :foundvs    &:# 1800	5.01	6.00	Tested and known to work fine
-%SEARCH_IN%  11/2012	"Microsoft Visual Studio 11.0"		VC	  BIN	&& goto :foundvs    &:# 1700	5.00	5.00
-%SEARCH_IN%  10/2010	"Microsoft Visual Studio 10.0"		VC	  BIN	&& goto :foundvs    &:# 1600	5.00	5.00
-%SEARCH_IN%  9/2008	"Microsoft Visual Studio 9.0"		VC	  BIN	&& goto :foundvs    &:# 1500	5.00	5.00
-:lastvs95                                                                                                               
-%SEARCH_IN%  8/2005	"Microsoft Visual Studio 8"		VC	  BIN	&& goto :foundvs    &:# 1400	4.00	4.00	Tested and known to work fine
-%SEARCH_IN%  7.1/2003	"Microsoft Visual Studio .NET 2003"	VC7	  BIN	&& goto :foundoldvs &:# 1310	4.00	4.00	Tested. Some problems worked around.
-%SEARCH_IN%  7/.NET	"Microsoft Visual Studio .NET"		VC7	  BIN	&& goto :foundoldvs &:# 1300
-:# %SEARCH_IN%  6	"Microsoft Visual Studio"		VC98	  BIN	&& goto :foundoldvs &:# 1200	Tested. MsvcLibX compilation fails. Unsupported. 
+													     :#        Link SUBSYSTEM (Not the same as windows.h WINVER, which is set in the WINSDK)
+:lastvs	&:#  VS Alias	VS Installation directory	     	     VC subdirs	  BIN database		      _MSC_VER	Min   Default	Notes (To find Min & Default, try various WINVER values in a makefile)
+%SEARCH_IN%  17/2022	"%PF64%\Microsoft Visual Studio\2022"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1930	5.01	6.00	Tested and known to work fine
+%SEARCH_IN%  16/2019	"%PF32%\Microsoft Visual Studio\2019"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1920	5.01	6.00	Tested and known to work fine
+%SEARCH_IN%  15/2017	"%PF32%\Microsoft Visual Studio\2017"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1910	5.01	6.00	Tested and known to work fine
+%SEARCH_IN%  14/2015	"%PF32%\Microsoft Visual Studio 14.0"		VC	  BIN	&& goto :foundvs    &:# 1900	5.01	6.00	Tested and known to work fine
+:# %SEARCH_IN%  13/?	"%PF32%\Microsoft Visual Studio 13.0"		VC	  BIN	&& goto :foundvs    &:#				MS skipped VS version 13
+:lastvsXP
+%SEARCH_IN%  12/2013	"%PF32%\Microsoft Visual Studio 12.0"		VC	  BIN	&& goto :foundvs    &:# 1800	5.01	6.00	Tested and known to work fine
+%SEARCH_IN%  11/2012	"%PF32%\Microsoft Visual Studio 11.0"		VC	  BIN	&& goto :foundvs    &:# 1700	5.00	5.00
+%SEARCH_IN%  10/2010	"%PF32%\Microsoft Visual Studio 10.0"		VC	  BIN	&& goto :foundvs    &:# 1600	5.00	5.00
+%SEARCH_IN%  9/2008	"%PF32%\Microsoft Visual Studio 9.0"		VC	  BIN	&& goto :foundvs    &:# 1500	5.00	5.00
+:lastvs95
+%SEARCH_IN%  8/2005	"%PF32%\Microsoft Visual Studio 8"		VC	  BIN	&& goto :foundvs    &:# 1400	4.00	4.00	Tested and known to work fine
+%SEARCH_IN%  7.1/2003	"%PF32%\Microsoft Visual Studio .NET 2003"	VC7	  BIN	&& goto :foundoldvs &:# 1310	4.00	4.00	Tested. Some problems worked around.
+%SEARCH_IN%  7/.NET	"%PF32%\Microsoft Visual Studio .NET"		VC7	  BIN	&& goto :foundoldvs &:# 1300
+:# %SEARCH_IN%  6/98	"%PF32%\Microsoft Visual Studio"		VC98	  BIN	&& goto :foundoldvs &:# 1200	Tested. MsvcLibX compilation fails. Unsupported. 
+:# %SEARCH_IN%  5/97	"%PF32%\Microsoft Visual Studio"		VC?	  BIN	&& goto :foundoldvs &:# 1100	Not tested. Unsupported. 
 SET "%VS%="
 %RETURN0%
 
