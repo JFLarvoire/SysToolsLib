@@ -2978,12 +2978,19 @@ del "%lock%" 2>nul
 :#  Notes 	    Returns the result in %ERRORLEVEL%: 0=Yes; 5=No           #
 :#                                                                            #
 :#  History                                                                   #
+:#   2021-11-12 JFL Fix to work even in a 32-bits cmd.exe in a 64-bits OS.    #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :IsAdmin
->NUL 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
-goto :eof
+setlocal EnableExtensions DisableDelayedExpansion
+
+set "CONFIG_DIR=%SYSTEMROOT%\system32\config"
+:# In 32-bits cmd shells in 64-bits Window, the config directory is in the native system32
+if defined PROCESSOR_ARCHITEW6432 set "CONFIG_DIR=%SYSTEMROOT%\sysnative\config"
+
+>NUL 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%CONFIG_DIR%\system"
+endlocal & exit /b
 
 :IsAdmin
 >NUL 2>&1 net session
