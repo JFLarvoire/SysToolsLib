@@ -12,16 +12,18 @@
 #    2019-07-08 JFL Added options -a, -c, -l, and their inverse -o, -C, -L.   #
 #                   Added support for C \t \xXX etc sequences in substitutions.
 #    2021-03-22 JFL Fixed the input and output encoding in Windows.           #
+#    2021-10-27 JFL Don't display the file names in quiet mode.               #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2021-03-22"
+set version "2021-10-27"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
 
+proc Quiet {} {expr $::verbosity == 0}  ; # Test if we're in quiet mode.
 proc Verbose {} {expr $::verbosity > 1} ; # Test if we're in verbose mode.
 proc Debug {{n 0}} {expr $::verbosity > (2+$n)} ; # Test if we're in debug mode.
 
@@ -122,6 +124,7 @@ Options:
   -l, --line            Regexp in line mode
   -L, --noline          Regexp in global mode (Default)
   -o, --one             Replace the first occurence
+  -q, --quiet		Quiet mode: Do not output the processed files names
   -V, --version         Display this library version
   -X, --noexec          Display the commands to execute, but don't run them
 
@@ -209,6 +212,8 @@ if {$nx != 2} {
 set nNames [llength $names]
 set opts [concat $all $line $case]
 
+if [Debug] { puts "rx=\"$rx\", sx=\"$sx\"" }
+
 # Kludge to work around the lack of support for \t, \xXX, etc, in substitution strings
 set sx0 $sx
 regsub -all {\\(.)} $sx0 {\\\\<\1>} sx
@@ -250,6 +255,8 @@ if {$tcl_platform(platform) == "windows"} {
   }
 }
 
+if [Debug] { puts "rx=\"$rx\", sx=\"$sx\"" }
+
 if ($noexec) {
   set input -
   set cmdList [concat regsub $opts [list -- $rx $input $sx0]]
@@ -268,7 +275,7 @@ if ($noexec) {
       set cmdList [concat regsub $opts [list -- $rx $input $sx]]
       set output [eval $cmdList]
       if {"$output" != "$input"} {
-	puts $local_name    ; # Show which file is getting updated 
+	if ![Quiet] { puts $local_name } ; # Show which file is getting updated 
       	set hFile [open $name w]
 	puts -nonewline $hFile $output
 	close $hFile
