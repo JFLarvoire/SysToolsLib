@@ -4,14 +4,115 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-06-02
+## [Unreleased] 2021-11-19
+### Changed
+- regsub.tcl: Don't display the file names in quiet mode
+- *.md: Reformated markdown documents in UTF-8, without tabs; Updated some sub-projects history notes.
+
+## [Unreleased] 2021-11-18
+### Fixed
+- Batch/Library.bat: Fixed :IsAdmin to work even invoked in a 32-bits cmd.exe in a 64-bits OS.
+
+## [Unreleased] 2021-11-16
 ### New
-- C/MsvcLibx/src/GetEncoding.c: Heuristics for detecting the most common text encodings (Binary/ASCII/Windows/UTF-8/UTF-16/UTF-32).
-- C/SRC/encoding.c: New tool displaying the text encoding for one or more files.
+- C/include/configure.bat: Added support for Visual Studio 17/2022.
+
+## [Unreleased] 2021-11-10
+### New
+- C/MsvcLibX/src/dirent.c, C/MsvcLibX/include/dirent.h: Added standard C library routine dirfd()
+
+## [Unreleased] 2021-11-09
+### New
+- C/MsvcLibX/include/limits.h, stdint.h: Added TS 18661-1:2014 integer types widths macros
+- C/SysLib/oprintf.*: Added 9 and 10 argument versions of oprintf()
+
+### Fixed
+- C/SysLib/qword.*, oprintf.*, makefile: Make sure QWORDs and oprintf() work together correctly in all operating systems.
+
+## [Unreleased] 2021-10-28
+### Changed
+- ShellApp.ps1:  
+  More consistent output object fields names, matching the originals.  
+  Added option -Object to add a ComObject property, allowing to get all original fields if desired. Drawback: It's much slower.
+
+## [Unreleased] 2021-10-27
+### Fixed
+- remplace.exe:  
+  Increased the max string size from 80 to 255.  
+  Fixed warnings in remplace.c compilation.
+
+## [Unreleased] 2021-10-20
+### Changed
+- sector.exe:  
+  Added option -lp to just list the available partitions.  
+  In verbose mode, report the free space between partitions.  
+  Display the correct partition size when it's 0xFFFFFFFF.
+- gpt.exe:  
+  Display the correct partition size when it's 0xFFFFFFFF.
+- Batch/Library.bat: Added routine :GetEchoState.
+
+### Fixed
+- sector.exe:  
+  Fixed the -ld option to report drives with no media inside.
+
+## [Unreleased] 2021-10-11
+### New
+- ShellApp.ps1: Enumerate shell applications, ie. i.e. File Explorers and Control Panels
 
 ### Changed
-- C/SRC/conv.c: Added support for conversions from/to UTF-16 & UTF-32.  
-  Added option -F to _not_ use best fit characters (Ex: ç -> c) when the correct ones are missing.   
+- Window.ps1: Major restructuration with...  
+  Removed the code dealing with shell applications, moved to the new ShellApp.ps1.  
+  A much faster enumeration by default (Rewritten in C#), and more complete.  
+  New fields in the Window object: Visible, RealClass, hTopWnd, hRootWnd, ThreadId, StartTime  
+  New options: -v, -Popups
+
+### Fixed
+- Window.ps1: Several bug fixes, like the -OnTop operation.
+
+## [Unreleased] 2021-09-15
+### Changed
+- Batch/Library.bat:  
+  Rewrote the variables preparation for passing back through endlocal/return.  
+  New %^1!% ... %^6!% expand to (2^n)-1 hats before a !.  
+  Renamed character entities from DEBUG.entity to @entity.  
+  Added routine :ConvertEntitiesNoDebug & use it for -c, -C.  
+
+### Fixed
+- Batch/Library.bat: Fixed the :Return routine in Windows XP.
+
+## [Unreleased] 2021-09-09
+### Changed
+- Shell/Library.bash: Improved the logging. Always indent the output to the log file.
+
+## [Unreleased] 2021-09-07
+### Changed
+- FlipMails.tcl: Improved the mail separator detection.
+
+### Fixed
+- C/include/make.bat: Avoid counting constants like NO_WARNINGS as warnings
+
+## [Unreleased] 2021-09-06
+### Changed
+- dirsize.exe:  
+  Continue by default for all recursive operations.  
+  Report the number of inaccessible directories if any error was ignored.
+
+### Fixed
+- dirsize.exe: Fixed "out of directory handles" errors with the -i option to ignore access errors.
+
+## [Unreleased] 2021-07-16
+### Changed
+- GetConsole.ps1: Improved the HTML output, to get a better rendering in Chrome.
+
+## [Unreleased] 2021-06-02
+### New
+- encoding.exe: New tool displaying the text encoding for one or more files.
+- C/MsvcLibx/src/GetEncoding.c: Heuristics for detecting the most common text encodings (Binary/ASCII/Windows/UTF-8/UTF-16/UTF-32).
+
+### Changed
+- conv.exe:  
+  Added support for conversions from/to UTF-16 & UTF-32.  
+  Added option -F to _not_ use best fit characters (Ex: ç -> c) when the correct ones are missing.     
   Removed support for the obsolete Symbol code page.  
   Added a workaround for Windows Terminal limitations on displaying Unicode characters beyond \U10000.
 - C/MsvcLibx/src/iconv.c: Added support for conversions from/to UTF-16 & UTF-32 in ConvertBuf() and associated routines.  
@@ -19,28 +120,30 @@ For more details about changes in a particular area, see the README.txt and/or N
   Renamed them with an Ex suffix; And added macros with the old name without the extra three arguments added recently.                       
 
 ### Fixed
-- C/SRC/conv.c: Fixed the default encoding when writing to the console.
-- C/SRC/zap.c: Fixed the recursion into linked subdirectories, and the recursive deletion of fixed names.
+- conv.exe: Fixed the default encoding when writing to the console.
+- zap.exe: Fixed the recursion into linked subdirectories, and the recursive deletion of fixed names.
 
 ## [Unreleased] 2021-05-21
 ### Changed
-- C/SRC/codepage.c:  
+- codepage.exe:  
   Fixed the output of C0 & C1 control codes in MS Terminal.  
   Added option -l as an alias to -i to list installed CPs.  
   Corrected typos and errors in the help.
 
 ## [Unreleased] 2021-05-03
 ### Changed
-- C/SRC/conv.c, detab.c, trim.c: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
-- C/SRC/deffeed.c: Removed the -filter option, and use the standard - to specify the input comes from stdin.  
+- conv.exe, detab.exe, trim.exe: If no change was made to the data, use the input file timestamp for the output.
+  (Or preserve it when using the -= switch.)
+- deffeed.exe:  
+  Removed the -filter option, and use the standard - to specify the input comes from stdin.  
   Add -= and -same as equivalents of -self.  
   Add an optional output file name.
+- Window.ps1: Avoid generating errors when modern apps (?) don't report a path.
 - Batch/Library.bat: Added function :compare_versions.
-- PowerShell/Window.ps1: Avoid generating errors when modern apps (?) don't report a path.
 
 ## [Unreleased] 2021-04-18
 ### Changed
-- C/SRC/remplace.c: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
+- remplace.exe: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
 
 ## [1.20] 2020-03-28
 ### Fixed
