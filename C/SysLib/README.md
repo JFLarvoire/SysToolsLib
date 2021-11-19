@@ -1,4 +1,4 @@
-System Library
+﻿System Library
 ==============
 
 
@@ -22,19 +22,19 @@ Categories of functions
 
 The available functions can be grouped in a number of families:
 
-Category	  | Description
+Category          | Description
 ------------------|---------------------------------------------------------------------------------------------------
-64-bits QWORDs	  | Manipulate 64-bit unsigned integers, even in 16-bits programs.
-Object printf	  | Print formatted C++ objects, as conveniently as C's printf(), with format strings similar to C#'s.
-SM-BIOS		  | Access System Management BIOS tables.
-UUID		  | UUID/GUID management routines. (Create; Compare; Format; Get the PC UUID; etc)
+64-bits QWORDs    | Manipulate 64-bit unsigned integers, even in 16-bits programs.
+Object printf     | Print formatted C++ objects, as conveniently as C's printf(), with format strings similar to C#'s.
+SM-BIOS           | Access System Management BIOS tables.
+UUID              | UUID/GUID management routines. (Create; Compare; Format; Get the PC UUID; etc)
 Block device I/O  | I/O to hard disks, logical volumes, files, and eventually physical floppies and CDs.
-Hard disk I/O	  | I/O to hard disk sectors.
+Hard disk I/O     | I/O to hard disk sectors.
 Logical disk I/O  | I/O to logical volumes visible to the operating system.
-Boot sector	  | Manage boot sectors.
-GPT		  | Manage entries in EFI GPT partition tables.
-NetBIOS		  | Send/Receive NetBIOS packets; Get MAC address.
-Strings		  | Case-insentitive search and replace.
+Boot sector       | Manage boot sectors.
+GPT               | Manage entries in EFI GPT partition tables.
+NetBIOS           | Send/Receive NetBIOS packets; Get MAC address.
+Strings           | Case-insentitive search and replace.
 
 See <System%20Library%20Reference.htm> for a description of the architecture, and the main function calls.
 
@@ -55,9 +55,9 @@ Building the SysLib library
 - Extract the SysLib library sources into another directory at the same level. Ex: %MY_LIBS_DIR%\SysLib\.
 - Open a cmd window, and run:
 
-        cd "%MY_LIBS_DIR%\SysLib"
-        configure
-        make
+      cd "%MY_LIBS_DIR%\SysLib"
+      configure
+      make
 
 Note: configure.bat will output a warning about the optional libraries that it cannot find.
 You may safely ignore that warning.
@@ -71,50 +71,50 @@ gnu-efi patches for 16-bits compiler support
 If you want to build the SysLib library for MS-DOS with GPT support, it's necessary to make the following changes.  
 All these add a conditional compilation around union definitions that are incompatible with the MSVC 1.5 C++ compiler:
        
-    #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
+    #ifndef _MSDOS      /* Prevent errors when compiling as C++ in MSVC 1.5 */
     [Code incompatible with the MSVC 1.5 C++ compiler]
-    #endif	 /* !defined(_MSDOS) */
+    #endif       /* !defined(_MSDOS) */
 
 * gnu-efi\inc\efidevp.h: Add a conditional compilation around union definitions in the end (about lines 473 to the end):
 
-        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
-        
-        typedef union {
-        [...]
-        } EFI_DEV_PATH;
-        
-        typedef union {
-        [...]
-        } EFI_DEV_PATH_PTR;
-        
-        #endif	 /* !defined(_MSDOS) */
+      #ifndef _MSDOS  /* Prevent errors when compiling as C++ in MSVC 1.5 */
+      
+      typedef union {
+      [...]
+      } EFI_DEV_PATH;
+      
+      typedef union {
+      [...]
+      } EFI_DEV_PATH_PTR;
+      
+      #endif   /* !defined(_MSDOS) */
 
 * gnu-efi\inc\efiapi.h: Add a conditional compilation around union definitions, about lines 582 to 588):
 
-        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
-        
-        typedef struct {
-        [...]
-        } EFI_CAPSULE_BLOCK_DESCRIPTOR;
-        
-        #endif	 /* !defined(_MSDOS) */
-
+      #ifndef _MSDOS  /* Prevent errors when compiling as C++ in MSVC 1.5 */
+      
+      typedef struct {
+      [...]
+      } EFI_CAPSULE_BLOCK_DESCRIPTOR;
+      
+      #endif   /* !defined(_MSDOS) */
+       
 * gnu-efi\inc\efilib.h: Add a conditional compilation around the following definitions (About lines 763 to 783):
 
-        #ifndef _MSDOS	/* Prevent errors when compiling as C++ in MSVC 1.5 */
-        
-        typedef union {
-        [...]
-        } EFI_PCI_ADDRESS_UNION;
-        
-        [...]
-        
-        EFI_STATUS
-        PciFindDevice (
-        [...]
-        );
-        
-        #endif	 /* !defined(_MSDOS) */
+      #ifndef _MSDOS  /* Prevent errors when compiling as C++ in MSVC 1.5 */
+      
+      typedef union {
+      [...]
+      } EFI_PCI_ADDRESS_UNION;
+      
+      [...]
+      
+      EFI_STATUS
+      PciFindDevice (
+      [...]
+      );
+      
+      #endif   /* !defined(_MSDOS) */
 
 
 Windows 98 DDK installation
@@ -137,25 +137,25 @@ Then make the following changes:
 
   Change
 
-        typedef (_cdecl * VXD_C_SERVICE)();
+      typedef (_cdecl * VXD_C_SERVICE)();
 
   To
 
-        typedef int (_cdecl * VXD_C_SERVICE)(); /* Some VxD C services return a value in EAX */
+      typedef int (_cdecl * VXD_C_SERVICE)(); /* Some VxD C services return a value in EAX */
 
 * 98DDK\src\block\inc\dcb.h: Put it with the other include files, then rename a structure to avoid a conflict:
 
   Copy that file to 98DDK\inc\win98\, then, in the copy, change:  
 
-        typedef struct  _DCB { /* */
-        [...]
-        } DCB, *PDCB;
+      typedef struct  _DCB { /* */
+      [...]
+      } DCB, *PDCB;
 
   to
 
-        typedef struct  _IOSDCB { /* Renamed DCB as IOSDCB, to avoid conflict with WIN32's winbase.h own DCB structure. */
-        [...]
-        } IOSDCB, *PIOSDCB;
+      typedef struct  _IOSDCB { /* Renamed DCB as IOSDCB, to avoid conflict with WIN32's winbase.h own DCB structure. */
+      [...]
+      } IOSDCB, *PIOSDCB;
 
 
 
@@ -193,8 +193,9 @@ To do
 -----
 
 * Port additional routines to Linux, like block I/O.
-* An obvious extension that I never had time to complete is to add floppy disk and CD/DVD/BR disk I/O.  
-  This would allow writing a tool for creating floppy images, or .iso files from CDs.
+* In 2017 I added support for block I/O to floppys, an idea that had been waiting for 20 years.
+  The obvious next step is block I/O to CD/DVD/BR.  
+  This would allow writing a tool for creating floppy images from floppys, or .iso files from CDs.
 * The QWORD support can be improved, to add other operators, and make its usage even more seamless in 16-bits programs.
 * The oprintf routine can be improved. See the to do list in the oprintf.cpp header.
 * The SMBIOS routines for DOS could be made smaller by accessing the tables in ROM istead of a copy in RAM.

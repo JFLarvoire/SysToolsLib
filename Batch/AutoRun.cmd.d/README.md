@@ -1,4 +1,4 @@
-cmd.exe AutoRun scripts management
+﻿cmd.exe AutoRun scripts management
 ==================================
 
 The cmd.exe shell allows defining an optional AutoRun script, that is executed
@@ -70,11 +70,11 @@ Caution:
 Each AutoRun script slows down cmd.exe startup a little bit.
 Only install the AutoRun scripts that you really need!
 
-| Script        | Description										| Example			|
-| ------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
-| history.bat	| Defines a history macro displaying the command history. Allows piping it to another program. | `history \| findstr /i make` |
-| pid.bat	| Defines a PID environment variable, containing the Process ID of the current cmd.exe shell instance. | `echo %PID%` |
-| which.cmd	| Redefine the which command, so that it uses `which -i` by default to detect cmd.exe macros.  | `which history` |
+| Script        | Description                                                                                  | Example                      |
+| ------------- | -------------------------------------------------------------------------------------------- | ---------------------------- |
+| history.bat   | Defines a history macro displaying the command history. Allows piping it to another program. | `history \| findstr /i make` |
+| pid.bat       | Defines a PID environment variable, containing the Process ID of the current cmd.exe shell instance. | `echo %PID%`         |
+| which.cmd     | Redefine the which command, so that it uses `which -i` by default to detect cmd.exe macros.  | `which history`              |
 
 Note: `AutoRun -i` installs the autorun extension scripts listed in the `AutoRun.cmd.d\default.lst` file.  
 This file contains only the extension scripts that are particularly useful, and that initialize quickly.

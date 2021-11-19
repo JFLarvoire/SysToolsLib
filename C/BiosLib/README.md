@@ -1,4 +1,4 @@
-The BIOS.LIB Library
+﻿The BIOS.LIB Library
 ===================
 
 Introduction
@@ -44,7 +44,7 @@ possible program size is a critical goal for all target types of programs (Optio
 
 There are just a few include files with all the main definitions:
 
-Name	    | Description
+Name        | Description
 ------------|-------------------------------------------------------------------
 adefine.inc | All assembly language definitions.
 clibdef.h   | C definitions for the subset of the standard C library available.
@@ -159,14 +159,14 @@ Object files and list files are stored in subdirectories OBJ and LIST respective
 
 Significant source files:
 
-Name			| Description
+Name                    | Description
 ------------------------|-----------------------------------------------------------------------
-ADEFINE.INC		| Assembly language definitions
-CLIBDEF.H		| C Definition for the subset of the standard C library supported
-CONFIGURE.BAT		| Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
-CONFIGURE.BIOSLIB.BAT	| Defines BIOS.LIB-specific configuration settings.
-MAKE.BAT		| Batch file to build BIOS.LIB at the command prompt.
-NMakefile		| Make file for BIOS.LIB
-SPRINTF.C		| The most useful routine of them all
-STARTCOM.ASM		| Sample startup routine for .COM programs. Not part of BIOS.LIB.
-UTILDEF.H		| All C Definition not in CLIBDEF.H, ie not in the standard C library.
+ADEFINE.INC             | Assembly language definitions
+CLIBDEF.H               | C Definition for the subset of the standard C library supported
+CONFIGURE.BAT           | Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
+CONFIGURE.BIOSLIB.BAT   | Defines BIOS.LIB-specific configuration settings.
+MAKE.BAT                | Batch file to build BIOS.LIB at the command prompt.
+NMakefile               | Make file for BIOS.LIB
+SPRINTF.C               | The most useful routine of them all
+STARTCOM.ASM            | Sample startup routine for .COM programs. Not part of BIOS.LIB.
+UTILDEF.H               | All C Definition not in CLIBDEF.H, ie not in the standard C library.

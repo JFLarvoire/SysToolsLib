@@ -1,4 +1,4 @@
-# System Script Libraries for Tcl/Tk, Bash, Batch, PowerShell
+ï»¿# System Script Libraries for Tcl/Tk, Bash, Batch, PowerShell
 
 The System Tools Library includes four system script libraries, for the four scripting languages that I regularly use.
 These libraries regroup functions that I found useful over the years, for developing and debugging powerful system management scripts.
@@ -8,7 +8,7 @@ Have a look and give them a try. They can help you write powerful new scripts...
 
 Note that these libraries are (and hopefully will always be) a work in progress. Some versions lag behind others. Some inconsistencies remain that should be cleaned up. I'll be happy to get feedback, improvement ideas, and maybe even contributions!
 
-Here's a short summary. For a full description, download the detailed file [System Script Libraries Description.htm](System Script Libraries Description.htm) in SysToolsLib’s Docs area.
+Here's a short summary. For a full description, download the detailed file [System Script Libraries Description.htm](System Script Libraries Description.htm) in SysToolsLib's Docs area.
 
 ## Library structure
 

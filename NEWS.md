@@ -680,7 +680,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### Changed
 - Batch/PySetup.bat: Accept start commands with quotes, or without if valid.   
   Accept start commands using copies of the default command.
-  Added a verification that there's no additional command associated with the class.				      
+  Added a verification that there's no additional command associated with the class.                                  
 - Batch/tclsh.bat: Use the improved FindTclsh routine from TclSetup.bat. Removed options -s and -t.
 - Batch/Library.bat: Added routine TrimRightSlash; Improved routine condquote2.
 
@@ -1415,41 +1415,41 @@ Publicly released on github.com
 ### Changed
 - Scripts: Minor improvements.
 - C Tools: Major rewrite of the configure.bat/make.bat scripts, and associated make files.   
-	   C tools can now target other Microsoft OS/processor targets, like WIN95, IA64 or ARM.
+           C tools can now target other Microsoft OS/processor targets, like WIN95, IA64 or ARM.
 
 ## [1.3] - 2015-09-24
 ### Added
-- PowerShell/IESec.ps1			Test Internet if Explorer Enhanced Security is enabled
-- PowerShell/Rename-Networks.ps1	Rename networks consistently on HP servers with many NICs
-- PowerShell/Window.ps1			Move and resize windows
-- PowerShell/PSService.ps1		A template for a Windows service written in pure PowerShell
+- PowerShell/IESec.ps1                  Test Internet if Explorer Enhanced Security is enabled
+- PowerShell/Rename-Networks.ps1        Rename networks consistently on HP servers with many NICs
+- PowerShell/Window.ps1                 Move and resize windows
+- PowerShell/PSService.ps1              A template for a Windows service written in pure PowerShell
 
 ### Changed
-- Tcl/cfdt.tcl		Added the --from option to copy the time of another file
-- Tcl/ilo.tcl		Allow specifying the list of systems in an @inputfile.  
-			Improved routine DnsSearchList, to avoid dependency on twapi in most cases.				    
-			Improved heuristics to distinguish system and ilo names.
-- C/SRC/configure.bat	Fix the detection of the Microsoft Assembler
+- Tcl/cfdt.tcl          Added the --from option to copy the time of another file
+- Tcl/ilo.tcl           Allow specifying the list of systems in an @inputfile.  
+                        Improved routine DnsSearchList, to avoid dependency on twapi in most cases.                                 
+                        Improved heuristics to distinguish system and ilo names.
+- C/SRC/configure.bat   Fix the detection of the Microsoft Assembler
 
 ## [1.2] - 2014-12-11
 ### Changed
-- ScriptLibs.zip	New name for SourceLibs.zip, with numerous improvements
-- Scripts.zip		Added a collection of scripts in these same languages
-- C Tools		Main changes:
-			- An improved make system.
-			- An improved mechanism for adding changes to existing .h files.
-			- Updated all routines to support for WIN32 pathnames >= 260 characters.
-			- A few new routines.
-			Detailed change Log: See ReadMe.txt in the C subdirectory.
+- ScriptLibs.zip        New name for SourceLibs.zip, with numerous improvements
+- Scripts.zip           Added a collection of scripts in these same languages
+- C Tools               Main changes:
+                        - An improved make system.
+                        - An improved mechanism for adding changes to existing .h files.
+                        - Updated all routines to support for WIN32 pathnames >= 260 characters.
+                        - A few new routines.
+                        Detailed change Log: See ReadMe.txt in the C subdirectory.
 
 ## [1.1] - 2014-04-01
 ### Added
-- MsvcLibX.zip	Microsoft Standard C library extensions
-- ToolsSRC.zip	C/C++ tools sources
-- Tools.zip	Win32 executables
+- MsvcLibX.zip  Microsoft Standard C library extensions
+- ToolsSRC.zip  C/C++ tools sources
+- Tools.zip     Win32 executables
 
 ## [1.0] - 2013-12-11
 Initial release internally within HP of my scripting libraries
 
 ### Added
-- SourceLibs.zip	A library of functions for various script languages
+- SourceLibs.zip        A library of functions for various script languages

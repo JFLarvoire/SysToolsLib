@@ -1,4 +1,4 @@
-The PMODE.LIB Library
+﻿The PMODE.LIB Library
 =====================
 
 Introduction
@@ -23,13 +23,13 @@ Object files and list files are stored in subdirectories OBJ and LIST respective
 
 Significant source files:
 
-Name			| Description
+Name                    | Description
 ------------------------|-----------------------------------------------------------------------
-CONFIGURE.BAT		| Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
-CONFIGURE.PMODE.BAT	| Defines PMODE.LIB-specific configuration settings.
-MAKE.BAT		| Batch file to build PMODE.LIB at the command prompt.
-NMakefile		| Rules for building PMODE.LIB with MAKE.BAT.
-PMODE.INC		| Pmode.lib definitions for assembly language sources.
-PMODE.H			| Pmode.lib definitions for C language sources.
-VMM16.H			| VMM Definitions for use by 16 bits programs.
-WINDEF.H		| Define common Windows data types.
+CONFIGURE.BAT           | Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
+CONFIGURE.PMODE.BAT     | Defines PMODE.LIB-specific configuration settings.
+MAKE.BAT                | Batch file to build PMODE.LIB at the command prompt.
+NMakefile               | Rules for building PMODE.LIB with MAKE.BAT.
+PMODE.INC               | Pmode.lib definitions for assembly language sources.
+PMODE.H                 | Pmode.lib definitions for C language sources.
+VMM16.H                 | VMM Definitions for use by 16 bits programs.
+WINDEF.H                | Define common Windows data types.

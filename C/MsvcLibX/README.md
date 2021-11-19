@@ -1,4 +1,4 @@
-MsvcLibX - A set of MSVC Library eXtensions
+﻿MsvcLibX - A set of MSVC Library eXtensions
 ===========================================
 
 
@@ -58,19 +58,19 @@ On a recent Windows PC, with Microsoft Visual C++ compilers installed:
 
 - Select a base work directory. I'll call it %BASEDIR% in the examples below:
 
-        set "HOME=%HOMEDRIVE%%HOMEPATH%"
-        set "BASEDIR=%HOME%\Documents\SRC"
-        md "%BASEDIR%"
-        cd "%BASEDIR%"
+      set "HOME=%HOMEDRIVE%%HOMEPATH%"
+      set "BASEDIR=%HOME%\Documents\SRC"
+      md "%BASEDIR%"
+      cd "%BASEDIR%"
   
 - Extract the MsvcLibX archive into a work subdirectory. Ex: %BASEDIR%\MsvcLibX\   
   This will put files in several subdirectories: include, src
 
 - Open a cmd window, and run:
 
-        cd "%BASEDIR%\MsvcLibX\src" 
-        configure
-        make
+      cd "%BASEDIR%\MsvcLibX\src" 
+      configure
+      make
 
 The configure.bat script will locate your MSVC tools, and generate a config
 file. It needs to be run once initially, then again if new MSVC tool versions
@@ -85,8 +85,8 @@ Requirements:
 - Microsoft Visual C++ compiler and linker for Windows 32 and 64 bits targets.
 - Microsoft Windows SDK. (May be installed along with Visual C++)
 
-As of 2017-03-10, I've tested the make.bat script and make files with Visual C++
-2005, 2008, 2012, 2015, and 2017, and Windows SDK 5.2, 8.1, and 10.  
+As of 2021-11-18, I've tested the make.bat script and make files with Visual C++
+2005, 2008, 2012, 2015, 2017, 2019, and 2022, and Windows SDK 5.2, 8.1, and 10.  
 Support for older versions is still built-in, but I've not tested it for long.  
 Support for newer versions will require minor tweaks in configure.bat.
 Note that configure.bat does not depend on MSVC's vcvars.bat. It will attempt
@@ -94,7 +94,7 @@ to locate and use the latest usable version of MSVC it finds in Program Files.
 
 Optional:
 
-- Microsoft Visual C++ 1.52 compiler and linker for MS-DOS targets.
+- Microsoft Visual C++ 1.52 compiler and linker for MS-DOS targets.  
   If present in C:\MSVC, make.bat will also generate libraries for DOS.
   Note that generating DOS versions is still more useful than it looks:
   Experience has shown that the severe memory constraints under DOS are a very
@@ -103,26 +103,26 @@ Optional:
   This takes a very small extra build time. And it'll be very much worth the time
   if the Windows version appears to work, but the DOS version does not.
   Visual C++ 1.52 is available on the Visual Studio 2005 CD.
-- The Visual C++ 8 compiler and tools from Microsoft Visual Studio 2005.
+- The Visual C++ 8 compiler and tools from Microsoft Visual Studio 2005.  
   This is the last version that allowed building programs for Windows 95/NT4.
 
 The MsvcLibX.lib libraries are generated in subdirectories of src, then copied 
 into the %BASEDIR%\MsvcLibX\lib directory, and renamed as shown in this table:
 
-Subdirectory	 | Description				  | Renamed as
+Subdirectory     | Description                            | Renamed as
 ---------------- | -------------------------------------- | ----------------
-DOS\BIN\T\	 | DOS normal version, tiny memory model  | MsvcLibXdt.lib
-DOS\DEBUG\BIN\T\ | DOS debug version, tiny memory model	  | MsvcLibXdtd.lib
-DOS\BIN\S\	 | DOS normal version, small memory model | MsvcLibXds.lib
+DOS\BIN\T\       | DOS normal version, tiny memory model  | MsvcLibXdt.lib
+DOS\DEBUG\BIN\T\ | DOS debug version, tiny memory model   | MsvcLibXdtd.lib
+DOS\BIN\S\       | DOS normal version, small memory model | MsvcLibXds.lib
 DOS\DEBUG\BIN\S\ | DOS debug version, small memory model  | MsvcLibXdsd.lib
-DOS\BIN\L\	 | DOS normal version, large memory model | MsvcLibXdl.lib
+DOS\BIN\L\       | DOS normal version, large memory model | MsvcLibXdl.lib
 DOS\DEBUG\BIN\L\ | DOS debug version, large memory model  | MsvcLibXdld.lib
-WIN95\		 | WIN32 normal version for Windows 95	  | MsvcLibXw32.lib
-WIN95\DEBUG\	 | WIN32 debug version for Windows 95	  | MsvcLibXw32d.lib
-WIN32\		 | WIN32 (X86) normal version		  | MsvcLibXw32.lib
-WIN32\DEBUG\	 | WIN32 (X86) debug version		  | MsvcLibXw32d.lib
-WIN64\		 | WIN64 (AMD64) normal version		  | MsvcLibXw64.lib
-WIN64\DEBUG\	 | WIN64 (AMD64) debug version		  | MsvcLibXw64d.lib
+WIN95\           | WIN32 normal version for Windows 95    | MsvcLibXw32.lib
+WIN95\DEBUG\     | WIN32 debug version for Windows 95     | MsvcLibXw32d.lib
+WIN32\           | WIN32 (X86) normal version             | MsvcLibXw32.lib
+WIN32\DEBUG\     | WIN32 (X86) debug version              | MsvcLibXw32d.lib
+WIN64\           | WIN64 (AMD64) normal version           | MsvcLibXw64.lib
+WIN64\DEBUG\     | WIN64 (AMD64) debug version            | MsvcLibXw64d.lib
 
 
 Building programs using the MsvcLibX library
@@ -213,7 +213,7 @@ To add a new include file into the library:
 
 To add an include file overriding an homonym one in the MSVC library:
 
-- The trick is to make it include MSVC's one, then define its own extensions.
+- The trick is to make it include MSVC's one, then define its own extensions.  
   As MSVC compilers do not support the #include_next directive, I've implemented
   a mechanism for including MSVC include files using their full pathname.
   As an example, see include/direct.h or include/sys/stat.h.
@@ -271,13 +271,13 @@ Scripts:
 
 Script                | Description
 --------------------- | --------------------------------------------------------
-make.bat	      | The main build tool. Invokes nmake.
+make.bat              | The main build tool. Invokes nmake.
 config.%HOSTNAME%.bat | Defines paths to all tools used by make. Do not edit.
-configure.bat 	      | Analyses your system, and generates a config.%HOSTNAME%.bat file.
+configure.bat         | Analyses your system, and generates a config.%HOSTNAME%.bat file.
 configure.*.bat       | Define user or task-specific extensions to configure.bat.
-exe.bat		      | Front end to make.bat, generating multiple goals.
-exe		      | Linux shell script, invoking cc with multiple goals.
-src2objs.bat	      | Internal script used by make files to convert SOURCES to OBJECTS
+exe.bat               | Front end to make.bat, generating multiple goals.
+exe                   | Linux shell script, invoking cc with multiple goals.
+src2objs.bat          | Internal script used by make files to convert SOURCES to OBJECTS
 
 configure.bat with search for configure.*.bat scripts in %windir%, then in %HOME%,
 then in the current directory.  
@@ -291,10 +291,10 @@ installed), create a 2clip.mak file with this content:
 
     !IF "$(T)"=="DOS"
     complain:
-            @echo>con There's no DOS version of this program.
+        @echo>con There's no DOS version of this program.
     
     dirs $(O)\2clip.obj $(B)\2clip.exe: complain
-            @rem Do nothing
+        @rem Do nothing
     !ENDIF
 
 Example 2: Porting to Windows a resize.c program manipulating jpeg images,
@@ -344,12 +344,12 @@ Debug macros:
 
 Macro                       | Description
 --------------------------- | ------------------------------------------------
-DEBUG_ON()		    | Enable the debug mode.
-DEBUG_CODE(...)		    | The code within parentheses is only compiled in the debug version
+DEBUG_ON()                  | Enable the debug mode.
+DEBUG_CODE(...)             | The code within parentheses is only compiled in the debug version
 DEBUG_PRINTF((format, ...)) | Generates a printf instruction in the debug version only, that prints only if debug mode is enabled, with the output indented by call depth.
 DEBUG_ENTER((format, ...))  | Like DEBUG_PRINTF, but for use at the beginning of a function. Increases the indent level.
 DEBUG_LEAVE((format, ...))  | Like DEBUG_PRINTF, but for use before returning from a function. Decreases the indent level.
-				
+                                
 Note that every use of DEBUG_ENTER must be matched by one DEBUG_LEAVE. So if a
 function has several return instructions, every return must be preceded by a
 DEBUG_LEAVE.
@@ -360,12 +360,12 @@ one of the following macros:
 
 Macro                         | Simplified description
 ----------------------------- | ------------------------------------------------
-RETURN_INT(i)		      | DEBUG_LEAVE(("return %d\n", i)); return i;
+RETURN_INT(i)                 | DEBUG_LEAVE(("return %d\n", i)); return i;
 RETURN_INT_COMMENT(i, (args)) | Idem, plus prints a comment behind the return
-RETURN_BOOL(b)		      | DEBUG_LEAVE(("return %s\n", b?"TRUE":"FALSE")); return b;
+RETURN_BOOL(b)                | DEBUG_LEAVE(("return %s\n", b?"TRUE":"FALSE")); return b;
 RETURN_BOOL_COMMENT(b, (...)) | Idem, plus prints a comment behind the return
-RETURN_CHAR(c)		      | DEBUG_LEAVE(("return %c\n", c)); return c;
-RETURN_STRING(s)	      | DEBUG_LEAVE(("return %s\n", s)); return s;
+RETURN_CHAR(c)                | DEBUG_LEAVE(("return %c\n", c)); return c;
+RETURN_STRING(s)              | DEBUG_LEAVE(("return %s\n", s)); return s;
 
 For all the above, the release version just does return retValue;
 
@@ -407,9 +407,9 @@ detect the encoding, and then sometimes corrupt the source.
 2. Define one of the following constants in the .c source, _before_ including
 any .h include files:
 
-        #define _BSD_SOURCE  1	/* Defined by many standard BSD-Unix programs */
-        #define _GNU_SOURCE  1	/* Defined by many standard GNU-Unix/Linux programs */
-        #define _UTF8_SOURCE 1	/* MsvcLibX-specific */
+       #define _BSD_SOURCE  1  /* Defined by many standard BSD-Unix programs */
+       #define _GNU_SOURCE  1  /* Defined by many standard GNU-Unix/Linux programs */
+       #define _UTF8_SOURCE 1  /* MsvcLibX-specific */
 
 Note that most modern Linux compilers do expect C sources encoded as UTF-8,
 and will silently ignore the UTF-8 BOM if present.
@@ -447,11 +447,11 @@ If stdout or stderr are redirected to a pipe or a file, then the text output is 
 to the current code page.  
 This behaviour is identical to that of cmd.exe itself. For example:
 
-        dir World_languages\
+    dir World_languages\
 
 displays Unicode file names, even with characters not in the current code page.
 
-        dir World_languages\ | more
+    dir World_languages\ | more
 
 converts Unicode file names into the current code page, changing missing characters to '?'.
 
@@ -498,7 +498,7 @@ Windows defines three types of links:
 
 Type      | Description
 --------- | ---------------------------------------------------------------
-SYMLINK	  | Symbolic link to a file
+SYMLINK   | Symbolic link to a file
 SYMLINKD  | Symbolic link to a directory
 JUNCTION  | Mount point, often used as a symbolic link to another directory
 
@@ -777,14 +777,14 @@ The OS-specific definition macros have been renamed to more generic names.
 The DosWin.mak file has been replaced by a more generic All.mak,
 supporting the old dos.mak, win32.mak, and win64.mak, plus the new...
 
-- bios.mak     Allows building 16-bits programs that can run in BIOS option
+- bios.mak   - Allows building 16-bits programs that can run in BIOS option
                ROMs. These programs are based on the BiosLib library,
                documented separately.
-- win95.mak    Allows building win32 programs that run in Windows 95.
-- ia64.mak     Allows building 64-bits programs that run in IA64 versions
-	       of Windows. Not tested.
-- arm.mak      Allows building win32 programs for Windows RT.
-	       Tests failed so far, due to a missing "ARM Desktop SDK".
+- win95.mak  - Allows building win32 programs that run in Windows 95.
+- ia64.mak   - Allows building 64-bits programs that run in IA64 versions
+               of Windows. Not tested.
+- arm.mak    - Allows building win32 programs for Windows RT.
+               Tests failed so far, due to a missing "ARM Desktop SDK".
 
 All.mak also skips building versions for which no tools are available;
 This prevents problems in the normal case when people only have the latest
@@ -848,3 +848,31 @@ Many significant changes and improvements this year:
   names differ in Windows and Linux.
 - Another simplification: It's possible to make recursive builds by just
   defining a DIRS variable in a Files.mak file.
+- Changed the output directory to bin/WIN32, bin/WIN64, etc.  
+  This avoids clutter in source directories.
+- The C debugging output is now indented by code depth.  
+  This makes it much more readable, like for the scripting languages.
+- Use the same batch file proxies for configure.bat and make.bat in every
+  directory.
+
+**2018**
+
+- Lots of minor improvements and bug fixes to the UTF-8 and long paths support.
+
+**2019**
+
+- Added support for Visual Studio 2019.
+- Removed the configure and make batch files proxies in most difrectories.  
+  They are now reinstalled automatically by the main configure.bat.
+
+**2020**
+
+- Added new routines: mkstemp(), mkdtemp(), asprintf() family.
+- Added support for the new UWP AppExecLinks and LXSS v2 symlinks.
+
+**2021**
+
+- Added heuristics to detect the stdin encoding.
+- Added support for the UTF-32 encoding.
+- Added a few more functions and macros.
+- Added support for Visual Studio 2022.

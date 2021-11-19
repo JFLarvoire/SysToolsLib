@@ -1,4 +1,4 @@
-Support for Windows 95/98/ME
+﻿Support for Windows 95/98/ME
 ---------------------------------
 
 The text below mentions Windows 95, but is applicable to Windows 98 and Windows ME as well.

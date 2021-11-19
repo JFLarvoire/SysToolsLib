@@ -1,4 +1,4 @@
-The LODOS.LIB Library
+﻿The LODOS.LIB Library
 =====================
 
 Introduction
@@ -13,12 +13,12 @@ be linked with it. This ensures a minimal size for executables, without any work
 
 There are just a few include files:
 
-Name	 | Description
+Name     | Description
 ---------|-------------------------------------------------------------------
-lodos.h	 | General definitions and prototypes.
+lodos.h  | General definitions and prototypes.
 dosdrv.h | Definitions for MS-DOS device drivers.
-msdos.h	 | MS-DOS structures and parameters.
-dos.inc	 | MS-DOS assembly language macros.
+msdos.h  | MS-DOS structures and parameters.
+dos.inc  | MS-DOS assembly language macros.
 
 To use LODOS.LIB, a program should add the LODOSLIB directory to the list of include file directories.  
 C language modules must include lodos.h.  
@@ -89,13 +89,13 @@ Object files and list files are stored in subdirectories OBJ and LIST respective
 
 Significant source files:
 
-Name			| Description
+Name                    | Description
 ------------------------|-----------------------------------------------------------------------
-CONFIGURE.BAT		| Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
-CONFIGURE.LODOSLIB.BAT	| Defines LODOS.LIB-specific configuration settings.
-DOS.INC			| MS-DOS definitions from successive DOS programmer�s references.
-LODOS.H			| C Definition for the subset of the standard C library supported
-MAKE.BAT		| Batch file to build LODOS.LIB at the command prompt.
-NMakefile		| Rules for building LODOS.LIB with MAKE.BAT.
-STARTCOM.ASM		| Sample startup routine for .EXE programs. Not part of LODOS.LIB.
-STARTDEV.ASM		| Sample startup routine for device drivers. Not part of LODOS.LIB.
+CONFIGURE.BAT           | Locate your build tools & generate CONFIG.%COMPUTERNAME%.BAT.
+CONFIGURE.LODOSLIB.BAT  | Defines LODOS.LIB-specific configuration settings.
+DOS.INC                 | MS-DOS definitions from successive DOS programmer’s references.
+LODOS.H                 | C Definition for the subset of the standard C library supported
+MAKE.BAT                | Batch file to build LODOS.LIB at the command prompt.
+NMakefile               | Rules for building LODOS.LIB with MAKE.BAT.
+STARTCOM.ASM            | Sample startup routine for .EXE programs. Not part of LODOS.LIB.
+STARTDEV.ASM            | Sample startup routine for device drivers. Not part of LODOS.LIB.
