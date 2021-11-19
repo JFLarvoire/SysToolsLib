@@ -301,7 +301,7 @@ a configure.YOURNAME.bat script defining the values you want:
 
 Batch variables definitions                | Description
 ------------------------------------------ | -----------------------------
-`set "MY_FULLNAME=Jean-FranÃ§ois Larvoire"` | The build author's full name
+`set "MY_FULLNAME=Jean-François Larvoire"` | The build author's full name
 `set "MY_EMAIL=jf.larvoire@free.fr"`       | The build author's email
 
 Important: If, as in this example, the MY_FULLNAME string contains non-ASCII characters, then configure.YOURNAME.bat
@@ -311,6 +311,6 @@ Configure.bat defines variable CON.CP with the current code page. Configure.USER
 initial code page as needed. For example, assuming configure.USER.bat is encoded using code page 1252, it should contain:
 
     if not %CON.CP%==1252 chcp 1252 >nul     &:# Make sure the next lines are executed using code page 1252
-    set "MY_FULLNAME=Jean-FranÃ§ois Larvoire" &:# The build author's full name
+    set "MY_FULLNAME=Jean-François Larvoire" &:# The build author's full name
     set "MY_EMAIL=jf.larvoire@free.fr"       &:# The build author's email
     if not %CON.CP%==1252 chcp %CON.CP% >nul &:# Restore the initial code page
