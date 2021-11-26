@@ -17,6 +17,7 @@
 *    2021-05-28 JFL Added a third argument to ConvertBuf() etc; Renamed them  *
 *                   with an Ex suffix; And added macros with the old name     *
 *                   without the extra three arguments.                        *
+*    2021-11-25 JFL Added WideToNewMultiByteString() & similar routines.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -63,8 +64,19 @@ int ConvertStringEx(char *buf, size_t nBufSize, UINT cpFrom, UINT cpTo, DWORD dw
 int CountCharacters(const char *string, UINT cp);
 char *DupAndConvertEx(const char *string, UINT cpFrom, UINT cpTo, DWORD dwFlags, LPCSTR lpDefaultChar, LPBOOL lpUsedDef);
 #define DupAndConvert(string, cpFrom, cpTo) DupAndConvertEx(string, cpFrom, cpTo, 0, NULL, NULL)
+
+/* Dynamically allocate a wide duplicate */
 WCHAR *MultiByteToNewWideStringEx(UINT cp, DWORD dwFlags, const char *string);
 #define MultiByteToNewWideString(cp, string) MultiByteToNewWideStringEx(cp, 0, string)
+#define Utf8ToNewWideString(string) MultiByteToNewWideString(CP_UTF8, string)
+#define NewWideCopy(string) Utf8ToNewWideString(string) /* Shorter alias for the preceding */
+
+/* Dynamically allocate a narrow duplicate */
+char *WideToNewMultiByteStringEx(UINT cp, DWORD dwFlags, const WCHAR *wstring);
+#define WideToNewMultiByteString(cp, wstring) WideToNewMultiByteStringEx(cp, 0, wstring)
+#define WideToNewUtf8String(wstring) WideToNewMultiByteString(CP_UTF8, wstring)
+#define NewUtf8Copy(wstring) WideToNewUtf8String(wstring) /* Shorter alias for the preceding */
+
 UINT GetBufferEncoding(const char *pszBuffer, size_t nBufSize, DWORD dwFlags); /* If dwFlags is 0, test everything, else test only the specified encodings + Windows' own */
 #define BE_TEST_BINARY	0x0001	/* Test if the buffer contains binary data, and if so return CP_UNDEFINED */
 #define BE_TEST_ASCII	0x0002	/* Test if the buffer contains ASCII text, and if so return CP_ASCII */

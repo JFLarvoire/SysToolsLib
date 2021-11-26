@@ -30,6 +30,7 @@
 *                   Added a third argument to ConvertBuf() etc; Renamed them  *
 *                   with an Ex suffix; And added macros with the old name     *
 *                   without the extra three arguments.                        *
+*    2021-11-25 JFL Added WideToNewMultiByteString() & similar routines.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -351,7 +352,7 @@ WCHAR *MultiByteToNewWideStringEx(UINT cp, DWORD dwFlags, const char *string) {
   WCHAR *pwBuf = (WCHAR *)malloc(n * sizeof(WCHAR));
   WCHAR *pwBuf2;
   if (!pwBuf) return NULL;
-  n = MultiByteToWideChar(cp, dwFlags, string, (int)(l+1), pwBuf, n);
+  n = MultiByteToWideChar(cp, dwFlags, string, l+1, pwBuf, n);
   if (!n) {
     errno = Win32ErrorToErrno();
     free(pwBuf);
@@ -360,6 +361,25 @@ WCHAR *MultiByteToNewWideStringEx(UINT cp, DWORD dwFlags, const char *string) {
   pwBuf2 = realloc(pwBuf, n * sizeof(WCHAR));
   if (pwBuf2) pwBuf = pwBuf2;
   return pwBuf;
+}
+
+/* Allocate a new multi-byte string converted from the input wide string */
+/* In case of failure, sets errno */
+char *WideToNewMultiByteStringEx(UINT cp, DWORD dwFlags, const WCHAR *wstring) {
+  int l = lstrlenW(wstring);
+  int n = (4*l)+1;	/* Worst case for the number of chars needed */
+  char *pBuf = (char *)malloc(n);
+  char *pBuf2;
+  if (!pBuf) return NULL;
+  n = WideCharToMultiByte(cp, dwFlags, wstring,	l+1, pBuf, n, NULL, NULL);
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    free(pBuf);
+    return NULL;
+  }
+  pBuf2 = realloc(pBuf, n);
+  if (pBuf2) pBuf = pBuf2;
+  return pBuf;
 }
 
 /*---------------------------------------------------------------------------*\
