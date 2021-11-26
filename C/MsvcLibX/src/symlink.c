@@ -20,6 +20,9 @@
 *    2016-08-25 JFL Fixed two warnings.                                       *
 *    2017-05-03 JFL Dynamically allocate debug strings in junction().         *
 *    2018-10-01 JFL Dynamically allocate path buffers in all routines.        *
+*    2021-11-24 JFL Added an optional _Base_Path.txt file at the root of      *
+*                   network shares, to provide a known good Base Path to use  *
+*                   for creating remote junctions.                            *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -31,7 +34,13 @@
 
 #include <unistd.h>
 #include <errno.h>
+#include <iconv.h>
 #include "debugm.h"
+
+#ifdef _MSC_VER
+#pragma warning(disable:4001)	/* Ignore the // C++ comment warning */
+#pragma warning(disable:4428)	/* Ignore the "universal-character-name encountered in source" warning */
+#endif
 
 #ifdef _WIN32
 
@@ -57,6 +66,91 @@
 |    2014-02-05 JFL Adapted from Mark Russinovitch CreateJuction sample	      |
 *									      *
 \*---------------------------------------------------------------------------*/
+
+/* Look for a file called _Base_Path.txt in the share root */
+WCHAR *GetShareBasePath(const WCHAR *pwszRemoteName) { // Name must be \\SERVER\SHARE[\SUBPATH]
+  WCHAR *pwszShareBasePath = NULL;
+  WCHAR *wszBasePathFileName = NULL;
+  WCHAR *pwsz;
+  WCHAR *pwsz2;
+  HANDLE hFile = INVALID_HANDLE_VALUE;
+  WCHAR wbuf[1024];
+  int lwBuf = sizeof(wbuf) / sizeof(WCHAR);
+  DWORD dwRead;
+  DEBUG_CODE(
+  char *pszTemp8;
+  )
+  
+  wszBasePathFileName = malloc(sizeof(WCHAR)*PATH_MAX);
+  if (!wszBasePathFileName) goto exit_GetShareBasePath;
+  
+  lstrcpyW(wszBasePathFileName, pwszRemoteName);
+  pwsz = wcschr(wszBasePathFileName+2, L'\\');	// Point to the \ between SERVER and SHARE
+  if (pwsz) pwsz = wcschr(pwsz+1, L'\\');	// Point to the \ between SHARE and SUBPATH
+  if (pwsz) *pwsz = L'0'; // Remove the SUBPATH
+  lstrcatW(wszBasePathFileName, L"\\_Base_Path.txt");
+
+  DEBUG_WSTR2NEWUTF8(wszBasePathFileName, pszTemp8);
+  DEBUG_PRINTF(("Looking for \"%s\"\n", pszTemp8));
+  DEBUG_FREEUTF8(pszTemp8);
+
+  hFile = CreateFileW(wszBasePathFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+  if (hFile == INVALID_HANDLE_VALUE) {
+    DEBUG_PRINTF(("_Base_Path.txt file not found\n"));
+    goto exit_GetShareBasePath;
+  }
+  if (ReadFile(hFile, wbuf, (lwBuf-1) * sizeof(WCHAR), &dwRead, NULL)) {
+    char *pBuf = (char *)wbuf;
+    int l;
+    *(WCHAR*)(pBuf+dwRead) = L'\0'; // Whether UTF8 or UTF16, the text buffer is now a NUL-terminated string
+    DEBUG_PRINTF(("Read %u bytes\n", dwRead));
+    if (pBuf[1]) { // This is UTF8
+      pwsz = MultiByteToNewWideString(CP_UTF8, pBuf);
+      l = lstrlenW(pwsz);
+      XDEBUG_PRINTF(("Converted to %u WCHARs\n", l));
+      if (l >= lwBuf) { // Trim it so that it fits in wbuf
+      	l = lwBuf - 1;
+        pwsz[l] = L'\0';
+      }
+      memcpy(wbuf, pwsz, (l+1)*sizeof(WCHAR));
+      free(pwsz);
+    }
+    DEBUG_WSTR2NEWUTF8(wbuf, pszTemp8);
+    XDEBUG_PRINTF(("wbuf contents:\n%s~~~~~~~~~~\n", pszTemp8));
+    DEBUG_FREEUTF8(pszTemp8);
+    pwsz = wbuf;
+    if (pwsz[0] == L'\uFEFF') pwsz += 1;	// Skip the BOM, if any
+    for ( ; pwsz && *pwsz; pwsz++) {
+      if (*pwsz == L' ') continue;
+      if (*pwsz == L'\t') continue;
+      if (*pwsz == L'\r') continue;
+      if (*pwsz == L'\n') continue;
+      if (*pwsz == L'#') {
+	XDEBUG_PRINTF(("Skipping a comment line\n"));
+      	pwsz = wcschr(pwsz, L'\n');
+      	continue;
+      }
+      XDEBUG_PRINTF(("Found the PATH line\n"));
+      break; // OK, we've found the PATH line
+    }
+    // Search the end of the PATH line
+    pwsz2 = wcschr(pwsz, L'\r');
+    if (!pwsz2) pwsz2 = wcschr(pwsz, L'\n');
+    if (pwsz2) *pwsz2 = L'\0';
+    l = lstrlenW(pwsz);
+    // Trim trailing spaces
+    while (l && ((pwsz[l-1] == L' ') || (pwsz[l-1] == L'\t'))) pwsz[--l] = L'\0';
+    pwszShareBasePath = _wcsdup(pwsz);
+    DEBUG_WSTR2NEWUTF8(pwszShareBasePath, pszTemp8);
+    DEBUG_PRINTF(("Found Base Path = \"%s\";\n", pszTemp8));
+    DEBUG_FREEUTF8(pszTemp8);
+  }
+
+exit_GetShareBasePath:
+  if (hFile != INVALID_HANDLE_VALUE) CloseHandle(hFile);
+  free(wszBasePathFileName);
+  return pwszShareBasePath;
+}
 
 /* MsvcLibX-specific routine to create an NTFS junction - Wide char version */
 int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
@@ -189,9 +283,30 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
       if ((wszRemoteName[0] == L'\\') && (wszRemoteName[1] == L'\\')) {
 	pwsz = wcschr(wszRemoteName+2, L'\\');
 	if (pwsz) {
+	  WCHAR *pwszShareBasePath;
+	  int l;
 	  if ((pwsz[2] == L'$') && !pwsz[3]) { /* This is the root of a shared drive. Ex: \\server\D$ -> D: */
+	    /* Safe, fast, and simple case */
 	    wszTargetFullName[0] = pwsz[1];	/* Local drive name on the server */
-	  } else { /* Heuristic: Assume the share name is a subdirectory name on the C: drive. Ex: \\server\Public -> C:\Public */
+	  } else if ((pwszShareBasePath = GetShareBasePath(wszRemoteName)) != NULL) {
+	    /* Heuristic: Look for a file called _Base_Path.txt in the root of the share, containing the information we want */
+	    /* Note: This is relatively fast, so we do this first, before trying to use WMI to get the same information, as WMI is much slower */
+	    int lTempName = PATH_MAX;
+	    lstrcpyW(wszTargetTempName, pwszShareBasePath);
+	    l = lstrlenW(pwszShareBasePath);
+	    if (wszTargetTempName[l-1] != L'\\') wszTargetTempName[l++] = L'\\';
+	    lstrcpyW(wszTargetTempName, pwszShareBasePath);	    
+	    lTempName -= l;
+	    if (lTempName > lstrlenW(wszTargetFullName+3)) {
+	      lstrcpyW(wszTargetTempName+l, wszTargetFullName+3);
+	      lstrcpyW(wszTargetFullName, wszTargetTempName);
+	    }
+	    free(pwszShareBasePath);
+	  } else if (!pwsz[2]) { /* I sometimes do that on some of my servers, to share the root with restricted permissions */
+	    /* Heuristic: If the share name has a single letter, assume it's the shared drive letter. Ex: \\server\D -> D: */
+	    wszTargetFullName[0] = pwsz[1];	/* Local drive name on the server */
+	  } else { /* Often the case when used between home PCs */
+	    /* Heuristic: Assume the share name is a subdirectory name on the C: drive. Ex: \\server\Public -> C:\Public */
 	    int lTempName = PATH_MAX;
 	    wszTargetTempName[0] = L'C';	/* Local drive name on the server */
 	    wszTargetTempName[1] = L':';

@@ -176,6 +176,8 @@
 *                   Version 3.11.                                             *
 *    2020-11-05 JFL Moved copydate() to SysLib, adding ns resolution.         *
 *                   Version 3.12.					      *
+*    2021-11-24 JFL Improved the heuristics for creating net. drive junctions.*
+*                   Version 3.13.					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -183,8 +185,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.12"
-#define PROGRAM_DATE    "2020-11-05"
+#define PROGRAM_VERSION "3.13"
+#define PROGRAM_DATE    "2021-11-24"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -813,7 +815,24 @@ Switches:\n\
   -V|--version  Display this program version and exit\n\
   -X|-t         Noexec/test mode: Display what would be done, but don't do it\n\
 \n\
-Note: Options -C -D -q -S override each other. The last one provided wins.\n\
+Note: Options -C -D -q -S override each other. The last one provided wins.\n"
+#ifdef _WIN32
+"\
+Note: Symbolic links can only be updated if running as Administrator,\n\
+      or if having the \"Create symbolic links\" right.\n\
+Note: Junctions can be updated in all cases. Junctions to the same drive are\n\
+      updated as if they were relative symbolic links. That is, the target\n\
+      junction will be set to point to a folder having the same relative path\n\
+      to the target junction itself, as the source junction to its own target.\n\
+      This can be done reliably on local drives, but not on network drives.\n\
+      On network drives, we use the following heuristics to find the junction\n\
+      target base path. The first two rules are reliable, the next two are not!\n\
+      1. Share names w. one letter + a $ refer to the drive root. Ex: C$ -> C:\\\n\
+      2. Read the base path stored in file \\\\SERVER\\SHARE\\_Base_Path.txt.\n\
+      3. Share names w. one letter also refer to the drive root. Ex: C -> C:\\\n\
+      4. Longer names refer to a folder on drive C. Ex: Public -> C:\\Public\n"
+#endif
+"\
 \n\
 "
 #ifdef _MSDOS
