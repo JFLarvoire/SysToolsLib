@@ -9,6 +9,7 @@
 *		    Note that even though pathnames in Unix are generally     *
 *		    case-sensitive, pathnames on Samba/CIFS mounts are not.   *
 *		    so a truename program could be useful on Unix too.	      *
+*		    (Actually Linux has the realpath command for that now.)   *
 *		    							      *
 *   History:								      *
 *    2014-02-07 JFL Created this program.				      *
