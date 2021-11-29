@@ -207,8 +207,9 @@ check_attr_again:
 	bIsMountPoint = TRUE;
 	n = readlinkW(pwszName, wbuf, WIDE_PATH_MAX);
 	/* Junction targets are absolute pathnames, starting with a drive letter. Ex: C: */
-	/* readlink() fails if the reparse point does not target a valid pathname */
-	if (n < 0) goto this_is_not_a_symlink; /* This is not a junction. */
+	/* readlink() fails if the reparse point does not target a valid WIN32 pathname */
+	/* Special case: readlink() fails with EXDEV if a network junction target is on an inaccessible drive. Yet it's a valid junction */
+	if ((n < 0) && (errno != EXDEV)) goto this_is_not_a_symlink; /* This is not a junction. */
 	bIsJunction = TRUE; /* Else this is a junction. Fall through to the symlink case. */
 	}
       case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */

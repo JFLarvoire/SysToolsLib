@@ -516,15 +516,8 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 	}
       }
       if (!iTargetFound) {
-#if 0	/* Initial implementation, which would have caused problems */
-	lstrcpynW(buf, path, (int)bufsize); /* Report the target as identical to the source, to allow resolving it on the server side */
-	buf[bufsize-1] = L'\0';
-	nRead = lstrlenW(path);
-	RETURN_INT_COMMENT((int)nRead, ("Cannot get to the real target, which is on another server drive.\n"));
-#else
-	errno = EINVAL;
+	errno = EXDEV; /* Cross-device junction, with a target invalid in the context of the client */
 	RETURN_INT_COMMENT(-1, ("Inaccessible junction target, on another server drive.\n"));
-#endif
       }
     }
 
