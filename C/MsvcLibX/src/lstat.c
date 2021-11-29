@@ -19,6 +19,7 @@
 *    2017-10-05 JFL Removed one huge buffer on stack, to lower stack usage.   *
 *    2018-05-31 JFL Changed dirent2stat() first arg to (const _dirent *).     *
 *    2020-12-15 JFL Added support for IO_REPARSE_TAG_APPEXECLINK.             *
+*    2021-11-29 JFL Prefixed MsvcLibX-specific WIN32 public routines with Mlx.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -36,7 +37,7 @@
 #include "msvclibx.h"
 #include <sys/stat.h>
 #include <dirent.h>
-#include <unistd.h> /* For ResolveLinks() definition */
+#include <unistd.h> /* For MlxResolveLinks() definition */
 #include "debugm.h"
 #include <stdint.h>
 
@@ -197,7 +198,7 @@ check_attr_again:
     // Test the FILE_ATTRIBUTE_REPARSE_POINT flag first, to make sure they're seen as symbolic links.
     //
     // All symlinks are reparse points, but not all reparse points are symlinks. */
-    dwTag = GetReparseTagU(path);
+    dwTag = MlxGetReparseTagU(path);
     switch (dwTag) {
       case IO_REPARSE_TAG_MOUNT_POINT:	/* NTFS junction or mount point */
 	{ /* We must read the link to distinguish junctions from mount points. */
@@ -288,7 +289,7 @@ int stat(const char *path, struct stat *pStat) {
   }
 
   if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
-    iErr = ResolveTailLinks(path, buf, sizeof(buf));
+    iErr = MlxResolveTailLinks(path, buf, sizeof(buf));
     path = buf;
   } else {
     iErr = 0;

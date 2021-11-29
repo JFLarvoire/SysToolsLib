@@ -25,6 +25,7 @@
 *    2018-04-24 JFL Use NAME_MAX from limits.h. Version 1.1.2.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.4.      *
+*    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -198,7 +199,7 @@ int main(int argc, char *argv[]) {
     strcpy(buf, absName); /* In case we use option -L to NOT resolve links */
   }
 
-  if (bResolveLinks) n = ResolveLinks(pszPath, buf, sizeof(buf));
+  if (bResolveLinks) n = MlxResolveLinks(pszPath, buf, sizeof(buf));
 
   if (n >= 0) {
     if (bResolveShortNames) {

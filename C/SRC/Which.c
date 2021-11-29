@@ -100,6 +100,7 @@
 *		    Version 1.16.					      *
 *    2021-01-06 JFL Show APPEXECLINKs and not their targets for now, as the   *
 *		    targets aren't always executable directly. Version 1.16.1.*
+*    2021-11-29 JFL Renamed MsvcLibX's GetReparseTag() as MlxGetReparseTag(). *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -1108,7 +1109,7 @@ int CheckProgram(char *pszName, int iFlags) {
       strcpy(szComment, "Case does not match");
     } else
 #if SUPPORT_APPEXECLINK
-    if (GetReparseTag(pszName) == IO_REPARSE_TAG_APPEXECLINK) {
+    if (MlxGetReparseTag(pszName) == IO_REPARSE_TAG_APPEXECLINK) {
       iExecutable = FALSE; /* Pretend it's not, and process the target of the link at the end of this routine */
       strcpy(szComment, "UWP App. Exec. Link");
       readlink(pszName, szAppExecLinkTarget, sizeof(szAppExecLinkTarget));

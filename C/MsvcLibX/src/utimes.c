@@ -15,6 +15,7 @@
 *    2017-05-31 JFL Get strerror() prototype from string.h.                   *
 *    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
 *                   Added common routines xxxxM, called by xxxxA and xxxxU.   *
+*    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -38,7 +39,7 @@
 
 #include <windows.h>
 #include <io.h> /* For MSVC's _get_osfhandle() */
-#include <unistd.h> /* For MsvcLibX's ResolveLinks() */
+#include <unistd.h> /* For MsvcLibX's MlxResolveLinks() */
 
 DEBUG_CODE(
   int Timeval2String(char *buf, size_t bufsize, const struct timeval *tvp) {
@@ -198,7 +199,7 @@ int utimesM(const char *file, const struct timeval tvp[2], UINT cp) {
     DEBUG_ENTER(("utimes(\"%s\", %s);\n", file, szTimes));
   });
 
-  iErr = ResolveLinksM(file, buf, sizeof(buf), cp);
+  iErr = MlxResolveLinksM(file, buf, sizeof(buf), cp);
   if (iErr) RETURN_INT_COMMENT(iErr, ("Cannot resolve the link\n"));
 
   iErr = lutimesM(buf, tvp, cp);

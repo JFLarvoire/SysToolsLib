@@ -27,6 +27,7 @@
 *    2017-10-30 JFL Added support for UNC paths in CompactPath[W]().	      *
 *    2018-04-24 JFL Use less memory in ResolveLinksU().			      *
 *    2018-04-26 JFL Added routine ConcatPathW().       			      *
+*    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -545,7 +546,7 @@ drive_copy_done:
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    ResolveLinks					      |
+|   Function	    MlxResolveLinks					      |
 |									      |
 |   Description	    Resolve all link names within a pathname		      |
 |									      |
@@ -575,14 +576,14 @@ typedef struct _NAMELIST {
   char *path;
 } NAMELIST;
 
-/* TODO: Create a real ResolveLinksM common routine, called by ResolveLinksA
-         and ResolveLinksU, then remove this uglyness */
-int ResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
+/* TODO: Create a real MlxResolveLinksM common routine, called by MlxResolveLinksA
+         and MlxResolveLinksU, then remove this uglyness */
+int MlxResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
   switch (cp) {
     case CP_ACP:
-      return ResolveLinksA(path, buf, bufsize);
+      return MlxResolveLinksA(path, buf, bufsize);
     case CP_UTF8:
-      return ResolveLinksU(path, buf, bufsize);
+      return MlxResolveLinksU(path, buf, bufsize);
     default:
       errno = EINVAL;
       return -1;
@@ -590,7 +591,7 @@ int ResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
 }
 
 /* Get the canonic name of a file, after resolving all links in its pathname */
-int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
+int MlxResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
   char *target = NULL;
   char *target2;
   int i;
@@ -605,7 +606,7 @@ int ResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, 
   NAMELIST *pList;
   char *path0 = NULL;
 
-  DEBUG_ENTER(("ResolveLinks1(\"%s\", 0x%p, %ld, 0x%p, %d);\n", path, buf, bufsize, prev, iDepth));
+  DEBUG_ENTER(("MlxResolveLinks1(\"%s\", 0x%p, %ld, 0x%p, %d);\n", path, buf, bufsize, prev, iDepth));
 
   target = malloc(UTF8_PATH_MAX);
   if (!target) RETURN_INT_COMMENT(-1, ("Not enough memory\n"));
@@ -726,13 +727,13 @@ resolves_too_long:
 	DEBUG_PRINTF(("// Relative link to \"%s\"\n", target));
 	/* So it'll replace the tail name in the output path */
 	iBuf = iBuf1; /* The index right after the last path separator */
-	DEBUG_PRINTF(("ResolveLinks1(\"%.*s\", \"%s\"); // Target tail\n", iBuf, buf, target));
+	DEBUG_PRINTF(("MlxResolveLinks1(\"%.*s\", \"%s\"); // Target tail\n", iBuf, buf, target));
 	if (((size_t)iBuf+lstrlen(target)) >= bufsize) goto resolves_too_long;
 	lstrcpy(buf+iBuf, target);
 	iBuf = CompactPath(buf, buf, bufsize);
       }
       /* Append the remainder of the input path, if any */
-      DEBUG_PRINTF(("ResolveLinks1(\"%s\", \"%s\"); // Path tail\n", buf, path+iPath));
+      DEBUG_PRINTF(("MlxResolveLinks1(\"%s\", \"%s\"); // Path tail\n", buf, path+iPath));
       if (path[iPath]) {
 	if (iBuf && (buf[iBuf-1] != '\\')) {
 	  if ((iBuf+1U) >= bufsize) goto resolves_too_long;
@@ -764,7 +765,7 @@ resolves_too_long:
       if (target2) target = target2;
       list.prev = prev;
       list.path = target;
-      iErr = ResolveLinksU1(target, buf, bufsize, &list, iDepth+1);
+      iErr = MlxResolveLinksU1(target, buf, bufsize, &list, iDepth+1);
       free(target);
       free(path0);
       RETURN_INT_COMMENT(iErr, ("\"%s\"\n", buf));
@@ -788,14 +789,14 @@ file_or_directory:
   RETURN_INT_COMMENT(0, ("Success: \"%s\"\n", buf));
 }
 
-int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
+int MlxResolveLinksU(const char *path, char *buf, size_t bufsize) {
   char *path1;
   char *path2;
   int nSize;
   NAMELIST root;
   int iErr;
 
-  DEBUG_ENTER(("ResolveLinks(\"%s\", 0x%p, %ld);\n", path, buf, bufsize));
+  DEBUG_ENTER(("MlxResolveLinks(\"%s\", 0x%p, %ld);\n", path, buf, bufsize));
 
   buf[0] = '\0'; /* Always output a valid string */
 
@@ -826,7 +827,7 @@ int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
   if (path2) path1 = path2;
   root.path = path1;
   root.prev = NULL;
-  iErr = ResolveLinksU1(path1, buf, bufsize, &root, 0);
+  iErr = MlxResolveLinksU1(path1, buf, bufsize, &root, 0);
   nSize = lstrlen(buf);
   /* Remove the final dot added above, if needed. */
   if ((nSize >= 2) && (buf[nSize-2] == '\\') && (buf[nSize-1] == '.')) buf[--nSize] = '\0';
@@ -835,7 +836,7 @@ int ResolveLinksU(const char *path, char *buf, size_t bufsize) {
 }
 
 /* ANSI version of the same, built upon the UTF-8 version */
-int ResolveLinksA(const char *path, char *buf, size_t bufsize) {
+int MlxResolveLinksA(const char *path, char *buf, size_t bufsize) {
   char pathU[UTF8_PATH_MAX];
   char pathU2[UTF8_PATH_MAX];
   WCHAR wszPath[PATH_MAX];
@@ -853,7 +854,7 @@ int ResolveLinksA(const char *path, char *buf, size_t bufsize) {
   }
 
   /* Resolve the links */
-  iErr = ResolveLinksU(pathU, pathU2, UTF8_PATH_MAX);
+  iErr = MlxResolveLinksU(pathU, pathU2, UTF8_PATH_MAX);
 
   /* Convert the result back to ANSI */
   if (!iErr) {
@@ -930,7 +931,7 @@ realpathU_failed:
   }    
 
   /* Resolve links in the absolute path */
-  iErr = ResolveLinksU(path, pPath2, UTF8_PATH_MAX);
+  iErr = MlxResolveLinksU(path, pPath2, UTF8_PATH_MAX);
   if (iErr == -1) {
     DEBUG_CODE(pszCause = "Resolution failed");
     goto realpathU_failed;

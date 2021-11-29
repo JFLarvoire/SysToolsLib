@@ -23,6 +23,7 @@
 *    2017-03-24 JFL Added ResolveTailLinks*() prototypes.                     *
 *    2018-04-26 JFL Added getcwdW() and ConcatPathW() prototypes.             *
 *    2020-12-11 JFL Added ReadAppExecLink*() prototypes.                      *
+*    2021-11-29 JFL Prefix MsvcLibX-specific WIN32 public routines with Mlx.  *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -144,51 +145,54 @@ typedef _W64 int ssize_t;
 #define symlink symlinkU
 #define symlinkd symlinkdU
 #define junction junctionU
-#define GetReparseTag GetReparseTagU
-#define ResolveLinks ResolveLinksU
-#define ResolveTailLinks ResolveTailLinksU
-#define ReadAppExecLink ReadAppExecLinkU
+#define MlxGetReparseTag MlxGetReparseTagU
+#define MlxResolveLinks MlxResolveLinksU
+#define MlxResolveTailLinks MlxResolveTailLinksU
+#define MlxReadAppExecLink MlxReadAppExecLinkU
 #else /* _ANSI_SOURCE */
 #define readlink readlinkA
 #define symlink symlinkA
 #define symlinkd symlinkdA
 #define junction junctionA
-#define GetReparseTag GetReparseTagA
-#define ResolveLinks ResolveLinksA
-#define ResolveTailLinks ResolveTailLinksA
-#define ReadAppExecLink ReadAppExecLinkA
+#define MlxGetReparseTag MlxGetReparseTagA
+#define MlxResolveLinks MlxResolveLinksA
+#define MlxResolveTailLinks MlxResolveTailLinksA
+#define MlxReadAppExecLink MlxReadAppExecLinkA
 #endif
-ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsiz);	    /* Posix routine readlink - Wide char version */
-ssize_t readlinkM(const char *path, char *buf, size_t bufsiz, UINT cp);     /* Posix routine readlink - Multibyte char version */
-#define readlinkA(path, buf, bufsiz) readlinkM(path, buf, bufsiz, CP_ACP)   /* Posix routine readlink - ANSI version */
-#define readlinkU(path, buf, bufsiz) readlinkM(path, buf, bufsiz, CP_UTF8)  /* Posix routine readlink - UTF-8 version */
-int symlinkW(const WCHAR *targetname, const WCHAR *newlinkname);	    /* Posix routine symlink - Wide char version */
-int symlinkM(const char *targetname, const char *newlinkname, UINT cp);	    /* Posix routine symlink - Multibyte char version */
-#define symlinkA(target, newlink) symlinkM(target, newlink, CP_ACP)	    /* Posix routine symlink - ANSI version */
-#define symlinkU(target, newlink) symlinkM(target, newlink, CP_UTF8)	    /* Posix routine symlink - UTF-8 version */
-int symlinkdW(const WCHAR *targetname, const WCHAR *newlinkname);	    /* MsvcLibX Create an NTFS symlinkd - Wide char version */
-int symlinkdM(const char *targetname, const char *newlinkname, UINT cp);    /* MsvcLibX Create an NTFS symlinkd - Multibyte char version */
-#define symlinkdA(target, newlink) symlinkdM(target, newlink, CP_ACP)	    /* MsvcLibX Create an NTFS symlinkd - ANSI version */
-#define symlinkdU(target, newlink) symlinkdM(target, newlink, CP_UTF8)	    /* MsvcLibX Create an NTFS symlinkd - UTF-8 version */
-int junctionW(const WCHAR *targetname, const WCHAR *junctionName);	    /* MsvcLibX Create an NTFS junction - Wide char version */
-int junctionM(const char *targetname, const char *junctionName, UINT cp);   /* MsvcLibX Create an NTFS junction - Multibyte char version */
-#define junctionA(target, newjunc) junctionM(target, newjunc, CP_ACP)	    /* MsvcLibX Create an NTFS junction - ANSI version */
-#define junctionU(target, newjunc) junctionM(target, newjunc, CP_UTF8)	    /* MsvcLibX Create an NTFS junction - UTF-8 version */
-DWORD GetReparseTagW(const WCHAR *path);				    /* MsvcLibX Get a Repase Point tag - Wide char version */
-DWORD GetReparseTagM(const char *path, UINT cp);			    /* MsvcLibX Get a Repase Point tag - MultiByte char version */
-#define GetReparseTagA(path) GetReparseTagM(path, CP_ACP)		    /* MsvcLibX Get a Repase Point tag - ANSI version */
-#define GetReparseTagU(path) GetReparseTagM(path, CP_UTF8)		    /* MsvcLibX Get a Repase Point tag - ANSI version */
-int ResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp);    /* Resolve pathnames with symlinks, symlinkds, and junctions */
-int ResolveLinksA(const char *path, char *buf, size_t bufsize);		    /* Resolve pathnames with symlinks, symlinkds, and junctions */
-int ResolveLinksU(const char *path, char *buf, size_t bufsize);		    /* Resolve pathnames with symlinks, symlinkds, and junctions */
-int ResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize);	    /* Resolve node names with symlinks, symlinkds, and junctions */
-int ResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp);/* Resolve node names with symlinks, symlinkds, and junctions */
-int ResolveTailLinksA(const char *path, char *buf, size_t bufsize);	    /* Resolve node names with symlinks, symlinkds, and junctions */
-int ResolveTailLinksU(const char *path, char *buf, size_t bufsize);	    /* Resolve node names with symlinks, symlinkds, and junctions */
-int ReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize);        /* Get the target of an appexeclink - Wide char version */
-int ReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp); /* Get the target of an appexeclink - MultiByte char version */
-#define ReadAppExecLinkA(p, buf, sz) ReadAppExecLinkM(p, buf, sz, CP_ACP);  /* Get the target of an appexeclink - ANSI version */
-#define ReadAppExecLinkU(p, buf, sz) ReadAppExecLinkM(p, buf, sz, CP_UTF8); /* Get the target of an appexeclink - UTF-8 version */
+ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsiz);		/* Posix routine readlink - Wide char version */
+ssize_t readlinkM(const char *path, char *buf, size_t bufsiz, UINT cp);		/* Posix routine readlink - Multibyte char version */
+#define readlinkA(path, buf, bufsiz) readlinkM(path, buf, bufsiz, CP_ACP)	/* Posix routine readlink - ANSI version */
+#define readlinkU(path, buf, bufsiz) readlinkM(path, buf, bufsiz, CP_UTF8)	/* Posix routine readlink - UTF-8 version */
+int symlinkW(const WCHAR *targetname, const WCHAR *newlinkname);		/* Posix routine symlink - Wide char version */
+int symlinkM(const char *targetname, const char *newlinkname, UINT cp);		/* Posix routine symlink - Multibyte char version */
+#define symlinkA(target, newlink) symlinkM(target, newlink, CP_ACP)		/* Posix routine symlink - ANSI version */
+#define symlinkU(target, newlink) symlinkM(target, newlink, CP_UTF8)		/* Posix routine symlink - UTF-8 version */
+int symlinkdW(const WCHAR *targetname, const WCHAR *newlinkname);		/* MsvcLibX Create an NTFS symlinkd - Wide char version */
+int symlinkdM(const char *targetname, const char *newlinkname, UINT cp);	/* MsvcLibX Create an NTFS symlinkd - Multibyte char version */
+#define symlinkdA(target, newlink) symlinkdM(target, newlink, CP_ACP)		/* MsvcLibX Create an NTFS symlinkd - ANSI version */
+#define symlinkdU(target, newlink) symlinkdM(target, newlink, CP_UTF8)		/* MsvcLibX Create an NTFS symlinkd - UTF-8 version */
+int junctionW(const WCHAR *targetname, const WCHAR *junctionName);		/* MsvcLibX Create an NTFS junction - Wide char version */
+int junctionM(const char *targetname, const char *junctionName, UINT cp);	/* MsvcLibX Create an NTFS junction - Multibyte char version */
+#define junctionA(target, newjunc) junctionM(target, newjunc, CP_ACP)		/* MsvcLibX Create an NTFS junction - ANSI version */
+#define junctionU(target, newjunc) junctionM(target, newjunc, CP_UTF8)		/* MsvcLibX Create an NTFS junction - UTF-8 version */
+DWORD MlxGetReparseTagW(const WCHAR *path);					/* MsvcLibX Get a Repase Point tag - Wide char version */
+DWORD MlxGetReparseTagM(const char *path, UINT cp);				/* MsvcLibX Get a Repase Point tag - MultiByte char version */
+#define MlxGetReparseTagA(path) MlxGetReparseTagM(path, CP_ACP)			/* MsvcLibX Get a Repase Point tag - ANSI version */
+#define MlxGetReparseTagU(path) MlxGetReparseTagM(path, CP_UTF8)		/* MsvcLibX Get a Repase Point tag - ANSI version */
+DWORD MlxReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize);		/* MsvcLibX Read the raw target of an NTFS link - Wide char version */
+DWORD MlxReadLinkU(const char *path, char *buf, size_t bufsize);		/* MsvcLibX Read the raw target of an NTFS link - UTF-8 version */
+int MlxResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp);	/* Resolve pathnames with symlinks, symlinkds, and junctions */
+int MlxResolveLinksA(const char *path, char *buf, size_t bufsize);		/* Resolve pathnames with symlinks, symlinkds, and junctions */
+int MlxResolveLinksU(const char *path, char *buf, size_t bufsize);		/* Resolve pathnames with symlinks, symlinkds, and junctions */
+int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize);	/* Resolve node names with symlinks, symlinkds, and junctions */
+int MlxResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp);	/* Resolve node names with symlinks, symlinkds, and junctions */
+int MlxResolveTailLinksA(const char *path, char *buf, size_t bufsize);		/* Resolve node names with symlinks, symlinkds, and junctions */
+int MlxResolveTailLinksU(const char *path, char *buf, size_t bufsize);		/* Resolve node names with symlinks, symlinkds, and junctions */
+int MlxReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize);		/* Get the target of an appexeclink - Wide char version */
+int MlxReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp);	/* Get the target of an appexeclink - MultiByte char version */
+#define MlxReadAppExecLinkA(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_ACP);/* Get the target of an appexeclink - ANSI version */
+#define MlxReadAppExecLinkU(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_UTF8);/* Get the target of an appexeclink - UTF-8 version */
+WCHAR *MlxGetShareBasePathW(const WCHAR *pwszShareUNC);				/* MsvcLibX Guess the server-side path of \\SERVER\SHARE */
 
 #ifndef ELOOP
 /*
