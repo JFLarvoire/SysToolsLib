@@ -101,6 +101,7 @@ WIN32_OBJECTS = \
     +GetFileAttributesEx.obj	\
     +GetFullPathName.obj	\
     +GetLongPathName.obj	\
+    +GetShareBasePath.obj	\
 
 ###############################################################################
 #			Include files dependancies			      #
@@ -227,6 +228,8 @@ getopt.c: $(I)\getopt.h $(I)\stdio.h $(I)\stdlib.h $(I)\string.h
 getpagesize.c: $(I)\msvclibx.h $(I)\unistd.h $(I)\windows.h
 
 getppid.c: $(I)\unistd.h $(I)\windows.h
+
+GetShareBasePath.c: $(CI)\debugm.h $(I)\unistd.h $(I)\iconv.h $(I)\windows.h
 
 gettimeofday.c: $(I)\msvclibx.h $(I)\time.h $(I)\sys\time.h
 

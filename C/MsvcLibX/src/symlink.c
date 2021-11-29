@@ -23,6 +23,9 @@
 *    2021-11-24 JFL Added an optional _Base_Path.txt file at the root of      *
 *                   network shares, to provide a known good Base Path to use  *
 *                   for creating remote junctions.                            *
+*    2021-11-28 JFL Moved the junction base path heuristic to an outside      *
+*                   subroutine, shared between readlink() and junction().     *
+*    2021-11-29 JFL Use the wide-string debug macros.                         *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -39,7 +42,6 @@
 
 #ifdef _MSC_VER
 #pragma warning(disable:4001)	/* Ignore the // C++ comment warning */
-#pragma warning(disable:4428)	/* Ignore the "universal-character-name encountered in source" warning */
 #endif
 
 #ifdef _WIN32
@@ -67,91 +69,6 @@
 *									      *
 \*---------------------------------------------------------------------------*/
 
-/* Look for a file called _Base_Path.txt in the share root */
-WCHAR *GetShareBasePath(const WCHAR *pwszRemoteName) { // Name must be \\SERVER\SHARE[\SUBPATH]
-  WCHAR *pwszShareBasePath = NULL;
-  WCHAR *wszBasePathFileName = NULL;
-  WCHAR *pwsz;
-  WCHAR *pwsz2;
-  HANDLE hFile = INVALID_HANDLE_VALUE;
-  WCHAR wbuf[1024];
-  int lwBuf = sizeof(wbuf) / sizeof(WCHAR);
-  DWORD dwRead;
-  DEBUG_CODE(
-  char *pszTemp8;
-  )
-  
-  wszBasePathFileName = malloc(sizeof(WCHAR)*PATH_MAX);
-  if (!wszBasePathFileName) goto exit_GetShareBasePath;
-  
-  lstrcpyW(wszBasePathFileName, pwszRemoteName);
-  pwsz = wcschr(wszBasePathFileName+2, L'\\');	// Point to the \ between SERVER and SHARE
-  if (pwsz) pwsz = wcschr(pwsz+1, L'\\');	// Point to the \ between SHARE and SUBPATH
-  if (pwsz) *pwsz = L'0'; // Remove the SUBPATH
-  lstrcatW(wszBasePathFileName, L"\\_Base_Path.txt");
-
-  DEBUG_WSTR2NEWUTF8(wszBasePathFileName, pszTemp8);
-  DEBUG_PRINTF(("Looking for \"%s\"\n", pszTemp8));
-  DEBUG_FREEUTF8(pszTemp8);
-
-  hFile = CreateFileW(wszBasePathFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-  if (hFile == INVALID_HANDLE_VALUE) {
-    DEBUG_PRINTF(("_Base_Path.txt file not found\n"));
-    goto exit_GetShareBasePath;
-  }
-  if (ReadFile(hFile, wbuf, (lwBuf-1) * sizeof(WCHAR), &dwRead, NULL)) {
-    char *pBuf = (char *)wbuf;
-    int l;
-    *(WCHAR*)(pBuf+dwRead) = L'\0'; // Whether UTF8 or UTF16, the text buffer is now a NUL-terminated string
-    DEBUG_PRINTF(("Read %u bytes\n", dwRead));
-    if (pBuf[1]) { // This is UTF8
-      pwsz = MultiByteToNewWideString(CP_UTF8, pBuf);
-      l = lstrlenW(pwsz);
-      XDEBUG_PRINTF(("Converted to %u WCHARs\n", l));
-      if (l >= lwBuf) { // Trim it so that it fits in wbuf
-      	l = lwBuf - 1;
-        pwsz[l] = L'\0';
-      }
-      memcpy(wbuf, pwsz, (l+1)*sizeof(WCHAR));
-      free(pwsz);
-    }
-    DEBUG_WSTR2NEWUTF8(wbuf, pszTemp8);
-    XDEBUG_PRINTF(("wbuf contents:\n%s~~~~~~~~~~\n", pszTemp8));
-    DEBUG_FREEUTF8(pszTemp8);
-    pwsz = wbuf;
-    if (pwsz[0] == L'\uFEFF') pwsz += 1;	// Skip the BOM, if any
-    for ( ; pwsz && *pwsz; pwsz++) {
-      if (*pwsz == L' ') continue;
-      if (*pwsz == L'\t') continue;
-      if (*pwsz == L'\r') continue;
-      if (*pwsz == L'\n') continue;
-      if (*pwsz == L'#') {
-	XDEBUG_PRINTF(("Skipping a comment line\n"));
-      	pwsz = wcschr(pwsz, L'\n');
-      	continue;
-      }
-      XDEBUG_PRINTF(("Found the PATH line\n"));
-      break; // OK, we've found the PATH line
-    }
-    // Search the end of the PATH line
-    pwsz2 = wcschr(pwsz, L'\r');
-    if (!pwsz2) pwsz2 = wcschr(pwsz, L'\n');
-    if (pwsz2) *pwsz2 = L'\0';
-    l = lstrlenW(pwsz);
-    // Trim trailing spaces
-    while (l && ((pwsz[l-1] == L' ') || (pwsz[l-1] == L'\t'))) pwsz[--l] = L'\0';
-    pwszShareBasePath = _wcsdup(pwsz);
-    DEBUG_WSTR2NEWUTF8(pwszShareBasePath, pszTemp8);
-    DEBUG_PRINTF(("Found Base Path = \"%s\";\n", pszTemp8));
-    DEBUG_FREEUTF8(pszTemp8);
-  }
-
-exit_GetShareBasePath:
-  if (hFile != INVALID_HANDLE_VALUE) CloseHandle(hFile);
-  free(wszBasePathFileName);
-  return pwszShareBasePath;
-}
-
 /* MsvcLibX-specific routine to create an NTFS junction - Wide char version */
 int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   WCHAR *wszReparseBuffer = NULL;
@@ -167,19 +84,11 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   HANDLE hFile;
   DWORD  dwReturnedLength;
   PMOUNTPOINT_WRITE_BUFFER reparseInfo;
-  DEBUG_CODE(
-  char *pszJunction8;
-  char *pszTarget8;
-  char *pszTemp8;
-  )
   UINT uiDriveType;
   DWORD dwFileSystemFlags;
   int iRet = -1;	/* Assume failure */
 
-  DEBUG_WSTR2NEWUTF8(junctionName, pszJunction8);
-  DEBUG_WSTR2NEWUTF8(targetName, pszTarget8);
-  DEBUG_ENTER(("junction(\"%s\", \"%s\");\n", pszTarget8, pszJunction8));
-  DEBUG_FREEUTF8(pszJunction8);
+  DEBUG_WENTER((L"junction(\"%s\", \"%s\");\n", targetName, junctionName));
 
   wszReparseBuffer = malloc(sizeof(WCHAR)*PATH_MAX*3);
   if (!wszReparseBuffer) goto junctionW_exit;
@@ -199,8 +108,7 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   /* Get the full path of the junction */
   if (!GetFullPathNameW(junctionName, PATH_MAX, wszJunctionFullName, &pwszFilePart)) {
     errno = Win32ErrorToErrno();
-    /* RETURN_INT_COMMENT(-1, ("%s is an invalid junction name\n", junctionName)); */
-    DEBUG_LEAVE(("return -1; // %s is an invalid junction name\n", junctionName));
+    DEBUG_WLEAVE((L"return -1; // %s is an invalid junction name\n", junctionName));
     goto junctionW_exit;
   }
 
@@ -212,7 +120,6 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     lTempName -= lstrlenW(wszJunctionFullName);
     if (lTempName < (size_t)(lstrlenW(targetName) + 5)) {
       errno = ENAMETOOLONG;
-      /* RETURN_INT_COMMENT(-1, ("Intermediate target name too long\n")); */
       DEBUG_LEAVE(("return -1; // Intermediate target name too long\n"));
       goto junctionW_exit;
     }
@@ -220,23 +127,17 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     lstrcatW(wszTargetTempName, targetName);
     if (!GetFullPathNameW(wszTargetTempName, PATH_MAX, wszTargetFullName, &pwszFilePart)) {
       errno = Win32ErrorToErrno();
-      /* RETURN_INT_COMMENT(-1, ("%s is an invalid target directory name\n", szTarget8)); */
-      DEBUG_LEAVE(("return -1; // %s is an invalid target directory name\n", pszTarget8));
+      DEBUG_WLEAVE((L"return -1; // %s is an invalid target directory name\n", targetName));
       goto junctionW_exit;
     }
-    DEBUG_WSTR2NEWUTF8(wszTargetFullName, pszTemp8);
-    XDEBUG_PRINTF(("wszTargetFullName = \"%s\"; // After absolutization relative to the junction\n", pszTemp8));
-    DEBUG_FREEUTF8(pszTemp8);
+    XDEBUG_WPRINTF((L"wszTargetFullName = \"%s\"; // After absolutization relative to the junction\n", wszTargetFullName));
   } else { /* Already an absolute name. Just make sure it's canonic. (Without . or ..) */
     if (!GetFullPathNameW(targetName, PATH_MAX, wszTargetFullName, &pwszFilePart)) {
       errno = Win32ErrorToErrno();
-      /* RETURN_INT_COMMENT(-1, ("%s is an invalid target directory name\n", szTarget8)); */
-      DEBUG_LEAVE(("return -1; // %s is an invalid target directory name\n", pszTarget8));
+      DEBUG_WLEAVE((L"return -1; // %s is an invalid target directory name\n", targetName));
       goto junctionW_exit;
     }
-    DEBUG_WSTR2NEWUTF8(wszTargetFullName, pszTemp8);
-    XDEBUG_PRINTF(("wszTargetFullName = \"%s\"; // After direct reabsolutization\n", pszTemp8));
-    DEBUG_FREEUTF8(pszTemp8);
+    XDEBUG_WPRINTF((L"wszTargetFullName = \"%s\"; // After direct reabsolutization\n", wszTargetFullName));
   }
   /* Make sure the target drive letter is upper case */
 #pragma warning(disable:4305) /* truncation from 'LPSTR' to 'WCHAR' */
@@ -244,7 +145,6 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   wszTargetFullName[0] = (WCHAR)CharUpperW((WCHAR *)(wszTargetFullName[0]));
 #pragma warning(default:4706)
 #pragma warning(default:4705)
-  DEBUG_FREEUTF8(pszTarget8);
 
   /* Make sure that the junction is on a file system that supports reparse points (Ex: NTFS) */
   wszVolumeName[0] = wszJunctionFullName[0];
@@ -252,18 +152,14 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   GetVolumeInformationW(wszVolumeName, NULL, 0, NULL, NULL, &dwFileSystemFlags, wszFileSystem, SIZEOF_wszFileSystem/sizeof(WCHAR));
   if (!(dwFileSystemFlags & FILE_SUPPORTS_REPARSE_POINTS)) {
     errno = EDOM;
-    DEBUG_WSTR2NEWUTF8(wszFileSystem, pszTemp8);
-    /* RETURN_INT_COMMENT(-1, ("Junctions are not supported on %s volumes\n", szTemp8)); */
-    DEBUG_LEAVE(("return -1; // Junctions are not supported on %s volumes\n", pszTemp8));
-    DEBUG_FREEUTF8(pszTemp8);
+    DEBUG_WLEAVE((L"return -1; // Junctions are not supported on %s volumes\n", wszFileSystem));
     goto junctionW_exit;
   }
 
   /* On network drives, make sure the target refers to the local drive on the server */
   /* Note: The local path on the server can be inferred in simple cases, but not in the general case */
   uiDriveType = GetDriveTypeW(wszVolumeName);
-  DEBUG_WSTR2NEWUTF8(wszVolumeName, pszTemp8);
-  XDEBUG_PRINTF(("GetDriveType(\"%s\") = %d // %s drive\n", pszTemp8, uiDriveType, (uiDriveType == DRIVE_REMOTE) ? "Network" : "Local"));
+  XDEBUG_WPRINTF((L"GetDriveType(\"%s\") = %d // %s drive\n", wszVolumeName, uiDriveType, (uiDriveType == DRIVE_REMOTE) ? L"Network" : L"Local"));
   if (uiDriveType == DRIVE_REMOTE) {
     WCHAR  wszLocalName[] = L"X:";
     DWORD dwErr;
@@ -273,57 +169,22 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     wszLocalName[0] = wszJunctionFullName[0];
     dwErr = WNetGetConnectionW(wszLocalName, wszRemoteName, &dwLength);
     if (dwErr == NO_ERROR) {
-      WCHAR *pwsz;
-      DEBUG_CODE(
-      char *pszRemote8;
-      )
-      DEBUG_WSTR2NEWUTF8(wszRemoteName, pszRemote8);
-      XDEBUG_PRINTF(("net use %c: %s\n", (char)(wszLocalName[0]), pszRemote8));
-      DEBUG_FREEUTF8(pszRemote8);
+      XDEBUG_WPRINTF((L"net use %c: %s\n", (char)(wszLocalName[0]), wszRemoteName));
       if ((wszRemoteName[0] == L'\\') && (wszRemoteName[1] == L'\\')) {
-	pwsz = wcschr(wszRemoteName+2, L'\\');
-	if (pwsz) {
-	  WCHAR *pwszShareBasePath;
-	  int l;
-	  if ((pwsz[2] == L'$') && !pwsz[3]) { /* This is the root of a shared drive. Ex: \\server\D$ -> D: */
-	    /* Safe, fast, and simple case */
-	    wszTargetFullName[0] = pwsz[1];	/* Local drive name on the server */
-	  } else if ((pwszShareBasePath = GetShareBasePath(wszRemoteName)) != NULL) {
-	    /* Heuristic: Look for a file called _Base_Path.txt in the root of the share, containing the information we want */
-	    /* Note: This is relatively fast, so we do this first, before trying to use WMI to get the same information, as WMI is much slower */
-	    int lTempName = PATH_MAX;
+      	WCHAR *pwszShareBasePath = MlxGetShareBasePathW(wszRemoteName);
+      	if (pwszShareBasePath) {
+      	  if ((lstrlenW(pwszShareBasePath) + lstrlenW(wszTargetFullName+2) + 1) < PATH_MAX) {
 	    lstrcpyW(wszTargetTempName, pwszShareBasePath);
-	    l = lstrlenW(pwszShareBasePath);
-	    if (wszTargetTempName[l-1] != L'\\') wszTargetTempName[l++] = L'\\';
-	    lstrcpyW(wszTargetTempName, pwszShareBasePath);	    
-	    lTempName -= l;
-	    if (lTempName > lstrlenW(wszTargetFullName+3)) {
-	      lstrcpyW(wszTargetTempName+l, wszTargetFullName+3);
-	      lstrcpyW(wszTargetFullName, wszTargetTempName);
-	    }
-	    free(pwszShareBasePath);
-	  } else if (!pwsz[2]) { /* I sometimes do that on some of my servers, to share the root with restricted permissions */
-	    /* Heuristic: If the share name has a single letter, assume it's the shared drive letter. Ex: \\server\D -> D: */
-	    wszTargetFullName[0] = pwsz[1];	/* Local drive name on the server */
-	  } else { /* Often the case when used between home PCs */
-	    /* Heuristic: Assume the share name is a subdirectory name on the C: drive. Ex: \\server\Public -> C:\Public */
-	    int lTempName = PATH_MAX;
-	    wszTargetTempName[0] = L'C';	/* Local drive name on the server */
-	    wszTargetTempName[1] = L':';
-	    lstrcpyW(wszTargetTempName+2, pwsz);
-	    lTempName -= lstrlenW(wszTargetTempName);
-	    if (lTempName > lstrlenW(wszTargetFullName+2)) {
-	      lstrcatW(wszTargetTempName, wszTargetFullName+2);
-	      lstrcpyW(wszTargetFullName, wszTargetTempName);
-	    }
+	    lstrcatW(wszTargetTempName, wszTargetFullName+2);
+	    lstrcpyW(wszTargetFullName, wszTargetTempName);
 	  }
+	  free(pwszShareBasePath);
 	}
       }
     } else {
-      XDEBUG_PRINTF(("WNetGetConnection(\"%s\") failed: Error %d\n", pszTemp8, dwErr));
+      XDEBUG_WPRINTF((L"WNetGetConnection(\"%s\") failed: Error %d\n", wszVolumeName, dwErr));
     }
   }
-  DEBUG_FREEUTF8(pszTemp8);
 
   /* Make the native target name */
   lNativeName = wsprintfW(wszTargetNativeName, L"\\??\\%s", wszTargetFullName );
@@ -334,16 +195,13 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
   }
 
   /* Create the link - ignore errors since it might already exist */
-  DEBUG_WSTR2NEWUTF8(wszJunctionFullName, pszJunction8);
-  DEBUG_WSTR2NEWUTF8(wszTargetNativeName, pszTarget8);
-  DEBUG_PRINTF(("// Creating junction \"%s\" -> \"%s\"\n", pszJunction8, pszTarget8));
+  DEBUG_WPRINTF((L"// Creating junction \"%s\" -> \"%s\"\n", wszJunctionFullName, wszTargetNativeName));
   CreateDirectoryW(junctionName, NULL);
   hFile = CreateFileW(junctionName, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
 		      FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS, NULL );
   if (hFile == INVALID_HANDLE_VALUE) {
     errno = Win32ErrorToErrno();
-    /* RETURN_INT_COMMENT(-1, ("Error creating %s:\n", szJunction8)); */
-    DEBUG_LEAVE(("return -1; // Error creating %s:\n", pszJunction8));
+    DEBUG_WLEAVE((L"return -1; // Error creating %s\n", wszJunctionFullName));
     goto junctionW_exit;
   }
 
@@ -363,19 +221,15 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     errno = Win32ErrorToErrno();
     CloseHandle(hFile);
     RemoveDirectoryW(junctionName);
-    /* RETURN_INT_COMMENT(-1, ("Error setting junction for %s:\n", szJunction8)); */
-    DEBUG_LEAVE(("return -1; // Error setting junction for %s:\n", pszJunction8));
+    DEBUG_WLEAVE((L"return -1; // Error setting junction for %s:\n", wszJunctionFullName));
     goto junctionW_exit;
   }
 
   CloseHandle(hFile);
-  /* RETURN_INT_COMMENT(0, ("Created \"%s\" -> \"%s\"\n", szJunction8, szTarget8)); */
-  DEBUG_LEAVE(("return 0; // Created \"%s\" -> \"%s\"\n", pszJunction8, pszTarget8));
+  DEBUG_WLEAVE((L"return 0; // Created \"%s\" -> \"%s\"\n", wszJunctionFullName, wszTargetNativeName));
   iRet = 0; /* Success */
 
 junctionW_exit:
-  DEBUG_FREEUTF8(pszJunction8);
-  DEBUG_FREEUTF8(pszTarget8);
   free(wszReparseBuffer);
   free(wszJunctionFullName);
   free(wszFileSystem);
@@ -483,16 +337,8 @@ int symlinkW(const WCHAR *targetName, const WCHAR *linkName) {
   BOOL done;
   DWORD dwFlags;
   int err;
-  DEBUG_CODE(
-  char *pszLink8;
-  char *pszTarget8;
-  )
 
-  DEBUG_WSTR2NEWUTF8(linkName, pszLink8);
-  DEBUG_WSTR2NEWUTF8(targetName, pszTarget8);
-  DEBUG_ENTER(("symlink(\"%s\", \"%s\");\n", pszTarget8, pszLink8));
-  DEBUG_FREEUTF8(pszTarget8);
-  DEBUG_FREEUTF8(pszLink8);
+  DEBUG_WENTER((L"symlink(\"%s\", \"%s\");\n", targetName, linkName));
 
   /* Work around an incompatibility between Unix and Windows:
   // Windows needs to know if the target is a file or a directory;
@@ -573,16 +419,8 @@ int symlinkM(const char *targetName, const char *linkName, UINT cp) {
 int symlinkdW(const WCHAR *targetName, const WCHAR *linkName) {
   BOOL done;
   int err;
-  DEBUG_CODE(
-  char *pszLink8;
-  char *pszTarget8;
-  )
 
-  DEBUG_WSTR2NEWUTF8(linkName, pszLink8);
-  DEBUG_WSTR2NEWUTF8(targetName, pszTarget8);
-  DEBUG_ENTER(("symlinkd(\"%s\", \"%s\");\n", pszTarget8, pszLink8));
-  DEBUG_FREEUTF8(pszTarget8);
-  DEBUG_FREEUTF8(pszLink8);
+  DEBUG_WENTER((L"symlinkd(\"%s\", \"%s\");\n", targetName, linkName));
 
   done = CreateSymbolicLinkW(linkName, targetName, SYMBOLIC_LINK_FLAG_DIRECTORY);
 

@@ -31,6 +31,7 @@
 #    2020-04-13 JFL Added an uninstall target rule, also using inferences.    #
 #    2020-11-18 JFL Disable diagnostics carets for gcc and clang that have it.#
 #    2020-11-21 JFL Avoid displaying entering/leaving directory for same dir. #
+#    2021-11-08 JFL Define C macro HAS_SYSLIB when SYSLIB is present.         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -215,8 +216,8 @@ ifndef SYSLIB
   endif
 endif
 ifdef SYSLIB
-CFLAGS := $(CFLAGS) -I $(SYSLIB)
-CXXFLAGS := $(CXXFLAGS) -I $(SYSLIB)
+CFLAGS := $(CFLAGS) -I $(SYSLIB) -DHAS_SYSLIB=1
+CXXFLAGS := $(CXXFLAGS) -I $(SYSLIB) -DHAS_SYSLIB=1
 NLDLIBS := $(NLDLIBS) -L $(SYSLIB)/$(OSPN) -l SysLib # Normal build linker flags
 DLDLIBS := $(DLDLIBS) -L $(SYSLIB)/$(OSPD) -l SysLib # Debug build linker flags
 endif

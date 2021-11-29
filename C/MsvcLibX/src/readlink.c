@@ -26,6 +26,11 @@
 *    2020-12-14 JFL Changed readlink to also read these APPEXEC links.        *
 *    2020-12-15 JFL Added debug descriptions for all known tag types.         *
 *                   Changed readlink to also read these LX_SYMLINK links.     *
+*    2021-11-28 JFL Moved the junction base path heuristic to an outside      *
+*                   subroutine, shared between readlink() and junction().     *
+*                   Renamed MsvcLibX-specific ReadLink*() as MlxReadLink*().  *
+*                   Likewise, renamed GetReparseTag*() as MlxGetReparseTag*(),*
+*                   Resolve*Links*() as MlxResolve*Links*(), etc.             *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,7 +57,7 @@
 
 /* Get the Reparse Point Tag for a mount point - Wide char version */
 /* See http://msdn.microsoft.com/en-us/library/windows/desktop/aa365511(v=vs.85).aspx */
-DWORD GetReparseTagW(const WCHAR *pwszPath) {
+DWORD MlxGetReparseTagW(const WCHAR *pwszPath) {
   HANDLE hFind;
   WIN32_FIND_DATAW findFileData;
   DWORD dwTag = 0;
@@ -67,7 +72,7 @@ DWORD GetReparseTagW(const WCHAR *pwszPath) {
 }
 
 /* Get the Reparse Point Tag for a mount point - MultiByte char version */
-DWORD GetReparseTagM(const char *path, UINT cp) {
+DWORD MlxGetReparseTagM(const char *path, UINT cp) {
   WCHAR wszPath[WIDE_PATH_MAX];
   int n;
   /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
@@ -78,10 +83,10 @@ DWORD GetReparseTagM(const char *path, UINT cp) {
 			  );
   if (!n) {
     errno = Win32ErrorToErrno();
-    DEBUG_PRINTF(("GetReparseTagM(\"%s\", %d); // Conversion to Unicode failed. errno=%d - %s\n", path, cp, errno, strerror(errno)));
+    DEBUG_PRINTF(("MlxGetReparseTagM(\"%s\", %d); // Conversion to Unicode failed. errno=%d - %s\n", path, cp, errno, strerror(errno)));
     return 0;
   }
-  return GetReparseTagW(wszPath);
+  return MlxGetReparseTagW(wszPath);
 }
 
 /* Trim trailing slashes or backslashes in pathname, except for the root directory */
@@ -126,7 +131,7 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 |		    Windows-aware applications supporting this can detect     |
 |		    this case by comparing linkName and targetName when       |
 |		    readlink() succeeds.				      |
-|		    Function ResolveLinks() in resolvelinks.c relies on this. |
+|		    Function MlxResolveLinks() relies on this.		      |
 |		    							      |
 |		    Using XDEBUG macros to debug readlink() itself,	      |
 |		    and DEBUG macros to display information useful for	      |
@@ -142,6 +147,7 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 |    2014-03-13 JFL Allow reading junctions targets in \\server\Public shares.|
 |    2014-03-19 JFL Split routine ReadReparsePointW() from readlinkW().       |
 |		    Fail in case a junction target is on another server drive.|
+|    2021-11-29 JFL Renamed ReadReparsePoint*() as MlxReadReparsePoint*().    |
 |		    							      |
 *									      *
 \*---------------------------------------------------------------------------*/
@@ -149,7 +155,7 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 #pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
 
 /* Get the reparse point data, and return the tag. 0=failure */
-DWORD ReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
+DWORD MlxReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
   DWORD dwAttr;
   HANDLE hLink;
   BOOL done;
@@ -161,7 +167,7 @@ DWORD ReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
   char *pType = "";
   )
 
-  DEBUG_WENTER((L"ReadReparsePointW(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
+  DEBUG_WENTER((L"MlxReadReparsePoint(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
 
   dwAttr = GetFileAttributesW(path);
   XDEBUG_PRINTF(("GetFileAttributes() = 0x%lX\n", dwAttr));
@@ -304,7 +310,7 @@ Offset    00           04           08           0C           0   4    8   C   \
 }
 
 /* Get the symlink or junction target. Returns the tag, or 0 on failure */
-DWORD ReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+DWORD MlxReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   char iobuf[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
   DWORD dwTag;
   PMOUNTPOINT_READ_BUFFER pMountpointBuf;
@@ -315,9 +321,9 @@ DWORD ReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   WCHAR *pwNewStr = NULL;
   unsigned short offset = 0, len = 0;
   
-  DEBUG_WENTER((L"ReadLinkW(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
+  DEBUG_WENTER((L"MlxReadLink(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
 
-  dwTag = ReadReparsePointW(path, iobuf, sizeof(iobuf));
+  dwTag = MlxReadReparsePointW(path, iobuf, sizeof(iobuf));
   if (!dwTag) RETURN_CONST(0);
 
   /* Process the supported tag types */
@@ -406,6 +412,25 @@ DWORD ReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   return dwTag;
 }
 
+/* Small UTF8 front end of the previous one */
+DWORD MlxReadLinkU(const char *path, char *buf, size_t bufsize) {
+  WCHAR wbuf[WIDE_PATH_MAX];
+  WCHAR *wPath = NewWideCopy(path);
+  DWORD dwTag = 0;
+  if (wPath) {
+    dwTag = MlxReadLinkW(wPath, wbuf, sizeof(wbuf));
+    if (dwTag) {
+      int n = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, buf, (int)bufsize, NULL, NULL);
+      if (!n) {
+	errno = Win32ErrorToErrno();
+      	dwTag = 0;
+      }
+    }
+    free(wPath);
+  }
+  return dwTag;
+}
+
 /* Posix routine readlink - Wide char version. Returns the link size, or -1 on failure */
 ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   ssize_t nRead;
@@ -414,11 +439,11 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 
   DEBUG_WENTER((L"readlink(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
 
-  /* TO DO: Fix readlinkW (And thus ReadReparsePointW) to return truncated links if the buffer is too small.
+  /* TO DO: Fix readlinkW (And thus MlxReadReparsePointW) to return truncated links if the buffer is too small.
             Returning an ENAMETOOLONG or ENOMEM error as we do now is sane, but NOT standard */
-  dwTag = ReadLinkW(path, buf, bufsize);
+  dwTag = MlxReadLinkW(path, buf, bufsize);
   if (!dwTag) {
-    RETURN_INT_COMMENT(-1, ("ReadReparsePointW() failed.\n"));
+    RETURN_INT_COMMENT(-1, ("MlxReadLink() failed.\n"));
   }
 
   /* Special case for junctions to other local directories: Remove their '\??\' header.
@@ -431,7 +456,7 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
     if (!strncmpW(buf+5, L":\\", 2)) {
       nRead -= 4;
       CopyMemory(buf, buf+4, (nRead+1)*sizeof(WCHAR));
-      XDEBUG_WPRINTF((L"buf = \"%s\"; // Removed '\\\\?\\': \n", buf));
+      XDEBUG_WPRINTF((L"buf = \"%s\"; // Removed \"\\??\\\".\n", buf));
     } else { /* Return an error for other types, as Posix SW cannot handle them successfully. */
       errno = EINVAL;
       DEBUG_WLEAVE((L"return -1; // Unsupported mount point type: %s\n", buf+4));
@@ -471,64 +496,27 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 	wszLocalName[0] = wszAbsPath[0];
 	dwErr = WNetGetConnectionW(wszLocalName, wszRemoteName, &dwLength);
 	if (dwErr == NO_ERROR) {
-	  WCHAR *pwsz;
 	  XDEBUG_WPRINTF((L"net use %c: %s\n", (char)(wszLocalName[0]), wszRemoteName));
 	  if ((wszRemoteName[0] == L'\\') && (wszRemoteName[1] == L'\\')) {
-	    pwsz = wcschr(wszRemoteName+2, L'\\');
-	    if (pwsz) {
-	      if ((pwsz[2] == L'$') && !pwsz[3]) { /* This is the root of a shared drive. Ex: \\server\D$ -> D: */
-		char c1, c2;
-		XDEBUG_PRINTF(("// Checking if it's the root of an X$ shared drive\n"));
-		c1 = (char)toupper((char)pwsz[1]);	/* The server-side drive letter of the network share */
-		c2 = (char)toupper((char)buf[0]);	/* The server-side drive letter of the junction target */
-		if (c1 == c2) { /* OK, the target is in the same share drive */
-		  buf[0] = wszLocalName[0];	/* Make the target accessible locally */
-		  iTargetFound = TRUE;
-		  XDEBUG_PRINTF(("// Confirmed it's the root of the shared drive\n"));
-		} /* Else the target is not accessible locally via its target name */
-	      } else { /* Heuristic: Assume the share name is an alias to the root on the network drive. Ex: \\server\DROOT -> D:\ */
-		DWORD dwAttr;
-		XDEBUG_PRINTF(("// Checking if it's an alias of the root of the shared drive\n"));
-		buf[0] = wszAbsPath[0];
-		dwAttr = GetFileAttributesW(buf);
-		XDEBUG_WPRINTF((L"GetFileAttributes(\"%s\") = 0x%lX\n", buf, dwAttr));
-		if (dwAttr != INVALID_FILE_ATTRIBUTES) {
-		  iTargetFound = TRUE;
-		  XDEBUG_PRINTF(("// Confirmed it's an alias of the root of the shared drive\n"));
-		} else { /* Heuristic: Assume the share name is a subdirectory name on the network drive. Ex: \\server\Public -> C:\Public */
-		  WCHAR *pwsz2;
-		  XDEBUG_PRINTF(("// Checking if it's first level shared directory\n"));
-		  pwsz2 = wcschr(buf+3, L'\\');
-		  if (pwsz2) {
-		    CopyMemory(buf+2, pwsz2, (lstrlenW(pwsz2)+1)*sizeof(WCHAR));
-		    dwAttr = GetFileAttributesW(buf);
-		    XDEBUG_WPRINTF((L"GetFileAttributes(\"%s\") = 0x%lX\n", buf, dwAttr));
-		    if (dwAttr != INVALID_FILE_ATTRIBUTES) {
-		      iTargetFound = TRUE;
-		      XDEBUG_PRINTF(("// Confirmed it's a first level shared directory\n"));
-		    }
-		  }
-		}
+	    WCHAR *pwszShareBasePath = MlxGetShareBasePathW(wszRemoteName);
+	    if (pwszShareBasePath) {
+	      int l = lstrlenW(pwszShareBasePath);
+	      if (!_wcsnicmp(pwszShareBasePath, buf, l) && ((buf[l] == L'\\') || !buf[l])) {
+	      	/* Yes, it points at the same share */
+		WCHAR *pwsz2 = buf + l;
+		buf[0] = szRootDir[0];
+		CopyMemory(buf+2, pwsz2, (lstrlenW(pwsz2)+1)*sizeof(WCHAR));
+		if (!buf[2]) lstrcpyW(buf+2, L"\\"); /* The junction pointed to the root */
+		XDEBUG_WPRINTF((L"buf = \"%s\"; // Substituted the share base path\n", buf));
+		iTargetFound = TRUE;
 	      }
-	      /* To do:
-		 The above code works for network drives shared at the root level and one level below.
-		 Ex: N: is \\server\C$
-		     junction target C:\Public\Temp\target.txt on N:
-		     Resolves to     N:\Public\Temp\target.txt
-		 Ex: If N: is \\server\Public, which is shared directory C:\Public,
-		     junction target C:\Public\Temp\target.txt on N:
-		     Should resolve to N:\Temp\target.txt
-		 Actually this could be extended by checking every possible parent path,
-		 to support cases where the junction is on a shared level2 or below subdirectory.
-		 Note that the share name is not always the same as the subdirectory
-		 name, nor is it even in the server's root. 
-	      */
+	      free(pwszShareBasePath);
 	    }
 	  }
 	}
       }
       if (!iTargetFound) {
-#if 0	/* Initial implementation, which would have cause problems */
+#if 0	/* Initial implementation, which would have caused problems */
 	lstrcpynW(buf, path, (int)bufsize); /* Report the target as identical to the source, to allow resolving it on the server side */
 	buf[bufsize-1] = L'\0';
 	nRead = lstrlenW(path);
@@ -565,6 +553,7 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       for (pc=p1; *pc; pc++) if (*pc == L'\\') lstrcatW(buf, L"..\\");
       /* Append what remains in path 2 */
       lstrcatW(buf, p2);
+      if (!buf[0]) lstrcpyW(buf, L"."); /* If buf is empty, it means the target is the directory of p1 itself */
       /* That's the relative link */
       nRead = lstrlenW(buf);
     } /* Else the drives differ. Paths cannot be relative. Don't change buf. */
@@ -620,7 +609,7 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    ResolveTailLinks					      |
+|   Function	    MlxResolveTailLinks					      |
 |									      |
 |   Description	    Resolve links in node names	(Ignore those in dir names)   |
 |									      |
@@ -637,11 +626,11 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int ResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   DWORD dwAttr;
   size_t l;
 
-  DEBUG_WENTER((L"ResolveTailLinks(\"%s\", %p, %ul);\n", path, buf, (unsigned long)bufsize));
+  DEBUG_WENTER((L"MlxResolveTailLinks(\"%s\", %p, %ul);\n", path, buf, (unsigned long)bufsize));
 
   dwAttr = GetFileAttributesW(path);
   XDEBUG_PRINTF(("GetFileAttributes() = 0x%lX\n", dwAttr));
@@ -677,7 +666,7 @@ int ResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       /* CompactpathW(wszBuf3, wszBuf2, WIDE_PATH_MAX); // We don't care as we're only interested in the tail */
       pwsz = wszBuf3;
     }
-    iRet = ResolveTailLinksW(pwsz, buf, bufsize);
+    iRet = MlxResolveTailLinksW(pwsz, buf, bufsize);
     DEBUG_WLEAVE((L"return %d; // \"%s\"\n", iRet, buf));
     return iRet;
   }
@@ -692,7 +681,7 @@ int ResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   return 0;
 }
 
-int ResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
+int MlxResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
   WCHAR wszPath[WIDE_PATH_MAX];
   WCHAR wszTarget[WIDE_PATH_MAX];
   int n;
@@ -707,11 +696,11 @@ int ResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
 			  );
   if (!n) {
     errno = Win32ErrorToErrno();
-    DEBUG_PRINTF(("ResolveTailLinksM(\"%s\", ...); // Conversion to Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+    DEBUG_PRINTF(("MlxResolveTailLinksM(\"%s\", ...); // Conversion to Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
     return -1;
   }
 
-  iErr = ResolveTailLinksW(wszPath, wszTarget, WIDE_PATH_MAX);
+  iErr = MlxResolveTailLinksW(wszPath, wszTarget, WIDE_PATH_MAX);
   if (iErr < 0) return iErr;
 
   pszDefaultChar = (cp == CP_UTF8) ? NULL : "?";
@@ -726,24 +715,24 @@ int ResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
 			  );
   if (!n) {
     errno = Win32ErrorToErrno();
-    DEBUG_PRINTF(("ResolveTailLinksM(\"%s\", ...); // Conversion back from Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+    DEBUG_PRINTF(("MlxResolveTailLinksM(\"%s\", ...); // Conversion back from Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
     return -1;
   }
 
   return iErr;
 }
 
-int ResolveTailLinksA(const char *path, char *buf, size_t bufsize) {
-  return ResolveTailLinksM(path, buf, bufsize, CP_ACP);
+int MlxResolveTailLinksA(const char *path, char *buf, size_t bufsize) {
+  return MlxResolveTailLinksM(path, buf, bufsize, CP_ACP);
 }
 
-int ResolveTailLinksU(const char *path, char *buf, size_t bufsize) {
-  return ResolveTailLinksM(path, buf, bufsize, CP_UTF8);
+int MlxResolveTailLinksU(const char *path, char *buf, size_t bufsize) {
+  return MlxResolveTailLinksM(path, buf, bufsize, CP_UTF8);
 }
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    ReadAppExecLink					      |
+|   Function	    MlxReadAppExecLink					      |
 |									      |
 |   Description	    Get the AppExecLink target, and return the tag            |
 |									      |
@@ -761,16 +750,16 @@ int ResolveTailLinksU(const char *path, char *buf, size_t bufsize) {
 \*---------------------------------------------------------------------------*/
 
 /* Get the AppExecLink target, and return its size. 0=failure */
-int ReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+int MlxReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   char iobuf[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
   DWORD dwTag;
   PAPPEXECLINK_READ_BUFFER pAppExecLinkBuf;
   WCHAR *pwStr = NULL;
   unsigned short offset = 0, len = 0;
 
-  DEBUG_WENTER((L"ReadAppExecLinkW(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
+  DEBUG_WENTER((L"MlxReadAppExecLink(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
 
-  dwTag = ReadReparsePointW(path, iobuf, sizeof(iobuf));
+  dwTag = MlxReadReparsePointW(path, iobuf, sizeof(iobuf));
   if (!dwTag) RETURN_CONST(0);
 
   /* Process the supported tag types */
@@ -814,7 +803,7 @@ int ReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 }
 
 /* Get the AppExecLink target, and return its size. 0 = failure */
-int ReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
+int MlxReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
   WCHAR wszPath[WIDE_PATH_MAX];
   WCHAR wszTarget[WIDE_PATH_MAX];
   int n;
@@ -828,11 +817,11 @@ int ReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 			  );
   if (!n) {
     errno = Win32ErrorToErrno();
-    DEBUG_PRINTF(("ReadAppExecLinkM(\"%s\", ...); // Conversion to Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+    DEBUG_PRINTF(("MlxReadAppExecLinkM(\"%s\", ...); // Conversion to Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
     return 0;
   }
 
-  n = ReadAppExecLinkW(wszPath, wszTarget, WIDE_PATH_MAX);
+  n = MlxReadAppExecLinkW(wszPath, wszTarget, WIDE_PATH_MAX);
   if (n <= 0) return n;
 
   pszDefaultChar = (cp == CP_UTF8) ? NULL : "?";
@@ -847,7 +836,7 @@ int ReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 			  );
   if (!n) {
     errno = Win32ErrorToErrno();
-    DEBUG_PRINTF(("ReadAppExecLinkM(\"%s\", ...); // Conversion back from Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+    DEBUG_PRINTF(("MlxReadAppExecLinkM(\"%s\", ...); // Conversion back from Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
   }
 
   return n;
