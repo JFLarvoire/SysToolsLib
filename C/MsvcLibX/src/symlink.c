@@ -26,6 +26,8 @@
 *    2021-11-28 JFL Moved the junction base path heuristic to an outside      *
 *                   subroutine, shared between readlink() and junction().     *
 *    2021-11-29 JFL Use the wide-string debug macros.                         *
+*                   Do not allow setting an external target on a netw. share. *
+*                   Allow passing native target names to junction().          *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -112,9 +114,16 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     goto junctionW_exit;
   }
 
+  /* Do we have a native name already? */
+  if (!wcsncmp(targetName, L"\\??\\", 4)) { /* We have the native name already */
+    lstrcpyW(wszTargetNativeName, targetName);
+    lNativeName = lstrlenW(wszTargetNativeName);
+    goto junctionW_create;
+  }
+
   /* Convert relative paths to absolute paths relative to the junction. */
   /* Note: I tested creating relative targets: They can be created, but Windows can't follow them. */
-  if ((targetName[0] != '\\') && (targetName[1] != ':')) {
+  if ((targetName[0] != L'\\') && (targetName[1] != L':')) {
     size_t lTempName = PATH_MAX;
     lstrcpyW(wszTargetTempName, wszJunctionFullName);
     lTempName -= lstrlenW(wszJunctionFullName);
@@ -139,10 +148,11 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     }
     XDEBUG_WPRINTF((L"wszTargetFullName = \"%s\"; // After direct reabsolutization\n", wszTargetFullName));
   }
-  /* Make sure the target drive letter is upper case */
+  /* Make sure the junction and target drive letters are upper case */
 #pragma warning(disable:4305) /* truncation from 'LPSTR' to 'WCHAR' */
 #pragma warning(disable:4306) /* conversion from 'WCHAR' to 'WCHAR *' of greater size */
-  wszTargetFullName[0] = (WCHAR)CharUpperW((WCHAR *)(wszTargetFullName[0]));
+  wszJunctionFullName[0] = (WCHAR)CharUpperW((WCHAR *)(wszJunctionFullName[0]));
+  wszTargetFullName[0]   = (WCHAR)CharUpperW((WCHAR *)(wszTargetFullName[0]));
 #pragma warning(default:4706)
 #pragma warning(default:4705)
 
@@ -164,6 +174,11 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     WCHAR  wszLocalName[] = L"X:";
     DWORD dwErr;
     DWORD dwLength = PATH_MAX;
+    if (wszJunctionFullName[0] != wszTargetFullName[0]) { /* Note: They're both upper case now */
+      errno = EXDEV;
+      DEBUG_WLEAVE((L"return -1; // Junctions to external drives are not supported on network shares\n"));
+      goto junctionW_exit;
+    }
     wszRemoteName = malloc(sizeof(WCHAR)*PATH_MAX);
     if (!wszRemoteName) goto junctionW_exit;
     wszLocalName[0] = wszJunctionFullName[0];
@@ -194,6 +209,7 @@ int junctionW(const WCHAR *targetName, const WCHAR *junctionName) {
     lNativeName -= 1;
   }
 
+junctionW_create:
   /* Create the link - ignore errors since it might already exist */
   DEBUG_WPRINTF((L"// Creating junction \"%s\" -> \"%s\"\n", wszJunctionFullName, wszTargetNativeName));
   CreateDirectoryW(junctionName, NULL);
