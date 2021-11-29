@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-11-29
+### New
+- C/MsvLibX/src/GetShareBasePath.c: Merge the heuristics for getting network junctions base paths, shared between
+  readlink() and junction(), into a new fixed and improved common routine.
+
+### Changed
+- C/MsvcLibX/include/unistd.h and several sources: Renamed MsvcLibX-specific WIN32 routines with an Mlx prefix.  
+  This was done to avoid confusions, like when I posted sample code containing MsvcLibX-specific calls on StackOverflow.
+
+### Fixed
+- update.exe: Better handling of junctions on network shares. See the build-in help screen for details.  
+  Option -c can now delete dangling junctions.
+
 ## [Unreleased] 2021-11-19
 ### Changed
 - regsub.tcl: Don't display the file names in quiet mode
