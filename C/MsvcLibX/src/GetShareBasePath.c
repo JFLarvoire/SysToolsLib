@@ -119,7 +119,7 @@ WCHAR *MlxReadShareBasePathFileW(const WCHAR *pwszShareUNC) { // Name must be \\
   lstrcpyW(pwszFileName, pwszShareUNC);
   pwsz = wcschr(pwszFileName+2, L'\\');		// Point to the \ between SERVER and SHARE
   if (pwsz) pwsz = wcschr(pwsz+1, L'\\');	// Point to the \ between SHARE and SUBPATH
-  if (pwsz) *pwsz = L'0'; // Remove the SUBPATH
+  if (pwsz) *pwsz = L'\0'; // Remove the SUBPATH
   lstrcatW(pwszFileName, L"\\_Base_Path.txt");
 
   pwszConfigLine = MlxReadConfigLineW(pwszFileName);
