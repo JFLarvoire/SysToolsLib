@@ -36,6 +36,7 @@ Batch\Reconnect.bat
 Batch\regx.bat
 Batch\rhs.bat
 Batch\-rhs.bat
+Batch\search.bat
 Batch\subcmd.bat
 Batch\TimeX.bat
 Batch\touch.bat

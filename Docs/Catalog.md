@@ -192,6 +192,7 @@ get.tcl         | -WL | Get a file from a web server. Simpler to use than Unix' 
 ie.bat          | -W- | Start Internet Explorer                                                               |
 ieCache.bat     | -W- | List the most recent files in the Internet Explorer cache.                            |
 n.bat           | -W- | Start Notepad                                                                         | `n readme.md`
+search.bat      | -W- | Query the Windows Search service, and display results in Windows Explorer.            | `search moon AND sun`
 
 -----------------------------------------------------------------------------------------------------------------------
 
