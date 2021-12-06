@@ -255,7 +255,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
-set "VERSION=2021-09-15"
+set "VERSION=2021-12-06"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -935,6 +935,7 @@ set "ECHOVARS.V=%LCALL% :EchoVars.Verbose"
 set "ECHOVARS.D=%LCALL% :EchoVars.Debug"
 set "ECHOSVARS.V=%LCALL% :EchoStringVars.Verbose"
 set "ECHOSVARS.D=%LCALL% :EchoStringVars.Debug"
+set "ECHOVARS.XD=rem" &:# Keep old debug directives, but don't output them anymore
 set "ECHOVALS=%LCALL% :EchoVals"
 set "ECHOVALS.V=%LCALL% :EchoVals.Verbose"
 set "ECHOVALS.D=%LCALL% :EchoVals.Debug"
@@ -2458,21 +2459,32 @@ set "%VARNAME%=!%VARNAME%:::=!"
 :#                                                                            #
 :#  Arguments                                                                 #
 :#                                                                            #
-:#  Notes 	    '*' '=' ':' cannot be replaced by %VAR:c=repl%            #
+:#  Notes 	    Non ASCII CHAR arguments must be quoted. Ex: ","          #
+:#                                                                            #
+:#		    '*' '=' ':' cannot be replaced by %VAR:c=repl%            #
+:#                                                                            #
+:#                  Routines shared on dostips:                               #
+:#                  https://www.dostips.com/forum/viewtopic.php?p=50132#p50132
 :#                                                                            #
 :#  History                                                                   #
 :#   2016-11-13 JFL Added routine ReplaceChars.                               #
+:#   2021-12-06 JFL Use %FUNCTION%/%RETURN% to return correct results.        #
+:#                  Updated the drawback comments about known limitations.    #
+:#		    Added routine :ReplaceEquals.                             #
+:#                  The RETVAR argument is now optional for all routines.     #
+:#		    Fixed :ReplaceDelimSets support for ^ in input strings.   #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Replace characters
-:# Advantage: Works with CHAR '=' ':' '*' '~'
+:# Advantage: Works with CHAR ':' '*' '~'
 :# Advantage: The string can contain LF and '"' characters
 :# Drawback: Does not work with '='.
-:ReplaceChars STRVAR CHAR REPLACEMENT RETVAR 
-setlocal EnableDelayedExpansion
+:ReplaceChars %1=STRVAR  %2=CHAR  %3=REPLACEMENT  %4=RETVAR (Default: STRVAR)
+%FUNCTION% EnableDelayedExpansion
 set "STRING=!%~1!"
 set "REPL=%~3"
+set "RETVAR=%~4" & if not defined RETVAR set "RETVAR=%~1"
 set "RESULT="
 if defined STRING (
   call :strlen.q STRING SLEN	&:# SLEN = Full string length
@@ -2491,17 +2503,18 @@ if defined STRING (
     )
   )
 )
-endlocal & set "%~4=%RESULT%"
-exit /b 0
+set "!RETVAR!=!RESULT!"
+%UPVAR% !RETVAR! & %RETURN% 0
 
-:# Replace delimiter sets.
-:# Advantage: Simple and fast; Works with CHAR '=' ':' '*'
+:# Replace delimiter sets
+:# Advantage: Simple and fast; Works with CHAR '=' ':'
 :# Drawback: Multiple consecutive CHARs are replaced by a single REPL string.
 :# Drawback: Does not work on strings with LF or '!' characters.
-:ReplaceDelimSets STRVAR CHAR REPLACEMENT RETVAR
-setlocal EnableDelayedExpansion
-set "STRING=[!%~1!]"	&:# Make mure the string does not begin or end with delims
+:ReplaceDelimSets %1=STRVAR  %2=CHAR  %3=REPLACEMENT  %4=RETVAR (Default: STRVAR)
+%FUNCTION% EnableDelayedExpansion
+set "STRING=[!%~1:^=^^^^!]" &:# Make mure the string does not begin or end with delims
 set "REPL=%~3"
+set "RETVAR=%~4" & if not defined RETVAR set "RETVAR=%~1"
 set "RESULT="
 :ReplaceDelimSets.loop
 for /f "delims=%~2 tokens=1*" %%s in ("!STRING!") do (
@@ -2513,17 +2526,18 @@ for /f "delims=%~2 tokens=1*" %%s in ("!STRING!") do (
     goto :ReplaceDelimSets.loop
   )
 )
-endlocal & set "%~4=%RESULT:~1,-1%"
-exit /b
+set "!RETVAR!=!RESULT:~1,-1!"
+%UPVAR% !RETVAR! & %RETURN% 0
 
-:# Replace delimiters.
+:# Replace delimiters
 :# Inspired by npocmaka post: http://www.dostips.com/forum/viewtopic.php?p=29901#p29901
-:# Advantage: Works with CHAR '=' ':' '*'
+:# Advantage: Works with CHAR '=' ':'
 :# Drawback: Does not work on strings with LF or '"' characters.
-:ReplaceDelims STRVAR CHAR REPLACEMENT RETVAR
-setlocal DisableDelayedExpansion
+:ReplaceDelims %1=STRVAR  %2=CHAR  %3=REPLACEMENT  %4=RETVAR (Default: STRVAR)
+%FUNCTION% DisableDelayedExpansion
 call set "STRING=[%%%~1%%]"	&:# Make mure the string does not begin or end with delims
 set "REPL=%~3"
+set "RETVAR=%~4" & if not defined RETVAR set "RETVAR=%~1"
 set "RESULT="
 call :strlen.q STRING SLEN	&:# SLEN = Full string length
 :ReplaceDelims.loop
@@ -2543,8 +2557,65 @@ if defined TAIL (	 :# Then there might be more chars to replace in the tail
   set "SLEN=%TLEN%"
   goto :ReplaceDelims.loop
 )
-endlocal & set "%~4=%RESULT:~1,-1%"
-exit /b
+set "%RETVAR%=%RESULT:~1,-1%"
+%UPVAR% %RETVAR% & %RETURN% 0
+
+:# Replace = characters
+:# Advantage: No dependency on the :strlen routine
+:# Drawback: Max 256 = characters
+:# Drawback: Does not work on strings with LF or '!' characters
+:ReplaceEquals %1=STRVAR %2=REPVAR or "=REPLACEMENT" %3=RETVAR (Default: STRVAR)
+if not defined %1 exit /b &:# Avoid issues with empty strings
+%FUNCTION% EnableDelayedExpansion
+for /F "delims==" %%v in ('set $_ 2^>NUL') do set "%%v=" &:# Clear existing $_XXX variables
+:# $_=input  $f=Termination flag  $v=output value  $r=replacement var
+set "$_=!%~1!." & set "$f=1" & set "$v=" & set "$r=%~2"
+if /i "!$_:%$_%=%$_%!" equ "!$_!" %RETURN% 0	&:# No = sign in $_. Return now to save time
+if defined $r if not "!$r:~0,1!"=="=" (set "$r=!%~2!") else set "$r=!$r:~1!" &:# $r=replacement value
+set "$o=%~3" & if not defined $o set "$o=%~1"
+for /L %%i in (0,1,256) do if defined $f (
+  for /F "delims==" %%a in ('set $_') do (
+    set "$a=%%a" & set "$b=!%%a!" &:# $a=$_variable name  $b=its value=all that followed the first =
+    set "%%a=" & set "$_!$b!" 2>NUL || set "$f="
+    if %%i gtr 0 set "$v=!$v!!$a:~2!!$r!"
+  )
+)
+set "!$o!=!$v!!$b:~0,-1!" &:# The complete result, with the tail . removed in the end
+%UPVAR% !$o! & %RETURN% 0
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        UrlEncode                                                 #
+:#                                                                            #
+:#  Description     Encode reserved characters in a URL                       #
+:#                                                                            #
+:#  Arguments       %1	    variable name                                     #
+:#                                                                            #
+:#  Notes 	    Reference for the list of characters to encode:           #
+:#		    https://secure.n-able.com/webhelp/nc_9-1-0_so_en/content/sa_docs/api_level_integration/api_integration_urlencoding.html
+:#                                                                            #
+:#  History                                                                   #
+:#   2016-01-12 JFL Created this routine                                      #
+:#   2021-12-05 JFL Encode = signs with the pure Batch :ReplaceEquals functn. #
+:#   2021-12-06 JFL Encode all characters that need to be encoded.            #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:UrlEncode %1=VARNAME
+setlocal EnableDelayedExpansion
+set "STRING=!%~1:%%=%%25!"
+set "STRING=!STRING: =%%20!"
+set ^"STRING=!STRING:"=%%22!"
+for %%x in ("# 23" "$ 24" "& 26" "+ 2B" ", 2C" "/ 2F" ": 3A"
+            "; 3B" "< 3C" "> 3E" "? 3F" "@ 40" "\ 5C" "^ 5E"
+           ) do for /f "tokens=1,2" %%a in (%%x) do (
+             set "STRING=!STRING:%%a=%%%%b!"
+           )
+:# Special case for the ! character, which can only be replaced in a set %STRING%
+set "STRING=%STRING:!= %" & set "STRING=!STRING: =%%21!" &:# Prerequisite: No more " and ^
+:# Special case for the = character, which cannot be replaced by any set command
+set "REPL=%%3D" & call :ReplaceEquals STRING REPL &:# Prerequisite: No more !
+endlocal & set "%~1=%STRING%" & exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
