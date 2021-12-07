@@ -8,6 +8,7 @@
 *		    							      *
 *   History								      *
 *    2021-06-02 JFL Created this program.                                     *
+*    2021-06-03 JFL Restructured error messages output.                       *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -16,7 +17,7 @@
 #define PROGRAM_DESCRIPTION "Find the encoding of text files"
 #define PROGRAM_NAME "encoding"
 #define PROGRAM_VERSION "0.9"
-#define PROGRAM_DATE    "2021-06-02"
+#define PROGRAM_DATE    "2021-06-03"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -122,7 +123,11 @@ HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT 
 
 #define verbose(args) if (iVerbose) do {fprintf args;} while (0)
 
+#ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS applic. */
 #define BLOCKSIZE (4096)	/* Number of characters that will be allocated in each loop. */
+#else
+#define BLOCKSIZE (1024*1024)	/* Number of characters that will be allocated in each loop. */
+#endif
 
 #define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
 #define FLAG_RECURSE	0x0002		/* Recursive operation */
@@ -147,18 +152,6 @@ char *program;	/* This program basename, with extension in Windows */
 char *progcmd;	/* This program invokation name, without extension in Windows */
 int iVerbose = 0;
 FILE *mf;			/* Message output file */
-
-void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving no traces behind */
-  va_list vl;
-  int n = fprintf(stderr, "Error: ");
-
-  va_start(vl, pszFormat);
-  n += vfprintf(stderr, pszFormat, vl);    /* Not thread-safe on WIN32 ?!? */
-  va_end(vl);
-  fprintf(stderr, "\n");
-
-  exit(1);
-}
 
 /* Function prototypes */
 
@@ -303,6 +296,24 @@ int __cdecl main(int argc, char *argv[]) {
   return 0;
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    ShowAllFilesEncoding				      |
+|									      |
+|   Description     Detect the encoding of a set of files, and display it     |
+|									      |
+|   Parameters      char *pszName	The file pathname, with wildcards     |
+|		    encoding_detection_opts *pOpts	Options		      |
+|		    							      |
+|   Returns	    0=Success, else error				      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2021-06-02 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
 int ShowAllFilesEncoding(char *path, encoding_detection_opts *pOpts) {
   char *pPath;
   char *pName;
@@ -320,7 +331,8 @@ int ShowAllFilesEncoding(char *path, encoding_detection_opts *pOpts) {
   if ((!path) || !(len = strlen(path))) RETURN_INT_COMMENT(1, ("path is empty\n"));
 
   if ((!strpbrk(path, "*?")) && !(pOpts->iFlags & FLAG_RECURSE)) {	/* If there are no wild cards */
-    nErr = ShowFileEncoding(path, pOpts);	    /* Remove that file, and we're done */
+    iErr = ShowFileEncoding(path, pOpts);	    /* Remove that file, and we're done */
+    if (iErr) nErr += 1;
     goto cleanup_and_return;
   }
 
@@ -374,7 +386,7 @@ process_files_in_subdirectory:
       	if (pOpts->iFlags & FLAG_VERBOSE) printf("%s\n", pPathname);
 	iErr = ShowFileEncoding(pPathname, pOpts);
 	if (iErr) {
-	  printError("Error processing \"%s\": %s", pPathname, strerror(errno));
+          /* The error message has already been displayed by ShowFileEncoding() */
 	  nErr += 1; /* Continue the directory scan, looking for other files to process */
 	} else {
 	  if (pOpts->pNProcessed) *(pOpts->pNProcessed) += 1; /* Number of files successfully processed */
@@ -389,8 +401,26 @@ cleanup_and_return:
   free(pPath2);
   free(pPath3);
 
-  RETURN_INT_COMMENT(nErr, (nErr ? "%d deletions failed\n" : "Success\n", nErr));
+  RETURN_INT_COMMENT(nErr, (nErr ? "%d detections failed\n" : "Success\n", nErr));
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    ShowFileEncoding					      |
+|									      |
+|   Description     Detect the encoding of one file, and display it	      |
+|									      |
+|   Parameters      char *pszName			The file pathname     |
+|		    encoding_detection_opts *pOpts	Options		      |
+|		    							      |
+|   Returns	    0=Success, else error				      |
+|									      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2021-06-02 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
 int ShowFileEncoding(char *pszName, encoding_detection_opts *pOpts) {
   FILE *sf = NULL;		/* Source file handle */
@@ -401,20 +431,28 @@ int ShowFileEncoding(char *pszName, encoding_detection_opts *pOpts) {
   UINT cp = CP_UNDEFINED;
   char *pszEncoding;
   int i;
-
+  char *pszDisplayName = pszName;
+  
+  if (streq(pszName, "-")) pszName = NULL;
+  if (!pszName) pszDisplayName = "stdin";
+  
   if (!pszBuffer) {
 fail_no_mem:
-    fail("Not enough memory.");
+    printError("Not enough memory for reading %s", pszDisplayName);
+    return 1;
   }
 
-  if ((!pszName) || streq(pszName, "-")) {
+  if (!pszName) {
     sf = stdin;
 #if defined(_MSDOS) || defined(_WIN32)
     _setmode(_fileno(stdin), _O_BINARY); /* Force stdin to untranslated */
 #endif
   } else {
     sf = fopen(pszName, "rb");
-    if (!sf) fail("Can't open file %s\n", pszName);
+    if (!sf) {
+      printError("Can't open file %s", pszDisplayName);
+      return 1;
+    }
   }
 
   /* Read the data */
@@ -576,6 +614,7 @@ int GetProgramNames(char *argv0) {
 |		    							      |
 |   History								      |
 |    2018-05-31 JFL Created this routine				      |
+|    2021-06-03 JFL Do not append a .					      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -583,10 +622,10 @@ int printError(char *pszFormat, ...) {
   va_list vl;
   int n;
 
-  n = fprintf(stderr, "%s: ", program);
+  n = fprintf(stderr, "%s: Error: ", program);
   va_start(vl, pszFormat);
   n += vfprintf(stderr, pszFormat, vl);
-  n += fprintf(stderr, ".\n");
+  n += fprintf(stderr, "\n");
   va_end(vl);
 
   return n;
