@@ -9,6 +9,7 @@
 *   History								      *
 *    2021-06-02 JFL Created this program.                                     *
 *    2021-06-03 JFL Restructured error messages output.                       *
+*    2021-12-07 JFL Updated help screen.                                      *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -17,7 +18,7 @@
 #define PROGRAM_DESCRIPTION "Find the encoding of text files"
 #define PROGRAM_NAME "encoding"
 #define PROGRAM_VERSION "0.9"
-#define PROGRAM_DATE    "2021-06-03"
+#define PROGRAM_DATE    "2021-12-07"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -199,18 +200,21 @@ Options:\n\
 #endif
 "\
   -libx [OPTIONS]   Use MsvcLibX heuristics (Default)\n\
+  -r                Scan subdirectories recursively\n\
   -v                Display verbose information\n\
   -V                Display this program version\n\
+\n\
+Pathname: A file pathname or [DIRECTORY\\]wildcards or - for stdin. Default: -\n\
 \n\
 MsvcLibX options:\n\
   flags: Hexadecimal combination of the following flags. Default=0=All set\n\
 ");
-  printf("    0x%02X      Binary\n", BE_TEST_BINARY);
-  printf("    0x%02X      ASCII\n", BE_TEST_ASCII);
-  printf("    0x%02X      Windows system code page\n", BE_TEST_SYSTEM);
-  printf("    0x%02X      UTF-8\n", BE_TEST_UTF8);
-  printf("    0x%02X      UTF-16\n", BE_TEST_UTF16);
-  printf("    0x%02X      UTF-32\n", BE_TEST_UTF32);
+  printf("    0x%02X      Test if Binary\n", BE_TEST_BINARY);
+  printf("    0x%02X      Test if ASCII\n", BE_TEST_ASCII);
+  printf("    0x%02X      Test if Windows system code page\n", BE_TEST_SYSTEM);
+  printf("    0x%02X      Test if UTF-8\n", BE_TEST_UTF8);
+  printf("    0x%02X      Test if UTF-16\n", BE_TEST_UTF16);
+  printf("    0x%02X      Test if UTF-32\n", BE_TEST_UTF32);
   printf("\
 \n\
 COM API options: See IMultiLanguage2::DetectInputCodepage doc on the Web\n\
@@ -288,7 +292,6 @@ int __cdecl main(int argc, char *argv[]) {
     /* Process every argument as a file name */
     ShowAllFilesEncoding(pszArg, &opts);
     nPathsProcessed += 1;
-
   }
 
   if (!nPathsProcessed) ShowAllFilesEncoding("-", &opts);
