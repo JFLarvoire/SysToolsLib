@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-12-07
+### New
+- Batch/search.bat: Query the Windows Search service indexed files, using the Advanced Query syntax.
+
+### Changed
+- update.exe: Improved the explanations in the help screen about junctions on network drives.
+- C/MsvLibX/src/mb2wpath.c: Detect pathnames that WIN32 APIs would "normalize", ex: "end space " or "nul",
+  and prefix them with \\\\?\\ to avoid that.
+
+### Fixed
+- update.exe, zap.exe: Can now handle any NTFS file name, including those like "end space " or "nul".
+  To distiguish files like "nul" from their homonym DOS devices, always use a path for the file. Ex: ".\nul"
+
 ## [Unreleased] 2021-11-29
 ### New
 - C/MsvLibX/src/GetShareBasePath.c: Merge the heuristics for getting network junctions base paths, shared between
