@@ -10,6 +10,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ### Changed
 - update.exe: Improved the explanations in the help screen about junctions on network drives.
+- encoding.exe: Updated the help screen, documenting option -r for recursion.
 - C/MsvLibX/src/mb2wpath.c: Detect pathnames that WIN32 APIs would "normalize", ex: "end space " or "nul",
   and prefix them with \\\\?\\ to avoid that.
 
