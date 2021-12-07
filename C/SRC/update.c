@@ -177,6 +177,7 @@
 *    2020-11-05 JFL Moved copydate() to SysLib, adding ns resolution.         *
 *                   Version 3.12.					      *
 *    2021-11-24 JFL Improved the heuristics for creating net. drive junctions.*
+*    2021-12-07 JFL Updated the explanations in the help screen.              *
 *                   Version 3.13.					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
@@ -186,7 +187,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.13"
-#define PROGRAM_DATE    "2021-11-24"
+#define PROGRAM_DATE    "2021-12-07"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -820,17 +821,27 @@ Note: Options -C -D -q -S override each other. The last one provided wins.\n"
 "\
 Note: Symbolic links can only be updated if running as Administrator,\n\
       or if having the \"Create symbolic links\" right.\n\
-Note: Junctions can be updated in all cases. Junctions to the same drive are\n\
-      updated as if they were relative symbolic links. That is, the target\n\
-      junction will be set to point to a folder having the same relative path\n\
-      to the target junction itself, as the source junction to its own target.\n\
-      This can be done reliably on local drives, but not on network drives.\n\
-      On network drives, we use the following heuristics to find the junction\n\
-      target base path. The first two rules are reliable, the next two are not!\n\
+      Junctions can be updated in all cases.\n\
+Note: Junctions to a different drive are updated with the same absolute target.\n\
+      Junctions to the same drive are updated as if they were relative symbolic\n\
+      links. That is, the target junction is set to point to a folder having\n\
+      the same relative path to the target junction itself, as the source\n\
+      junction target to the source junction.\n\
+Note: Relative junction targets can be read and set reliably on local drives,\n\
+      but not on network drives. There, the problem is that junctions record\n\
+      their target pathname as seen on the server side, not on the client side.\n\
+      This program attempts to find the network share's server side base path\n\
+      by trying the following heuristic rules in sequence:\n\
       1. Share names w. one letter + a $ refer to the drive root. Ex: C$ -> C:\\\n\
       2. Read the base path stored in file \\\\SERVER\\SHARE\\_Base_Path.txt.\n\
       3. Share names w. one letter also refer to the drive root. Ex: C -> C:\\\n\
-      4. Longer names refer to a folder on drive C. Ex: Public -> C:\\Public\n"
+      4. Longer names refer to a folder on drive C. Ex: Public -> C:\\Public\n\
+      Warning: The first two rules are reliable, the next two are not! In the\n\
+      latter cases, relative network junctions may be read or set incorrectly.\n\
+      It is sometimes possible to get the base path from the server using WMI:\n\
+        wmic /node:SERVER share where name=\"SHARE\" get path\n\
+      Once found, store that path into \\\\SERVER\\SHARE\\_Base_Path.txt,\n\
+      so that it can then be read by rule #2.\n"
 #endif
 "\
 \n\
