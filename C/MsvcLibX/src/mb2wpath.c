@@ -20,6 +20,7 @@
 *    2018-04-27 JFL Moved MultiByteToNewWideString to iconv.c.                *
 *		    Split CorrectWidePath() off of MultiByteToWidePath().     *
 *		    Added CorrectNewWidePath().				      *
+*    2021-12-07 JFL Detect abnormal paths that also require a \\?\ prefix.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,12 +33,71 @@
 
 #if defined(_WIN32)
 
+#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+
+#pragma warning(disable:4996)        /* Ignore the deprecated name warning */
+
 #include <windows.h>
 #include <direct.h>	/* For _getdrive() */
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>	/* For CompactPathW() */
 #include <iconv.h>	/* For MultiByteToNewWideString() */
+
+#define CRITICAL_LENGTH 240 /* Documented as 255 or 260, but some APIs (ex: CreateDirectoryW) fail between 240 and 250 */
+
+/* Test if a pathname refers to a device name like NUL, CON, COM1, LPT1, ... */
+BOOL MlxIsDosDeviceW(LPCWSTR pwszPath) {
+  /* First the simple cases */
+  if (!wcsicmp(pwszPath, L"NUL")) return TRUE;
+  if (!wcsicmp(pwszPath, L"CON")) return TRUE;
+  if (!wcsicmp(pwszPath, L"PRN")) return TRUE;
+  if (!wcsicmp(pwszPath, L"AUX")) return TRUE;
+  /* Then detect COM1...COM9 and LPT1...LPT9 */
+  /* Note that COM10, LPT10, etc, if they exist, are only accessible as \\.\COM10, etc */
+  if ((!wcsnicmp(pwszPath, L"COM", 3)) || (!wcsnicmp(pwszPath, L"LPT", 3))) {
+    if ((pwszPath[3] >= '1') && (pwszPath[3] <= '9') && !pwszPath[4]) return TRUE;
+  }
+  return FALSE;
+}
+
+/* Test if a pathname contains parts that would be renormalized by WIN32 APIs */
+/* See https://docs.microsoft.com/en-us/archive/blogs/jeremykuhne/path-normalization */
+BOOL MlxIsAbnormalPathW(LPCWSTR pwszPath) {
+  LPCWSTR pwsz;
+  int lPart;
+  WCHAR wBuf[CRITICAL_LENGTH+4] = L"C:\\";
+  WCHAR wBuf2[CRITICAL_LENGTH+32];
+  int lBuf2 = (int)(sizeof(wBuf2)/sizeof(WCHAR));
+  int lResult;
+  
+  if ((!pwszPath) || (!pwszPath[0])) return FALSE; /* Prevent issues */
+
+  if (lstrlenW(pwszPath) >= CRITICAL_LENGTH) return TRUE;
+
+  if (MlxIsDosDeviceW(pwszPath)) return FALSE;
+
+  /* Make sure that each part if normal */
+  if (pwszPath[1] == L':') pwszPath += 2; /* Skip the drive letter */
+  for (pwsz = pwszPath; *pwsz; pwsz += lPart) {
+    lPart = (int)wcscspn(pwsz, L"\\/");
+    if (!lPart) {	/* The first character is a \ or a / */
+      lPart = 1;	/* Skip it */
+      continue;
+    }
+    wcsncpy(wBuf+3, pwsz, lPart);
+    wBuf[3+lPart] = L'\0';
+    if ((!wcscmp(wBuf+3, L".")) || (!wcscmp(wBuf+3, L".."))) continue;
+    if (MlxIsDosDeviceW(wBuf+3)) return TRUE;	/* One part is named like a DOS device */
+    lResult = (int)GetFullPathNameW(wBuf, lBuf2, wBuf2, NULL); /* Normalize the path */
+    if (!lResult) return TRUE;			/* Normalization failed */
+    if (lResult >= lBuf2) return TRUE;		/* Normalization wants to make a huge change */
+    if (wcscmp(wBuf, wBuf2)) return TRUE;	/* Normalization made a small change */
+    /* The normalization did not change anything in that part. Try the next part. */
+  }
+
+  return FALSE; /* OK, it's a normal WIN32 pathname */
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -64,10 +124,9 @@
 |    2017-10-25 JFL Fixed support for paths with / separators.                |
 |    2017-10-30 JFL Bugfix: Don't add a \\?\ prefix if there's one already.   |
 |		    Fixed a memory leak when converting to an absolute path.  |
+|    2021-12-07 JFL Detect abnormal paths that also require a \\?\ prefix.    |
 *                   							      *
 \*---------------------------------------------------------------------------*/
-
-#define CRITICAL_LENGTH 240 /* Documented as 255 or 260, but some APIs (ex: CreateDirectoryW) fail between 240 and 250 */
 
 int MultiByteToWidePath(
   UINT nCodePage,
@@ -103,10 +162,12 @@ int CorrectWidePath(
   for (pwsz = pwszName; *pwsz; pwsz++) if (*pwsz == L'/') *pwsz = L'\\';
 
   /* Relative pathnames will cause failures if the absolute name passes the 260 character limit */
-  if (   (pwszName[0] != L'\\')				/* If this is not an absolute path */
-      && (   (pwszName[1] && (pwszName[1] != L':'))	/* And there's no drive letter */
-	  || (!pwszName[2])				   /* Or it's just a drive letter */
-	  || (pwszName[2] != L'\\'))) {			   /* Or there's no absolute path after the drive letter */
+  if (MlxIsDosDeviceW(pwszName)) {				/* If this is a DOS device name */
+    goto copy_the_name;		/* It needs no change */
+  } else if (   (pwszName[0] != L'\\')				/* If this is not an absolute path */
+	     && (   (pwszName[1] && (pwszName[1] != L':'))	/* And there's no drive letter */
+		 || (!pwszName[2])				   /* Or it's just a drive letter */
+		 || (pwszName[2] != L'\\'))) {			   /* Or there's no absolute path after the drive letter */
     /* Then it's a relative path. Convert it to an absolute path to prevent WIN32 APIs failures */
     int iDrive = 0;
     WCHAR *pwszRelPath = pwszName;
@@ -136,7 +197,7 @@ int CorrectWidePath(
     iLen += lRelPath;
     iLen = CompactPathW(pwszBuf2, pwszBuf2, WIDE_PATH_MAX);
     pwszBuf2 = realloc(pwszBuf2, (iLen+1) * sizeof(WCHAR)); /* Avoid wasting space */
-    if (iLen >= CRITICAL_LENGTH) { /* Then processing this pathname requires prepending a special prefix */
+    if (MlxIsAbnormalPathW(pwszBuf2)) { /* Then processing this pathname requires prepending a special prefix */
       DEBUG_WPRINTF((L"// Relative name \"%s\" changed to \"%s\"\n", pwszName, pwszBuf2));
       pwszName = pwszBuf2;
       lName = iLen;
@@ -147,7 +208,7 @@ int CorrectWidePath(
     } else { /* OK, we don't need the absolute path. Free its buffer. */
       free(pwszBuf2);
     }
-  } else if (lName >= CRITICAL_LENGTH) { /* Then processing this pathname requires prepending a special prefix */
+  } else if (MlxIsAbnormalPathW(pwszName)) { /* Then processing this absolute pathname requires prepending a special prefix */
     /* See http://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx */
     if (!strncmpW(pwszName, L"\\\\?\\", 4)) {		/* The name is in the Win32 file namespace */
       /* Do nothing, the "\\?\" extended-length prefix is already there */
@@ -188,6 +249,7 @@ fail_no_space:
     errno = ENOSPC;
     goto cleanup_and_return;
   }
+copy_the_name:
   lstrcpyW(pwszBuf, pwszName);
   DEBUG_CODE(
     if (pwszBuf != pwszBuf0) {
