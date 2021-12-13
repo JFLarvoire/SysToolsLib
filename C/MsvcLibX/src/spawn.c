@@ -22,11 +22,12 @@
 /* MsvcLibX library extensions */
 #include "debugm.h"
 #include "msvclibx.h"
+#include <process.h>
+#include <errno.h>
 
 #ifdef _WIN32
 
 #include <windows.h>
-#include <process.h>
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

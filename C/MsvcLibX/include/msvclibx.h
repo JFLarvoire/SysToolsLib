@@ -85,12 +85,7 @@
 #pragma message("Adding pragma comment(lib, \"" _MSVCLIBX_LIB "\")")
 #pragma comment(lib, _MSVCLIBX_LIB)
 
-/* Library-specific routine used internally by many standard routines */
 #if defined(_WIN32)
-extern int Win32ErrorToErrno(); /* Converts the last WIN32 error to a Posix error code */
-#ifndef ELOOP	/* Defined in VS10's errno.h, but not in VS9 */
-#define ELOOP           114
-#endif
 /* Convert an ANSI or UTF-8 or OEM pathname to a Unicode string. Defined in mb2wpath.c. */
 typedef unsigned int UINT;	/* Defined in windef.h */
 typedef char* LPSTR;		/* Defined in winnt.h */

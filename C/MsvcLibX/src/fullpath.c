@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <malloc.h>
+#include <errno.h>
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
 

@@ -194,22 +194,6 @@ int MlxReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp);	/
 #define MlxReadAppExecLinkU(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_UTF8);/* Get the target of an appexeclink - UTF-8 version */
 WCHAR *MlxGetShareBasePathW(const WCHAR *pwszShareUNC);				/* MsvcLibX Guess the server-side path of \\SERVER\SHARE */
 
-#ifndef ELOOP
-/*
-// Unix defines ELOOP as errno 40.
-// MS Visual C++ 1.52 for DOS is standard up to errno 34, then diverges up to errno 36.
-//  Many errnos within the list are actually unused, and for them _sys_errlist[] = "".
-// MS Visual C++ 9 for Windows is standard up to errno 34, then diverges up to errno 43.
-//  Also MSVC9 does not define errno:
-//   15      // The posix standard ENOTBLK "Block device required"
-//   26      // The posix standard ETXTBSY "Text file busy"
-//   35      // Positioned between standard ERANGE and EDEADLK
-//   37      // Positioned between standard EDEADLK and ENAMETOOLONG
-//   43      // Positioned last, after standard ENOTEMPTY
-// The _sys_errlist[] pointer for all the above points to a single string "Unknown error".
-*/
-#define ELOOP  35  /* Using the first available slot */  /* Update _sys_errlist[ELOOP] accordingly in any routine that generates ELOOP! */
-#endif /* !defined(ELOOP) */
 #define SYMLOOP_MAX 31 /* Maximum depth of symbolic name resolution, to avoid stack overflows. Windows is documented to allow 31: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365460(v=vs.85).aspx */
 #endif /* defined(_WIN32) */
 

@@ -46,10 +46,6 @@
 #include <errno.h>
 #include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
 
-#ifndef ENAMETOOLONG /* Not defined in DOS' errno.h */
-#define ENAMETOOLONG 38
-#endif
-
 #ifdef  __cplusplus
 extern "C" {
 #endif
