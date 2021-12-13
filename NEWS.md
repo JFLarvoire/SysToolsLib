@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-12-13
+### New
+- C/MsvcLibX/include/errno.h: New include file extension, regrouping all errno-related definitions previously spread
+  across several other include files.
+
+### Fixed
+- C/include/win32.mak, dos.mak, bios.mak: Fixed `make clean` & `make help` when used in the C/SRC subdirectory.
+- C/MsvcLibX/include/msvclibx.h, unistd.h: There were 2 distinct (and incoherent) definitions of error ELOOP.
+
 ## [Unreleased] 2021-12-07
 ### New
 - Batch/search.bat: Query the Windows Search service indexed files, using the Advanced Query syntax.
