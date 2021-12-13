@@ -938,7 +938,7 @@ $(CONV_SCRIPT): "$(THIS_MAKEFILE)"	# Poor man's version of conv.exe, limited to 
 <<KEEP
 
 # Erase all output files
-clean:
+clean: NUL
     -rd /S /Q $(R)	>NUL 2>&1
     -del /Q *.pdb	>NUL 2>&1
     -del /Q *.ncb	>NUL 2>&1
@@ -947,7 +947,7 @@ clean:
     -del /Q *~		>NUL 2>&1
 
 # Help message describing the targets
-help:
+help: NUL
     type <<
 Targets:
   clean                   Erase all files in the $(R) directory
