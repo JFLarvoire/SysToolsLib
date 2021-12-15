@@ -28,6 +28,7 @@
 COMMON_OBJECTS = \
     +$(O)/copydate.obj		\
     +$(O)/IsMBR.obj		\
+    +$(O)/JoinPaths.obj		\
     +$(O)/oprintf.obj		\
     +$(O)/oprintf6.obj		\
     +$(O)/oprintf7.obj		\
@@ -35,10 +36,12 @@ COMMON_OBJECTS = \
     +$(O)/oprintf9.obj		\
     +$(O)/oprintf10.obj		\
     +$(O)/PcUuid.obj		\
+    +$(O)/pferror.obj		\
     +$(O)/PrintUuid.obj		\
     +$(O)/qword.obj		\
     +$(O)/uuid.obj		\
     +$(O)/uuidnull.obj		\
+    +$(O)/WalkDirTree.obj	\
 
 # Microsoft-OS-specific objects are defined conditionally in SysLib.mak
 # MS_OBJECTS = \
@@ -113,6 +116,8 @@ $(S)/IsMBR.c: $(S)/IsMBR.h
 
 $(S)/IsMBR.h: $(S)/SysLib.h
 
+$(S)/JoinPaths.c: $(S)/pathnames.h
+
 $(S)/LDisk95.cpp: $(S)/LogDisk.h $(S)/Ring0.h $(S)/R0Ios.h
 
 $(S)/LDiskDos.cpp: $(S)/LogDisk.h
@@ -150,6 +155,8 @@ $(S)/OPrintf10.cpp: $(S)/OPrintf.h
 
 $(S)/PcUuid.c: $(S)/Uuid.h $(S)/smbios.h
 
+$(S)/pferror.c: $(S)/mainutil.h
+
 $(S)/printerr.c:
 
 $(S)/PrintUuid.c: $(S)/Uuid.h
@@ -185,4 +192,6 @@ $(S)/UuidNull.c: $(S)/Uuid.h
 $(S)/VxDCall.c: $(S)/VxDCall.h
 
 $(S)/VxDCall.h: $(S)/SysLib.h
+
+$(S)/WalkDirTree.c: $(S)/dirx.h $(S)/mainutil.h $(S)/pathnames.h
 
