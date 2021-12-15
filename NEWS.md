@@ -6,6 +6,11 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2021-12-13
 ### New
+- C/SysLib/WalkDirTree.c, JoinPaths.c, pferror.c, pathnames.h, mainutil.h:
+  Added routines WalkDirTree(), JoinPaths.c(), pferror()
+
+## [Unreleased] 2021-12-13
+### New
 - C/MsvcLibX/include/errno.h: New include file extension, regrouping all errno-related definitions previously spread
   across several other include files.
 
