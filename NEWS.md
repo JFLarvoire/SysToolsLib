@@ -4,8 +4,12 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2021-12-13
+## [Unreleased] 2021-12-15
 ### New
+- junction.exe: Manage NTFS junctions as if they were relative symbolic links.
+  Otherwise same features and options as SysInternal's junction.exe.
+- ShareInfo.exe: Get information about a shared folder on a remote server. Useful to configure network shares,
+  so that junction.exe, update.exe, etc, can properly manage relative junctions over there.
 - C/SysLib/WalkDirTree.c, JoinPaths.c, pferror.c, pathnames.h, mainutil.h:
   Added routines WalkDirTree(), JoinPaths.c(), pferror()
 

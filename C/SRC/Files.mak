@@ -33,12 +33,14 @@ PROGRAMS = \
   font.exe        \
   gpt.exe         \
   inicomp.exe     \
+  junction.exe    \
   md.exe          \
   msgbox.exe      \
   rd.exe          \
   redo.exe        \
   remplace.exe    \
   sector.exe      \
+  ShareInfo.exe   \
   smbios.exe      \
   tee.exe         \
   trim.exe        \
@@ -116,6 +118,8 @@ ZIPSOURCES =		 \
   gpt.mak		 \
   inicomp.c              \
   inicomp.mak            \
+  junction.c             \
+  junction.mak           \
   macros.cpp             \
   make.bat               \
   Makefile               \
@@ -130,6 +134,8 @@ ZIPSOURCES =		 \
   redo.mak               \
   remplace.c             \
   sector.cpp		 \
+  ShareInfo.c            \
+  ShareInfo.mak          \
   smbios.c               \
   smbios.mak             \
   smbios_defs.c          \

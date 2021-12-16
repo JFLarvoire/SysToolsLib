@@ -118,11 +118,13 @@ hosts.bat                   | -W- | Edit the hosts file with notepad            
 IESec.ps1                   | -W- | Display Internet Explorer security mode settings.                                     |
 IPcfg.bat                   | -W- | Front end to ipconfig.exe, filtering its output to make it more readable. Numerous options to select the information needed.  | `ipcfg` &:# Display just Ethernet and Wifi interfaces
 Is-WindowsActivated.ps1     | -W- | Test if Windows is activated.                                                         |
+junction.exe                | -W- | Manage NTFS junctions as if they were symbolic links. Otherwise like SysInternal's.   | `junction bin ..\bin` &:# Create a relative junction
 Out-ByHost.ps1              | -W- | Execute PowerShell commands on remote machines in parallel, displaying results like Unix pdsh: That is as pure text lines, prefixed by the remote machine name. Requires installing Out-ByHost.ps1 and Reconnect.ps1 on every target system.          | `Out-ByHost (atlas 1..4) {update S:\tools C:\tools}`
 Reconnect.bat               | -W- | Reconnect disconnected network drives. Useful after moving a laptop, or when opening an elevated window.      | `Reconnect S:`
 Reconnect.ps1               | -W- | Reconnect disconnected network drives. Useful in remote PS sessions, which have drives disconnected by default.       | `Reconnect S:`
 regx.bat                    | -W- | Manage the registry as if it were a file system, with keys=dirs & values=files. Output formatted as SML.      | `regx dir HKLM\SOFTWARE\Microsoft\Windows`
 ShadowCopy.ps1              | -W- | Manage volume shadow copies. Options for listing previous versions of files. Option for recyling shadow copies like a pool of backup tapes.   | `help ShadowCopy.ps1 -detailed`
+ShareInfo.exe               | -W- | Get information about a shared folder on a remote server.                             | `ShareInfo \\server\share`
 ShellApp.ps1                | -W- | List Windows Shell Application Windows, i.e. File Explorers and Control Panels.       | `shellapp -fe -h | window -moveto 400,200`
 Test-IPv6Components.ps1     | -W- | Test if Windows IPv6 component are enabled or disabled. Useful for diagnosing networking issues.      |
 Window.ps1                  | -W- | Move and resize windows.                                                              | `Window "Server Manager" -MoveTo 150,150 -Resize 1000,750 -OnTop`
