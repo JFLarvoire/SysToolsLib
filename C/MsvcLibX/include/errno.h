@@ -63,7 +63,7 @@ extern int Win32ErrorToErrno(); /* Converts the last WIN32 error to a Posix erro
 //   37      // Positioned between standard EDEADLK and ENAMETOOLONG
 //   43      // Positioned last, after standard ENOTEMPTY
 // The _sys_errlist[] pointer for all the above points to a single string "Unknown error".
-// MS Visual C++ 15 / VS 2022 has the same errno code list as Visual C++ 9.
+// MS Visual C++ 10 and later define ERRNO as 114.
 */
 #define ELOOP  35  /* Using the first available slot */  /* Update _sys_errlist[ELOOP] accordingly in any routine that generates ELOOP! */
 #endif /* !defined(ELOOP) */
