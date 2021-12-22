@@ -145,12 +145,12 @@ int lstat(const char *path, struct stat *pStat) {
   DEBUG_PRINTF(("GetFileAttributes() = 0x%lX\n", dwAttr));
   if (dwAttr == INVALID_FILE_ATTRIBUTES) {
     errno = ENOENT;
-    RETURN_INT_COMMENT(-1, ("File does not exist\n"));
+    RETURN_INT_COMMENT(-1, ("errno = %d; // %s\n", errno, strerror(errno)));
   }
 
   if (!(dwAttr & FILE_ATTRIBUTE_REPARSE_POINT)) {
     int iErr = stat(path, pStat);
-    RETURN_INT(iErr);
+    RETURN_INT_COMMENT(iErr, ("errno = %d; // %s\n", errno, strerror(errno)));
   }
 #endif
 
@@ -286,7 +286,7 @@ int stat(const char *path, struct stat *pStat) {
   dwAttr = GetFileAttributes(path);
   if (dwAttr == INVALID_FILE_ATTRIBUTES) {
     errno = ENOENT;
-    RETURN_INT_COMMENT(-1, ("File does not exist\n"));
+    RETURN_INT_COMMENT(-1, ("errno = %d; // %s\n", errno, strerror(errno)));
   }
 
   if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
@@ -298,7 +298,7 @@ int stat(const char *path, struct stat *pStat) {
 
   if (!iErr) iErr = lstat(path, pStat);
 
-  RETURN_INT(iErr);
+  RETURN_INT_COMMENT(iErr, ("errno = %d; // %s\n", errno, strerror(errno)));
 }
 #endif /* !USE_MSVC_STAT */
 
