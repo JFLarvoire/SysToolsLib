@@ -727,13 +727,13 @@ resolves_too_long:
 	DEBUG_PRINTF(("// Relative link to \"%s\"\n", target));
 	/* So it'll replace the tail name in the output path */
 	iBuf = iBuf1; /* The index right after the last path separator */
-	DEBUG_PRINTF(("MlxResolveLinks1(\"%.*s\", \"%s\"); // Target tail\n", iBuf, buf, target));
+	DEBUG_PRINTF(("// Base dir = \"%.*s\"\n", iBuf, buf));
 	if (((size_t)iBuf+lstrlen(target)) >= bufsize) goto resolves_too_long;
 	lstrcpy(buf+iBuf, target);
 	iBuf = CompactPath(buf, buf, bufsize);
       }
       /* Append the remainder of the input path, if any */
-      DEBUG_PRINTF(("MlxResolveLinks1(\"%s\", \"%s\"); // Path tail\n", buf, path+iPath));
+      DEBUG_PRINTF(("buf = \"%s\"; path tail = \"%s\";\n", buf, path+iPath));
       if (path[iPath]) {
 	if (iBuf && (buf[iBuf-1] != '\\')) {
 	  if ((iBuf+1U) >= bufsize) goto resolves_too_long;
