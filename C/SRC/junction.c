@@ -9,12 +9,15 @@
 *   History                                                                   *
 *    2021-11-27 JFL Created this program.				      *
 *    2021-12-15 JFL Added all missing SysInternals-compatible options.	      *
+*    2021-12-21 JFL Added option -f to follow symlinks and junctions. 	      *
+*    2021-12-22 JFL Detect link loops, and avoid entering them.       	      *
+*    2021-12-26 JFL Changed the verbose flag operation.               	      *
 *                                                                             *
 \*****************************************************************************/
 
-#define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were symbolic links"
+#define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2021-12-15"
+#define PROGRAM_VERSION "2021-12-26"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -85,9 +88,11 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 #endif
 "\
   -d      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
-  -q      Quiet mode. Do not report access errors when searching for junctions.\n\
+  -f      Follow links to directories when searching recursively\n\
+  -q      Quiet mode. Do not report access errors when searching recursively\n\
   -r|-s   Search junctions recursively in a directory tree\n\
   -V      Display this program version and exit\n\
+  -v      Verbose mode. Report both the junction and target.\n\
 \n\
 Junction: The junction to manage. By default, read and display the target.\n\
  o Targets on the same drive as the junction are shown as a relative path.\n\
@@ -101,8 +106,8 @@ Target dir: If specified, create a junction pointing to that target directory.\n
    Use at your own risk!\n\
 \n\
 Heuristics for managing junctions on network shares:\n\
-  The problem is that junctions record the target pathname as seen on the\n\
-  server side, not on the client side. This program attempts to find the\n\
+  The problem is that junctions record the absolute target pathname as seen on\n\
+  the server side, not on the client side. This program attempts to find the\n\
   share's server side base path by trying the following rules in sequence:\n\
    1. Share names with one letter + a $ refer to the drive root. Ex: C$ -> C:\\\n\
    2. Read the base path stored in file \\\\SERVER\\SHARE\\_Base_Path.txt\n\
@@ -111,17 +116,17 @@ Heuristics for managing junctions on network shares:\n\
   Warning: The first two rules are reliable, the next two are not!\n\
   It is sometimes possible to get the base path from the server using WMI:\n\
     wmic /node:SERVER share where name=\"SHARE\" get path\n\
-  Once found, it is best to store that path in \\\\SERVER\\SHARE\\_Base_Path.txt.\n\
+  Once found, it is best to store that path in \\\\SERVER\\SHARE\\_Base_Path.txt.\
 ");
 }
 
-typedef enum {
+typedef enum {	/* Action to do */
   ACT_NONE,
-  ACT_CREATE,
-  ACT_RAWGET,
-  ACT_GET,
-  ACT_DELETE,
-  ACT_SCAN
+  ACT_CREATE,		/* Create a new junction */
+  ACT_RAWGET,		/* Get the raw target of a junction */
+  ACT_GET,		/* Get the relatie target of a junction */
+  ACT_DELETE,		/* Delete a junction */
+  ACT_SCAN		/* Search recursively for junctions */
 } action_t;
 
 int main(int argc, char *argv[]) {
@@ -156,7 +161,11 @@ int main(int argc, char *argv[]) {
 	action = ACT_DELETE;
 	continue;
       }
-      if (streq(opt, "q")) {
+      if (streq(opt, "f")) {	/* Follow symlinkds and junctions */
+	opts.iFlags |= WDT_FOLLOW;
+	continue;
+      }
+      if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors */
 	opts.iFlags |= WDT_IGNOREERR;
 	continue;
       }
@@ -198,7 +207,7 @@ int main(int argc, char *argv[]) {
 
   if (action == ACT_SCAN) { /* Scan a directory tree for junctions */
     char *pszDir = pszJunction ? pszJunction : ".";
-    iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, NULL);
+    iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, &iVerbose);
     if (iErr) {
       pferror("Failed to search junctions in \"%s\". %s", pszDir, strerror(errno));
       return 1;
@@ -217,6 +226,11 @@ int main(int argc, char *argv[]) {
       pferror("Failed to create junction \"%s\". %s", pszJunction, strerror(errno));
       return 1;
     }
+    if (iVerbose) {
+      printf("%s -> %s\n", pszJunction, pszTarget);
+    } else {
+      printf("%s\n", pszJunction);
+    }
     return 0;
   }
 
@@ -231,7 +245,11 @@ int main(int argc, char *argv[]) {
       pferror("\"%s\" is not a junction", pszJunction);
       return 1;
     }
-    printf("%s\n", buf);
+    if (iVerbose) {
+      printf("%s -> %s\n", pszJunction, buf);
+    } else {
+      printf("%s\n", buf);
+    }
     return 0;
   }
 
@@ -242,7 +260,11 @@ int main(int argc, char *argv[]) {
       pferror("Failed to read junction \"%s\". %s", pszJunction, strerror(errno));
       return 1;
     }
-    printf("%s\n", buf);
+    if (iVerbose) {
+      printf("%s -> %s\n", pszJunction, buf);
+    } else {
+      printf("%s\n", buf);
+    }
     return 0;
   }
 
@@ -262,7 +284,11 @@ not_junction:
       pferror("Failed to delete junction \"%s\". %s", pszJunction, strerror(errno));
       return 1;
     }
-    printf("%s\n", buf); /* Display the target of the deleted link */
+    if (iVerbose) {
+      printf("%s -> %s\n", pszJunction, buf);
+    } else {
+      printf("%s\n", buf); /* Display the target of the deleted link */
+    }
     return 0;
   }
 
@@ -273,13 +299,21 @@ not_junction:
 
 int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
   DWORD dwTag;
+  int iVerbose = *(int *)pRef;
 
   if (pDE->d_type != DT_LNK) return 0;
 
   dwTag = MlxGetReparseTag(pszRelPath);
   if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) return 0;
 
-  printf("%s\n", pszRelPath);
+  if (iVerbose) {
+    char buf[PATH_MAX];
+    int iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+    if (iErr == -1) buf[0] = '\0';
+    printf("%s -> %s\n", pszRelPath, buf);
+  } else {
+    printf("%s\n", pszRelPath);
+  }
   return 0;
 }
 
