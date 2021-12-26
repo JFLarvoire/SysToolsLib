@@ -4,6 +4,16 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-12-26
+### Changed
+- junction.exe: Added option -f to follow symlinks and junctions.  
+  Detect link loops and danglink links, report them as errors (except in quiet mode), and avoid entering them.  
+  The verbose flag now always reports both the link and its target.
+
+### Fixed
+- C/MsvcLibX/readlink.c: Added link loop detection to MlxResolveTailLinks().
+- C/SysLib/WalkDirTree.c: Added link loop and dangling link detection to WalkDirTree().
+
 ## [Unreleased] 2021-12-15
 ### New
 - junction.exe: Manage NTFS junctions as if they were relative symbolic links.
