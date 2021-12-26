@@ -84,7 +84,8 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 /* WalkDirTree option flags */
 #define WDT_IGNOREERR	0x0001		/* Ignore directory access errors */
 #define WDT_NORECURSE	0x0002		/* Do not recurse into subdirectories */
-#define WDT_LRECURSE	0x0004		/* Recurse into junctions & symlinkds */
+#define WDT_FOLLOW	0x0004		/* Recurse into junctions & symlinkds */
+#define WDT_QUIET	0x0008		/* Do not display minor errors */
 
 typedef struct {	/* WalkDirTree options */
   int iFlags;			/* Options */
