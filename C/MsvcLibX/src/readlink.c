@@ -612,16 +612,25 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 |									      |
 |   Returns	    0 = Success, -1 = Failure and set errno		      |
 |		    							      |
-|   Notes	    TO DO: Detect circular loops?			      |
-|									      |
+|   Notes	    							      |
+|		    							      |
 |   History								      |
 |    2017-03-22 JFL Created this routine                               	      |
+|    2021-12-22 JFL Detect link loops                                  	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+/* Linked list of previous pathnames */
+typedef struct _NAMELIST {
+  struct _NAMELIST *prev;
+  const WCHAR *path;
+} NAMELIST;
+
+int MlxResolveTailLinksW1(const WCHAR *path, WCHAR *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
   DWORD dwAttr;
   size_t l;
+  NAMELIST list;
+  NAMELIST *pList;
 
   DEBUG_WENTER((L"MlxResolveTailLinks(\"%s\", %p, %ul);\n", path, buf, (unsigned long)bufsize));
 
@@ -656,10 +665,27 @@ int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       iCDSize = lstrlenW(wszBuf3);
       lstrcpynW(wszBuf3+iCDSize, wszBuf2, WIDE_PATH_MAX-iCDSize); /* May truncate the output string */
       wszBuf3[WIDE_PATH_MAX-1] = L'\0'; /* Make sure the string is NUL-terminated */
-      /* CompactpathW(wszBuf3, wszBuf2, WIDE_PATH_MAX); // We don't care as we're only interested in the tail */
+      /* CompactPathW(wszBuf3, wszBuf2, WIDE_PATH_MAX); // We don't care as we're only interested in the tail */
+      CompactPathW(wszBuf3, wszBuf3, WIDE_PATH_MAX); /* Actually we do, to avoid too much growth of the path length, and allow loop detection */
       pwsz = wszBuf3;
     }
-    iRet = MlxResolveTailLinksW(pwsz, buf, bufsize);
+    /* Check for the max link chain depth */
+    if (iDepth == SYMLOOP_MAX) {
+      errno = ELOOP;
+      DEBUG_WLEAVE((L"return -1; // Max link chain depth reached: \"%s\"\n", pwsz));
+      return -1;
+    }
+    /* Check if we've seen this path before */
+    for (pList = prev; pList; pList = pList->prev) {
+      if (!lstrcmpW(pwsz, pList->path)) {
+	errno = ELOOP;
+	DEBUG_WLEAVE((L"return -1; // Loop found: \"%s\"\n", pwsz));
+	return -1;
+      }
+    }
+    list.path = pwsz;
+    list.prev = prev;
+    iRet = MlxResolveTailLinksW1(pwsz, buf, bufsize, &list, iDepth+1);
     DEBUG_WLEAVE((L"return %d; // \"%s\"\n", iRet, buf));
     return iRet;
   }
@@ -672,6 +698,13 @@ int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   lstrcpyW(buf, path);
   DEBUG_WLEAVE((L"return 0; // \"%s\"\n", buf));
   return 0;
+}
+
+int MlxResolveTailLinksW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+  NAMELIST root;
+  root.path = path;
+  root.prev = NULL;
+  return MlxResolveTailLinksW1(path, buf, bufsize, &root, 0);
 }
 
 int MlxResolveTailLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {

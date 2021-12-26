@@ -137,6 +137,8 @@ int Win32ErrorToErrno() {
       return EILSEQ;
     case ERROR_FILENAME_EXCED_RANGE:
       return ENAMETOOLONG;
+    case ERROR_CANT_RESOLVE_FILENAME:
+      return ELOOP; /* Most likely because there were more than 16 consecutive links. Broken links return ERROR_FILE_NOT_FOUND. */
     default: {
       int errno0, errno1;
       errno0 = errno; /* Preserve the initial errno */
