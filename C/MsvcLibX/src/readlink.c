@@ -116,6 +116,10 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 |		    size_t bufsize		Number of TCHAR in buf        |
 |		    							      |
 |   Returns:	    >0 = Link target size in TCHARS, Success, -1 = Failure    |
+|		    Special errno values:                                     |
+|		      EBADF	Unsupported link type			      |
+|		      ELOOP	The link loops to itself                      |
+|		      ENOENT	Dangling link                                 |
 |									      |
 |   Notes:	    Supports NTFS link types: symlink, symlinkd, junction.    |
 |		    							      |
@@ -611,6 +615,10 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 |		    size_t bufsize	    Output buffer size in characters  |
 |									      |
 |   Returns	    0 = Success, -1 = Failure and set errno		      |
+|		    Special errno values:                                     |
+|		      EBADF	Unsupported link type, ex: Linux symlink      |
+|		      ELOOP	The link loops to itself                      |
+|		      ENOENT	Dangling link                                 |
 |		    							      |
 |   Notes	    							      |
 |		    							      |
@@ -649,6 +657,11 @@ int MlxResolveTailLinksW1(const WCHAR *path, WCHAR *buf, size_t bufsize, NAMELIS
     int iRet;
     ssize_t nLinkSize = readlinkW(path, wszBuf2, WIDE_PATH_MAX); /* Corrects junction drive letters, etc */
     if (nLinkSize < 0) RETURN_INT(-1);
+    if (wszBuf2[0] == L'/') { /* Most likely a Linux absolute symlink */
+      errno = EBADF; /* We can't resolve such absolute links */
+      RETURN_INT_COMMENT(-1, ("Can't resolve Linux absolute symlink"));
+    }
+    if (!lstrcmpW(path, wszBuf2)) goto return_target_path; /* Junction to a server's external device. See readlink() header */
     if (!(   (wszBuf2[0] == L'\\')
           || (wszBuf2[0] && (wszBuf2[1] == L':')))) { /* This is a relative path. We must compose it with the link dirname */
       lstrcpynW(wszBuf3, path, WIDE_PATH_MAX); /* May truncate the output string */
@@ -690,6 +703,7 @@ int MlxResolveTailLinksW1(const WCHAR *path, WCHAR *buf, size_t bufsize, NAMELIS
     return iRet;
   }
 
+return_target_path:
   l = lstrlenW(path);
   if (l >= bufsize) {
     errno = ENAMETOOLONG;

@@ -173,6 +173,8 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
 	  pszBadLink = "Link loops to itself";
 	} else if (errno == ENOENT) { /* There's a dangling link */
 	  pszBadLink = "Dangling link";
+	} else if (errno == EBADF) { /* Unsupported link type, ex: Linux symlink */
+	  pszBadLink = "Unsupported link";
 	} else if (errno) { /* There's a real error we can't handle here */
 	  free(pPathname);
 	  iRet = 1; /* Abort the search */
