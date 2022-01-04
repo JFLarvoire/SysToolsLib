@@ -99,7 +99,7 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
 
   DEBUG_ENTER(("WalkDirTree(\"%s\", ...);\n", path));
 
-  if ((!path) || !strlen(path)) RETURN_INT_COMMENT(1, ("path is empty\n"));
+  if ((!path) || !strlen(path)) RETURN_INT_COMMENT(-1, ("path is empty\n"));
 
   pDir = opendirx(path);
   if (!pDir) {
@@ -107,7 +107,6 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
       if (!(pOpts->iFlags & WDT_QUIET)) {
       	pferror("Can't access \"%s\": %s", path, strerror(errno));
       }
-      iRet = 1;
     }
     goto fail;
   }
@@ -177,7 +176,7 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
 	  pszBadLink = "Unsupported link";
 	} else if (errno) { /* There's a real error we can't handle here */
 	  free(pPathname);
-	  iRet = 1; /* Abort the search */
+	  iRet = -1; /* Abort the search */
 	  break;
 	}
       }
@@ -186,8 +185,9 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
 
     /* Report the valid directory entry to the callback */
     iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
-    if (pOpts->pNProcessed && (iRet <= 0)) *(pOpts->pNProcessed) += 1; /* Number of files successfully processed */
-    if (iRet) break;	/* -1 = error; 1 = abort the walk */
+    if (pOpts->pNProcessed && (iRet >= 0)) *(pOpts->pNProcessed) += 1; /* Number of files successfully processed */
+    if (iRet == -1) pOpts->nErr += 1;
+    if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
 
     switch (pDE->d_type) {
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK) /* If the OS has links (For some OSs which don't, macros are defined, but always returns 0) */
@@ -216,7 +216,7 @@ int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, v
     free(pBuf);
     pBuf = NULL;
 #endif
-    if (iRet) break;	/* 1 = error; -1 = abort the walk */
+    if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
   }
   closedirx(pDir);
   goto cleanup_and_return;
@@ -233,7 +233,7 @@ cleanup_and_return:
   free(pRootBuf);
   free(pBuf);
 #endif
-  RETURN_INT_COMMENT(iRet, ((iRet == -1) ? "Cancel walk\n" : "Continue walk\n"));
+  RETURN_INT_COMMENT(iRet, ((iRet == -1) ? "Error, stop walk\n" : (iRet ? "Success, stop Walk\n" : "Success, continue walk\n")));
 }
 
 int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef) {
