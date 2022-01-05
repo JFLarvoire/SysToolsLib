@@ -17,7 +17,7 @@
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2021-12-26"
+#define PROGRAM_VERSION "2022-01-05"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -121,10 +121,10 @@ Heuristics for managing junctions on network shares:\n\
 }
 
 typedef enum {	/* Action to do */
-  ACT_NONE,
   ACT_CREATE,		/* Create a new junction */
   ACT_RAWGET,		/* Get the raw target of a junction */
   ACT_GET,		/* Get the relatie target of a junction */
+  ACT_GETID,		/* Get a file ID */
   ACT_DELETE,		/* Delete a junction */
   ACT_SCAN		/* Search recursively for junctions */
 } action_t;
@@ -165,6 +165,10 @@ int main(int argc, char *argv[]) {
 	opts.iFlags |= WDT_FOLLOW;
 	continue;
       }
+      if (streq(opt, "i")) {
+	action = ACT_GETID;
+	continue;
+      }
       if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors */
 	opts.iFlags |= WDT_IGNOREERR;
 	continue;
@@ -203,6 +207,23 @@ int main(int argc, char *argv[]) {
     if (i) /* Stupid hack preventing the next line, at the end of the for {block}, from */
 #endif     /* causing an unreachable code warning in ALL versions of the MS C compiler! */
     return 2;
+  }
+
+  if (action == ACT_GETID) { /* Scan a directory tree for junctions */
+    char *pszPath = pszJunction ? pszJunction : ".";
+    FILE_ID fid;
+    BOOL bDone = GetFileID(pszPath, &fid);
+    if (!bDone) {
+      pferror("Failed to get the file ID for \"%s\". %s", pszPath, strerror(errno));
+      return 1;
+    }
+    if (fid.dwIDVol1 || fid.dwIDFil3 || fid.dwIDFil2) {
+      printf("Volume SN %08.8lX%08.8lX, File ID %08.8lX%08.8lX%08.8lX%08.8lX\n",
+      	     fid.dwIDVol1, fid.dwIDVol0, fid.dwIDFil3, fid.dwIDFil2, fid.dwIDFil1, fid.dwIDFil0);
+    } else {
+      printf("Volume ID %08.8lX, File ID %08.8lX%08.8lX\n", fid.dwIDVol0, fid.dwIDFil1, fid.dwIDFil0);
+    }
+    return 0;
   }
 
   if (action == ACT_SCAN) { /* Scan a directory tree for junctions */

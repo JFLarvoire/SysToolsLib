@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2021-12-27
+### New
+- C/SysLib/WalkDirTree.c: Added function GetFileID() for Windows
+- junction.exe: Added a test of function GetFileID().
+
+## [Unreleased] 2021-12-27
+### Fixed
+- junction.exe, C/MsvcLibX/readlink.c, C/SysLib/WalkDirTree.c: Fixed WalkDirTree() abort when encountering a Linux symlink
+
 ## [Unreleased] 2021-12-26
 ### Changed
 - junction.exe: Added option -f to follow symlinks and junctions.  

@@ -95,7 +95,24 @@ typedef struct {	/* WalkDirTree options */
 
 typedef int (*pWalkDirTreeCB_t)(char *pszRelPath, struct dirent *pDE, void *pRef);
 
-int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
+#ifdef _WIN32
+
+/* File ID, unique locally on a server. */
+typedef struct { /* Equivalent to the FILE_ID_INFO structure defined in winbase.h */
+  /* https://docs.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info */
+  DWORD dwIDVol0;		/* Volume ID (low DWORD for NTFS and ReFS) */
+  DWORD dwIDVol1;		/* Volume ID (high DWORD for ReFS, 0 for NTFS) */
+  DWORD dwIDFil0;		/* File ID (low DWORD for NTFS and ReFS) */
+  DWORD dwIDFil1;		/* File ID (high DWORD for NTFS and ReFS) */
+  DWORD dwIDFil2;		/* File ID (DWORD #3 for ReFS, 0 for NTFS) */
+  DWORD dwIDFil3;		/* File ID (DWORD #4 for ReFS, 0 for NTFS) */
+} FILE_ID;
+
+extern BOOL GetFileID(const char *pszName, FILE_ID *pFID);
+
+#endif /* _WIN32 */
+
+extern int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
 
 #ifdef __cplusplus
 }
