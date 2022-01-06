@@ -26,6 +26,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 /* SysLib include files */
 #include "mainutil.h"	/* Main C routine utility routines */
@@ -212,7 +213,7 @@ int main(int argc, char *argv[]) {
   if (action == ACT_GETID) { /* Scan a directory tree for junctions */
     char *pszPath = pszJunction ? pszJunction : ".";
     FILE_ID fid;
-    BOOL bDone = GetFileID(pszPath, &fid);
+    BOOL bDone = MlxGetFileID(pszPath, &fid);
     if (!bDone) {
       pferror("Failed to get the file ID for \"%s\". %s", pszPath, strerror(errno));
       return 1;

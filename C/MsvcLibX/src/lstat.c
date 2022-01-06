@@ -248,6 +248,16 @@ this_is_not_a_symlink:
   pStat->st_ReparseTag = dwTag;
 #endif
 
+  if (bMlxStatSetInode) { /* Control whether to set st_dev & st_ino, which slows lstat() noticeably */
+    FILE_ID fid;
+    bDone = MlxGetFileIDW(pwszName, &fid);
+    if (bDone) {
+      pStat->st_dev = *(_dev_t *)(&fid.dwIDVol0);
+      pStat->st_ino = *(_ino_t *)(&fid.dwIDFil0);
+      if (*(_ino_t *)(&fid.dwIDFil2)) *(_ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
+    }
+  }
+
   free(pwszName);
   RETURN_INT_COMMENT(0, ("%s  mode = 0x%04X  size = %I64d bytes\n", szTime, pStat->st_mode, qwSize));
 }
@@ -349,4 +359,3 @@ int dirent2stat(const _dirent *pDirent, struct stat *pStat) {
 }
 
 #endif /* _WIN32 */
-

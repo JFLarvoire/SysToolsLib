@@ -11,6 +11,7 @@
 *    2014-06-06 JFL Moved mode_t & off*_t definitions here, from sys\stat.h.  *
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
 *    2017-02-28 JFL Redefine pid_t as an int in all cases: It's more standard.*
+*    2022-01-05 JFL Optionally redefine _dev_t and _ino_t.		      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -21,13 +22,35 @@
 
 #include "msvclibx.h"
 
+#if _USE_EXTENDED_STAT_STRUCT
+
+/* Redefine the _dev_t and _ino_t types. Must be the same as in wchar.h */
+
+/* Define an actual device ID type. Must be an integer type. */
+#if defined(_MSDOS)
+typedef short _dev_t;			/* Use the drive letter */
+#elif defined(_WIN32)
+typedef __int64 _dev_t;			/* Use the device Serial Number */
+#endif
+#define _DEV_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
+
+/* Define an actual inode number type. Must be an unsigned integer type. */
+#if defined(_MSDOS)
+typedef unsigned long _ino_t;		/* Use the cluster number */
+#elif defined(_WIN32)
+typedef unsigned __int64 _ino_t;	/* Use the file ID Number */
+#endif
+#define _INO_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
+
+#endif /* _USE_EXTENDED_STAT_STRUCT */
+
+/*****************************************************************************/
+
 #include UCRT_INCLUDE_FILE(sys\types.h) /* Include MSVC's own <sys/types.h> file */
 
 /************************ MS-DOS-specific definitions ************************/
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
-
-
 
 /* File offset type */
 /* For now, use the MSVC 32-bits functions in all cases */

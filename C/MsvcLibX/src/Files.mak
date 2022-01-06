@@ -96,6 +96,7 @@ OBJECTS = \
 WIN32_OBJECTS = \
     +aswprintf.obj		\
     +daswprintf.obj		\
+    +fileid.obj			\
     +GetEncoding.obj		\
     +GetFileAttributes.obj	\
     +GetFileAttributesEx.obj	\
@@ -148,7 +149,7 @@ $(I)\sys\stat.h: $(I)\msvclibx.h $(I)\sys\types.h
 
 # $(I)\stdbool.h: 
 
-# $(I)\stdint.h: 
+$(I)\stdint.h: $(I)\wchar.h
 
 $(I)\stdio.h: $(I)\msvclibx.h 
 
@@ -198,6 +199,8 @@ dirname.c: $(I)\libgen.h $(I)\limits.h $(I)\msvclibx.h $(I)\stdlib.h $(I)\string
 encoding.c: $(CI)\debugm.h $(I)\iconv.h $(I)\msvclibx.h $(I)\stdio.h $(I)\string.h
 
 err2errno.c: $(CI)\debugm.h $(I)\errno.h $(I)\msvclibx.h $(I)\stdio.h $(I)\windows.h
+
+fileid.c: $(CI)\debugm.h $(I)\msvclibx.h $(I)\errno.h $(I)\stdio.h $(I)\sys\stat.h
 
 filetime.c: $(I)\sys\stat.h $(I)\time.h $(I)\windows.h
 

@@ -115,8 +115,6 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
   #define _STAT_SUFFIX 
 #endif
 
-#define _USE_EXTENDED_STAT_STRUCT 1
-
 #define _VALUEOF(a) a				/* Get the token value */
 #define _CONCAT2T(a,b) a##b			/* Concatenate two tokens (does not expand their values) */
 #define _CONCAT3T(a,b,c) a##b##c		/* Concatenate three tokens (does not expand their values) */
@@ -149,7 +147,7 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
 #define _lstati64_ns _lstat64_ns
 #endif
 
-#if !_USE_EXTENDED_STAT_STRUCT
+#if !_USE_EXTENDED_STAT_STRUCT /* Option control macro defined in msvclibx.h */
   #define _NS_SUFFIX
 #else /* _USE_EXTENDED_STAT_STRUCT */
   #define _MSVCLIBX_STAT_DEFINED 1
@@ -267,6 +265,21 @@ extern void Timespec2Filetime(const struct timespec *pTS, FILETIME *pFT);
 
 /* Proprietary function for generating a string with the local file time, in the ISO 8601 date/time format */
 extern char *Filetime2String(const FILETIME *pFT, char *pBuf, size_t nBufSize);
+
+/* Proprietary function returning a File ID, unique locally on a server. */
+typedef struct { /* Equivalent to the FILE_ID_INFO structure defined in winbase.h */
+  /* https://docs.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info */
+  DWORD dwIDVol0;		/* Volume ID (low DWORD for NTFS and ReFS) */
+  DWORD dwIDVol1;		/* Volume ID (high DWORD for ReFS, 0 for NTFS) */
+  DWORD dwIDFil0;		/* File ID (low DWORD for NTFS and ReFS) */
+  DWORD dwIDFil1;		/* File ID (high DWORD for NTFS and ReFS) */
+  DWORD dwIDFil2;		/* File ID (DWORD #3 for ReFS, 0 for NTFS) */
+  DWORD dwIDFil3;		/* File ID (DWORD #4 for ReFS, 0 for NTFS) */
+} FILE_ID;
+
+extern BOOL bMlxStatSetInode; /* Control whether lstat() & stat() do set st_dev & st_ino, which slows it noticeably */
+extern BOOL MlxGetFileIDW(const WCHAR *pwszName, FILE_ID *pFID);
+extern BOOL MlxGetFileID(const char *pszName, FILE_ID *pFID);
 
 #endif /* defined(_WIN32) */
 

@@ -34,6 +34,9 @@
 #error The msvclibx library is designed for use with the Microsoft Visual C/C++ tools only.
 #endif
 
+/* Control MsvcLibX options */
+#define _USE_EXTENDED_STAT_STRUCT 1	/* 1=Redefine our own stat structure */
+
 /* Compute the OS-specific suffix */
 #if defined(_WIN64)
 #  if defined(_M_X64) || defined(_M_AMD64)
