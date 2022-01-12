@@ -627,6 +627,7 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 |   History								      |
 |    2017-03-22 JFL Created this routine                               	      |
 |    2021-12-22 JFL Detect link loops                                  	      |
+|    2022-01-12 JFL Fixed bug in last change in case: bin -> ..\bin -> ..\bin |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -663,27 +664,27 @@ int MlxResolveTailLinksW1(const WCHAR *path, WCHAR *buf, size_t bufsize, NAMELIS
       errno = EBADF; /* We can't resolve such absolute links */
       RETURN_INT_COMMENT(-1, ("Can't resolve Linux absolute symlink"));
     }
-    if (!lstrcmpW(path, wszBuf2)) goto return_target_path; /* Junction to a server's external device. See readlink() header */
     if (!(   (wszBuf2[0] == L'\\')
           || (wszBuf2[0] && (wszBuf2[1] == L':')))) { /* This is a relative path. We must compose it with the link dirname */
       lstrcpynW(wszBuf3, path, WIDE_PATH_MAX); /* May truncate the output string */
       wszBuf3[WIDE_PATH_MAX-1] = L'\0'; /* Make sure the string is NUL-terminated */
       TrimTailSlashesW(wszBuf3);
-      pwsz = PathFindFileNameW(wszBuf3);
-      if (!lstrcmpW(pwsz, L"..")) { /* The link dirname is actually one level above */
-      	lstrcatW(pwsz, L"\\..\\");
-      } else if (!lstrcmpW(pwsz, L".")) { /* It's also one level above */
-      	lstrcatW(pwsz, L".\\");			/* Change the . into a ..\ */
-      } else if (lstrcmpW(pwsz, L"/")) { /* The value replaces the link node name */
-      	*pwsz = L'\0';
-      }
       iCDSize = lstrlenW(wszBuf3);
-      lstrcpynW(wszBuf3+iCDSize, wszBuf2, WIDE_PATH_MAX-iCDSize); /* May truncate the output string */
+
+      lstrcpynW(wszBuf3+iCDSize, L"\\..\\", WIDE_PATH_MAX-iCDSize);	/* Remove the link name */
       wszBuf3[WIDE_PATH_MAX-1] = L'\0'; /* Make sure the string is NUL-terminated */
-      /* CompactPathW(wszBuf3, wszBuf2, WIDE_PATH_MAX); // We don't care as we're only interested in the tail */
-      CompactPathW(wszBuf3, wszBuf3, WIDE_PATH_MAX); /* Actually we do, to avoid too much growth of the path length, and allow loop detection */
+      iCDSize += lstrlenW(wszBuf3+iCDSize);
+
+      lstrcpynW(wszBuf3+iCDSize, wszBuf2, WIDE_PATH_MAX-iCDSize);	/* Append the relative link target */
+      wszBuf3[WIDE_PATH_MAX-1] = L'\0'; /* Make sure the string is NUL-terminated */
+      iCDSize += lstrlenW(wszBuf3+iCDSize);
+
+      CompactPathW(wszBuf3, wszBuf3, WIDE_PATH_MAX); /* Remove all useless . and .. */
       pwsz = wszBuf3;
+    } else { /* This is an absolute path */
+      if (!lstrcmpW(path, wszBuf2)) goto return_target_path; /* Junction to a server's external device. See readlink() header */
     }
+
     /* Check for the max link chain depth */
     if (iDepth == SYMLOOP_MAX) {
       errno = ELOOP;

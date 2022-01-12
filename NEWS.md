@@ -11,6 +11,10 @@ For more details about changes in a particular area, see the README.txt and/or N
   Optionally make sure to visit folders only once.  
   More consistent error handling & better statistics.  
   Clarified the code, and fixed many bugs.
+  
+### Fixed
+- C/MsvcLibX/readlink.c: Fixed a bug introduced in the last change in MlxResolveTailLinks(),
+  which caused it to return an incorrect target in cases like: bin -> ..\bin -> ..\bin
 
 ## [Unreleased] 2021-12-27
 ### New
