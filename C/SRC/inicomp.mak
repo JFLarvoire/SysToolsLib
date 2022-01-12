@@ -1,2 +1,3 @@
 !MESSAGE Included inicomp.mak
-$(S)\inicomp.c: $(S)\dict.h $(S)\tree.h
+CI=$(STINCLUDE)
+$(S)\inicomp.c: $(CI)\dict.h $(CI)\tree.h

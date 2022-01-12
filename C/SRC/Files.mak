@@ -100,7 +100,6 @@ ZIPSOURCES =		 \
   cpuid.mak              \
   deffeed.c              \
   detab.c                \
-  dict.h                 \
   dirc.c                 \
   dirc.mak               \
   dirsize.c              \
@@ -142,7 +141,6 @@ ZIPSOURCES =		 \
   smbios_lib.c           \
   tee.c                  \
   Tools.lst              \
-  tree.h                 \
   trim.c                 \
   truename.c             \
   truename.mak           \
