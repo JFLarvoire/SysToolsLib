@@ -117,7 +117,8 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 |		    							      |
 |   Returns:	    >0 = Link target size in TCHARS, Success, -1 = Failure    |
 |		    Special errno values:                                     |
-|		      EBADF	Unsupported link type			      |
+|		      EBADF	Unsupported link type (lacking ENOTSUP)	      |
+|		      EINVAL	Unsupported Reparse Point Type		      |
 |		      ELOOP	The link loops to itself                      |
 |		      ENOENT	Dangling link                                 |
 |									      |
@@ -617,6 +618,7 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
 |   Returns	    0 = Success, -1 = Failure and set errno		      |
 |		    Special errno values:                                     |
 |		      EBADF	Unsupported link type, ex: Linux symlink      |
+|		      EINVAL	Unsupported Reparse Point Type		      |
 |		      ELOOP	The link loops to itself                      |
 |		      ENOENT	Dangling link                                 |
 |		    							      |
