@@ -12,12 +12,13 @@
 *    2021-12-21 JFL Added option -f to follow symlinks and junctions. 	      *
 *    2021-12-22 JFL Detect link loops, and avoid entering them.       	      *
 *    2021-12-26 JFL Changed the verbose flag operation.               	      *
+*    2022-01-11 JFL Changed the verbose flag operation.               	      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-01-05"
+#define PROGRAM_VERSION "2022-01-12"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -57,7 +58,11 @@ int IsSwitch(char *arg) {
 }
 
 /* WalkDirTree definitions */
-int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef);
+typedef struct {
+  int iVerbose;
+  long nJunction;
+} JCB_REF;
+int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pJcbRef);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -82,6 +87,7 @@ void usage() {
 Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 \n\
   -?      Display this help and exit\n\
+  -1      Make sure to search linked folders only once. (slower)\n\
   -a      Display the raw absolute target. Default: Display the relative target\n"
 #ifdef _DEBUG
 "\
@@ -93,7 +99,7 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
   -r|-s   Search junctions recursively in a directory tree\n\
   -V      Display this program version and exit\n\
-  -v      Verbose mode. Report both the junction and target.\n\
+  -v      Verbose mode. Report both the junction and target. Show search stats.\n\
 \n\
 Junction: The junction to manage. By default, read and display the target.\n\
  o Targets on the same drive as the junction are shown as a relative path.\n\
@@ -115,7 +121,7 @@ Heuristics for managing junctions on network shares:\n\
    3. Share names with one letter also refer to the drive root. Ex: C -> C:\\\n\
    4. Longer names refer to a folder on drive C. Ex: Public -> C:\\Public\n\
   Warning: The first two rules are reliable, the next two are not!\n\
-  It is sometimes possible to get the base path from the server using WMI:\n\
+  It may be possible to get the server base path from the client using WMI:\n\
     wmic /node:SERVER share where name=\"SHARE\" get path\n\
   Once found, it is best to store that path in \\\\SERVER\\SHARE\\_Base_Path.txt.\
 ");
@@ -138,8 +144,11 @@ int main(int argc, char *argv[]) {
   char buf[PATH_MAX];
   int iVerbose = FALSE;
   action_t action = ACT_GET;
-  wdt_opts opts = {0};
-  
+  wdt_opts opts = {0};		/* Must be cleared before use */
+  JCB_REF jcbRef = {0};		/* Must be cleared before use */
+
+  opts.iFlags |= WDT_CONTINUE;	/* Continue searching after recoverable errors */
+
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
     if (IsSwitch(arg)) {	/* This is a switch */
@@ -148,8 +157,16 @@ int main(int argc, char *argv[]) {
       	usage();
 	return 0;
       }
+      if (streq(opt, "1")) {	/* Make sure to scan directories only once */
+	opts.iFlags |= WDT_ONCE; /* Slower, but ensures duplicate paths aren't explored twice */
+	continue;
+      }
       if (streq(opt, "a")) {
 	action = ACT_RAWGET;
+	continue;
+      }
+      if (streq(opt, "C")) {	/* Test the effect of WDT_CONTINUE  */
+	opts.iFlags &= ~WDT_CONTINUE;
 	continue;
       }
       DEBUG_CODE(
@@ -170,8 +187,8 @@ int main(int argc, char *argv[]) {
 	action = ACT_GETID;
 	continue;
       }
-      if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors */
-	opts.iFlags |= WDT_IGNOREERR;
+      if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors, warnings & infos */
+	opts.iFlags |= WDT_QUIET;
 	continue;
       }
       if (streq(opt, "r") || streq(opt, "s")) {
@@ -184,6 +201,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "v")) {
 	iVerbose = TRUE;
+	jcbRef.iVerbose = TRUE;
 	continue;
       }
       pferror("Unknown option: %s", arg);
@@ -229,12 +247,24 @@ int main(int argc, char *argv[]) {
 
   if (action == ACT_SCAN) { /* Scan a directory tree for junctions */
     char *pszDir = pszJunction ? pszJunction : ".";
-    iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, &iVerbose);
-    if (iErr) {
-      pferror("Failed to search junctions in \"%s\". %s", pszDir, strerror(errno));
-      return 1;
+    iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, &jcbRef);
+    if (iVerbose) {
+      printf("# Scanned %lld entries in %lld directories, and found %ld junctions\n",
+	     (long long)opts.nFile, (long long)opts.nDir, jcbRef.nJunction);
     }
-    return 0;
+    if (opts.nErr) {
+      int nSkipped = opts.nErr;
+      if (iErr == -1) nSkipped -= 1; /* Remove the final unrecoverable error, which _was_ displayed last */
+      if (opts.iFlags & WDT_QUIET) { /* Most errors were hidden and ignored */
+	if (nSkipped) fprintf(stderr, "Warning: %d errors were ignored\n", nSkipped);
+      } else { /* All errors were displayed. Print a summary */
+	if (   (nSkipped > 1)
+	    || ((nSkipped == 1) && (jcbRef.nJunction > 10))) {
+	  fprintf(stderr, "Notice: %d errors were ignored\n", nSkipped);
+	}
+      }
+    }
+    return (iErr == -1) ? 1 : 0;
   }
 
   if (!pszJunction) {
@@ -321,12 +351,15 @@ not_junction:
 
 int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
   DWORD dwTag;
-  int iVerbose = *(int *)pRef;
+  JCB_REF *pJcbRef = (JCB_REF *)pRef;
+  int iVerbose = pJcbRef->iVerbose;
 
   if (pDE->d_type != DT_LNK) return 0;
 
   dwTag = MlxGetReparseTag(pszRelPath);
   if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) return 0;
+
+  pJcbRef->nJunction += 1;
 
   if (iVerbose) {
     char buf[PATH_MAX];

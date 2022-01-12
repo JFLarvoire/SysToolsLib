@@ -60,8 +60,10 @@ OBJECTS1 = $(COMMON_OBJECTS:+=)
 OBJECTS = $(OBJECTS1:.obj=.o) $(UNIX_OBJECTS)
 
 #-----------------------------------------------------------------------------#
-#			Include files dependancies			      #
+#			Include files dependencies			      #
 #-----------------------------------------------------------------------------#
+
+CI=$(STINCLUDE)
 
 $(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/LogDisk.h
 
@@ -193,5 +195,5 @@ $(S)/VxDCall.c: $(S)/VxDCall.h
 
 $(S)/VxDCall.h: $(S)/SysLib.h
 
-$(S)/WalkDirTree.c: $(S)/dirx.h $(S)/mainutil.h $(S)/pathnames.h
+$(S)/WalkDirTree.c: $(CI)/dict.h $(CI)/tree.h $(S)/dirx.h $(S)/mainutil.h $(S)/pathnames.h
 

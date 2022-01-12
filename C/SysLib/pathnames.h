@@ -76,21 +76,24 @@ extern "C" {
 
 /********************** End of OS-specific definitions ***********************/
 
-char *NewJoinedPath(const char *pszPart1, const char *pszPart2);	/* Join 2 paths, and return to new string */
+char *NewJoinedPath(const char *pszPart1, const char *pszPart2);	/* Join 2 paths, and return the new string */
 char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem, removing all useless ./ parts */
 
 /* WalkDirTree definitions */
 
 /* WalkDirTree option flags */
-#define WDT_IGNOREERR	0x0001		/* Ignore directory access errors */
-#define WDT_NORECURSE	0x0002		/* Do not recurse into subdirectories */
-#define WDT_FOLLOW	0x0004		/* Recurse into junctions & symlinkds */
-#define WDT_QUIET	0x0008		/* Do not display minor errors */
+#define WDT_CONTINUE	0x0001		/* Handle recoverable errors as warnings, and continue */
+#define WDT_QUIET	0x0002		/* Do not display warnings & infos */
+#define WDT_NORECURSE	0x0004		/* Do not recurse into subdirectories */
+#define WDT_FOLLOW	0x0008		/* Recurse into junctions & symlinkds */
+#define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
 
-typedef struct {	/* WalkDirTree options */
-  int iFlags;			/* Options */
-  int *pNProcessed;		/* Optional pointer to a number of files tested */
-  int nErr;			/* Number of errors */
+typedef struct {		/* WalkDirTree options. Must be cleared before use. */
+  int iFlags;			/* [IN] Options */
+  _ino_t nDir;			/* [OUT] Number of directories scanned */
+  _ino_t nFile;			/* [OUT] Number of directory entries processed */
+  int nErr;			/* [OUT] Number of errors */
+  void *pOnce;			/* [RESERVED] Used internally to process WDT_ONCE */
 } wdt_opts;
 
 typedef int (*pWalkDirTreeCB_t)(char *pszRelPath, struct dirent *pDE, void *pRef);

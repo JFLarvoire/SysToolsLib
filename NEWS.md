@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-01-12
+### Changed
+- C/include/dict.h, tree.h: Moved from C/SRC.
+- junction.exe, C/SRC/junction.c, C/SysLib/WalkDirTree.c:  
+  Optionally make sure to visit folders only once.  
+  More consistent error handling & better statistics.  
+  Clarified the code, and fixed many bugs.
+
 ## [Unreleased] 2021-12-27
 ### New
 - C/SysLib/WalkDirTree.c: Added function GetFileID() for Windows
