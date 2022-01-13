@@ -268,7 +268,7 @@ DWORD MlxReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
     case IO_REPARSE_TAG_WCI_LINK:		/* 0xA0000027 */ pType = "Windows Container Isolation filter Link"; break;
     default:					pType = "Unknown type! Please report its value and update reparsept.h & readlink.c."; break;
     }
-    DEBUG_PRINTF(("ReparseTag = 0x%04X; // %s\n", (unsigned)(dwTag), pType));
+    XDEBUG_PRINTF(("ReparseTag = 0x%04X; // %s\n", (unsigned)(dwTag), pType));
   )
   XDEBUG_PRINTF(("ReparseDataLength = 0x%04X\n", (unsigned)(pIoctlBuf->ReparseDataLength)));
   
@@ -494,7 +494,7 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       /* Then check if the junction target is relative to the same network drive. (Not always true!) */
       int iTargetFound = FALSE;
       if (buf[0] && (buf[1] == L':')) {
-	WCHAR  wszLocalName[] = L"X:";
+	WCHAR wszLocalName[] = L"X:";
 	WCHAR wszRemoteName[WIDE_PATH_MAX];
 	DWORD dwErr;
 	DWORD dwLength = WIDE_PATH_MAX;
@@ -506,12 +506,14 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
 	    WCHAR *pwszShareBasePath = MlxGetShareBasePathW(wszRemoteName);
 	    if (pwszShareBasePath) {
 	      int l = lstrlenW(pwszShareBasePath);
-	      if (!_wcsnicmp(pwszShareBasePath, buf, l) && ((buf[l] == L'\\') || !buf[l])) {
+	      if (!_wcsnicmp(pwszShareBasePath, buf, l) && ((l == 3) || (buf[l] == L'\\') || !buf[l])) {
 	      	/* Yes, it points at the same share */
-		WCHAR *pwsz2 = buf + l;
+	      	/* Replace the remote base dir by the local share drive root */
 		buf[0] = szRootDir[0];
-		CopyMemory(buf+2, pwsz2, (lstrlenW(pwsz2)+1)*sizeof(WCHAR));
-		if (!buf[2]) lstrcpyW(buf+2, L"\\"); /* The junction pointed to the root */
+	      	if (l > 3) { /* If the remote base dir is not the root dir */
+		  WCHAR *pwsz2 = buf + l;
+		  MoveMemory(buf+2, pwsz2, (lstrlenW(pwsz2)+1)*sizeof(WCHAR));
+		}
 		XDEBUG_WPRINTF((L"buf = \"%s\"; // Substituted the share base path\n", buf));
 		iTargetFound = TRUE;
 	      }

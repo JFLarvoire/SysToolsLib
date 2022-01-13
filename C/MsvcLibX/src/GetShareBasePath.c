@@ -168,9 +168,11 @@ WCHAR *MlxGetShareBasePathW(const WCHAR *pwszShareUNC) { // Name must be \\SERVE
 
   /* Now append the optional \SUBPATH */
   if (pwsz2) {
-    pwszShareBasePath = realloc(pwszShareBasePath, sizeof(WCHAR)*(lstrlenW(pwszShareBasePath) + lstrlenW(pwsz2) + 1));
+    int l = lstrlenW(pwszShareBasePath);
+    if (l == 3) l -= 1; /* Remove the trailing / if it's the root directory */
+    pwszShareBasePath = realloc(pwszShareBasePath, sizeof(WCHAR)*(l + lstrlenW(pwsz2) + 1));
     if (!pwszShareBasePath) goto fail_no_mem;
-    lstrcatW(pwszShareBasePath, pwsz2);
+    lstrcpyW(pwszShareBasePath+l, pwsz2);
   }
 
   DEBUG_WLEAVE((L"return \"%s\";\n", pwszShareBasePath));
