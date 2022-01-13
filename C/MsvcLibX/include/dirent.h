@@ -76,7 +76,7 @@ typedef struct _fileinfo fileinfo;
 #pragma pack(1)
 struct dirent { /* Standard C library structure returning directory entries. */
   /* Standard fields */
-  _ino_t d_ino;		/* We don't need it, but it's required by the spec */
+  ino_t d_ino;		/* We don't need it, but it's required by the spec */
   unsigned char d_type;	/* File type. Values defined in macros DT_xxxx */
   /* unsigned char d_namlen; /* File name length, not including NUL */
   /* OS-specific extensions (allowed by the Posix specification) */
@@ -148,7 +148,7 @@ struct dirent { /* Structure used to return information about directory entries.
   uint64_t d_filesize;
   char     d_shortname[14*sizeof(WCHAR)];
   /* Standard fields */
-  _ino_t d_ino;		/* We don't need it, but it's required by the spec */
+  ino_t d_ino;		/* We don't need it, but it's required by the spec */
   unsigned char d_type;	/* File type. Values defined in macros DT_xxxx */
   /* unsigned char d_namlen; /* File name length, not including NUL */
   char d_name[(NAME_MAX+1)*sizeof(WCHAR)]; /* Null-terminated file name */
@@ -178,7 +178,7 @@ struct _DIR { /* Private structure, not for use by users */
 #include "os2.h"
 
 struct dirent { /* Structure used to return information about directory entries. */
-  _ino_t d_ino;		/* We don't need it, but it's required by the spec */
+  ino_t d_ino;		/* We don't need it, but it's required by the spec */
   /* Non standard extensions, to ease adapting old DOS/WIN32 apps */
   uintmax_t d_filesize;	/* File size */
   uint16_t time;	/* MS-DOS time */

@@ -24,22 +24,24 @@
 
 #if _USE_EXTENDED_STAT_STRUCT
 
-/* Redefine the _dev_t and _ino_t types. Must be the same as in wchar.h */
+/* Redefine the dev_t and ino_t types. Must be the same as in wchar.h */
 
 /* Define an actual device ID type. Must be an integer type. */
 #if defined(_MSDOS)
-typedef short _dev_t;			/* Use the drive letter */
+typedef short dev_t;			/* Use the drive letter */
 #elif defined(_WIN32)
-typedef __int64 _dev_t;			/* Use the device Serial Number */
+typedef __int64 dev_t;			/* Use the device Serial Number */
 #endif
+typedef dev_t _dev_t;			/* MSVC include files use this type */
 #define _DEV_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
 
 /* Define an actual inode number type. Must be an unsigned integer type. */
 #if defined(_MSDOS)
-typedef unsigned long _ino_t;		/* Use the cluster number */
+typedef unsigned long ino_t;		/* Use the cluster number */
 #elif defined(_WIN32)
-typedef unsigned __int64 _ino_t;	/* Use the file ID Number */
+typedef unsigned __int64 ino_t;		/* Use the file ID Number */
 #endif
+typedef ino_t _ino_t;			/* MSVC include files use this type */
 #define _INO_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
 
 #endif /* _USE_EXTENDED_STAT_STRUCT */

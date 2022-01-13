@@ -12,6 +12,8 @@
 \*****************************************************************************/
 
 #define _UTF8_LIB_SOURCE
+#define _GNU_SOURCE
+#define _FILE_OFFSET_BITS 64
 
 #include <string.h>
 #include <stdlib.h>
@@ -114,6 +116,8 @@ typedef struct _NAMELIST {
   struct _NAMELIST *prev;
   const char *path;
 } NAMELIST;
+
+#ifndef __unix__
 
 /* Internal subroutine, used to avoid infinite loops on link back loops */
 static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef, NAMELIST *prev, int iDepth) {
@@ -340,3 +344,5 @@ cleanup_and_return:
 int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef) {
   return WalkDirTree1(path, pOpts, pWalkDirTreeCB, pRef, NULL, 0);
 }
+
+#endif /* ! __unix__ */

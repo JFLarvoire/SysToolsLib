@@ -19,6 +19,7 @@
 #include "SysLib.h"		/* SysLib Library core definitions */
 
 #include <dirent.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,8 +91,8 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   int iFlags;			/* [IN] Options */
-  _ino_t nDir;			/* [OUT] Number of directories scanned */
-  _ino_t nFile;			/* [OUT] Number of directory entries processed */
+  ino_t nDir;			/* [OUT] Number of directories scanned */
+  ino_t nFile;			/* [OUT] Number of directory entries processed */
   int nErr;			/* [OUT] Number of errors */
   void *pOnce;			/* [RESERVED] Used internally to process WDT_ONCE */
 } wdt_opts;

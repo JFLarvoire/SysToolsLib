@@ -252,9 +252,9 @@ this_is_not_a_symlink:
     FILE_ID fid;
     bDone = MlxGetFileIDW(pwszName, &fid);
     if (bDone) {
-      pStat->st_dev = *(_dev_t *)(&fid.dwIDVol0);
-      pStat->st_ino = *(_ino_t *)(&fid.dwIDFil0);
-      if (*(_ino_t *)(&fid.dwIDFil2)) *(_ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
+      pStat->st_dev = *(dev_t *)(&fid.dwIDVol0);
+      pStat->st_ino = *(ino_t *)(&fid.dwIDFil0);
+      if (*(ino_t *)(&fid.dwIDFil2)) *(ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
     }
   }
 

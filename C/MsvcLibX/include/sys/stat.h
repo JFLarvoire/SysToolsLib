@@ -160,13 +160,13 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
 #pragma message("Defining type struct " VALUEIZE(_LIBX_stat))
   struct _LIBX_stat {
     /* MSVC standard stat structure fields */
-    _dev_t          st_dev;
-    _ino_t          st_ino;
+    dev_t           st_dev;
+    ino_t           st_ino;
     unsigned short  st_mode;
     short           st_nlink;
     short           st_uid;
     short           st_gid;
-    _dev_t          st_rdev;
+    dev_t           st_rdev;
     off_t           st_size;
     /* End of MSVC standard stat structure fields */
     struct timespec st_ctim;		/* File creation date/time,  w. ns resolution */
@@ -188,13 +188,13 @@ extern char *Filetime2String(uint16_t date, uint16_t time, char *pBuf, size_t nB
 #pragma message("Defining type struct " VALUEIZE(_LIBX_stat64))
     struct _LIBX_stat64 {
       /* MSVC standard stat structure fields */
-      _dev_t          st_dev;
-      _ino_t          st_ino;
+      dev_t           st_dev;
+      ino_t           st_ino;
       unsigned short  st_mode;
       short           st_nlink;
       short           st_uid;
       short           st_gid;
-      _dev_t          st_rdev;
+      dev_t           st_rdev;
       off64_t         st_size;
       /* End of MSVC standard stat structure fields */
       struct timespec st_ctim;		/* File creation date/time,  w. ns resolution */

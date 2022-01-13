@@ -19,7 +19,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#include <pathnames.h>	/* Public definitions for this module */
+#include "pathnames.h"	/* Public definitions for this module */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
