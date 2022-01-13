@@ -73,6 +73,7 @@
 *                   Report the # of inaccessible dirs if any err. was ignored.*
 *                   Continue by default for all recursive operations.	      *
 *                   Version 3.5.					      *
+*    2022-01-12 JFL Added option -f to follow links to directories. Ver. 3.6. *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -80,8 +81,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.5"
-#define PROGRAM_DATE    "2021-09-06"
+#define PROGRAM_VERSION "3.6"
+#define PROGRAM_DATE    "2022-01-13"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -180,6 +181,13 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /********************** End of OS-specific definitions ***********************/
 
+/* Flag OSs that have links (For some OSs which don't, macros are defined, but S_ISLNK always returns 0) */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK)
+  #define OS_HAS_LINKS 1
+#else
+  #define OS_HAS_LINKS 0
+#endif
+
 /* Local definitions */
 
 #define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
@@ -234,6 +242,9 @@ typedef struct _scanOpts {	/* Options for scanning the directory tree */
   int subdirs;			    /* If TRUE, start scanning in each subdirectory */
   int depth;			    /* Current depth in the scan tree */
   int nErrors;			    /* Number of errors that were ignored */
+#if OS_HAS_LINKS
+  int follow;			    /* If TRUE, follow links to subdirectories */
+#endif /* OS_HAS_LINKS */
 } scanOpts;
 
 /* Global variables */
@@ -277,18 +288,8 @@ long GetClusterSize(char drive);    /* Get cluster size */
 int main(int argc, char *argv[]) {
   char *from = NULL;		/* What directory to list */
   int i;
-  selectOpts fConstraints = {
-    0,				/* pattern: Wildcards pattern. NULL=undefined */
-    0,				/* datemin: Minimum date stamp. 0=undefined */
-    0,				/* datemax: Maximum date stamp. 0=undefined */
-  };
-  scanOpts sOpts = {
-    FALSE,			/* recur: If TRUE, list subdirectories recursively */
-    FALSE,			/* total: If TRUE, totalize size of all subdirs */
-    FALSE,			/* subdirs: If TRUE, start scanning in each subdirectory */
-    0,				/* Initial depth in the search tree */
-    0,				/* Number of errors that were ignored */
-  };
+  selectOpts fConstraints = {0};/* Constraints. None by default */
+  scanOpts sOpts = {0};		/* Scanning options. All disabled by default */
   char *dateminarg = NULL;	/* Minimum date argument */
   char *datemaxarg = NULL;	/* Maximum date argument */
   int iUseCsz = FALSE;		/* If TRUE, use the cluster size */
@@ -321,6 +322,12 @@ int main(int argc, char *argv[]) {
 #ifdef _DEBUG
       if (streq(opt, "d")) {
 	DEBUG_ON();
+	continue;
+      }
+#endif
+#if OS_HAS_LINKS
+      if (streq(opt, "f")) {
+	sOpts.follow = TRUE;
 	continue;
       }
 #endif
@@ -539,6 +546,10 @@ Switches:\n\
 #ifdef _DEBUG
 "\
   -d          Output debug information.\n"
+#endif
+#if OS_HAS_LINKS
+"\
+  -f          Follow links to directories.\n"
 #endif
 "\
   -from Y-M-D List only files starting from that date.\n\
@@ -802,10 +813,38 @@ int SelectDirsCB(const struct dirent *pDE, void *pRef) {
   /* Invoked by scandirX(), so d_type always valid, even under Unix */
   if (   (pDE->d_type == DT_DIR)	/* We want only directories */
       && (!streq(pDE->d_name, "."))	/* Except . */
-      && (!streq(pDE->d_name, "..")))	/* and .. */
+      && (!streq(pDE->d_name, ".."))) { /* and .. */
     return TRUE;
-  else
+#if OS_HAS_LINKS
+  } else if (pDE->d_type == DT_LNK) {
+    scanOpts *pOpts = pRef;
+    if (pOpts->follow) {
+      struct stat s;
+      int iErr = stat(pDE->d_name, &s);
+      if (iErr) {
+	char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
+	if (iVerbose || !iContinue) {
+	  char *pcd = NULL;
+	  NEW_PATHNAME_BUF(szCurDir);
+	  if (szCurDir) pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+	  if (!pcd) {
+	    finis(RETCODE_INACCESSIBLE, "Invalid link \"%s\". %s", pDE->d_name, strerror(errno));
+	  }
+	  fprintf(stderr, "%s: Invalid link \"%s" DIRSEPARATOR_STRING "%s\". %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
+	  FREE_PATHNAME_BUF(szCurDir);
+	}
+	if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
+	pOpts->nErrors += 1;
+      	return FALSE;
+      }
+      return S_ISDIR(s.st_mode);
+    } else {
+      return FALSE;
+    }
+#endif /* OS_HAS_LINKS */
+  } else {
     return FALSE;
+  }
 }
 
 #ifdef _MSC_VER
@@ -833,7 +872,7 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
 #endif
 
   /* Get all subdirectories */
-  nDE = scandirX(".", &pDElist, SelectDirsCB, alphasort, NULL);
+  nDE = scandirX(".", &pDElist, SelectDirsCB, alphasort, pOpts);
   if (nDE < 0) {
     iErr = errno;
     if (iVerbose || !iContinue) {
