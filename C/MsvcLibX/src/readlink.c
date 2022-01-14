@@ -524,7 +524,7 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
       }
       if (!iTargetFound) {
 	errno = EXDEV; /* Cross-device junction, with a target invalid in the context of the client */
-	RETURN_INT_COMMENT(-1, ("Inaccessible junction target, on another server drive.\n"));
+	RETURN_INT_COMMENT(-1, ("Inaccessible junction target, on another server drive, or outside of the shared folder.\n"));
       }
     }
 
