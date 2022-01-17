@@ -13,12 +13,13 @@
 *    2021-12-22 JFL Detect link loops, and avoid entering them.       	      *
 *    2021-12-26 JFL Changed the verbose flag operation.               	      *
 *    2022-01-11 JFL Changed the verbose flag operation.               	      *
+*    2022-01-17 JFL Added a dummy -nobanner option.                   	      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-01-12"
+#define PROGRAM_VERSION "2022-01-17"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -186,6 +187,9 @@ int main(int argc, char *argv[]) {
       if (streq(opt, "i")) {
 	action = ACT_GETID;
 	continue;
+      }
+      if (streq(opt, "nobanner")) {
+	continue;		/* For MS compatibility. Ignore that */
       }
       if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors, warnings & infos */
 	opts.iFlags |= WDT_QUIET;
