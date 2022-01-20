@@ -14,12 +14,13 @@
 *    2021-12-26 JFL Changed the verbose flag operation.               	      *
 *    2022-01-11 JFL Changed the verbose flag operation.               	      *
 *    2022-01-17 JFL Added a dummy -nobanner option.                   	      *
+*    2022-01-19 JFL Added option -l to list junctions non-recursively.	      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-01-17"
+#define PROGRAM_VERSION "2022-01-19"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -97,6 +98,7 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 "\
   -d      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
   -f      Follow links to directories when searching recursively\n\
+  -l      List junctions in a directory\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
   -r|-s   Search junctions recursively in a directory tree\n\
   -V      Display this program version and exit\n\
@@ -188,6 +190,11 @@ int main(int argc, char *argv[]) {
 	action = ACT_GETID;
 	continue;
       }
+      if (streq(opt, "l")) {
+	action = ACT_SCAN;
+	opts.iFlags |= WDT_NORECURSE;
+	continue;
+      }
       if (streq(opt, "nobanner")) {
 	continue;		/* For MS compatibility. Ignore that */
       }
@@ -197,6 +204,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "r") || streq(opt, "s")) {
 	action = ACT_SCAN;
+	opts.iFlags &= ~WDT_NORECURSE;
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
