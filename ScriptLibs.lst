@@ -2,6 +2,7 @@ Batch\Library.bat
 PowerShell\Library.ps1
 PowerShell\PSService.ps1
 Shell\Library.bash
+Shell\Library.sh
 Tcl\DebugLib.tcl
 Tcl\Library.tcl
 Tcl\suspect.tcl

@@ -4,6 +4,17 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-01-26
+### Changed
+- Shell/Library.bash: Added routines ReadSecret(), Info(), Warning(), Error().  
+  Check whether the script was sourced or executed directly.
+- dirsize.exe: Added option -f to follow links to directories.
+- junction.exe: Added a dummy -nobanner option. Added option -l to list junctions non-recursively.
+
+### Fixed
+- Various makefiles: Fixed Linux builds
+- C/MsvcLibX/src/GetShareBasePath.c, readlink.c: Fixed a bug preventing to read relative junction targets on network drives.
+
 ## [Unreleased] 2022-01-12
 ### Changed
 - C/include/dict.h, tree.h: Moved from C/SRC.
@@ -11,7 +22,7 @@ For more details about changes in a particular area, see the README.txt and/or N
   Optionally make sure to visit folders only once.  
   More consistent error handling & better statistics.  
   Clarified the code, and fixed many bugs.
-  
+
 ### Fixed
 - C/MsvcLibX/readlink.c: Fixed a bug introduced in the last change in MlxResolveTailLinks(),
   which caused it to return an incorrect target in cases like: bin -> ..\bin -> ..\bin
