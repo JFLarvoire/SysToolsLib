@@ -3,9 +3,9 @@
 #                                                                             #
 #   Filename        Library.bash                                              #
 #                                                                             #
-#   Description     A library of useful shell routines for Linux/Unix         #
+#   Description     A sourceable library of useful Bash functions             #
 #                                                                             #
-#   Notes                                                                     #
+#   Notes           Use Library.sh instead for general POSIX compatibility    #
 #                                                                             #
 #   History                                                                   #
 #    2009-12-16 JFL Created this script.                                      #
@@ -19,17 +19,30 @@
 #    2020-11-24 JFL Use a shebang with the env command.                       #
 #    2021-09-09 JFL Always indent the output to the log file.                 #
 #                   Added routines DoExec() and SetLogFile().                 #
+#    2022-01-26 JFL Added routine ReadSecret().                               #
+#                   Added routines Info(), Warning(), Error().                #
+#                   Check whether the script was sourced or executed directly.#
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2021-09-09"
-ARGV=("$0" "$@")		# All arguments, as an array of strings
-ARGV0="$0"                      # Full script pathname
+VERSION="2022-01-26"
+
+# Check if the script is sourced
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+# If so, we must return from it, not exit
+[[ $sourced = 1 ]] && exit=return || exit=exit
+# Get the script name
+if [[ $sourced = 1 ]] ; then
+  ARGV0="${BASH_SOURCE[${#BASH_SOURCE[@]} - 1]}"
+else
+  ARGV0="$0"                    # Full script pathname
+fi
+ARGV=("$ARGV0" "$@")		# All arguments, as an array of strings
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
-SCRIPTDIR="$(cd $(dirname "$0") ; /bin/pwd)" # ... and its absolute path
+SCRIPTDIR="$(cd $(dirname "$ARGV0") ; /bin/pwd)" # ... and its absolute path
 SCRIPTBASE="${SCRIPT%%.*}"	# Script base name without extension
 
 ###############################################################################
@@ -117,6 +130,21 @@ EchoX() { # $*=strings to display and log
   if NoExec ; then
     Echo "$@"
   fi
+}
+
+# Display an information
+Info() { # $*=strings to display and log
+  >&2 EchoV "#" "$@"
+}
+
+# Display a warning
+Warning() { # $*=strings to display and log
+  >&2 Echo "Warning:" "$@"
+}
+
+# Display an error message
+Error() { # $*=strings to display and log
+  >&2 Echo "Error:" "$@"
 }
 
 # Debug routines. Display the values of a series of global variables.
@@ -225,7 +253,7 @@ QuoteArg() { # $1=Argument to quote
   if [[ "$arg" == "" ]] ; then
     arg="''"         # Make sure empty strings are visible
   fi
-  printf "%s\n" "$s" # Do not use echo, with breaks on -n, -e, etc, arguments
+  printf "%s\n" "$s" # Do not use echo, which breaks on -n, -e, etc, arguments
 }
 
 fi # End of alternative QuoteArg() versions
@@ -614,6 +642,14 @@ ljoin() { # [-s SEPARATOR]|[--] $*. Default separator: "".
 }
 
 #-----------------------------------------------------------------------------#
+
+# Read a secret string (Ex: A password) without echoing it
+ReadSecret() {		# $1=Prompt string $2=Output variable
+  read -s -p "$@"		# Read the secret
+  echo				# Print a newline following what was read
+}
+
+#-----------------------------------------------------------------------------#
 #                      Functions for testing the library                      #
 #-----------------------------------------------------------------------------#
 
@@ -628,6 +664,14 @@ fact() {
   echo $result
 }
 TraceProc fact
+
+start() {
+  Echo Started
+}
+
+stop() {
+  Echo Stopped
+}
 
 exec_all_cmds() {
   while (( $# > 0 )) ; do
@@ -653,28 +697,32 @@ exec_all_cmds() {
 
 Help() {
   cat <<EOF
+$SCRIPT - A sourceable library of Bash functions
 
-Usage: $(basename ${0}) [OPTIONS] [COMMANDS]
+Usage: $SCRIPT [OPTIONS] [COMMANDS]
 
 Options:
   -c CMD ...        Evaluate each argument as a separate command
-  -d, --debug       Debug mode. Trace functions entry and exit, etc
-  -h, --help, -?    Display this help screen and exit.
-  -l LOGFILE        Set the log file name. Use -l /dev/null to disable.
-  -v, --verbose     Enable verbose output.
+  -d, --debug       Debug mode: Tell the script author what code is being run
+  -h, --help, -?    Display this help screen and exit
+  -l LOGFILE        Set the log file name. Use -l /dev/null to disable
+  -v, --verbose     Verbose mode: Tell the user what is being done
   -V, --version     Display the script version and exit
-  -X, --noexec      Display the commands to execute, but don't execute them
+  -X, --noexec      Display the commands to execute, but don't run them
 
 Commands:
-  start             Start the daemon
-  stop              Stop the daemon
+  start             Pretend to start a daemon
+  stop              Pretend to stop a daemon
 
 EOF
 }
 
+#-----------------------------------------------------------------------------#
+
 # Main routine
+ACTION=true # Do nothing, successfully
+
 # Process command line arguments
-err=0
 while (( $# > 0 )) ; do
   # Pop the first argument off the head of the list
   arg="$1"
@@ -706,30 +754,29 @@ while (( $# > 0 )) ; do
     ;;
     -V|--version)
       echo $VERSION
-      exit 0
+      $exit 0
     ;;
     -X|--noexec)
       EXEC=0
     ;;
     start)
-      start
-      err=$?
+      ACTION=start
     ;;
     stop)
-      stop
-      err=$?
+      ACTION=stop
     ;;
     -*)
       echo "Unrecognized option: \"$arg\"" >&2
       echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
-      err=3 ; # Unimplemented feature
+      $exit 3 # Unimplemented feature
     ;;
     *)
       echo "Unrecognized argument: \"$arg\"" >&2
       echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
-      err=3 ; # Unimplemented feature
+      $exit 3 # Unimplemented feature
     ;;
   esac
 done
-exit $err
 
+$ACTION
+$exit
