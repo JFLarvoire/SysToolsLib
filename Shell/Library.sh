@@ -13,6 +13,7 @@
 #   History                                                                   #
 #    2020-09-25 JFL Created this script.                                      #
 #    2022-01-26 JFL Added routine ReadSecret().                               #
+#                   Added logging. Added variable values debug output.        #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -79,13 +80,30 @@ DoExec() {
   [ $EXEC != 0 ]
 }
 
+# Manage output indentation in debug mode proportionally to the call depth
 CallIndent() {
   return 0
 }
 
+# Global variables defining the current log file
+# LOGDIR=/var/log		# Preferred log file location with root rights
+# LOGDIR=~/log			# Alternate location for non-root users
+# LOGFILE=$LOGDIR/$SCRIPTBASE.log	# Recommended name for the log file
+LOGFILE=/dev/null		# Default: Do not write to an actual log file
+LOGDIR=/dev
+
+# Set the log file
+SetLogFile() { # $1 = New log file pathname. Use /dev/null to disable logging.
+  LOGFILE="$1"
+  LOGDIR="`dirname "$LOGFILE"`"
+}
+
 # Log a message into the log file
 Log() { # $*=strings to log
-  return 0
+  if [ ! -d $LOGDIR ] ; then
+    mkdir -p $LOGDIR
+  fi
+  echo "`CallIndent -f`$*" >> $LOGFILE	 # Always indent output to the log file
 }
 
 # Display a message and log it in the log file
@@ -132,6 +150,46 @@ Error() { # $*=strings to display and log
   >&2 Echo "Error:" "$@"
 }
 
+# Check if a variable exists
+VarExists() {
+  eval "[ \"\${${1}+true}\" = \"true\" ]"
+}
+
+# Get the value of a variable
+VarValue() {
+  eval "echo \"\${${1}}\""
+}
+
+# Debug routines. Display the values of a series of global variables.
+VarsValue() { # $*=Variables names. Display always.
+  for var in "$@" ; do
+    if VarExists "$var" ; then
+      echo "$var=`VarValue "$var"`"
+    else
+      echo "unset $var"
+    fi
+  done
+}
+EchoVars() { # $*=Variables names. Display and log always.
+  Echo "`VarsValue "$@"`"
+}
+EchoSVars() { # $1=String; $2...=Variables names. Display and log always.
+  text="$1"
+  shift
+  Echo "$text `VarsValue "$@"`"
+}
+EchoVVars() { # $*=Variables names. Display in debug mode only and log always.
+  EchoV "`VarsValue "$@"`"
+}
+EchoDVars() { # $*=Variables names. Display in debug mode only and log always.
+  EchoD "`VarsValue "$@"`"
+}
+EchoDSVars() { # $1=String; $2...=Variables names. Display in debug mode only...
+  local text="$1"
+  shift
+  EchoD "$text `VarsValue "$@"`"
+}
+
 # Conditionally execute a command line
 Exec() {
   if [ $EXEC -eq 1 ] ; then
@@ -146,6 +204,12 @@ Exec() {
 #                           General Purpose Library                           #
 #                                                                             #
 ###############################################################################
+
+# Get the current time as an ISO 8601 date/time string
+Now() { # $1 = Date-time separator. Default: " ". (Strict ISO 8601 is "T")
+	# $2 = hour-minute-second separator. Default: "h" & "m". Use ":" for ISO 8601
+  date +"%04Y-%02m-%02d${1:- }%02H${2:-h}%02M${2:-m}%02S"
+}
 
 #-----------------------------------------------------------------------------#
 
@@ -162,6 +226,17 @@ ReadSecret() {		# $1=Prompt string $2=Output variable
 #-----------------------------------------------------------------------------#
 #                      Functions for testing the library                      #
 #-----------------------------------------------------------------------------#
+
+# Recursive function computing factorial N
+fact() {
+  EchoD "fact($1)"
+  result=1
+  if [ $1 -gt 1 ] ; then
+    result=$(expr $1 '*' $(fact $(expr $1 - 1)))
+  fi
+  EchoDVars result
+  echo $result
+}
 
 exec_all_cmds() {
   while [ $# -gt 0 ] ; do
@@ -195,6 +270,7 @@ Options:
   -c CMD ...        Evaluate each argument as a separate command
   -d, --debug       Debug mode: Tell the script author what code is being run
   -h, --help, -?    Display this help screen and exit
+  -l LOGFILE        Set the log file name. Use -l /dev/null to disable
   -v, --verbose     Verbose mode: Tell the user what is being done
   -V, --version     Display the script version and exit
   -X, --noexec      Display the commands to execute, but don't run them
@@ -226,6 +302,13 @@ while [ $# -gt 0 ] ; do
       Help
       exit 0
     ;;
+    -l|--logfile)
+      SetLogFile "$1"
+      shift
+    ;;
+    -L|--nologfile)
+      SetLogFile /dev/null
+    ;;
     -q|--quiet)
       VERBOSITY=0
     ;;
@@ -242,12 +325,12 @@ while [ $# -gt 0 ] ; do
     -*)
       echo "Unrecognized option: \"$arg\"" >&2
       echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
-      $exit 3 ; # Unimplemented feature
+      $exit 3 # Unimplemented feature
     ;;
     *)
       echo "Unrecognized argument: \"$arg\"" >&2
       echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
-      $exit 3 ; # Unimplemented feature
+      $exit 3 # Unimplemented feature
     ;;
   esac
 done
