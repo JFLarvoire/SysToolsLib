@@ -62,19 +62,19 @@ EXEC=1				# 1=Execute commands; 0=Don't
 
 # Helper routines to test verbosity levels
 Quiet() {
-  [ $VERBOSITY == 0 ]
+  [ $VERBOSITY = 0 ]
 }
 Normal() {
-  [ $VERBOSITY > 0 ]
+  [ $VERBOSITY -gt 0 ]
 }
 Verbose() {
-  [ $VERBOSITY > 1 ]
+  [ $VERBOSITY -gt 1 ]
 }
 Debug() {
-  [ $VERBOSITY > 2 ]
+  [ $VERBOSITY -gt 2 ]
 }
 NoExec() {
-  [ $EXEC == 0 ]
+  [ $EXEC = 0 ]
 }
 DoExec() {
   [ $EXEC != 0 ]
