@@ -5,6 +5,9 @@ Major changes for the System Tools Library are recorded here.
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
 ## [Unreleased] 2022-01-26
+### New
+- Shell/Library.sh: A sourceable library of useful Bourne Shell routines
+
 ### Changed
 - Shell/Library.bash: Added routines ReadSecret(), Info(), Warning(), Error().  
   Check whether the script was sourced or executed directly.
