@@ -23,6 +23,7 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.4.2.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.3.      *
 *    2020-04-19 JFL Added support for MacOS. Version 1.5.                     *
+*    2022-02-01 JFL Prevent a misalignment in Windows Terminal. Version 1.6.  *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -30,14 +31,15 @@
 
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.5"
-#define PROGRAM_DATE    "2020-04-19"
+#define PROGRAM_VERSION "1.6"
+#define PROGRAM_DATE    "2022-02-01"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /************************ Win32-specific definitions *************************/
 
@@ -107,6 +109,10 @@ int IsSwitch(char *pszArg);
 int ToUtf8(unsigned int c, char *b);
 #endif /* SUPPORTS_UTF8 */
 
+#ifdef _WIN32
+int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname);
+#endif
+
 int main(int argc, char *argv[]) {
   int i, j;
 #ifdef _WIN32
@@ -124,6 +130,12 @@ int main(int argc, char *argv[]) {
 #endif /* SUPPORTS_UTF8 */
 #ifdef _UNIX
   char *pszLang = getenv("LANG");
+#endif
+#ifdef _WIN32
+  /* The new Windows Terminal behaves differently from the old Windows Console */
+  char szNameBuf[32];
+  pid_t pid = GetAncestorProcessName(0, 2, szNameBuf, sizeof(szNameBuf));
+  int isWindowsTerminal = (pid && streq(szNameBuf, "WindowsTerminal.exe"));
 #endif
 
 #if SUPPORTS_UTF8
@@ -275,6 +287,21 @@ int main(int argc, char *argv[]) {
 	      break;
 	    }
 #endif
+#ifdef _WIN32
+	    /* The new Windows Terminal interprets several ASCII control chars */
+	    if (isWindowsTerminal) {
+	      switch (k) {
+		case 0x00:
+		case 0x0B:
+		case 0x0C:
+		case 0x0E:
+		case 0x0F:
+		case 0x1B:
+		  if (!iAll) l = ' ';
+		  break;
+	      }
+	    }
+#endif
 	    break;
 	}
 
@@ -381,3 +408,63 @@ int ToUtf8(unsigned int c, char *b) {
   return (int)(b-b0);
 }
 #endif /* SUPPORTS_UTF8 */
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetAncestorProcessName				      |
+|									      |
+|   Description     Get the process ID and name of an ancestor process 	      |
+|									      |
+|   Notes	    							      |
+|									      |
+|   History								      |
+|    2022-02-01 JFL Initial implementattion, based on GetProcessName().	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#if defined(_WIN32)
+#include <windows.h>
+#pragma pack(push,8) /* Work around a bug in tlhelp32.h in WIN64, which generates the wrong structure if packing has been changed */
+#include <tlhelp32.h>
+#pragma pack(pop)
+
+int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname) {
+  size_t len = 0;
+  HANDLE h;
+  BOOL bFound;
+  PROCESSENTRY32 pe = {0};
+  int i;
+
+  if (!pid) pid = getpid();
+
+  h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (h == INVALID_HANDLE_VALUE) {
+    fprintf(stderr, "Failed to get list of processes\n");
+    return 0;
+  }
+
+  pe.dwSize = sizeof(PROCESSENTRY32);
+  for (i=0; i<=iLevel; i++) {
+    pid_t ppid = (pid_t)0;
+    for (bFound=Process32First(h, &pe); bFound; bFound=Process32Next(h, &pe)) {
+      if ((pid_t)(pe.th32ProcessID) == pid) {
+      	/* printf("PID %d = %s\n", (int)pid, pe.szExeFile); */
+      	ppid = (pid_t)(pe.th32ParentProcessID);
+	break;
+      }
+    }
+    if (!ppid) return 0;
+    pid = ppid;
+  }
+
+  len = strlen(pe.szExeFile);
+  if (lname <= len) return -(int)len; /* Not enough room in the output buffer */
+  strcpy(name, pe.szExeFile);
+
+  CloseHandle(h);
+
+  return (int)pe.th32ProcessID;
+}
+
+#endif
+
