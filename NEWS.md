@@ -11,6 +11,10 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SRC/smbios.mak: Rebuild smbios.exe if one of its dependencies changes.
 - C/SRC/smbios.c: Improved the interface to the optional HPE tables decoder.
 
+### Fixed
+- chars.exe: Prevent a misalignment in the new Windows Terminal, which handles ASCII control characters differently
+  from the old Windows Console.
+
 ## [Unreleased] 2022-01-26
 ### New
 - Shell/Library.sh: A sourceable library of useful Bourne Shell routines
