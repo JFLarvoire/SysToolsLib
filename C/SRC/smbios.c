@@ -50,6 +50,8 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.2.3.1.*
 *    2019-04-28 JFL Update PROGRAM_VERSION if including HPE-specific tables.  *
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.3.2.      *
+*    2022-02-01 JFL Improved the interface to the optional HPE tables decoder.*
+*                   Version 2.4.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,8 +59,8 @@
 
 #define PROGRAM_DESCRIPTION "Display SMBIOS tables contents"
 #define PROGRAM_NAME      "smbios"
-#define PROGRAM_VERSION_0 "2.3.2"
-#define PROGRAM_DATE      "2019-06-12"
+#define PROGRAM_VERSION_0 "2.4"
+#define PROGRAM_DATE      "2022-02-01"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -79,8 +81,6 @@
 #include "smbios_defs.c"	/* Standard tables definitions */
 										/* Include lines in $(O)\smbios.ver.h */
 #if HAS_SMBIOS_HP								/* #define PROGRAM_VERSION */
-#pragma message("Including smbios_hp.c")
-#include "smbios_hp.c"		/* HP OEM-specific tables definitions */
 #define PROGRAM_VERSION_HPE "/HPE"                                              /* #define PROGRAM_VERSION */
 #else                                                                           /* #define PROGRAM_VERSION */
 #define PROGRAM_VERSION_HPE ""                                                  /* #define PROGRAM_VERSION */
@@ -134,6 +134,15 @@ int iVerbose = 0;
 void usage(int retcode);
 int IsSwitch(char *pszArg);
 int PrintStringIfDefined(PSMBIOS21HEADER pDmi21Hdr, BYTE *pStruct, int iString, char *pszDescript);
+
+/* ------------- Optional extensions using the above prototypes ------------ */
+
+/* -------------------------- HPE BIOS extensions -------------------------- */
+
+#if HAS_SMBIOS_HP
+#pragma message("Including smbios_hp.c")
+#include "smbios_hp.c"		/* HP OEM-specific tables definitions */
+#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -878,7 +887,7 @@ int _cdecl main(int argc, char *argv[]) {
 	    break;
 
 	  default: {
-	    int iDecoded = TRUE;
+	    int iDecoded = 1;
 	    /* Display the table type, if known. */
 	    if ((int)bType < NDMI2TABLETYPES) { /* Known table, but decoding code not implemented yet */
 	      printf(" %s:\n", szDmi2TableTypes[bType]);
@@ -888,11 +897,12 @@ int _cdecl main(int argc, char *argv[]) {
 	      printf(" End-of-Table.\n");
 #if HAS_SMBIOS_HP
       	    } else if (isHP && (bType >= 192)) {
-      	      iDecoded = DecodeHPSmbiosTable(pStruct);
+      	      iDecoded = DecodeHPSmbiosTable(&dmi21Hdr, pStruct);
 #endif
 	    } else {
-	      iDecoded = FALSE;
+	      iDecoded = 0;
 	    }
+	    if (iDecoded == 2) break; /* It was fully decoded, including strings */
 	    if (!iDecoded) {
 	      printf("Unknown table:\n");
 	    }
