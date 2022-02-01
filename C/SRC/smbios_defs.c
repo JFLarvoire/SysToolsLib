@@ -11,6 +11,7 @@
 *    2014-01-03 JFL Minor updates to type 17 fields.			      *
 *    2016-03-29 JFL Added type 2, 3, 22 fields, and updated type 17 fields.   *
 *    2016-07-04 JFL Renamed dmistd.c as smbios_defs.c.                        *
+*    2022-02-01 JFL Added table 43 name.		                      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -61,6 +62,7 @@ char *szDmi2TableTypes[] =
   "Additional Information",                             /* Type 40 */
   "Onboard Devices Extended Information",               /* Type 41 */
   "Management Controller Host Interface",               /* Type 42 */
+  "TPM Device",       				        /* Type 43 */
   };
 #define NDMI2TABLETYPES (sizeof(szDmi2TableTypes) / sizeof(char *))
 
