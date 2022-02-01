@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-02-01
+### Changed
+- smbios.exe: Recognize table 43 "TPM Device".
+- C/SRC/smbios_defs.c: Added table 43 name.
+- C/SRC/smbios.mak: Rebuild smbios.exe if one of its dependencies changes.
+- C/SRC/smbios.c: Improved the interface to the optional HPE tables decoder.
+
 ## [Unreleased] 2022-01-26
 ### New
 - Shell/Library.sh: A sourceable library of useful Bourne Shell routines
