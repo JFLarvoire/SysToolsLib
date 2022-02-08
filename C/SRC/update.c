@@ -179,6 +179,7 @@
 *    2021-11-24 JFL Improved the heuristics for creating net. drive junctions.*
 *    2021-12-07 JFL Updated the explanations in the help screen.              *
 *                   Version 3.13.					      *
+*    2022-02-08 JFL Fixed option -- to force ending switches. Version 3.13.1. *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -186,8 +187,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.13"
-#define PROGRAM_DATE    "2021-12-07"
+#define PROGRAM_VERSION "3.13.1"
+#define PROGRAM_DATE    "2022-02-08"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -487,7 +488,7 @@ int main(int argc, char *argv[]) {
       DEBUG_PRINTF(("Switch = %s\n", arg));
       if (   streq(opt, "-")) {	    /* Force end of switches */
 	iProcessSwitches = FALSE;
-	break;
+	continue;
       }
       if (   streq(opt, "h")	    /* Display usage */
 	  || streq(opt, "help")	    /* The historical name of that switch */
