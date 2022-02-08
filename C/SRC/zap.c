@@ -34,13 +34,14 @@
 *    2020-04-20 JFL Added support for MacOS. Version 1.4.                     *
 *    2020-04-28 JFL Fixed the recursion into linked subdirectories, and the   *
 *		    recursive deletion of fixed names. Version 1.4.1.         *
+*    2022-02-08 JFL Added option -- to force the end of switches. Version 1.5.*
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.4.1"
-#define PROGRAM_DATE    "2020-04-28"
+#define PROGRAM_VERSION "1.5"
+#define PROGRAM_DATE    "2022-02-08"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -173,6 +174,7 @@ int main(int argc, char *argv[]) {
   int iZapBackup = FALSE;
   int nZaps = 0;
   size_t len;
+  int iProcessSwitches = TRUE;
 
   zo.pNDeleted = &nDeleted;
   
@@ -181,8 +183,12 @@ int main(int argc, char *argv[]) {
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
-    if (IsSwitch(arg)) {	/* It's a switch */
+    if (iProcessSwitches && IsSwitch(arg)) {	/* It's a switch */
       char *opt = arg+1;
+      if (streq(opt, "-")) {	/* Force end of switches */
+	iProcessSwitches = FALSE;
+	continue;
+      }
       if (streq(opt, "b")) {	/* Zap Backup Files */
 	iZapBackup = TRUE;
 	continue;
@@ -322,6 +328,7 @@ Usage:\n\
   %s [SWITCHES] -b [PATH [PATH [...]]]\n\
 \n\
 Switches:\n\
+  --          End of switches\n\
   -?|-h       Display this help message and exit\n"
 #ifdef _DEBUG
 "\
