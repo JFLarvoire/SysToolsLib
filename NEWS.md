@@ -4,6 +4,13 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-02-08
+### Changed
+- zap.exe: Added option -- to force end of switches.
+
+### Fixed
+- update.exe: Fixed option -- to force end of switches.
+
 ## [Unreleased] 2022-02-01
 ### Changed
 - smbios.exe: Recognize table 43 "TPM Device".
