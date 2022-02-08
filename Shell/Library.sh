@@ -285,7 +285,7 @@ ACTION=true # Do nothing, successfully
 
 # Process command line arguments
 # Note: The Bourne Shell does not set $#/$*/$@ for sourced scripts. Arguments are ignored.
-#       All modern shells work fine, even with the !/bin/sh header line.
+#       All modern POSIX shells work fine, even with the !/bin/sh header line.
 while [ $# -gt 0 ] ; do
   # Pop the first argument off the head of the list
   arg="$1"
