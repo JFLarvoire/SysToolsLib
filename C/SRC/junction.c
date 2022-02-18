@@ -14,13 +14,15 @@
 *    2021-12-26 JFL Changed the verbose flag operation.               	      *
 *    2022-01-11 JFL Changed the verbose flag operation.               	      *
 *    2022-01-17 JFL Added a dummy -nobanner option.                   	      *
-*    2022-01-19 JFL Added option -l to list junctions non-recursively.	      *
+*    2022-01-19 JFL Added option -l (dash-L) to list junctions non-recursively.
+*    2022-02-18 JFL Rewrote option -1 (dash-one) to record the junction       *
+*                   themselves in a binary tree. Renamed the old -1 as -o.    *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-01-19"
+#define PROGRAM_VERSION "2022-02-18"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -38,6 +40,7 @@
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debugging macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
+#include "tree.h"	/* Manage a binary tree */
 
 #define TRUE 1
 #define FALSE 0
@@ -59,11 +62,14 @@ int IsSwitch(char *arg) {
   }
 }
 
-/* WalkDirTree definitions */
-typedef struct {
-  int iVerbose;
-  long nJunction;
-} JCB_REF;
+/* Local definitions and forward references */
+#define JCB_VERBOSE 0x0001
+#define JCB_ONCE    0x0002
+typedef struct { /* Reference data to pass to the WalkDirTree callback */
+  int iFlags;		/* Input: A combination of JCB_xxx flags */
+  long nJunction;	/* Output: The number of junctions found */
+  void *pTree;		/* Internal: The binary tree of known junctions */
+} JCB_REF;	 /* Initialize as {0}, except for the inut flags */
 int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pJcbRef);
 
 /*---------------------------------------------------------------------------*\
@@ -89,7 +95,7 @@ void usage() {
 Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 \n\
   -?      Display this help and exit\n\
-  -1      Make sure to search linked folders only once. (slower)\n\
+  -1      Make sure to list junctions only once. (Useful with -f) \n\
   -a      Display the raw absolute target. Default: Display the relative target\n"
 #ifdef _DEBUG
 "\
@@ -97,10 +103,11 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 #endif
 "\
   -d      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
-  -f      Follow links to directories when searching recursively\n\
-  -l      List junctions in a directory\n\
+  -f      Follow junctions and symlinkds when searching recursively\n\
+  -l DIR  List junctions in a directory\n\
+  -o      Make sure to search linked folders only once. (slower, useful w. -f)\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
-  -r|-s   Search junctions recursively in a directory tree\n\
+  -r|-s DIR  List junctions recursively in a directory tree\n\
   -V      Display this program version and exit\n\
   -v      Verbose mode. Report both the junction and target. Show search stats.\n\
 \n\
@@ -127,6 +134,10 @@ Heuristics for managing junctions on network shares:\n\
   It may be possible to get the server base path from the client using WMI:\n\
     wmic /node:SERVER share where name=\"SHARE\" get path\n\
   Once found, it is best to store that path in \\\\SERVER\\SHARE\\_Base_Path.txt.\
+\n\
+This program detects link loops, and silently avoids getting caught.\n\
+Use option -v to display warnings about loops detected.\n\
+Likewise, the -v option informs about duplicate paths that were skipped.\n\
 ");
 }
 
@@ -160,8 +171,8 @@ int main(int argc, char *argv[]) {
       	usage();
 	return 0;
       }
-      if (streq(opt, "1")) {	/* Make sure to scan directories only once */
-	opts.iFlags |= WDT_ONCE; /* Slower, but ensures duplicate paths aren't explored twice */
+      if (streq(opt, "1")) {	/* Make sure to list junctions only once */
+	jcbRef.iFlags |= JCB_ONCE; /* Ensures duplicate paths to the same junction aren't listed twice */
 	continue;
       }
       if (streq(opt, "a")) {
@@ -198,6 +209,10 @@ int main(int argc, char *argv[]) {
       if (streq(opt, "nobanner")) {
 	continue;		/* For MS compatibility. Ignore that */
       }
+      if (streq(opt, "o")) {	/* Make sure to scan directories only once */
+	opts.iFlags |= WDT_ONCE; /* Slower, but ensures duplicate paths aren't explored twice */
+	continue;
+      }
       if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors, warnings & infos */
 	opts.iFlags |= WDT_QUIET;
 	continue;
@@ -213,7 +228,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "v")) {
 	iVerbose = TRUE;
-	jcbRef.iVerbose = TRUE;
+	jcbRef.iFlags |= JCB_VERBOSE;
 	continue;
       }
       pferror("Unknown option: %s", arg);
@@ -359,17 +374,120 @@ not_junction:
   return 0;
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    ShowJunctionsCB					      |
+|									      |
+|   Description     Process files found in the tree, and display junctions    |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    0=Success, continue; 1=Success, stop; -1=Error, stop      |
+|		    							      |
+|   Notes	    Optionally records the junction file IDs in a binary tree,|
+|		    to efficiently recognize the junctions that have already  |
+|		    been listed.					      |
+|		    The tree is not freed in the end, as this program exits.  |
+|		    							      |
+|   History	    							      |
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+#include "tree.h"
+typedef struct _knownJunction {
+  NODE_FIELDS(struct _tree, struct _knownJunction); /* The tree-specific fields */
+  /* Two key fields */
+  _dev_t devID;			/* Device ID and file ID uniquely identifying it */
+  _ino_t fileID;		/* "" */
+  /* And one data field */
+  const char *pszPathname;	/* Pathname for this visited directory */
+} knownJunction;
+typedef struct _tree {
+  TREE_FIELDS(struct _tree, struct _knownJunction); /* The tree-specific fields */
+  /* No global property fields */
+} tree;
+TREE_DEFINE_TYPES(tree, knownJunction);
+TREE_DEFINE_PROCS(tree, knownJunction);
+int TREE_CMP(knownJunction)(knownJunction *n1, knownJunction *n2) { /* Node comparison routine */
+  if (n1->devID < n2->devID) return -1;
+  if (n1->devID > n2->devID) return 1;
+  if (n1->fileID < n2->fileID) return -1;
+  if (n1->fileID > n2->fileID) return 1;
+  return 0;
+}
+DEBUG_CODE(
+int TREE_SPRINT(knownJunction)(char *buf, int len, knownJunction *n) {
+  return snprintf(buf, len, "%lX:%llX \"%s\"", (long)n->devID, (long long)n->fileID, n->pszPathname);
+}
+)
+/* Node allocation routine */
+knownJunction *new_knownJunction(_dev_t devID, _ino_t fileID, const char *pszPathname) {
+  knownJunction *node = calloc(1, sizeof(knownJunction));
+  if (node) {
+    node->devID = devID;
+    node->fileID = fileID;
+    node->pszPathname = pszPathname;
+  }
+  return node;
+}
+
 #pragma warning(disable:4100) /* Ignore the unreferenced formal parameter warning */
 
+/* Callback called by WalkDirTree for every file it finds */
 int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
   DWORD dwTag;
   JCB_REF *pJcbRef = (JCB_REF *)pRef;
-  int iVerbose = pJcbRef->iVerbose;
+  int iVerbose = pJcbRef->iFlags & JCB_VERBOSE;
+  int iOnce = pJcbRef->iFlags & JCB_ONCE;
+  tree *pTree = pJcbRef->pTree;
 
   if (pDE->d_type != DT_LNK) return 0;
 
   dwTag = MlxGetReparseTag(pszRelPath);
   if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) return 0;
+
+  if (iOnce) { /* Check if that same junction has been seen before */
+    struct stat sStat;
+    int iErr;
+
+    if (!pTree) { /* Create the tree, if this has not yet been done */
+      pTree = pJcbRef->pTree = new_knownJunction_tree();
+      if (!pTree) goto out_of_memory;
+    }
+
+    iErr = dirent2stat(pDE, &sStat);
+    if ((!iErr) && !sStat.st_ino) {
+      FILE_ID fid;
+      BOOL bDone = MlxGetFileID(pszRelPath, &fid);
+      if (bDone) {
+	sStat.st_dev = *(dev_t *)(&fid.dwIDVol0);
+	sStat.st_ino = *(ino_t *)(&fid.dwIDFil0);
+	if (*(ino_t *)(&fid.dwIDFil2)) sStat.st_ino = 0; /* This is an ReFS ID that does not fit on 64 bits */
+      }
+    }
+    if (sStat.st_ino) {
+      char *pszDupName;
+      knownJunction *pPrevious;
+      knownJunction *pThis = new_knownJunction(sStat.st_dev, sStat.st_ino, NULL);
+      if (!pThis) goto out_of_memory;
+      pPrevious = get_knownJunction(pTree, pThis);
+      if (pPrevious) { /* The same junction has been seen before under another pathname */
+	if (iVerbose) {
+	  fprintf(stderr, "Notice: Junction \"%s\" is the same as \"%s\"\n", pszRelPath, pPrevious->pszPathname);
+	}
+	free(pThis);
+	return 0;
+      }
+      /* OK, we've not seen this junction before. Record its name and unique ID in the tree */
+      pszDupName = strdup(pszRelPath);
+      if (!pszDupName) {
+        free(pThis);
+      	goto out_of_memory;
+      }
+      pThis->pszPathname = pszDupName;
+      add_knownJunction(pTree, pThis);
+    }
+  }
 
   pJcbRef->nJunction += 1;
 
@@ -382,6 +500,10 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
     printf("%s\n", pszRelPath);
   }
   return 0;
+
+out_of_memory:
+  pferror("Out of memory");
+  return -1;
 }
 
 #pragma warning(default:4100) /* Restore the unreferenced formal parameter warning */

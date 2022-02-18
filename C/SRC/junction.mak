@@ -17,3 +17,12 @@
 !IF "$(T)"=="DOS" || "$(T)"=="WIN95"
 SKIP_THIS=There's no $(T) version of this program.
 !ENDIF
+
+CI=$(STINCLUDE)
+MI=$(MSVCLIBX)
+SI=$(SYSLIB)
+
+# Include files dependencies
+access.c: $(CI)\debugm.h $(CI)\tree.h$(CI)\stversion.h \
+          $(MI)\stdio.h $(MI)\string.h $(MI)\errno.h $(MI)\unistd.h $(MI)\sys\stat.h \
+          $(SI)\mainutil.h $(SI)\pathnames.h
