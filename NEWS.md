@@ -4,6 +4,14 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-02-18
+### Changed
+- Moved SysLib\WalkDirTree.c:SafeRealloc() to Include\debugm.h:ShrinkBuf(), and use it in many sources. (Could be used in many more.)
+- Rewrote option -1 to record the junction themselves in a binary tree. Renamed the old -1 as -o. The new way is faster.
+
+### Fixed
+- Include/tree.h, dict.h: Updated macros, so that multiple kinds of trees can be used in the same program.
+
 ## [Unreleased] 2022-02-08
 ### Changed
 - zap.exe: Added option -- to force end of switches.
