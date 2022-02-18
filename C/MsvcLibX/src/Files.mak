@@ -212,7 +212,7 @@ fstat64.c: fstat.c $(CI)\debugm.h $(I)\errno.h $(I)\dirent.h $(I)\msvclibx.h $(I
 
 fstat64i32.c: fstat.c $(CI)\debugm.h $(I)\dirent.h $(I)\errno.h $(I)\msvclibx.h $(I)\sys\stat.h $(I)\stdint.h $(I)\stdio.h $(I)\string.h $(I)\windows.h
 
-fullpath.c: $(I)\errno.h $(I)\limits.h $(I)\stdlib.h $(I)\limits.h $(I)\stdlib.h $(I)\windows.h
+fullpath.c: $(CI)\debugm.h $(I)\errno.h $(I)\limits.h $(I)\stdlib.h $(I)\limits.h $(I)\stdlib.h $(I)\windows.h
 
 fwrite.c: $(CI)\debugm.h $(I)\errno.h $(I)\iconv.h $(I)\msvclibx.h $(I)\stdio.h $(I)\unistd.h $(I)\windows.h
 

@@ -15,6 +15,8 @@
 #define _GNU_SOURCE
 #define _FILE_OFFSET_BITS 64
 
+#define _CRT_SECURE_NO_WARNINGS /* Prevent MSVC warnings about unsecure C library functions */
+
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -36,12 +38,6 @@
 #else
   #define OS_HAS_LINKS 0
 #endif
-
-/* Safe realloc() */
-void *SafeRealloc(void *old, size_t new_size) {
-  void *new = realloc(old, new_size); /* This may fail, even for a smaller size */
-  return new ? new : old;
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -161,7 +157,7 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 	goto fail_entry;
       }
     }
-    pRootBuf = SafeRealloc(pRootBuf, lstrlen(pRootBuf)+1); /* Free the unused space */
+    pRootBuf = ShrinkBuf(pRootBuf, lstrlen(pRootBuf)+1); /* Free the unused space */
     root.path = pRootBuf;
     
     if (pOpts->iFlags & WDT_ONCE) { /* Check if an alias has been visited before */
@@ -208,7 +204,7 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
       bIsDir = isEffectiveDir(pPathname);
       if (bIsDir && (MlxResolveLinks(pPathname, pTrueName, PATH_MAX) == 0)) {
 	/* Resolution succeeded */
-	pTrueName = SafeRealloc(pTrueName, lstrlen(pTrueName)+1); /* Free the unused space */
+	pTrueName = ShrinkBuf(pTrueName, lstrlen(pTrueName)+1); /* Free the unused space */
 	if (pOpts->iFlags & WDT_FOLLOW) {
 	  NAMELIST *pList;
 	  list.path = pTrueName; /* Record this path for next time */
@@ -331,7 +327,7 @@ cleanup_and_return:
   if (bCreatedDict) { /* We're the first folder that created the visited dictionary. Delete it before returning. */
     dictnode *pNode;
     while ((pNode = FirstDictValue(dict)) != NULL) {
-      DeleteDictValue(dict, pNode->pszKey, free);
+      DeleteDictValue(dict, pNode->pszKey, free); /* Pass the free() function to free the value at the same time */
     }
     free(dict);
     pOpts->pOnce = NULL;

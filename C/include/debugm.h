@@ -141,6 +141,7 @@
 *    2020-07-24 JFL Rewrote debug_printf() to use the standard asprintf() as  *
 *		    much as possible.					      *
 *    2020-12-11 JFL Added XDEBUG_WPRINTF and RETURN_DWORD* macros.            *
+*    2022-02-17 JFL Added the INLINE macro, and ShrinkBuf() inline function.  *
 *		    							      *
 *	 (C) Copyright 2016 Hewlett Packard Enterprise Development LP	      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -177,6 +178,19 @@ extern "C" {
 #if defined(HAS_MSVCLIBX) || defined(GNU_SOURCE)  /* If we have MsvcLibX or GNU asprintf() functions, use them */
 #define _DEBUG_USE_ASPRINTF 1
 #endif
+
+/* General purpose C definitions, useful beyond debugging */
+#if defined(_MSC_VER) && (_MSC_VER < 1800) && !defined(__cplusplus)
+#define INLINE __inline	/* The MSVC compiler defines inline for C++, but not for C */
+#pragma warning(disable:4505) /* Avoid warnings "unreferenced local function has been removed" */
+#else
+#define INLINE inline	/* All other modern compilers define inline for C99, and C++ compilers always had it */
+#endif
+/* Reallocate a buffer to a smaller size, if possible */
+INLINE void *ShrinkBuf(void *old, size_t new_size) { /* Make it inline since it's so trivial */
+  void *new = realloc(old, new_size); /* This may fail, even for a smaller size */
+  return new ? new : old; /* In case of failure, keep using the larger buffer */
+}
 
 /* #undef _DEBUG_USE_ASPRINTF // For testing the alternate implementation */
 
@@ -231,8 +245,7 @@ int debug_vasprintf(char **ppszBuf, const char *pszFormat, va_list vl) {		    \
     n = debug_vsnprintf(pBuf = pBuf2, nBufSize, pszFormat, (nBufSize == 128) ? vl : vl2);   \
     va_end(vl2);									    \
     if ((n >= 0) && (n < nBufSize)) { /* Success, now we know the necessary size */	    \
-      pBuf2 = (char *)realloc(pBuf, n+1); /* Free the unused space in the end - May fail */ \
-      *ppszBuf = pBuf2 ? pBuf2 : pBuf;	  /* Return the valid one */			    \
+      *ppszBuf = (char *)ShrinkBuf(pBuf, n+1); /* Free the unused space in the end */	    \
       va_end(vl0);									    \
       return n;										    \
     } /* Else if n == nBufSize, actually not success, as there's no NUL in the end */	    \

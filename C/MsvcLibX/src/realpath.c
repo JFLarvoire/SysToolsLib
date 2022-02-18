@@ -259,7 +259,7 @@ realpath_failed:
     return NULL;
   }
 
-  if (!outbuf) pOutbuf = realloc(pOutbuf, strlen(pOutbuf) + 1);
+  if (!outbuf) pOutbuf = ShrinkBuf(pOutbuf, strlen(pOutbuf) + 1);
   return pOutbuf;
 }
 
@@ -537,10 +537,7 @@ drive_copy_done:
   /* Then remove the . and .. parts */
   l = CompactPathW(pwszBuf, pwszBuf, lBuf);
   /* Finally, if it's a new buffer of unspecified size, minimize its size */
-  if (iReAlloc) {
-    WCHAR *pwszBuf2 = realloc(pwszBuf, (l + 1) * sizeof(WCHAR));
-    if (pwszBuf2) pwszBuf = pwszBuf2;
-  }
+  if (iReAlloc) pwszBuf = ShrinkBuf(pwszBuf, (l + 1) * sizeof(WCHAR));
   return pwszBuf;
 }
 
@@ -593,7 +590,6 @@ int MlxResolveLinksM(const char *path, char *buf, size_t bufsize, UINT cp) {
 /* Get the canonic name of a file, after resolving all links in its pathname */
 int MlxResolveLinksU1(const char *path, char *buf, size_t bufsize, NAMELIST *prev, int iDepth) {
   char *target = NULL;
-  char *target2;
   int i;
   int iErr = 0;
   DWORD dwAttr;
@@ -761,8 +757,7 @@ resolves_too_long:
       }
       /* OK, no loop, so repeat the process for that new path */
       lstrcpy(target, buf); /* Keep that as a reference in the linked list, in case there are further links */
-      target2 = realloc(target, strlen(target)+1);
-      if (target2) target = target2;
+      target = ShrinkBuf(target, strlen(target)+1);
       list.prev = prev;
       list.path = target;
       iErr = MlxResolveLinksU1(target, buf, bufsize, &list, iDepth+1);
@@ -791,7 +786,6 @@ file_or_directory:
 
 int MlxResolveLinksU(const char *path, char *buf, size_t bufsize) {
   char *path1;
-  char *path2;
   int nSize;
   NAMELIST root;
   int iErr;
@@ -823,8 +817,7 @@ int MlxResolveLinksU(const char *path, char *buf, size_t bufsize) {
     path1[nSize++] = '.'; /* So add it explicitely */
     path1[nSize] = '\0';
   }
-  path2 = realloc(path1, nSize+1); /* Resize the buffer to fit the name length */
-  if (path2) path1 = path2;
+  path1 = ShrinkBuf(path1, nSize+1); /* Resize the buffer to fit the name length */
   root.path = path1;
   root.prev = NULL;
   iErr = MlxResolveLinksU1(path1, buf, bufsize, &root, 0);
@@ -945,7 +938,7 @@ realpathU_failed:
   }
 
   DEBUG_LEAVE(("return 0x%p; // \"%s\"\n", pOutbuf, pOutbuf));
-  if (!outbuf) pOutbuf = realloc(pOutbuf, strlen(pOutbuf) + 1);
+  if (!outbuf) pOutbuf = ShrinkBuf(pOutbuf, strlen(pOutbuf) + 1);
   free(pPath1);
   free(pPath2);
   return pOutbuf;

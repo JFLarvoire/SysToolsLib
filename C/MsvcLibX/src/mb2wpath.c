@@ -196,7 +196,7 @@ int CorrectWidePath(
     lstrcpyW(pwszBuf2+iLen, pwszRelPath);
     iLen += lRelPath;
     iLen = CompactPathW(pwszBuf2, pwszBuf2, WIDE_PATH_MAX);
-    pwszBuf2 = realloc(pwszBuf2, (iLen+1) * sizeof(WCHAR)); /* Avoid wasting space */
+    pwszBuf2 = ShrinkBuf(pwszBuf2, (iLen+1) * sizeof(WCHAR)); /* Avoid wasting space */
     if (MlxIsAbnormalPathW(pwszBuf2)) { /* Then processing this pathname requires prepending a special prefix */
       DEBUG_WPRINTF((L"// Relative name \"%s\" changed to \"%s\"\n", pwszName, pwszBuf2));
       pwszName = pwszBuf2;
@@ -265,7 +265,6 @@ cleanup_and_return:
 
 LPWSTR CorrectNewWidePath(LPWSTR pwszName) {
   LPWSTR pwszBuf = malloc(WIDE_PATH_MAX * sizeof(WCHAR));
-  LPWSTR pwszBuf2;
   int n;
   if (!pwszBuf) return NULL;
 
@@ -275,8 +274,7 @@ LPWSTR CorrectNewWidePath(LPWSTR pwszName) {
     return NULL;
   }
 
-  pwszBuf2 = realloc(pwszBuf, (n+1) * sizeof(WCHAR));
-  if (pwszBuf2) pwszBuf = pwszBuf2;
+  pwszBuf = ShrinkBuf(pwszBuf, (n+1) * sizeof(WCHAR));
   return pwszBuf;
 }
 
@@ -321,8 +319,7 @@ LPWSTR MultiByteToNewWidePath(
   }
   n += 1;	/* Count the final NUL */
 
-  pwszName2 = realloc(pwszName, sizeof(WCHAR) * n); /* This is unlikely to fail, as the buffer is shrinking, but this _can_ happen */ 
-  if (!pwszName2) pwszName2 = pwszName; /* In the unlikely case that it did fail, keep using the large buffer */
+  pwszName2 = ShrinkBuf(pwszName, sizeof(WCHAR) * n); 
   return pwszName2;
 }
 
