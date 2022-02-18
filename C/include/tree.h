@@ -70,6 +70,8 @@
 *    2017-01-02 JFL Adapted to use SysToolsLib's debugm.h definitions.	      *
 *                   Do not use _flushall(), as it also flushes input files!   *
 *    2017-01-04 JFL Allow defining global tree properties.            	      *
+*    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
+*                   allow having multiple kinds of trees in the same program. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -88,17 +90,17 @@
 #define TREE_CAT(arg1, arg2) arg1##arg2 /* Concatenation operator */
 #if defined(_DEBUG) && !defined(_MSDOS) /* These macros cause error "out of macro expansion space" with VC++ 1.52 */
 #define TREE_IF_DEBUG(tokens) tokens
-#define TREE_ENTRY(args) TREE_LOG_ENTRY args
-#define TREE_RETURN(result) return TREE_LOG_RETURN(result)
-#define TREE_RETURN_PVOID(result) return TREE_LOG_RETURN_PVOID(result)
-#define TREE_RETURN_INT(result) return TREE_LOG_RETURN_INT(result)
+#define TREE_ENTRY(node_t,args) TREE_LOG_ENTRY_##node_t args
+#define TREE_RETURN(node_t,result) return TREE_LOG_RETURN_##node_t(result)
+#define TREE_RETURN_PVOID(node_t,result) return TREE_LOG_RETURN_PVOID_##node_t(result)
+#define TREE_RETURN_INT(node_t,result) return TREE_LOG_RETURN_INT_##node_t(result)
 #include <stdarg.h>
 #else
 #define TREE_IF_DEBUG(tokens)
-#define TREE_ENTRY(args)
-#define TREE_RETURN(result) return result
-#define TREE_RETURN_PVOID(result) return result
-#define TREE_RETURN_INT(result) return result
+#define TREE_ENTRY(node_t,args)
+#define TREE_RETURN(node_t,result) return (result)
+#define TREE_RETURN_PVOID(node_t,result) return (result)
+#define TREE_RETURN_INT(node_t,result) return (result)
 #endif
 
 /* A balanced tree can never be perfectly balanced */
@@ -159,10 +161,10 @@ extern node_t *TREE_PREV_##node_t(node_t *root, node_t *n, node_t *prev);	\
 extern void *TREE_FOREACH_##node_t(node_t *root, TREE_##node_t##_CB *func, void *ref);	\
 extern void *TREE_RFOREACH_##node_t(node_t *root, TREE_##node_t##_CB *func, void *ref);	\
 TREE_IF_DEBUG(									\
-extern void TREE_LOG_ENTRY(char *format, ...);					\
-extern node_t *TREE_LOG_RETURN(node_t *result);					\
-extern void *TREE_LOG_RETURN_PVOID(void *result);				\
-extern int TREE_LOG_RETURN_INT(int result);					\
+extern void TREE_LOG_ENTRY_##node_t(char *format, ...);				\
+extern node_t *TREE_LOG_RETURN_##node_t(node_t *result);			\
+extern void *TREE_LOG_RETURN_PVOID_##node_t(void *result);			\
+extern int TREE_LOG_RETURN_INT_##node_t(int result);				\
 )										\
 										\
 /* Declare and define public inline functions. */				\
@@ -224,72 +226,72 @@ extern inline void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function
 #define TREE_DEFINE_PROCS(tree_t, node_t)					\
 										\
 node_t *TREE_ADD_##node_t(node_t *root, node_t *n) {				\
-  TREE_ENTRY((TREE_S(TREE_ADD_##node_t) "(%p, %p)\n", root, n));		\
-  if (!root) TREE_RETURN(n);							\
+  TREE_ENTRY(node_t,(TREE_S(TREE_ADD_##node_t) "(%p, %p)\n", root, n));		\
+  if (!root) TREE_RETURN(node_t,n);						\
   if (TREE_CMP(node_t)(n, root) < 0)						\
     root->sbbt_left = TREE_ADD_##node_t(root->sbbt_left, n);			\
   else										\
     root->sbbt_right = TREE_ADD_##node_t(root->sbbt_right, n);			\
-  TREE_RETURN(TREE_BALANCE_##node_t(root));					\
+  TREE_RETURN(node_t,TREE_BALANCE_##node_t(root));				\
 }										\
 										\
 node_t *TREE_REMOVE_##node_t(node_t *root, node_t *n) {				\
   int diff;									\
-  TREE_ENTRY((TREE_S(TREE_REMOVE_##node_t) "(%p, %p)\n", root, n));		\
-  if (!root) TREE_RETURN(0);							\
+  TREE_ENTRY(node_t,(TREE_S(TREE_REMOVE_##node_t) "(%p, %p)\n", root, n));	\
+  if (!root) TREE_RETURN(node_t,0);						\
   diff = TREE_CMP(node_t)(n, root);						\
   if (diff == 0) {								\
     node_t *tmp = TREE_MERGE_HALVES##node_t(root->sbbt_left, root->sbbt_right);	\
     root->sbbt_left = 0;							\
     root->sbbt_right = 0;							\
-    TREE_RETURN(tmp);								\
+    TREE_RETURN(node_t,tmp);							\
   }										\
   if (diff < 0)									\
     root->sbbt_left = TREE_REMOVE_##node_t(root->sbbt_left, n);			\
   else										\
     root->sbbt_right = TREE_REMOVE_##node_t(root->sbbt_right, n);		\
-  TREE_RETURN(TREE_BALANCE_##node_t(root));					\
+  TREE_RETURN(node_t,TREE_BALANCE_##node_t(root));				\
 }										\
 										\
 node_t *TREE_GET_##node_t(node_t *root, node_t *n) {				\
   int diff;									\
-  TREE_ENTRY((TREE_S(TREE_GET_##node_t) "(%p, %p)\n", root, n));		\
-  if (!root) TREE_RETURN(0);							\
+  TREE_ENTRY(node_t,(TREE_S(TREE_GET_##node_t) "(%p, %p)\n", root, n));		\
+  if (!root) TREE_RETURN(node_t,0);						\
   diff = TREE_CMP(node_t)(n, root);						\
-  if (diff == 0) TREE_RETURN(root);						\
+  if (diff == 0) TREE_RETURN(node_t,root);					\
   if (diff < 0)									\
-    TREE_RETURN(TREE_GET_##node_t(root->sbbt_left, n));				\
+    TREE_RETURN(node_t,TREE_GET_##node_t(root->sbbt_left, n));			\
   else										\
-    TREE_RETURN(TREE_GET_##node_t(root->sbbt_right, n));			\
+    TREE_RETURN(node_t,TREE_GET_##node_t(root->sbbt_right, n));			\
 }										\
 										\
 node_t *TREE_ROTL_##node_t(node_t *root) {					\
   node_t *r = root->sbbt_right;							\
-  TREE_ENTRY((TREE_S(TREE_ROTL_##node_t) "(%p)\n", root));			\
+  TREE_ENTRY(node_t,(TREE_S(TREE_ROTL_##node_t) "(%p)\n", root));		\
   root->sbbt_right = r->sbbt_left;						\
   r->sbbt_left = TREE_BALANCE_##node_t(root);					\
-  TREE_RETURN(TREE_BALANCE_##node_t(r));					\
+  TREE_RETURN(node_t,TREE_BALANCE_##node_t(r));					\
 }										\
 										\
 node_t *TREE_ROTR_##node_t(node_t *root) {					\
   node_t *l = root->sbbt_left;							\
-  TREE_ENTRY((TREE_S(TREE_ROTR_##node_t) "(%p)\n", root));			\
+  TREE_ENTRY(node_t,(TREE_S(TREE_ROTR_##node_t) "(%p)\n", root));		\
   root->sbbt_left = l->sbbt_right;						\
   l->sbbt_right = TREE_BALANCE_##node_t(root);					\
-  TREE_RETURN(TREE_BALANCE_##node_t(l));					\
+  TREE_RETURN(node_t,TREE_BALANCE_##node_t(l));					\
 }										\
 										\
 node_t *TREE_BALANCE_##node_t(node_t *root) {					\
   int delta = TREE_DELTA(root);							\
-  TREE_ENTRY((TREE_S(TREE_BALANCE_##node_t) "(%p)\n", root));			\
+  TREE_ENTRY(node_t,(TREE_S(TREE_BALANCE_##node_t) "(%p)\n", root));		\
   if (delta < -TREE_DELTA_MAX) {						\
     if (TREE_DELTA(root->sbbt_right) > 0)					\
       root->sbbt_right = TREE_ROTR_##node_t(root->sbbt_right);			\
-    TREE_RETURN(TREE_ROTL_##node_t(root));					\
+    TREE_RETURN(node_t,TREE_ROTL_##node_t(root));				\
   } else if (delta > TREE_DELTA_MAX) {						\
     if (TREE_DELTA(root->sbbt_left) < 0)					\
       root->sbbt_left = TREE_ROTL_##node_t(root->sbbt_left);			\
-    TREE_RETURN(TREE_ROTR_##node_t(root));					\
+    TREE_RETURN(node_t,TREE_ROTR_##node_t(root));				\
   }										\
   root->sbbt_depth = 0;								\
   if (root->sbbt_left && (root->sbbt_left->sbbt_depth > root->sbbt_depth))	\
@@ -297,89 +299,89 @@ node_t *TREE_BALANCE_##node_t(node_t *root) {					\
   if (root->sbbt_right && (root->sbbt_right->sbbt_depth > root->sbbt_depth))	\
     root->sbbt_depth = root->sbbt_right->sbbt_depth;				\
   root->sbbt_depth += 1;							\
-  TREE_RETURN(root);								\
+  TREE_RETURN(node_t,root);							\
 }										\
 										\
 /* Merge the two halves of a tree split at the head */         			\
 /* Move the right tree to the bottom-right of the left tree, and balance it */	\
 node_t *TREE_MERGE_HALVES##node_t(node_t *left, node_t *right) {		\
   /* node_t *tip;						*/		\
-  TREE_ENTRY((TREE_S(TREE_MERGE_HALVES_##node_t) "(%p, %p)\n", left, right));	\
-  if (!left) TREE_RETURN(right);						\
+  TREE_ENTRY(node_t,(TREE_S(TREE_MERGE_HALVES_##node_t) "(%p, %p)\n", left, right));	\
+  if (!left) TREE_RETURN(node_t,right);						\
   /* for (tip = left; tip->sbbt_right; tip = tip->sbbt_right) ; */		\
   /* tip->sbbt_right = right;					*/		\
   left->sbbt_right = TREE_MERGE_HALVES##node_t(left->sbbt_right, right);	\
-  TREE_RETURN(TREE_BALANCE_##node_t(left));					\
+  TREE_RETURN(node_t,TREE_BALANCE_##node_t(left));				\
 }										\
 										\
 node_t *TREE_FIRST_##node_t(node_t *root) {					\
-  TREE_ENTRY((TREE_S(TREE_FIRST_##node_t) "(%p)\n", root));			\
+  TREE_ENTRY(node_t,(TREE_S(TREE_FIRST_##node_t) "(%p)\n", root));		\
   if (root) while (root->sbbt_left) root = root->sbbt_left;			\
-  TREE_RETURN(root);								\
+  TREE_RETURN(node_t,root);							\
 }										\
 										\
 node_t *TREE_NEXT_##node_t(node_t *root, node_t *n, node_t *next) {		\
   int diff;									\
-  TREE_ENTRY((TREE_S(TREE_NEXT_##node_t) "(%p, %p, %p)\n", root, n, next));	\
-  if (!root) TREE_RETURN(next);							\
+  TREE_ENTRY(node_t,(TREE_S(TREE_NEXT_##node_t) "(%p, %p, %p)\n", root, n, next));	\
+  if (!root) TREE_RETURN(node_t,next);						\
   diff = TREE_CMP(node_t)(n, root);						\
   if (diff == 0) {								\
     if (root->sbbt_right) next = TREE_FIRST_##node_t(root->sbbt_right);		\
-    TREE_RETURN(next);								\
+    TREE_RETURN(node_t,next);							\
   }										\
   if (diff < 0)									\
-    TREE_RETURN(TREE_NEXT_##node_t(root->sbbt_left, n, root));			\
+    TREE_RETURN(node_t,TREE_NEXT_##node_t(root->sbbt_left, n, root));		\
   else										\
-    TREE_RETURN(TREE_NEXT_##node_t(root->sbbt_right, n, next));			\
+    TREE_RETURN(node_t,TREE_NEXT_##node_t(root->sbbt_right, n, next));		\
 }										\
 										\
 node_t *TREE_LAST_##node_t(node_t *root) {					\
-  TREE_ENTRY((TREE_S(TREE_LAST_##node_t) "(%p)\n", root));			\
+  TREE_ENTRY(node_t,(TREE_S(TREE_LAST_##node_t) "(%p)\n", root));		\
   if (root) while (root->sbbt_right) root = root->sbbt_right;			\
-  TREE_RETURN(root);								\
+  TREE_RETURN(node_t,root);							\
 }										\
 										\
 node_t *TREE_PREV_##node_t(node_t *root, node_t *n, node_t *prev) {		\
   int diff;									\
-  TREE_ENTRY((TREE_S(TREE_PREV_##node_t) "(%p, %p, %p)\n", root, n, prev));	\
-  if (!root) TREE_RETURN(prev);							\
+  TREE_ENTRY(node_t,(TREE_S(TREE_PREV_##node_t) "(%p, %p, %p)\n", root, n, prev));	\
+  if (!root) TREE_RETURN(node_t,prev);						\
   diff = TREE_CMP(node_t)(n, root);						\
   if (diff == 0) {								\
     if (root->sbbt_left) prev = TREE_LAST_##node_t(root->sbbt_left);		\
-    TREE_RETURN(prev);								\
+    TREE_RETURN(node_t,prev);							\
   }										\
   if (diff < 0)									\
-    TREE_RETURN(TREE_PREV_##node_t(root->sbbt_left, n, prev));			\
+    TREE_RETURN(node_t,TREE_PREV_##node_t(root->sbbt_left, n, prev));		\
   else										\
-    TREE_RETURN(TREE_PREV_##node_t(root->sbbt_right, n, root));			\
+    TREE_RETURN(node_t,TREE_PREV_##node_t(root->sbbt_right, n, root));		\
 }										\
 										\
 void *TREE_FOREACH_##node_t(node_t *root, TREE_##node_t##_CB *function, void *ref) {	\
   void *result;									\
-  TREE_ENTRY((TREE_S(TREE_FOREACH_##node_t) "(%p, %p, %p)\n", root, function, ref));	\
-  if (!root) TREE_RETURN_PVOID(0);						\
+  TREE_ENTRY(node_t,(TREE_S(TREE_FOREACH_##node_t) "(%p, %p, %p)\n", root, function, ref));	\
+  if (!root) TREE_RETURN_PVOID(node_t,0);					\
   result = TREE_FOREACH_##node_t(root->sbbt_left, function, ref);		\
-  if (result) TREE_RETURN_PVOID(result);					\
+  if (result) TREE_RETURN_PVOID(node_t,result);					\
   result = function(root, ref);							\
-  if (result) TREE_RETURN_PVOID(result);					\
+  if (result) TREE_RETURN_PVOID(node_t,result);					\
   result = TREE_FOREACH_##node_t(root->sbbt_right, function, ref);		\
-  TREE_RETURN_PVOID(result);							\
+  TREE_RETURN_PVOID(node_t,result);						\
 }										\
 										\
 void *TREE_RFOREACH_##node_t(node_t *root, TREE_##node_t##_CB *function, void *ref) {	\
   void *result;									\
-  TREE_ENTRY((TREE_S(TREE_RFOREACH_##node_t) "(%p, %p, %p)\n", root, function, ref));	\
-  if (!root) TREE_RETURN_PVOID(0);						\
+  TREE_ENTRY(node_t,(TREE_S(TREE_RFOREACH_##node_t) "(%p, %p, %p)\n", root, function, ref));	\
+  if (!root) TREE_RETURN_PVOID(node_t,0);					\
   result = TREE_RFOREACH_##node_t(root->sbbt_right, function, ref);		\
-  if (result) TREE_RETURN_PVOID(result);					\
+  if (result) TREE_RETURN_PVOID(node_t,result);					\
   result = function(root, ref);							\
-  if (result) TREE_RETURN_PVOID(result);					\
+  if (result) TREE_RETURN_PVOID(node_t,result);					\
   result = TREE_RFOREACH_##node_t(root->sbbt_left, function, ref);		\
-  TREE_RETURN_PVOID(result);							\
+  TREE_RETURN_PVOID(node_t,result);						\
 }										\
 										\
 TREE_IF_DEBUG(									\
-void TREE_LOG_ENTRY(char *format, ...) {					\
+void TREE_LOG_ENTRY_##node_t(char *format, ...) {				\
   va_list args;									\
   if (iDebug) {									\
     va_start(args, format);							\
@@ -391,7 +393,7 @@ void TREE_LOG_ENTRY(char *format, ...) {					\
   iIndent += 2;									\
 }										\
 										\
-node_t *TREE_LOG_RETURN(node_t *result) {					\
+node_t *TREE_LOG_RETURN_##node_t(node_t *result) {				\
   if (iDebug) {									\
     char buf[80];								\
     TREE_SPRINT(node_t)(buf, sizeof(buf), result);				\
@@ -402,7 +404,7 @@ node_t *TREE_LOG_RETURN(node_t *result) {					\
   return result;								\
 }										\
 										\
-void *TREE_LOG_RETURN_PVOID(void *result) {					\
+void *TREE_LOG_RETURN_PVOID_##node_t(void *result) {				\
   if (iDebug) {									\
     printf("%*sreturn %p\n", iIndent, "", result);				\
     fflush(stdout);								\
@@ -411,7 +413,7 @@ void *TREE_LOG_RETURN_PVOID(void *result) {					\
   return result;								\
 }										\
 										\
-int TREE_LOG_RETURN_INT(int result) {						\
+int TREE_LOG_RETURN_INT_##node_t(int result) {					\
   if (iDebug) {									\
     printf("%*sreturn %d\n", iIndent, "", result);				\
     fflush(stdout);								\
