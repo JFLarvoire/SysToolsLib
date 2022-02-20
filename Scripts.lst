@@ -69,6 +69,7 @@ Python\python.bat
 Python\pip.bat
 Shell\distrib
 Shell\paths
+Shell\subsh
 Shell\truename
 Shell\profile.d\mcd.sh
 Tcl\b64dec.tcl

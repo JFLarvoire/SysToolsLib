@@ -4,6 +4,10 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-02-20
+### New
+- Shell/subsh: Start a sub Linux shell, changing the prompt to show the shell depth level.
+
 ## [Unreleased] 2022-02-18
 ### Changed
 - Moved SysLib\WalkDirTree.c:SafeRealloc() to Include\debugm.h:ShrinkBuf(), and use it in many sources. (Could be used in many more.)
@@ -173,7 +177,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2021-10-11
 ### New
-- ShellApp.ps1: Enumerate shell applications, ie. i.e. File Explorers and Control Panels
+- ShellApp.ps1: Enumerate shell applications, i.e. File Explorers and Control Panels
 
 ### Changed
 - Window.ps1: Major restructuration with...  

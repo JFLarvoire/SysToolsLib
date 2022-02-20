@@ -160,6 +160,7 @@ nlines.tcl      | -WL | Count lines, and non-commented source lines, in a set of
 PSService.ps1   | -W- | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
 PySetup.bat     | -W- | Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts.        | `pysetup` &:# Test if Python is correctly configured
 subcmd.bat      | -W- | Start a sub cmd shell, changing the prompt to show the shell depth level and modes.   | `subcmd /V:on` &:# Enable delayed expansion in the sub shell
+subsh           | --L | Start a sub Linux shell, changing the prompt to show the shell depth level.           | `subsh`
 TclSetup.bat    | -W- | Configure Windows to run *.tcl files as command-line scripts, and *.tk as windowed scripts.   | `tclsetup` &:# Test if Tcl is correctly configured
 tclsh.bat       | -W- | Find the Tcl shell even if it's not in the PATH.                                      | `tclsh.bat -t` &:# Test if Tcl is correctly configured
 tee.exe         | DW- | Duplicate the input from stdin to multiple parallel outputs.                          | `dir \| tee -a work.log`

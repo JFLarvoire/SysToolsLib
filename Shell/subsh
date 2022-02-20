@@ -1,0 +1,65 @@
+#!/bin/bash
+###############################################################################
+#                                                                             #
+#   Filename        subsh                                                     #
+#                                                                             #
+#   Description     Open a sub-shell, updating the prompt to show its depth   #
+#                                                                             #
+#   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#    2022-02-05 JFL Created this script.                                      #
+#                                                                             #
+#         © Copyright 2022 Hewlett Packard Enterprise Development LP          #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Global variables
+VERSION="2022-02-05"
+
+# If self-invoked as a Bash RC file
+if [ -n "$SUBSH_IS_RC" ] ; then
+  unset SUBSH_IS_RC # Allow invoking this script normally again
+  # echo "# subsh sourced as an RC file. SUBSH_LEVEL=$SUBSH_LEVEL"
+
+  # Source the standard profiles that Bash would have sourced by default
+  # See: https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html
+  if [ -f /etc/profile ] ; then
+	. /etc/profile
+  fi
+  for rcfile in ~/.bash_profile ~/.bash_login ~/.profile ; do
+  	if [ -f $rcfile ] ; then
+  	  . $rcfile
+  	  break
+  	fi
+  done
+
+  # Update the prompt string with the shell level
+  SUBSH_LEVEL=$(expr $SUBSH_LEVEL + 1)
+  # echo "# Updated SUBSH_LEVEL=$SUBSH_LEVEL"
+  if [ "$(echo "$PS1" | sed -E 's/.*?(\\n)(\\?\$ ?)$/\1/')" = "\\n" ] ; then
+  	SUBSH_INFO="#$SUBSH_LEVEL "		# If the $ is on a new line, no need for a separator space.
+  else
+  	SUBSH_INFO=" #$SUBSH_LEVEL "	# The $ is at the end of its line. Insert an initial space.
+  fi
+  PS1="$(echo "$PS1" | sed 's/\( \?#[0-9][0-9]* \?\)\?\(\\\?\$ \?\)$/'"$SUBSH_INFO"'\2/')"
+  unset SUBSH_INFO
+  return
+fi
+
+# Else, manually invoked as a normal script
+
+# echo "# subsh invoked manually. SUBSH_LEVEL=$SUBSH_LEVEL"
+
+# Define the shell level variable, if it's not set already
+if [ -z "$SUBSH_LEVEL" ] ; then
+  SUBSH_LEVEL=1
+fi
+
+# Work around the issue that $PS1 is NOT passed in the environment to sub-shells
+# by invoking itself as a Bash RC file, and flagging that with a couple of variables.
+SUBSH_IS_RC=1 SUBSH_LEVEL=$SUBSH_LEVEL "$SHELL" --rcfile "$0"
+# echo "# Back in Shell $SUBSH_LEVEL"
+exit
