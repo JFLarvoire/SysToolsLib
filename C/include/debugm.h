@@ -187,9 +187,9 @@ extern "C" {
 #define INLINE inline	/* All other modern compilers define inline for C99, and C++ compilers always had it */
 #endif
 /* Reallocate a buffer to a smaller size, if possible */
-INLINE void *ShrinkBuf(void *old, size_t new_size) { /* Make it inline since it's so trivial */
-  void *new = realloc(old, new_size); /* This may fail, even for a smaller size */
-  return new ? new : old; /* In case of failure, keep using the larger buffer */
+static INLINE void *ShrinkBuf(void *old_buf, size_t new_size) { /* Make it inline since it's so trivial */
+  void *new_buf = realloc(old_buf, new_size); /* This may fail, even for a smaller size */
+  return new_buf ? new_buf : old_buf; /* In case of failure, keep using the larger buffer */
 }
 
 /* #undef _DEBUG_USE_ASPRINTF // For testing the alternate implementation */
