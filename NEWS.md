@@ -4,7 +4,7 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2022-02-20
+## [1.21] 2022-02-20
 ### New
 - Shell/subsh: Start a sub Linux shell, changing the prompt to show the shell depth level.
 
@@ -265,7 +265,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### Changed
 - remplace.exe: If no change was made to the data, use the input file timestamp for the output. (Or preserve it when using the -= switch.)
 
-## [1.20] 2020-03-28
+## [1.20] 2021-03-28
 ### Fixed
 - C/SRC/Makefile, C/SysLib/Makefile : Use the correct processor in the MacOSX builds.
 
