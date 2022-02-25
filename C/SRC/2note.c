@@ -25,6 +25,10 @@
 *                   and option -16 as an alias for option -u to input UTF-16. *
 *    2020-08-30 JFL Added the autodetection of UTF encodings.                 *
 *		    Version 1.2.					      *
+*    2022-02-23 JFL Added support for the new Notepad in Windows 11 2022H1.   *
+*		    Avoid displaying success when no edit window was found.   *
+*    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
+*		    Version 1.3.					      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,8 +36,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows Notepad"
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2020-08-30"
+#define PROGRAM_VERSION "1.3"
+#define PROGRAM_DATE    "2022-02-24"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -561,8 +565,10 @@ int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars) {
     goto cleanup;
   }
   /* Find Notepad content area window */
-  hWnd = FindWindowEx(hMainWnd, 0, "Edit", NULL);
+  hWnd = FindWindowEx(hMainWnd, 0, "Edit", NULL); /* Notepad versions until 2021 */
+  if (!hWnd) hWnd = FindWindowEx(hMainWnd, 0, "RichEditD2DPT", NULL); /* 2022 versions and later */
   if (!hWnd) {
+    if (!GetLastError()) SetLastError(ERROR_CANNOT_FIND_WND_CLASS); /* Avoid displaying success when nothing was found */
     PrintWin32Error("Failed to get Notepad edit window handle");
     goto cleanup;
   }
@@ -593,10 +599,6 @@ cleanup:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef S_IFIFO
-#define S_IFIFO         0010000         /* pipe */
-#endif
-
 int is_pipe(FILE *f) {
   int err;
   struct stat buf;			/* Use MSC 6.0 compatible names */
@@ -605,7 +607,7 @@ int is_pipe(FILE *f) {
   h = fileno(f);			/* Get the file handle */
   err = fstat(h, &buf);			/* Get information on that handle */
   if (err) return FALSE;		/* Cannot tell more if error */
-  return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
+  return (S_ISFIFO(buf.st_mode));	/* It's a FiFo */
 }
 
 /*---------------------------------------------------------------------------*\
