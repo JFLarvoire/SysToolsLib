@@ -12,6 +12,7 @@
 *    2015-11-15 JFL Visual Studio 2015 moved this file to the Windows Kit UCRT.
 *    2017-02-28 JFL Redefine pid_t as an int in all cases: It's more standard.*
 *    2022-01-05 JFL Optionally redefine _dev_t and _ino_t.		      *
+*    2022-02-25 JFL Use different definitions for dev_t,ino_t & _dev_t,_ino_t.*
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -25,25 +26,39 @@
 #if _USE_EXTENDED_STAT_STRUCT
 
 /* Redefine the dev_t and ino_t types. Must be the same as in wchar.h */
+#if !defined(_LIBX_INO_T_DEFINED)
 
-/* Define an actual device ID type. Must be an integer type. */
-#if defined(_MSDOS)
-typedef short dev_t;			/* Use the drive letter */
-#elif defined(_WIN32)
-typedef __int64 dev_t;			/* Use the device Serial Number */
+#if defined(_DEV_T_DEFINED) || defined(_INO_T_DEFINED) /* Avoid using the wrong definition */
+#error "_dev_t and/or _ino_t have already been defined by MSVC own include files"
 #endif
-typedef dev_t _dev_t;			/* MSVC include files use this type */
+
+/* Duplicate MSVC own _dev_t and _ino_t fake types definitions */
+#if defined(_MSDOS)
+typedef short _dev_t;
+#elif defined(_WIN32)
+typedef int _dev_t;
+#endif
 #define _DEV_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
+
+typedef unsigned short _ino_t;
+#define _INO_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
+
+/* Define an actual device ID type for MsvcLibX. Must be an integer type. */
+#if defined(_MSDOS)
+typedef short dev_t;		/* Use the drive letter */
+#elif defined(_WIN32)
+typedef __int64 dev_t;		/* Use the device Serial Number */
+#endif
 
 /* Define an actual inode number type. Must be an unsigned integer type. */
 #if defined(_MSDOS)
-typedef unsigned long ino_t;		/* Use the cluster number */
+typedef unsigned long ino_t;	/* Use the cluster number */
 #elif defined(_WIN32)
-typedef unsigned __int64 ino_t;		/* Use the file ID Number */
+typedef unsigned __int64 ino_t;	/* Use the file ID Number */
 #endif
-typedef ino_t _ino_t;			/* MSVC include files use this type */
-#define _INO_T_DEFINED	 /* Prevent MSVC's own <sys/types.h> file from redefining it */
+#define _LIBX_INO_T_DEFINED	/* Prevent MsvcLibX wchar.h from redefining it */
 
+#endif /* !defined(_LIBX_INO_T_DEFINED) */
 #endif /* _USE_EXTENDED_STAT_STRUCT */
 
 /*****************************************************************************/

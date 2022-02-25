@@ -397,8 +397,8 @@ not_junction:
 typedef struct _knownJunction {
   NODE_FIELDS(struct _tree, struct _knownJunction); /* The tree-specific fields */
   /* Two key fields */
-  _dev_t devID;			/* Device ID and file ID uniquely identifying it */
-  _ino_t fileID;		/* "" */
+  dev_t devID;			/* Device ID and file ID uniquely identifying it */
+  ino_t fileID;			/* "" */
   /* And one data field */
   const char *pszPathname;	/* Pathname for this visited directory */
 } knownJunction;
@@ -421,7 +421,7 @@ int TREE_SPRINT(knownJunction)(char *buf, int len, knownJunction *n) {
 }
 )
 /* Node allocation routine */
-knownJunction *new_knownJunction(_dev_t devID, _ino_t fileID, const char *pszPathname) {
+knownJunction *new_knownJunction(dev_t devID, ino_t fileID, const char *pszPathname) {
   knownJunction *node = calloc(1, sizeof(knownJunction));
   if (node) {
     node->devID = devID;
