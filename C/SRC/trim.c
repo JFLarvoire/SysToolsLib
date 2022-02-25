@@ -47,6 +47,8 @@
 *    2021-01-06 JFL renamed lessive.c as trim.c. Version 2.0.                 *
 *    2021-05-03 JFL Do not change the file time if nothing changed.           *
 *                   Version 2.1.                                              *
+*    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
+*		    Version 2.1.1.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,8 +56,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "trim"
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2021-05-03"
+#define PROGRAM_VERSION "2.1.1"
+#define PROGRAM_DATE    "2022-02-24"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -551,26 +553,22 @@ int IsSwitch(char *pszArg)
 |									      |
 |   History:								      |
 |    2004-04-05 JFL Added a test of the S_IFIFO flag, for pipes under Windows.|
+|    2023-02-24 JFL Use the standard S_ISxxx macros to detect files and fifos.|
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef S_IFIFO
-#define S_IFIFO         0010000         /* pipe */
-#endif
+int is_redirected(FILE *f) {
+  int err;
+  struct stat st;
+  int h;
 
-int is_redirected(FILE *f)
-    {
-    int err;
-    struct stat buf;			/* Use MSC 6.0 compatible names */
-    int h;
-
-    h = fileno(f);			/* Get the file handle */
-    err = fstat(h, &buf);		/* Get information on that handle */
-    if (err) return FALSE;		/* Cannot tell more if error */
-    return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
-            || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
-	   );
-    }
+  h = fileno(f);			/* Get the file handle */
+  err = fstat(h, &st);			/* Get information on that handle */
+  if (err) return FALSE;		/* Cannot tell more if error */
+  return (   (S_ISREG(st.st_mode))	/* Tell if device is a regular file */
+	  || (S_ISFIFO(st.st_mode))	/* or it's a FiFo */
+	 );
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

@@ -75,6 +75,8 @@
 *    2021-06-01 JFL Added debug option -tge to test GetBufferEncoding().      *
 *    2021-06-02 JFL Fixed the COM API result analysis. Still poor though.     *
 *		    Version 2.5.1.					      *
+*    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
+*		    Version 2.5.2.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -82,8 +84,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.5.1"
-#define PROGRAM_DATE    "2021-06-02"
+#define PROGRAM_VERSION "2.5.2"
+#define PROGRAM_DATE    "2022-02-24"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -898,32 +900,28 @@ int IsSwitch(char *pszArg) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef S_IFIFO
-#define S_IFIFO         0010000         /* pipe */
-#endif
-
 int is_redirected(FILE *f) {
   int err;
-  struct stat buf;			/* Use MSC 6.0 compatible names */
+  struct stat st;
   int h;
 
   h = fileno(f);			/* Get the file handle */
-  err = fstat(h, &buf);			/* Get information on that handle */
+  err = fstat(h, &st);			/* Get information on that handle */
   if (err) return FALSE;		/* Cannot tell more if error */
-  return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
-	  || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
+  return (   (S_ISREG(st.st_mode))	/* Tell if device is a regular file */
+	  || (S_ISFIFO(st.st_mode))	/* or it's a FiFo */
 	 );
 }
 
 int is_pipe(FILE *f) {
   int err;
-  struct stat buf;			/* Use MSC 6.0 compatible names */
+  struct stat st;			/* Use MSC 6.0 compatible names */
   int h;
 
   h = fileno(f);			/* Get the file handle */
-  err = fstat(h, &buf);			/* Get information on that handle */
+  err = fstat(h, &st);			/* Get information on that handle */
   if (err) return FALSE;		/* Cannot tell more if error */
-  return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
+  return (S_ISFIFO(st.st_mode));	/* It's a FiFo */
 }
 
 /*---------------------------------------------------------------------------*\

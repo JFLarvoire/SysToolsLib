@@ -44,6 +44,8 @@
 *                   and option -16 as an alias for option -u to input UTF-16. *
 *    2020-08-30 JFL Added the autodetection of UTF encodings.                 *
 *		    Version 1.7.					      *
+*    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
+*		    Version 1.7.1.					      *
 *                   							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -51,8 +53,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.7"
-#define PROGRAM_DATE    "2020-08-30"
+#define PROGRAM_VERSION "1.7.1"
+#define PROGRAM_DATE    "2022-02-24"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -656,7 +658,7 @@ int ToClipW(const WCHAR* pwBuffer, size_t nWChars)
 |									      |
 |   Description     Check if a FILE is a pipe			 	      |
 |									      |
-|   Parameters     FILE *f		    The file to test		      |
+|   Parameters	    FILE *f		    The file to test		      |
 |									      |
 |   Returns	    TRUE if the FILE is a pipe				      |
 |									      |
@@ -666,10 +668,6 @@ int ToClipW(const WCHAR* pwBuffer, size_t nWChars)
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef S_IFIFO
-#define S_IFIFO         0010000         /* pipe */
-#endif
-
 int is_pipe(FILE *f) {
   int err;
   struct stat buf;			/* Use MSC 6.0 compatible names */
@@ -678,7 +676,7 @@ int is_pipe(FILE *f) {
   h = fileno(f);			/* Get the file handle */
   err = fstat(h, &buf);			/* Get information on that handle */
   if (err) return FALSE;		/* Cannot tell more if error */
-  return (buf.st_mode & S_IFIFO);	/* It's a FiFo */
+  return (S_ISFIFO(buf.st_mode));	/* It's a FiFo */
 }
 
 /*---------------------------------------------------------------------------*\

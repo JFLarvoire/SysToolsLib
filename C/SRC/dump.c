@@ -36,6 +36,8 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.10.     *
 *    2019-10-31 JFL Added option -z to stop input on Ctrl-Z. Version 1.2.     *
 *    2020-04-20 JFL Added support for MacOS. Version 1.3.                     *
+*    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
+*		    Version 1.3.1.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -43,8 +45,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2022-02-24"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -467,27 +469,23 @@ void printflf(void)
 |		    routine returns TRUE, then they've been redirected.       |
 |									      |
 |   History:								      |
-|    2004/04/05 JFL Added a test of the S_IFIFO flag, for pipes under Windows.|
+|    2004-04-05 JFL Added a test of the S_IFIFO flag, for pipes under Windows.|
+|    2023-02-24 JFL Use the standard S_ISxxx macros to detect files and fifos.|
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifndef S_IFIFO
-#define S_IFIFO         0010000         /* pipe */
-#endif
+int is_redirected(FILE *f) {
+  int err;
+  struct stat st;
+  int h;
 
-int is_redirected(FILE *f)
-    {
-    int err;
-    struct stat buf;			/* Use MSC 6.0 compatible names */
-    int h;
-
-    h = fileno(f);			/* Get the file handle */
-    err = fstat(h, &buf);		/* Get information on that handle */
-    if (err) return FALSE;		/* Cannot tell more if error */
-    return (   (buf.st_mode & S_IFREG)	/* Tell if device is a regular file */
-            || (buf.st_mode & S_IFIFO)	/* or it's a FiFo */
-	   );
-    }
+  h = fileno(f);			/* Get the file handle */
+  err = fstat(h, &st);			/* Get information on that handle */
+  if (err) return FALSE;		/* Cannot tell more if error */
+  return (   (S_ISREG(st.st_mode))	/* Tell if device is a regular file */
+	  || (S_ISFIFO(st.st_mode))	/* or it's a FiFo */
+	 );
+}
 
 /*---------------------------------------------------------------------------*\
 *									      *
