@@ -4,13 +4,21 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-02-25
+### Fixed
+- C/MsvcLibX/include/sys/types.h, C/MsvcLibX/include/wchar.h, C/SRC/junction.c:  
+  Corrected the definitions for MSVC's own _dev_t and _ino_t types, used in its stat* structures.
+- 2clip.exe, 2note.exe, conv.exe, detab.exe, dump.exe, remplace.exe, trim.exe:  
+  Fixed the detection of the input (file or pipe) type.
+- 2note.exe: Added support for the new Windows 11 22H1 notepad.exe.
+
 ## [1.21] 2022-02-20
 ### New
 - Shell/subsh: Start a sub Linux shell, changing the prompt to show the shell depth level.
 
 ## [Unreleased] 2022-02-18
 ### Changed
-- Moved SysLib\WalkDirTree.c:SafeRealloc() to Include\debugm.h:ShrinkBuf(), and use it in many sources. (Could be used in many more.)
+- Moved SysLib/WalkDirTree.c:SafeRealloc() to Include\debugm.h:ShrinkBuf(), and use it in many sources. (Could be used in many more.)
 - Rewrote option -1 to record the junction themselves in a binary tree. Renamed the old -1 as -o. The new way is faster.
 
 ### Fixed
