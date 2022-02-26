@@ -4,7 +4,7 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2022-02-25
+## [1.21.1] 2022-02-26
 ### Fixed
 - C/MsvcLibX/include/sys/types.h, C/MsvcLibX/include/wchar.h, C/SRC/junction.c:  
   Corrected the definitions for MSVC's own _dev_t and _ino_t types, used in its stat* structures.
