@@ -715,6 +715,7 @@ $source = @"
   using System.Diagnostics;
   using System.Runtime.InteropServices;                                 // SET STATUS
   using System.ComponentModel;                                          // SET STATUS
+  using System.Reflection;                                              // SET STATUS
 
   public enum ServiceType : int {                                       // SET STATUS [
     SERVICE_WIN32_OWN_PROCESS = 0x00000010,
@@ -756,11 +757,25 @@ $source = @"
     private System.Diagnostics.EventLog eventLog;                       // EVENT LOG
     private ServiceStatus serviceStatus;                                // SET STATUS
 
+    public const int SERVICE_ACCEPT_PRESHUTDOWN = 0x100;                // Preshutdown
+    public const int SERVICE_CONTROL_PRESHUTDOWN = 0xf;                 // Preshutdown
+
     public Service_$serviceName() {
       ServiceName = "$serviceName";
       CanStop = true;
+      CanShutdown = true;
       CanPauseAndContinue = false;
       AutoLog = true;
+
+      // PreShutdown Section
+      FieldInfo acceptedCommandsFieldInfo = typeof(ServiceBase).GetField("acceptedCommands", BindingFlags.Instance | BindingFlags.NonPublic);
+      if (acceptedCommandsFieldInfo == null)
+      {
+          throw new ApplicationException("acceptedCommands field not found");
+      }    
+      int value = (int)acceptedCommandsFieldInfo.GetValue(this);
+      acceptedCommandsFieldInfo.SetValue(this, value | SERVICE_ACCEPT_PRESHUTDOWN);
+      // End PreShutdown Section
 
       eventLog = new System.Diagnostics.EventLog();                     // EVENT LOG [
       if (!System.Diagnostics.EventLog.SourceExists(ServiceName)) {         
@@ -819,8 +834,8 @@ $source = @"
       }
     }
 
-    protected override void OnStop() {
-      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Entry");   // EVENT LOG
+    private void SCMStop()
+    {
       // Start a child process with another copy of ourselves
       try {
         Process p = new Process();
@@ -838,25 +853,48 @@ $source = @"
         // Success. Set the service state to Stopped.                   // SET STATUS
         serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;      // SET STATUS
       } catch (Exception e) {
-        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Failed to stop $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
-        // Change the service state back to Started.                    // SET STATUS [
-        serviceStatus.dwCurrentState = ServiceState.SERVICE_RUNNING;
-        Win32Exception w32ex = e as Win32Exception; // Try getting the WIN32 error code
-        if (w32ex == null) { // Not a Win32 exception, but maybe the inner one is...
-          w32ex = e.InnerException as Win32Exception;
-        }    
-        if (w32ex != null) {    // Report the actual WIN32 error
-          serviceStatus.dwWin32ExitCode = w32ex.NativeErrorCode;
-        } else {                // Make up a reasonable reason
-          serviceStatus.dwWin32ExitCode = (int)(Win32Error.ERROR_APP_INIT_FAILURE);
-        }                                                               // SET STATUS ]
+        EventLog.WriteEntry(ServiceName, "$exeName StopSCM() // Failed to stop $scriptCopyCname.", EventLogEntryType.Error); // EVENT LOG
+        throw e;                                                        // SET STATUS ]
       } finally {
         serviceStatus.dwWaitHint = 0;                                   // SET STATUS
         SetServiceStatus(ServiceHandle, ref serviceStatus);             // SET STATUS
-        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit"); // EVENT LOG
       }
     }
+    protected override void OnStop() {
+      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Entry");   // EVENT LOG
+      try {
+        this.SCMStop();
+        base.OnStop();
+      }
+      catch(Exception e)
+      {
+          EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Fail. " + e.Message, EventLogEntryType.Error);   // EVENT LOG
+          throw e;
+      }
+      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit");   // EVENT LOG
+    }
+    protected override void OnCustomCommand(int command)
+    {
+        if (command == SERVICE_CONTROL_PRESHUTDOWN)
+        {
+            EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Entry");   // EVENT LOG
+            try{
+                this.StopSCM();
+            }
+            catch(Exception e)
+            {
+                EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Fail. " + e.Message, EventLogEntryType.Error);   // EVENT LOG
+                throw e;
+            }
+            EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Exit");   // EVENT LOG
+        }
+        base.OnCustomCommand(command);
+    }
 
+    protected override void OnShutdown() {
+        // * NOP *
+    }
+    
     public static void Main() {
       System.ServiceProcess.ServiceBase.Run(new Service_$serviceName());
     }
