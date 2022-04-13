@@ -879,7 +879,7 @@ $source = @"
         {
             EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Entry");   // EVENT LOG
             try{
-                this.StopSCM();
+                this.SCMStop();
             }
             catch(Exception e)
             {
@@ -894,7 +894,7 @@ $source = @"
     protected override void OnShutdown() {
         // * NOP *
     }
-    
+
     public static void Main() {
       System.ServiceProcess.ServiceBase.Run(new Service_$serviceName());
     }
