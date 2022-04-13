@@ -853,7 +853,7 @@ $source = @"
         // Success. Set the service state to Stopped.                   // SET STATUS
         serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;      // SET STATUS
       } catch (Exception e) {
-        EventLog.WriteEntry(ServiceName, "$exeName StopSCM() // Failed to stop $scriptCopyCname.", EventLogEntryType.Error); // EVENT LOG
+        EventLog.WriteEntry(ServiceName, "$exeName SCMStop() // Failed to stop $scriptCopyCname.", EventLogEntryType.Error); // EVENT LOG
         throw e;                                                        // SET STATUS ]
       } finally {
         serviceStatus.dwWaitHint = 0;                                   // SET STATUS
