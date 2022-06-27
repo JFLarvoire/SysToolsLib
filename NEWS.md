@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-06-27
+### Changed
+- 2clip.exe: Added option -N to remove the final CRLF.
+- C/include/configure.bat: Changed the STINCLUDE presence test file from debugm.h to all.mak, in preparation for the
+  split of the NMaker system, and the C debug library.
+- Batch/Library.bat:
+  Added routines :SaveErrorLevel and :RetrieveErrorLevel, to allow testing the exit code from the left half of a pipe.  
+  Added routine :GetUserEmail.  
+  Improved routine :RunAsAdmin.
+
+### Fixed
+- 2note2.bat: Fixed the issue with the extra CRLF appended to the text.
+
 ## [1.21.1] 2022-02-26
 ### Fixed
 - C/MsvcLibX/include/sys/types.h, C/MsvcLibX/include/wchar.h, C/SRC/junction.c:  
