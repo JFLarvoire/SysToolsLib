@@ -38,6 +38,7 @@ C/make.bat
 *.log
 *.pdb
 *.lib
+*.out
 config.*.bat
 scriptDirs.lst
 bin/
