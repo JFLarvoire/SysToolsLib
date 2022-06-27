@@ -11,6 +11,7 @@
 :#                                                                            #
 :#  History                                                                   #
 :#   2019-10-24 JFL Create this script.                                       #
+:#   2022-06-27 JFL Fix the issue with the extra CRLF appended to the text.   #
 :#		                                                              #
 :##############################################################################
 
@@ -18,7 +19,7 @@
 echo %0 | findstr :: >nul || (cmd /d /c ^""%~dp0\::\..\%~nx0" %*^" & exit /b)
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2019-11-01"
+set "VERSION=2022-06-27"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -233,9 +234,10 @@ if errorlevel 1 echo Error: Failed to find 4 free handles for pipe 1 & exit /b 1
 :# >&%P1OUT% echo.!SUB!
 
 :# Pipe the standard input data into Notepad2
-2clip		  &:# First pipe it into the clipboard
+2clip -N	  &:# First pipe it into the clipboard, removing the final CRLF
 start notepad2 -c &:# -c option tells Notepad2 to copy data from the clipboard
 		   :# Known issue: -c appends an extra \n after the clipboard data!
+		   :# 2clip.exe's -N option now compensates for that.
 
 :# wait 1s, to give time to Notepad2 to start and paste the clipboard content
 call :Sleep 1
