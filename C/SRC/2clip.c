@@ -46,6 +46,7 @@
 *		    Version 1.7.					      *
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
 *		    Version 1.7.1.					      *
+*    2022-06-27 JFL Added option -N to remove the final CRLF. Version 1.8.    *
 *                   							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -53,8 +54,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows clipboard"
 #define PROGRAM_NAME    "2clip"
-#define PROGRAM_VERSION "1.7.1"
-#define PROGRAM_DATE    "2022-02-24"
+#define PROGRAM_VERSION "1.8"
+#define PROGRAM_DATE    "2022-06-27"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -142,6 +143,7 @@ int main(int argc, char *argv[]) {
   int isHTML = FALSE;
   int isRTF = FALSE;
   int iCtrlZ = FALSE;		/* If true, stop input on a Ctrl-Z */
+  int iTrimFinalCRLF = FALSE;	/* If true, remove the CRLF in the end of the input */
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -189,6 +191,10 @@ int main(int argc, char *argv[]) {
 	}
       }
       )
+      if (streq(arg+1, "N")) {		/* Trim the final CRLF */
+	iTrimFinalCRLF = TRUE;
+	continue;
+      }
       if (streq(arg+1, "O")) {		/* Assume the input is OEM text */
 	codepage = CP_OEMCP;
 	continue;
@@ -247,6 +253,10 @@ int main(int argc, char *argv[]) {
       if (nRead < BLOCKSIZE) break;
     }
     Sleep(0);	    // Release end of time-slice
+  }
+  if (iTrimFinalCRLF) { /* Optionally remove the final CRLF */
+    if (nTotal && (pBuffer[nTotal-1] == '\n')) nTotal -= 1;
+    if (nTotal && (pBuffer[nTotal-1] == '\r')) nTotal -= 1;
   }
   if (nTotal > 0) {
     WCHAR *pwUnicodeBuf = (WCHAR *)pBuffer;
