@@ -240,6 +240,10 @@
 :#   2021-09-15 JFL Renamed character entities from DEBUG.entity to @entity.  #
 :#		    Rewrote :Prep2ExpandVars based on :Prep2ExpandVar.	      #
 :#		    Added routine :ConvertEntitiesNoDebug & use it for -c, -C.#
+:#   2022-03-01 JFL Added routine :GetUserEmail.			      #
+:#		    Improved routine :RunAsAdmin.                             #
+:#		    Added routines :SaveErrorLevel / :RetrieveErrorLevel to   #
+:#		    allow testing the exit code from the left half of a pipe. #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -1748,6 +1752,73 @@ for /l %%. in () do (
 )
 
 :#----------------------------------------------------------------------------#
+:# Save the ERRORLEVEL into a Doskey variable
+:# This allows saving the exit code from the left half of a pipe
+:# Do not quote the variable=value pair, else the first quote becomes part of the name,
+:#  and it's impossible to get rid of it later on.
+:# Usage:
+:# call :SaveErrorLevel.init
+:# ( first_command & %SAVE_ERRORLEVEL% NAME1 ) | ( second_command & %SAVE_ERRORLEVEL% NAME2 )
+:# call :RetrieveDoskeyVar NAME1
+:# echo NAME1=%NAME1%
+:# call :RetrieveDoskeyVar NAME2
+:# echo NAME2=%NAME2%
+:SetDoskeyVar  %1=Doskey VARNAME  %2=VALUE
+doskey /exename=vars %~1=%~2
+exit /b
+
+:# Retrieve the value of a Doskey variable, and delete it.
+:RetrieveDoskeyVar %1=Doskey VARNAME
+for /f "delims== tokens=1,*" %%V in ('doskey /m:vars') do (
+  if /I "%%V"=="%~1" (
+    set "%~1=%%W"
+    doskey /exename=vars %%V=
+  )
+)
+exit /b
+
+:RetrieveErrorLevel %1=Doskey VARNAME
+call :RetrieveDoskeyVar %1
+call set "%1=%%%1: =%%" &:# Remove the unwanted space appended by macro SAVE_ERRORLEVEL
+exit /b
+
+:SaveErrorLevel.init
+set "SAVE_ERRORLEVEL=for %%n in (1 2) do @if %%n==2 (call doskey /exename=vars %%^^ARG: =%%=%%^^ERRORLEVEL%%) else set ARG="
+set "RETRIEVE_ERRORLEVEL=call :RetrieveErrorLevel"
+exit /b
+
+:SaveErrorLevel.test
+call :SaveErrorLevel.init
+set SAVE_ERR
+
+setlocal EnableExtensions DisableDelayedExpansion
+set "ERRLVL="
+( cmd /c exit 0 & %SAVE_ERRORLEVEL% ERRLVL ) | findstr /v "something" 2>NUL
+:# doskey /m:vars | dump
+%RETRIEVE_ERRORLEVEL% ERRLVL
+echo set "ERRLVL=%ERRLVL%"
+
+set "ERRLVL="
+(cmd /c exit 1 & %SAVE_ERRORLEVEL% ERRLVL) | findstr /v "something" 2>NUL
+%RETRIEVE_ERRORLEVEL% ERRLVL
+echo set "ERRLVL=%ERRLVL%"
+endlocal
+
+setlocal EnableExtensions EnableDelayedExpansion
+set "ERRLVL="
+( cmd /c exit 0 & %SAVE_ERRORLEVEL% ERRLVL ) | findstr /v "something" 2>NUL
+%RETRIEVE_ERRORLEVEL% ERRLVL
+echo set "ERRLVL=%ERRLVL%"
+
+set "ERRLVL="
+(cmd /c exit 1 & %SAVE_ERRORLEVEL% ERRLVL) | findstr /v "something" 2>NUL
+%RETRIEVE_ERRORLEVEL% ERRLVL
+echo set "ERRLVL=%ERRLVL%"
+endlocal
+
+exit /b
+
+:#----------------------------------------------------------------------------#
 :#                                                                            #
 :#  Function        EnableExpansion                                           #
 :#                                                                            #
@@ -3067,23 +3138,58 @@ endlocal & exit /b
 >NUL 2>&1 net session
 goto :eof
 
-:RunAsAdmin
-:# adaptation of https://sites.google.com/site/eneerge/home/BatchGotAdmin and http://stackoverflow.com/q/4054937
+:# Adaptation of https://sites.google.com/site/eneerge/home/BatchGotAdmin and http://stackoverflow.com/q/4054937
+:# TODO: Allow passing multiple arguments, by escaping " in the ShellExecute argline
+:RunAsAdmin %1=Batch name %2=Optional argument line, passed to the batch without its quotes
 :# Check for ADMIN Privileges
 >nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
-if '%errorlevel%' NEQ '0' (
-  REM Get ADMIN Privileges
-  echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\getadmin.vbs"
-  echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\getadmin.vbs"
-  "%temp%\getadmin.vbs"
-  del "%temp%\getadmin.vbs"
-  exit /B
-) else (
-  REM Got ADMIN Privileges
-  pushd "%cd%"
-  cd /d "%~dp0"
+if '%errorlevel%' NEQ '0' ( :# Not Administrator. Get ADMIN Privileges
+  > "%TEMP%\getadmin%PID%.vbs" (
+    echo Set UAC = CreateObject^("Shell.Application"^)
+    echo UAC.ShellExecute "%~1", "%~2", "%CD%", "runas", 1
+  )
+  cscript //B "%TEMP%\getadmin%PID%.vbs"
+  del "%TEMP%\getadmin%PID%.vbs"
+) else ( :# Already got ADMIN Privileges
+  call %1 %~2 &rem Pass the argument unquoted, to match the current behaviour in the alternate case
 )
-goto :eof
+exit /b
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetUserEmail                                              #
+:#                                                                            #
+:#  Description     Get the current user main email address                   #
+:#                                                                            #
+:#  Arguments       %1 = Optional output variable name                        #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2022-03-01 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:GetUserEmail %1 = Optional output variable name
+setlocal EnableExtensions DisableDelayedExpansion
+set "EMAIL="
+
+:# First, try to get the domain user principal name, which is his email
+for /f %%e in ('whoami /upn 2^>NUL') do set "EMAIL=%%e"
+
+:# Else, try looking in the Windows mail configuration
+if not defined EMAIL (
+  for /f "delims=\ tokens=6" %%e in (
+    'reg query HKEY_CURRENT_USER\Software\Microsoft\IdentityCRL\UserExtendedProperties /f *@* 2^>NUL ^| findstr HKEY_CURRENT_USER'
+  ) do set "EMAIL=%%e"
+)
+
+if "%~1"=="" ( :# In the absence of a variable name, echo the email
+  set "PASS_RESULT=echo.%EMAIL%"
+) else ( :# Else store the email in that variable
+  set ^"PASS_RESULT=set "%~1=%EMAIL%"^"
+)
+endlocal &%PASS_RESULT%& exit /b
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
