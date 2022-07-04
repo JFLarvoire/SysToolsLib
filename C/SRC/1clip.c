@@ -51,6 +51,7 @@
 *                   Added option -8 as an alias for option -U to output UTF-8,*
 *                   and option -16 to output UTF-16. Version 2.2.             *
 *    2020-09-03 JFL Minor correction to one error message. Version 2.2.1.     *
+*    2022-06-29 JFL Add option -s to get the clipboard data size. Version 2.3.*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -58,8 +59,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.2.1"
-#define PROGRAM_DATE    "2020-09-03"
+#define PROGRAM_VERSION "2.3"
+#define PROGRAM_DATE    "2022-06-29"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -92,6 +93,7 @@
 enum {
   COPYCLIP,
   ENUMCLIP,
+  SIZECLIP,
 };
 
 #define CP_NULL ((UINT)-1)	/* No output code page. Can't use 0 as CP_ACP is 0 */
@@ -117,6 +119,7 @@ void usage(void);
 int IsSwitch(char *pszArg);
 int CopyClip(UINT type, UINT codepage);
 int EnumClip(void);
+int SizeClip(UINT type);
 int PrintCError(const char *pszExplanation, ...);
 int PrintWin32Error(const char *pszExplanation, ...);
 
@@ -201,6 +204,10 @@ int main(int argc, char *argv[]) {
 	type = RegisterClipboardFormat("Rich Text Format");
 	continue;
       }
+      if (streq(arg+1, "s")) {			/* -s: Size */
+	iAction = SIZECLIP;
+	continue;
+      }
       if (streq(arg+1, "t")) {			/* -t: Type */
       	type = CF_TEXT;
 	if (((i+1) < argc) && !IsSwitch(argv[i+1])) sscanf(argv[++i], "%u", &type);
@@ -238,6 +245,10 @@ int main(int argc, char *argv[]) {
       break;
     case ENUMCLIP:
       EnumClip();
+      break;
+    case SIZECLIP:
+      i = SizeClip(type);
+      if (i >= 0) printf("%d\n", i);
       break;
     default:
       fprintf(stderr, "Unexpected action requested.\n");
@@ -295,7 +306,8 @@ Options:\n\
   -o      Get the OEM text from the clipboard\n\
   -O      Output using the OEM encoding (Code page %u)\n\
   -r      Get the RTF data from the clipboard\n\
-  -t N    Get format N. Default: 1 = plain text\n\
+  -s      Get clipboard data size\n\
+  -t [N]  Get format N. Default N: 1 = plain text\n\
   -u      Get the Unicode text from the clipboard (Default)\n\
   -U|-8   Output using the UTF-8 encoding (Code page 65001)\n\
   -V      Display the program version\n\
@@ -694,7 +706,7 @@ clipFormat cf[] = {
   {3, "CF_METAFILEPICT", "Metafile picture"},
   {4, "CF_SYLK", "Microsoft Symbolic Link format"},
   {5, "CF_DIF", "Software Arts' Data Interchange Format"},
-  {6, "CF_TIFF", "Tagged-image file format"},
+  {6, "CF_TIFF", "Tagged-Image File Format"},
   {7, "CF_OEMTEXT", "Text in the OEM character set"},
   {8, "CF_DIB", "Device Independant Bitmap"},
   {9, "CF_PALETTE", "Color palette"},
@@ -769,4 +781,48 @@ int EnumClip(void) {
   return nChars;
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    SizeClip						      |
+|									      |
+|   Description:    Get the size of a given clipboard data type item	      |
+|									      |
+|   Parameters:     UINT type		Clipboard data type. Ex: CF_TEXT      |
+|									      |
+|   Returns:	    The item size in bytes.				      |
+|									      |
+|   History:								      |
+|    2022-06-29 JFL Created this routine.                                     |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int SizeClip(UINT type) {
+  int nChars = -1;
+
+  DEBUG_PRINTF(("SizeClip(%d);\n", type));
+
+  if (OpenClipboard(NULL)) {
+    HANDLE hCBData = GetClipboardData(type);
+    if (hCBData) {
+      GlobalLock(hCBData);
+      nChars = (int)GlobalSize(hCBData);
+      switch (type) {
+	case CF_TEXT:
+	case CF_OEMTEXT:
+	  nChars -= 1; break; // Remove the trailing NUL
+	case CF_UNICODETEXT:
+	  nChars -= 2; break; // Remove the trailing unicode NUL
+	default:
+	  // TO DO: Handle the HTML case, like in CopyClip()
+	  break;
+      }
+      GlobalUnlock(hCBData);
+    }
+    CloseClipboard();
+  } else {
+    PrintWin32Error("Could not open the clipboard");
+  }
+
+  return nChars;
+}
 
