@@ -12,6 +12,9 @@
 :#  History                                                                   #
 :#   2019-10-24 JFL Create this script.                                       #
 :#   2022-06-27 JFL Fix the issue with the extra CRLF appended to the text.   #
+:#   2022-06-28 JFL Fix hangs with clipboard contents > 4KB.                  #
+:#   2022-07-04 JFL Added option -p to revert to using a pipe if desired.     #
+:#		    Added option -d to enable debugging on the command line.  #
 :#		                                                              #
 :##############################################################################
 
@@ -19,7 +22,7 @@
 echo %0 | findstr :: >nul || (cmd /d /c ^""%~dp0\::\..\%~nx0" %*^" & exit /b)
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2022-06-27"
+set "VERSION=2022-07-04"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -33,7 +36,9 @@ goto :Main
 
 :debug.init
 set "IFDEBUG=if "%DEBUG%"=="1""
+set "ECHO=echo"
 set "ECHO.D=%IFDEBUG% echo"
+set "ECHOVARS=call :echovars"
 set "ECHOVARS.D=%IFDEBUG% call :echovars"
 set "RETURN=exit /b"
 exit /b
@@ -195,6 +200,8 @@ echo Usage: ^<command^> ^| %SCRIPT% [OPTIONS]
 echo.
 echo Options:
 echo   -?       Display this help
+echo   -d       Debug mode
+echo   -p       Use a pipe instead of a file for saving the clipboard content
 echo   -V       Display the script version and exit
 goto :eof
 
@@ -202,6 +209,7 @@ goto :eof
 :# Main routine
 
 :Main
+set "USE_PIPE=0"
 goto :get_arg
 :next_arg
 shift
@@ -210,12 +218,14 @@ if [%1]==[] goto :Start
 set "ARG=%~1"
 if "!ARG!"=="-?" goto :Help
 if "!ARG!"=="/?" goto :Help
+if "!ARG!"=="-d" set "DEBUG=1" & call :debug.init & goto :next_arg
+if "!ARG!"=="-p" set "USE_PIPE=1" & goto :next_arg
 if "!ARG!"=="-V" (echo.%VERSION%) & goto :eof
 if "!ARG:~0,1!"=="-" (
   >&2 %ECHO% Warning: Unexpected option ignored: !ARG!
   goto :next_arg
 )
->&2 %ECHO% Warning: Unexpected argument ignored: !"ARG"!
+>&2 %ECHO% Warning: Unexpected argument ignored: %1
 goto :next_arg
 
 :#----------------------------------------------------------------------------#
@@ -226,12 +236,23 @@ goto :next_arg
 :# >NUL copy /y NUL + NUL /a "%TEMP%\1A.chr" /a
 :# for /f %%c in (%TEMP%\1A.chr) do set "SUB=%%c"
 
-call :CreatePipe P1IN P1OUT
-if errorlevel 1 echo Error: Failed to find 4 free handles for pipe 1 & exit /b 1
-
+:# Prepare saving the initial clipboard contents
+if "%USE_PIPE%"=="1" (
+  call :CreatePipe P1IN P1OUT
+  if errorlevel 1 echo Error: Failed to find 4 free handles for pipe 1 & exit /b 1
+) else (
+  set "TEMPFILE=%TEMP%\2note2_%PID%_%RANDOM%_%TIME::=%.tmp"
+)
 :# Save the initial clipboard contents
->&%P1OUT% 1clip -U -Z
-:# >&%P1OUT% echo.!SUB!
+:# Use a second if test for doing the actual save, because >&!P1OUT! in a (block) generates a syntax error.
+if "%USE_PIPE%"=="1" (
+  :# Saving the data in a pipe hangs if there is 4KB of data or more.
+  >&%P1OUT% 1clip -U -Z
+  rem :# >&%P1OUT% echo.!SUB!
+) else (
+  :# So instead of saving it in a pipe, save it by default in a temporary file.
+  >"%TEMPFILE%" 1clip -U
+)
 
 :# Pipe the standard input data into Notepad2
 2clip -N	  &:# First pipe it into the clipboard, removing the final CRLF
@@ -243,4 +264,9 @@ start notepad2 -c &:# -c option tells Notepad2 to copy data from the clipboard
 call :Sleep 1
 
 :# Restore the initial clipboard contents
-<&%P1IN% 2clip -U -z
+if "%USE_PIPE%"=="1" (
+  <&%P1IN% 2clip -U -z
+) else (
+  <"%TEMPFILE%" 2clip -U
+  del "%TEMPFILE%"
+)
