@@ -51,7 +51,8 @@
 *                   Added option -8 as an alias for option -U to output UTF-8,*
 *                   and option -16 to output UTF-16. Version 2.2.             *
 *    2020-09-03 JFL Minor correction to one error message. Version 2.2.1.     *
-*    2022-06-29 JFL Add option -s to get the clipboard data size. Version 2.3.*
+*    2022-06-29 JFL Add option -s to get the clipboard data size.             *
+*    2022-07-09 JFL Add option -L to get the clipboard text locale. Ver. 2.3. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -60,7 +61,7 @@
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
 #define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2022-06-29"
+#define PROGRAM_DATE    "2022-07-09"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -94,6 +95,7 @@ enum {
   COPYCLIP,
   ENUMCLIP,
   SIZECLIP,
+  GETLOCALE,
 };
 
 #define CP_NULL ((UINT)-1)	/* No output code page. Can't use 0 as CP_ACP is 0 */
@@ -120,6 +122,7 @@ int IsSwitch(char *pszArg);
 int CopyClip(UINT type, UINT codepage);
 int EnumClip(void);
 int SizeClip(UINT type);
+LCID GetClipLocale(void);
 int PrintCError(const char *pszExplanation, ...);
 int PrintWin32Error(const char *pszExplanation, ...);
 
@@ -149,6 +152,7 @@ int main(int argc, char *argv[]) {
   UINT type = CF_UNICODETEXT;
   UINT codepage = CP_AUTO;	    /* The code page to use for the output. Default: Choose automatically */
   int iCtrlZ = FALSE;		    /* If true, append a Ctrl-Z to the output */
+  int iErr = 0;
 
   /* Process arguments */
   for (i=1; i<argc; i++) {
@@ -190,6 +194,10 @@ int main(int argc, char *argv[]) {
       }
       if (streq(arg+1, "l")) {			/* -l: List */
 	iAction = ENUMCLIP;
+	continue;
+      }
+      if (streq(arg+1, "L")) {			/* -L: Get Locale */
+	iAction = GETLOCALE;
 	continue;
       }
       if (streq(arg+1, "o")) {			/* -o: Get the OEM type */
@@ -250,13 +258,17 @@ int main(int argc, char *argv[]) {
       i = SizeClip(type);
       if (i >= 0) printf("%d\n", i);
       break;
+    case GETLOCALE:
+      if (!GetClipLocale()) iErr = 1;
+      break;
     default:
       fprintf(stderr, "Unexpected action requested.\n");
+      iErr = 2;
       break;
   }
 
   DEBUG_PRINTF(("Exiting\n"));
-  return 0;
+  return iErr;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -303,6 +315,7 @@ Options:\n\
 "\
   -h      Get the HTML data from the clipboard (Encoded in UTF-8)\n\
   -l      List clipboard formats available\n\
+  -L      Get the clipboard text locale\n\
   -o      Get the OEM text from the clipboard\n\
   -O      Output using the OEM encoding (Code page %u)\n\
   -r      Get the RTF data from the clipboard\n\
@@ -716,7 +729,7 @@ clipFormat cf[] = {
   {13, "CF_UNICODETEXT", "Unicode text"},
   {14, "CF_ENHMETAFILE", "Enhanced metafile"},
   {15, "CF_HDROP", "HDROP list of files"},
-  {16, "CF_LOCALE", "Locale identifier for the text in the clipboard."},
+  {16, "CF_LOCALE", "Locale identifier for the text in the clipboard"},
   {17, "CF_DIBV5", "Device Independant Bitmap v5"},
   {0x0080, "CF_OWNERDISPLAY", "Owner-display format"},
   {0x0081, "CF_DSPTEXT", "Private text format"},
@@ -826,3 +839,50 @@ int SizeClip(UINT type) {
   return nChars;
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetClipLocale					      |
+|									      |
+|   Description     Get the locale of the clipboard text		      |
+|									      |
+|   Parameters      UINT type		Clipboard data type. Ex: CF_TEXT      |
+|		    							      |
+|   Returns	    The item size in bytes.				      |
+|		    							      |
+|   History								      |
+|    2022-07-09 JFL Created this routine.                                     |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+LCID GetClipLocale() {
+  int nChars = 0;
+  LCID idLocale = 0;
+
+  DEBUG_PRINTF(("GetClipLocale();\n"));
+
+  if (OpenClipboard(NULL)) {
+    HANDLE hCBData;
+    LPSTR lpString;
+
+    hCBData = GetClipboardData(CF_LOCALE);
+    if (hCBData) {
+      lpString = GlobalLock(hCBData);
+      nChars = (int)GlobalSize(hCBData);
+      if (nChars >= sizeof(LCID)) {
+      	/* char szCode[20] = ""; */
+      	char szName[100] = "";
+      	idLocale = *(LCID *)lpString;
+	/* GetLocaleInfo(idLocale, LOCALE_SNAME, szCode, sizeof(szCode)); */
+	GetLocaleInfo(idLocale, LOCALE_SLANGUAGE, szName, sizeof(szName));
+      	printf("0x%04X %s\n", (UINT)idLocale, szName);
+      } else {
+      	printf("There are only %d bytes of data, expected %d\n", nChars, sizeof(LCID));
+      }
+    }
+    CloseClipboard();
+  } else {
+    PrintWin32Error("Could not open the clipboard");
+  }
+
+  return idLocale;
+}
