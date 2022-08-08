@@ -51,8 +51,9 @@
 *                   Added option -8 as an alias for option -U to output UTF-8,*
 *                   and option -16 to output UTF-16. Version 2.2.             *
 *    2020-09-03 JFL Minor correction to one error message. Version 2.2.1.     *
-*    2022-06-29 JFL Add option -s to get the clipboard data size.             *
-*    2022-07-09 JFL Add option -L to get the clipboard text locale. Ver. 2.3. *
+*    2022-06-29 JFL Added option -s to get the clipboard data size.           *
+*    2022-07-09 JFL Added option -L to get the clipboard text locale.         *
+*    2022-07-10 JFL Added a workaround for an Excel bug. Version 2.3.         *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -61,7 +62,7 @@
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
 #define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2022-07-09"
+#define PROGRAM_DATE    "2022-07-10"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -538,16 +539,29 @@ int CopyClip(UINT type, UINT codepage) {
     int errno0;
 
     hCBData = GetClipboardData(type);
+    DEBUG_PRINTF(("GetClipboardData() returns hCBData = %p\n", hCBData));
     if (hCBData) {
       lpString = GlobalLock(hCBData);
       // nChars = lstrlen(lpString); // This works only for text types
       nChars = (int)GlobalSize(hCBData);
+      DEBUG_PRINTF(("There are %d bytes of data\n", nChars));
       switch (type) {
 	case CF_TEXT:
 	case CF_OEMTEXT:
-	  nChars -= 1; break; // Remove the trailing NUL
+	  nChars -= 1;		// Remove the trailing NUL
+	  DEBUG_PRINTF(("There are actually %d bytes of text\n", nChars));
+	  break;
 	case CF_UNICODETEXT:
-	  nChars -= 2; break; // Remove the trailing unicode NUL
+	  // nChars -= 2;	// Remove the trailing unicode NUL
+	  // Workaround for the Excel bug, where putting more than 16 KB (8K WCHARs)
+	  // of Excel data into the clipboard always returns nChars = 32768!
+	  // Note that in this case, only the Unicode data size is wrong; The text mode data size is correct.
+	  {
+	  wchar_t *pEnd = wcschr((wchar_t *)lpString, L'\0');
+	  if (pEnd) nChars = (int)((char *)pEnd - lpString);
+	  DEBUG_PRINTF(("There are actually %d bytes of Unicode text\n", nChars));
+	  }
+	  break;
 	default: {
 	  char buf[128];
 	  int n;
