@@ -4,6 +4,18 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-08-08
+### Fixed
+- update.exe: Fixed errors "Failed to create directory PATHNAME. File exists." when updating files below a junction on
+  a network server.
+
+## [Unreleased] 2022-07-10
+### Changed
+- 1clip.exe:  
+  Added option -s to get the clipboard data size.  
+  Added option -L to get the clipboard text locale.  
+  Added a workaround for an Excel bug, where putting more than 16 KB (8K WCHARs) into the clipboard returned only 8K Unicode chars.
+
 ## [Unreleased] 2022-06-27
 ### Changed
 - 2clip.exe: Added option -N to remove the final CRLF.
