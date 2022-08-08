@@ -180,6 +180,7 @@
 *    2021-12-07 JFL Updated the explanations in the help screen.              *
 *                   Version 3.13.					      *
 *    2022-02-08 JFL Fixed option -- to force ending switches. Version 3.13.1. *
+*    2022-08-08 JFL Fixed routine is_effective_dir(). Version 3.13.2.         *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -187,8 +188,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.13.1"
-#define PROGRAM_DATE    "2022-02-08"
+#define PROGRAM_VERSION "3.13.2"
+#define PROGRAM_DATE    "2022-08-08"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1748,14 +1749,37 @@ int is_directory(char *name){ /* Is name a directory? -> TRUE/FALSE */
 }
 
 int is_effective_directory(char *name){ /* Is name a directory, or a link to a directory */
-  int result;
+  int result = FALSE;
   int err;
   struct stat sstat;
 
   DEBUG_ENTER(("is_effective_directory(\"%s\");\n", name));
 
-  err = stat(name, &sstat); // Use stat, as lstat sees SYMLINKDs as links.
+#if defined(_WIN32) && _MSVCLIBX_STAT_DEFINED
+  err = lstat(name, &sstat); // Use MsvcLibX's lstat to detect junctions and symlinkds
+  if (err == 0) {
+    if (S_ISDIR(sstat.st_mode)) {
+      result = TRUE;
+    } else if (S_ISLNK(sstat.st_mode)) {
+      switch (sstat.st_ReparseTag) {
+	case IO_REPARSE_TAG_MOUNT_POINT: // This is a junction
+	  result = TRUE;
+	  break;
+	case IO_REPARSE_TAG_SYMLINK: // This is a Windows symlink
+	  if (sstat.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) { // This is a symlinkd
+	    result = TRUE;
+	  } // Else it's a Windows symbolic link, and it's implied by the -> after the name
+	  break;
+	default:
+	  break;
+      }
+    }
+  }
+#else
+  err = stat(name, &sstat); // Use stat, as lstat sees symbolic links as links.
   result = ((err == 0) && (S_ISDIR(sstat.st_mode)));
+#endif
+
   RETURN_BOOL_COMMENT(result, ("%s %s a directory\n", name, result ? "is" : "is not"));
 }
 
