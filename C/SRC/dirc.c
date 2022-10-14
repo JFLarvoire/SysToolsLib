@@ -235,6 +235,8 @@
 *    2021-03-12 JFL Optionally display the compression ratio in Windows.      *
 *		    Display more readable sizes, with thousands separators.   *
 *                   Version 3.7.                                              *
+*    2022-10-12 JFL Separate new option -I (ignore <=2s) from -i (ignore TZ). *
+*                   Version 3.8.                                              *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -242,8 +244,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.7"
-#define PROGRAM_DATE    "2021-03-12"
+#define PROGRAM_VERSION "3.8"
+#define PROGRAM_DATE    "2022-10-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -515,6 +517,7 @@ typedef struct {
 #ifdef _WIN32
   int compression:1;	/* Report the compression ratio */
 #endif
+  int twosec:1;		/* Ignore time differences <= 2 seconds */
   /* Caution: If more than 16 flags are defined, t_opts becomes a long in MS-DOS
               This would force to change DEBUG_ENTER() format strings for MS-DOS! */
 } t_opts;
@@ -731,6 +734,11 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "i")) {
 	opts.notz = 1;		/* Ignore time zone differences */
+	opts.twosec = 1;	/* Proved useful since 1996-08-28 */
+	continue;
+      }
+      if (streq(opt, "I")) {
+	opts.twosec = 1;	/* Ignore time differences <= 2 seconds */
 	continue;
       }
       if (streq(opt, "j")) {
@@ -1048,6 +1056,7 @@ Switches:\n\
 "\
   -f          List files only, but not subdirectories.\n\
   -i          Ignore integer number of hours differences, up to +/- 23 hours.\n\
+  -I          Ignore differences up to +/- 2 seconds. (Implied by -i)\n\
   -j          Ignore date/time completely.\n\
   -k          Consider case in file name comparisons." MATCHCASEDEFAULT "\n\
   -K          Ignore case in file name comparisons." IGNORECASEDEFAULT "\n\
@@ -1945,23 +1954,26 @@ int CompareToNext(fif **ppfif, t_opts opts) { /* Compare file date with next ent
 
   /* If same file name, compare date and time */
   if (!opts.notime && deltatime) {     /* If comparison expected, and there is a difference */
-    int sign;               /* Sign of deltatime */
-
-    sign = (deltatime > 0) ? 1 : -1;        /* Sign of the difference */
+    int sign = (deltatime > 0) ? 1 : -1;	/* Sign of the difference */
 
     if (opts.notz) {   /* Special case if we wish to ignore time-zone differences */
-      /* Ignore differences that are an integer number of hours  less than 24 hours */
-      int deltaseconds;
+      long deltahours = deltatime / 3600;	/* Convert difference to hours */
+      if ((deltahours > 23) || (deltahours < -23))
+	DEBUG_RETURN_INT(sign, "Timestamps differ > 1 day"); /* More than 1 day of diff. */
+      deltatime %= 3600; /* Remainder is in [0..3599] for delta>0, or [-3599..0] for delta<0 */
+      if (deltatime > 1800) deltatime -= 3600;	/* Change 3600-N to -N */
+      if (deltatime < -1800) deltatime += 3600;	/* Change -3600+N to N */
+    }
 
-      deltaseconds = (int)(deltatime % 3600);
-      if (deltaseconds < 0) deltaseconds += 3600;
-      deltatime /= 3600;                   /* Convert difference to hours */
-      if ((deltatime > 23) || (deltatime < -23))
-	  DEBUG_RETURN_INT(sign, "Timestamps differ > 1 day"); /* More than 1 day of diff. */
-      switch (deltaseconds) { // ~~jfl 1996-09-16
-	case 0:
-	case 2:
-	case 3600-2:
+    if (opts.twosec) {   /* Special case if we wish to ignore <=2s differences */
+      switch (deltatime) { // ~~jfl 1996-09-16
+	case 0L: /* Can be 0 in opts.notz mode */
+	case 2L:
+	case -2L:
+#ifndef _MSDOS
+	case 1L:
+	case -1L:
+#endif
 	/* Assume the difference isn't meaningful. Go compare the size. */
 	break;
 	default:
