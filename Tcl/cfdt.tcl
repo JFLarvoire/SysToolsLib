@@ -46,12 +46,13 @@
 #                   In verbose mode, display the old and new time changed.    #
 #		    Also allow time arguments formatted as 01h02m03s.         #
 #    2019-11-29 JFL Improved an error message.                                #
+#    2022-10-13 JFL Added options --pf and --ps.                              #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-set version "2019-11-29"
+set version "2022-10-13"
 set script [file rootname [file tail $argv0]]
 set verbosity 1
 set noexec 0
@@ -329,6 +330,8 @@ proc FormatTime {time} {
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
+set prefix_fmt "%Y-%m-%d_%Hh%Mm%Ss_"
+
 set usage [subst -nobackslashes -nocommands {
 $script version $version
 Display or change a file date & time
@@ -346,6 +349,8 @@ Options:
     --i2m             Set the file modify time from the image create time
     --i2n             Prefix the name with the image create time
     --m2n             Prefix the name with the file modify time
+    --pf FORMAT       Set the Prefix Format. Default: "$prefix_fmt"
+    --ps SEP          Set the Prefix words Separator. Default: "_"
 -m, --mtime           Get/set the file modify time (default)
 -q, --quiet           Quiet mode. Do not report minor issues.
 -s, --shift N         Shift time by N seconds
@@ -431,6 +436,12 @@ while {"$args" != ""} {
     "--m2n" { # Prefix the name with the file modify time
       set action rename
       set from mtime
+    }
+    "--pf" { # Set the Prefix Format
+      set prefix_fmt [PopArg]
+    }
+    "--ps" { # Set the Prefix Separator
+      regsub -all "_" $prefix_fmt [PopArg] prefix_fmt
     }
     "-m" - "--mtime" { # Modification time
       set what mtime
@@ -597,7 +608,7 @@ set err [catch {
     if {"$action" == "rename"} { # Prefix the file name with a file or image time
       set time [set $from]
       if {"$time" == ""} continue ; # Nothing to set
-      set time [clock format $time -format "%Y-%m-%d_%Hh%Mm%Ss_"]
+      set time [clock format $time -format $prefix_fmt]
       set dir [file dirname $name]
       set name2 "$time[file tail $name]"
       if {"$dir" != "."} {
