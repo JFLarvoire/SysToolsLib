@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-10-13
+### Changed
+- cfdt.tcl: Added options --pf and --ps, to better control the --m2n option effect.
+- dirc.exe: Separate new option -I (ignore <=2s) from -i (ignore TZ).
+
 ## [Unreleased] 2022-08-08
 ### Fixed
 - update.exe: Fixed errors "Failed to create directory PATHNAME. File exists." when updating files below a junction on
