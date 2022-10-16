@@ -98,7 +98,7 @@ int isEffectiveDir(const char *pszPath) {
 \*---------------------------------------------------------------------------*/
 
 /* Record all previously visited directories. Useful to avoid reporting files twice, when links point to directories */
-/* Note: Initially implemented as a linked list, but too slow when used on a whole hard disk. (O(N²))
+/* Note: Initially implemented as a linked list, but too slow when used on a whole hard disk. (O(NÂ²))
          With ~3 million files in ~300.000 directories, the linked list version took 16 minutes,
          whereas the tree version took 3 minutes, and the dictionary version now takes 2.5 minutes. (Both O(N.log(N)) */
 /* TODO: It would be even better and faster to use a hash table, but I don't have one yet in my C library */

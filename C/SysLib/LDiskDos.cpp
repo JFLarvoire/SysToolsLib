@@ -18,7 +18,7 @@
 *    2002/02/07 JFL Created this file.					      *
 *    2002/04/15 JFL Added write protection flag in handle bit 15.	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

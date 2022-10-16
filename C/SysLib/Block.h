@@ -15,7 +15,7 @@
 *    2017-07-15 JFL Added the floppy and CD disk types.   		      *
 *		    Removed BLOCK_TYPE_* constants. Use BT_* enums instead.   *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

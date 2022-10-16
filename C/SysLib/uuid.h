@@ -16,7 +16,7 @@
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2016-04-26 JFL Changed the unsigned64_t type to SysLib's QWORD.	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

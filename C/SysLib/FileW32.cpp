@@ -20,7 +20,7 @@
 *    2018-03-05 JFL Added support for 64-bits read/write sizes in WIN64.      *
 *    2021-03-12 JFL Fixed FileW32Read and FileW32Write that hung on errors.   *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

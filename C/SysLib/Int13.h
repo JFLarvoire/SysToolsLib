@@ -11,7 +11,7 @@
 *    2017-07-28 JFL Added prototypes for BIOS disk I/O routines.	      *
 *    2017-08-02 JFL Added common int 13 errors.				      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

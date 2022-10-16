@@ -31,7 +31,7 @@
 *    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
 *                   allow having multiple kinds of trees in the same program. *
 *                                                                             *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

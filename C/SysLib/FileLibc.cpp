@@ -15,7 +15,7 @@
 *    2017-08-02 JFL Fixed the support for far buffers in DOS small mem modes. *
 *		    Bug fix. Open for writing must use mode "r+b".	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

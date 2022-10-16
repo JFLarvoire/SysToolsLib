@@ -23,7 +23,7 @@
 *    2003-01-17 JFL Added #define NO_QWORD_CONSTRUCTORS before qword.h.	      *
 *    2016-07-01 JFL Removed warning.                                   	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

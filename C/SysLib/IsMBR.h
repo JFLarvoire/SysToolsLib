@@ -13,7 +13,7 @@
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

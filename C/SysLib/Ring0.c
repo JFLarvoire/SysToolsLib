@@ -43,7 +43,7 @@
 *		    at [ebp-4].						      *
 *    2017-07-07 JFL Fixed more compilation warnings. 			      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

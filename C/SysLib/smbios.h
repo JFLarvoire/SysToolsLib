@@ -17,7 +17,7 @@
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2020-04-19 JFL Define and use consistently DWORD_DEFINED & QWORD_DEFINED.*
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -212,7 +212,7 @@ typedef struct		/* System info structure #0x01 */
     BYTE bVersion;	/* Number of Null terminated string */
     BYTE bSerialNumber; /* Number of Null terminated string */
     BYTE bUUID[16];	/* Universal Unique ID number.  If the value is all FFh, the ID is not currently present in the system, but is settable.  If the value is all 00h, the ID is not present in the system. */
-    BYTE bWakeUpType;	/* Identifies the event that caused the system to power up.  See SMBIOS 2.2 spec §3.2.2.1. */
+    BYTE bWakeUpType;	/* Identifies the event that caused the system to power up.  See SMBIOS 2.2 spec Â§3.2.2.1. */
     } SMBIOSSYSTEMINFO, *PSMBIOSSYSTEMINFO, FAR *LPSMBIOSSYSTEMINFO;
 
 typedef struct		/* HP-proprietary structure #0x85 */

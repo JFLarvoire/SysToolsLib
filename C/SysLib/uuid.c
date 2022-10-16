@@ -19,7 +19,7 @@
 *    2016-04-24 JFL Added the BIOS version of get_system_time().	      *
 *    2016-04-26 JFL Changed the unsigned64_t type to SysLib's QWORD.	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -174,7 +174,7 @@ long MilliSec(struct _dostime_t *pdt)
 *                                                                             *
 |   Function:	    get_system_time					      |
 |									      |
-|   Description:    Get the UUID date/time = # of µs since October 15, 1582   |
+|   Description:    Get the UUID date/time = # of Âµs since October 15, 1582   |
 |									      |
 |   Parameters:     QWORD *uuid_time	    Where to store the time	      |
 |									      |
@@ -267,7 +267,7 @@ get_system_time(QWORD *uuid_time)
 *                                                                             *
 |   Function:	    get_system_time					      |
 |									      |
-|   Description:    Get the UUID date/time = # of µs since October 15, 1582   |
+|   Description:    Get the UUID date/time = # of Âµs since October 15, 1582   |
 |									      |
 |   Parameters:     QWORD *uuid_time	    Where to store the time	      |
 |									      |
@@ -308,7 +308,7 @@ get_system_time(QWORD *uuid_time)
        According to Ralph Brown interrupt list, the tick frequency is now
 		       1,573,040 / day = 65536 / 3599.597213s */
     /* #s  = #T/F = #T*3600/65536
-       #µs = #T * 3,599,597,213 / 65,536 = (#T * 3,599,597,213) >> 16 */
+       #Âµs = #T * 3,599,597,213 / 65,536 = (#T * 3,599,597,213) >> 16 */
     mult32(dw, 3599597213, &utc);
     WORD0(utc) = WORD1(utc);
     WORD1(utc) = WORD2(utc);

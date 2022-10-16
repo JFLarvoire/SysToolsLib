@@ -9,7 +9,7 @@
 *   History                                                                   *
 *    2020-11-05 JFL Created this file.                                        *
 *                                                                             *
-*         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

@@ -13,7 +13,7 @@
 *    1995/05/30 JFL Adapted from "Windows Network Programming" book.	      *
 *    2000/09/21 JFL Restructured.					      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

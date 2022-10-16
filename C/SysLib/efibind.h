@@ -18,7 +18,7 @@
 *		    Fixed the INTERFACE_DECL macro for C++.		      *
 *									      *
 *		    Copyright (c) 1998  Intel Corporation		      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 \*****************************************************************************/
 
 #include "qword.h"

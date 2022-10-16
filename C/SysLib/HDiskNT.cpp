@@ -18,7 +18,7 @@
 *    2001/09/05 JFL Moved all WinNT-specific routines into file HDiskNT.cpp.  *
 *    2001/12/21 JFL Use wsprintf instead of printf.			      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

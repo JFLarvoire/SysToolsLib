@@ -19,7 +19,7 @@
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2017-07-06 JFL Fixed warnings when included in a C source.		      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

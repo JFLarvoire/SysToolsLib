@@ -10,7 +10,7 @@
 *    2001/02/20 JFL Created this file.					      *
 *    2001/02/26 JFL Changed crc32 param 2 from size_t to int.		      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

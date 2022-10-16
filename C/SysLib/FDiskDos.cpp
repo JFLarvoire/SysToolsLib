@@ -18,7 +18,7 @@
 *   History:								      *
 *    2017-07-28 JFL Created this file.					      *
 *									      *
-*         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

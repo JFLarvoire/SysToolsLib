@@ -16,7 +16,7 @@
 *    2020-03-19 JFL Use 64-bits file sizes even in 32-bits OSs, like that in  *
 *		    the Raspberry Pi 2.					      *
 *									      *
-*         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

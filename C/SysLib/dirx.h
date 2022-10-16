@@ -11,7 +11,7 @@
 *    2020-03-11 JFL Created this file.					      *
 *    2020-03-19 JFL Enforce that we only supports 64-bits file sizes.	      *
 *									      *
-*         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

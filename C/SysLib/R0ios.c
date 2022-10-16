@@ -15,7 +15,7 @@
 *    2001-12-21 JFL Include qword.h.					      *
 *    2017-06-29 JFL Fixed compilation warnings. No functional code change.    *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

@@ -37,7 +37,7 @@
 *    2016-04-27 JFL Added alternate WIN32 method using GetSystemFirmwareTable.*
 *		    Added functions SmBiosOpen and SmBiosClose.		      *
 *		    							      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

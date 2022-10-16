@@ -13,7 +13,7 @@
 *    2001/12/19 JFL Created this file from routines in in13emu.cpp.	      *
 *    2002/07/01 JFL Fixed a bug in IsBS(). Added a second parameter.	      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

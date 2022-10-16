@@ -11,7 +11,7 @@
 *		    Moved in routine IsNullUuid() from file uuid.c.	      *
 *		    Changed IsNullUuid() argument to (void *).		      *
 *									      *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
