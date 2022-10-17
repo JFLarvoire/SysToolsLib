@@ -156,7 +156,9 @@
 *		    Fixed warnings in ConvertString macros calls.	      *
 *                   Version 3.2.1.                                            *
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
-*		    Version 3.3.2.					      *
+*		    Version 3.2.2.					      *
+*    2022-10-16 JFL Removed an unused variable.                               *
+*		    Version 3.2.3.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -164,8 +166,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "3.2.2"
-#define PROGRAM_DATE    "2022-02-24"
+#define PROGRAM_VERSION "3.2.3"
+#define PROGRAM_DATE    "2022-10-16"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -288,10 +290,10 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 void fail(char *pszFormat, ...) {
   va_list vl;
-  int n = fprintf(stderr, "Error: ");
 
+  fprintf(stderr, "Error: ");
   va_start(vl, pszFormat);
-  n += vfprintf(stderr, pszFormat, vl);    /*  Not thread-safe on WIN32 ?!? */
+  vfprintf(stderr, pszFormat, vl);    /*  Not thread-safe on WIN32 ?!? */
   va_end(vl);
   fprintf(stderr, "\n");
 

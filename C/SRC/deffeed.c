@@ -42,6 +42,8 @@
 *                   Add -= and -same as equivalents of -self.		      *
 *                   Add an optional output file name.        		      *
 *		    Version 3.0.					      *
+*    2022-10-16 JFL Removed in release mode a variable only used in debug mode.
+*		    Version 3.0.1.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -49,8 +51,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove Form Feeds from a text"
 #define PROGRAM_NAME    "deffeed"
-#define PROGRAM_VERSION "3.0"
-#define PROGRAM_DATE    "2021-05-03"
+#define PROGRAM_VERSION "3.0.1"
+#define PROGRAM_DATE    "2022-10-16"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -176,7 +178,9 @@ int main(int argc, char *argv[]) {
   char *pline;        /* Pointer on the beginning of the line */
   int nl = 0;         /* Current line number (0 to lpp-1) */
   int np = 0;         /* Current page number, modulo modnp */
+  DEBUG_CODE(
   int npt = 0;        /* Current page number */
+  )
   char *format;       /* output format */
   int top_without_ff = TRUE; /* TRUE if we've reached the top of page without a form-feed */
   int i;
@@ -464,7 +468,7 @@ int main(int argc, char *argv[]) {
 	nl = 0;
 	np += 1;
 	np %= modnp;
-	npt += 1;
+	DEBUG_CODE(npt += 1;)
       } else {
 	DEBUG_CODE(fprintf(stderr, "Skipping form-feed on page %d line %d.\n", npt, nl);)
       }
@@ -484,7 +488,7 @@ int main(int argc, char *argv[]) {
       nl = 0;
       np += 1;
       np %= modnp;
-      npt += 1;
+      DEBUG_CODE(npt += 1;)
       top_without_ff = TRUE;	/* Flag the fact we automatically fed a page. */
     }
   }
