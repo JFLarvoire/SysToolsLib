@@ -2,12 +2,27 @@
 *                                                                             *
 *   File name	    macros.c				         	      *
 *									      *
-*   Description     Display common predefined macros			      *
+*   Description     Display common C predefined macros & limits definitions   *
 *									      *
 *   Notes	    gcc can display all its predefined macros this way:       *
 *		    echo . | gcc -dM -E - | sort -d -f			      *
 *		    							      *
-*		    References:						      *
+*		    Likewise, many Unix C/C++ compilers can display theirs:   *
+*		    cc -dM -E -x c /dev/null | sort -d -f		      *
+*		    or							      *
+*		    cc -dM -E -x c++ /dev/null | sort -d -f		      *
+*		    							      *
+*		    Microsoft Visual C++ has a similar ability since v16.8:   *
+*		    echo.>empty.c					      *
+*		    cl /nologo /EP /Zc:preprocessor /PD /TC empty.c | sort    *
+*		    or							      *
+*		    cl /nologo /EP /Zc:preprocessor /PD /TP empty.cpp	      *
+*		    							      *
+*		    There's no equivalent feature in older MSVC versions.     *
+*		    Also we're not 100% sure that the above commands report   *
+*		    all the macros that are actually defined. Hence this pgm. *      
+*		    							      *
+*		    Microsoft C macros references:			      *
 *		    https://msdn.microsoft.com/en-us/library/b0084kay.aspx    *
 *		    							      *
 *   History								      *
@@ -16,15 +31,31 @@
 *    2014-04-22 JFL Removed an annoying Visual C++ warning.		      *
 *                   Fixed the command-line argument parsing.		      *
 *    2014-04-22 JFL Added processor types _M_X64, _M_ARM, _M_ARM64.	      *
+*    2022-10-17 JFL Output valid #define directives, to match Unix compilers  *
+*		    (and now MSVC 16.8+) built-in abilities.                  *
+*		    Added a help screen, and a -V (get version) option.	      *
+*		    Fixed warnings in MS-DOS and MacOS LLVM builds.	      *
+*		    Version 2.0.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \******************************************************************************/
 
+#define PROGRAM_DESCRIPTION "Display common C predefined macros & limits definitions"
+#define PROGRAM_NAME    "macros"
+#define PROGRAM_VERSION "2.0"
+#define PROGRAM_DATE    "2022-10-17"
+
 #ifdef _MSC_VER
 #pragma warning(disable:4127) /* Ignore the "conditional expression is constant" warning */
+#ifdef _MSDOS
+#pragma warning(disable:4703) /* Ignore the "'main' : function too large for global optimizations" warning */
+#endif
 #endif
 
+/* Avoid including too many include files, because we're first and foremost
+   interested in the predefined macros, that the compiler itself defines. */
+/* Also include only standard C include files. Nothing from MsvcLibX, etc. */
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
@@ -32,22 +63,34 @@
 #define FALSE 0
 #define TRUE 1
 
-int iVerbose=0;
+int iVerbose = 0;
 
 #define streq(s1, s2) (!strcmp(s1,s2))
 
 #define stringize( x ) #x                /* Convert a macro name to a string */
 #define stringizex( x ) stringize( x )   /* Convert a macro value to a string */
 
-/* Display the macro name and value. */
+#if defined(__GNUC__) || defined(__clang__)
+/* It's actually clang that complains every time PRINTVAL() is invoked:
+   warning: adding 'int' to a string does not append to the string [-Wstring-plus-int]
+   The procedure for disabling warnings is actually the same for both compilers: */
+#pragma GCC diagnostic ignored "-Wpragmas" /* Avoid further warnings for compilers the don't support the "-Wstring-plus-int" warning */ 
+#pragma GCC diagnostic ignored "-Wstring-plus-int" /* Disable the "-Wstring-plus-int" warning */
+#endif /* defined(__GNUC__) || defined(__clang__) */
+
+/* Display the macro definition */
 /* Discard the 1st character to avoid preprocessor errors in case of a blank macro. */
+/* => Always invoke with one non-blank character ahead of the macro name.
+      Ex: PRINTVAL(=__STDC__); */
 #define PRINTVAL( x ) do { \
   const char *pszName = #x + 1; \
   const char *pszValue = stringize( x ) + 1; \
   if (strcmp(pszName, pszValue)) { \
-    printf("%s = \"%s\"\n", pszName, pszValue); \
+    printf("#define %s %s", pszName, pszValue); \
+    if (iVerbose) printf(" // \"%s\"", pszValue); \
+    printf("\n"); \
   } else { /* Not 100% certain, but most likely. */ \
-    if (iVerbose) printf("%s undefined.\n", pszName); \
+    if (iVerbose) printf("#undef %s\n", pszName); \
   } \
 } while (0)
 
@@ -70,32 +113,50 @@ int IsSwitch(char *pszArg);
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int main(int argc, char *argv[])
-{
-    int i;
+void usage(void) {
+  printf(
+PROGRAM_NAME " - " PROGRAM_DESCRIPTION "\n\
+\n\
+Usage: macros [OPTIONS]\n\
+\n\
+Options:\n\
+  -?|-h       Display this help message and exit.\n\
+  -v          Verbose mode. List macros evaluated and found undefined.\n\
+  -V          Display this program version and exit.\n\
+"
+#if !(defined(_MSDOS) || defined(_WIN32)) /* Unix, MacOS, etc */
+"\n"
+#endif
+);
+}
 
-    for (i=1; i<argc; i++)
-        {
-        if (IsSwitch(argv[i]))
-            {
-	    if (   streq(argv[i]+1, "?")
-	        || streq(argv[i]+1, "h")
-	        || streq(argv[i]+1, "-help"))
-                {
-		printf("Usage: macros [-v]\n");
-		return 0;
-                }
-	    if (streq(argv[i]+1, "v"))
-                {
-		iVerbose = TRUE;
-		continue;
-                }
-	    printf("Unrecognized switch ignored: %s\n", argv[i]);
-            continue;
-	    }
-        printf("Unexpected argument ignored: %s\n", argv[i]);
-        break;  /* Ignore other arguments */
-	}
+int main(int argc, char *argv[]) {
+  int i;
+
+  for (i=1; i<argc; i++) {
+    char *arg = argv[i];
+    if (IsSwitch(arg)) {
+      char *opt = arg+1;
+      if (   streq(opt, "?")
+	  || streq(opt, "h")
+	  || streq(opt, "-help")) {
+	usage();
+	return 0;
+      }
+      if (streq(opt, "v")) {
+	iVerbose = TRUE;
+	continue;
+      }
+      if (streq(opt, "V")) {	/* Display version */
+	puts(PROGRAM_VERSION " " PROGRAM_DATE);
+	return 0;
+      }
+      printf("Unrecognized switch ignored: %s\n", arg);
+      continue;
+    }
+    printf("Unexpected argument ignored: %s\n", arg);
+    continue;
+  }
 
   /* Debug our own macros */
 /*
@@ -516,12 +577,11 @@ printf("condmac(1) = " condmac(1));
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
-    {
-    return (   (*pszArg == '-')
-#ifndef __unix__
-            || (*pszArg == '/')
+int IsSwitch(char *pszArg) {
+  return (   (*pszArg == '-')
+#if defined(_MSDOS) || defined(_WIN32)
+	  || (*pszArg == '/')
 #endif
-           ); /* It's a switch */
-    }
+	 ); /* It's a switch */
+}
 
