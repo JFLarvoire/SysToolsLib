@@ -4,10 +4,11 @@
 *                                                                             *
 *   Description	    Call a function for every dir entry in a directory tree   *
 *                                                                             *
-*   Notes	                                                              *
+*   Notes	    TODO: Implement Unix & MacOS version of WalkDirTree().    *
 *                                                                             *
 *   History                                                                   *
 *    2021-11-27 JFL Created this file.					      *
+*    2022-10-16 JFL Avoid errors in MacOS.				      *
 *                                                                             *
 \*****************************************************************************/
 
@@ -23,6 +24,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <limits.h>
 
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debugging macros */
@@ -113,7 +115,7 @@ typedef struct _NAMELIST {
   const char *path;
 } NAMELIST;
 
-#ifndef __unix__
+#if (defined(_MSDOS) || defined(_WIN32)) && HAS_MSVCLIBX
 
 /* Internal subroutine, used to avoid infinite loops on link back loops */
 static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef, NAMELIST *prev, int iDepth) {
@@ -341,4 +343,4 @@ int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, vo
   return WalkDirTree1(path, pOpts, pWalkDirTreeCB, pRef, NULL, 0);
 }
 
-#endif /* ! __unix__ */
+#endif /* defined(_WIN32) && HAS_MSVCLIBX */
