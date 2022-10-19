@@ -72,7 +72,11 @@
 #		    RC16    	16-bits Resource compiler		      #
 #		    MAPSYM	16-bits Linker .map file to .sym converter    #
 #		    TMP	    	Temporary directory	 		      #
-#									      #
+#		    							      #
+#		    The MSVC compiler for DOS does not support UTF-8 sources. #
+#		    This make file converts the sources to the DOS encoding   #
+#		    configured on the Windows host.			      #
+#		    							      #
 #  History:								      #
 #    2000-09-21 JFL Adapted from earlier projects.			      #
 #    2001-01-11 JFL Added generation of 32-bit EXE.			      #
@@ -133,6 +137,9 @@
 #    2018-02-28 JFL Added $(LSX) Library SuffiX definition.		      #
 #    2018-03-02 JFL Added variable SKIP_THIS, to prevent building specific    #
 #		    versions.						      #
+#    2022-10-18 JFL Generate localized C sources only once for all DOS builds.#
+#		    This is faster, and also resolves the case of CPP sources #
+#		    including other CPP sources with a UTF-8 BOM.	      #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -237,6 +244,7 @@ R=$(T)				# Root output path - In the current directory
 !ELSE # It's defined and not empty
 R=$(OUTDIR)\$(T)		# Root output path - In the specified directory
 !ENDIF
+CS=$(R)\SRC			# C sources converted from UTF-8 to DOS CP
 BD=$(R)$(DS)
 B=$(BD)\BIN\$(MEM)		# Where to store binary executable files
 O=$(BD)\OBJ\$(MEM)		# Where to store object files
@@ -903,8 +911,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
+    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -913,8 +921,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
+    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation of resident modules
@@ -923,8 +931,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /NTRESID /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
+    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /NTRESID /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -1120,8 +1128,12 @@ $(L):
     if not exist $(L) $(MSG) Creating directory $(L)
     if not exist $(L) mkdir $(L)
 
+$(CS):
+    if not exist $(CS) $(MSG) Creating directory $(CS)
+    if not exist $(CS) mkdir $(CS)
+
 !IF !DEFINED(SKIP_THIS)
-dirs: $(B) $(O) $(L) files
+dirs: $(B) $(O) $(L) $(CS) files localize_C_sources
 
 files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT) $(COMPACT_PATHS)
 !ELSE
@@ -1143,7 +1155,7 @@ $(UTF8_BOM_FILE): $(MAKEFILE)
 	WriteBinaryFile(args(0), szBOM);
 	WScript.Quit(0);
 <<NOKEEP
-
+	
 $(REMOVE_UTF8_BOM): $(MAKEFILE)
     $(MSG) Generating script $@
     copy <<$@ NUL
@@ -1210,6 +1222,14 @@ $(COMPACT_PATHS): $(MAKEFILE)
 	  for /f "delims=" %%r in ('echo !VAR!') do (endlocal & set %%v=%%r)
 	)
 <<KEEP
+
+# Remove BOMs from all modified C source and include files, and convert them to the OEM character set
+localize_C_sources: NUL
+    $(MSG) Updating localized C sources in $(CS) ...
+    -for %%e in (h c r cpp) do for /f "delims=: tokens=2" %%f in ( \
+       'xcopy /c /d /l /y *.%%e $(CS) 2^>NUL ^| findstr ":"' \
+     ) do $(MSG) %%f & $(REMOVE_UTF8_BOM) %%f $(CS)\%%f
+    $(MSG) ... done.
 
 # Erase all output files
 clean: NUL
