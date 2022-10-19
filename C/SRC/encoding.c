@@ -10,6 +10,7 @@
 *    2021-06-02 JFL Created this program.                                     *
 *    2021-06-03 JFL Restructured error messages output.                       *
 *    2021-12-07 JFL Updated help screen.                                      *
+*    2022-10-18 JFL Added option -b to report the presence of a Unicode BOM.  *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -17,8 +18,8 @@
 
 #define PROGRAM_DESCRIPTION "Find the encoding of text files"
 #define PROGRAM_NAME "encoding"
-#define PROGRAM_VERSION "0.9"
-#define PROGRAM_DATE    "2021-12-07"
+#define PROGRAM_VERSION "1.0"
+#define PROGRAM_DATE    "2022-10-18"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -133,6 +134,7 @@ HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT 
 #define FLAG_VERBOSE	0x0001		/* Display the pathname operated on */
 #define FLAG_RECURSE	0x0002		/* Recursive operation */
 #define FLAG_NOCASE	0x0004		/* Ignore case */
+#define FLAG_BOM	0x0008		/* Report the presence of a Unicode BOM */
 
 typedef enum {
   METHOD_LIBX,
@@ -192,6 +194,7 @@ Usage:\n\
 \n\
 Options:\n\
   -?                This help\n\
+  -b                Report with a B suffix the presence of a Unicode BOM\n\
   -com [OPTIONS]    Use Windows IMultiLanguage2 COM API\n\
 "
 #ifdef _DEBUG
@@ -247,6 +250,10 @@ int __cdecl main(int argc, char *argv[]) {
       char *pszOpt = pszArg+1;
       if (streq(pszOpt, "?")) {		/* -?: Help */
       	usage(0);
+      }
+      if (streq(pszOpt, "b")) {		/* Report the presence of a Unicode BOM */
+	opts.iFlags |= FLAG_BOM;
+	continue;
       }
 #ifdef _DEBUG
       if (streq(pszOpt, "d")) {
@@ -435,6 +442,8 @@ int ShowFileEncoding(char *pszName, encoding_detection_opts *pOpts) {
   char *pszEncoding;
   int i;
   char *pszDisplayName = pszName;
+  int iHasBOM = FALSE;
+  char *pszBOM = "";
   
   if (streq(pszName, "-")) pszName = NULL;
   if (!pszName) pszDisplayName = "stdin";
@@ -538,13 +547,20 @@ fail_no_mem:
     case CP_UNDEFINED: pszEncoding = "Binary"; break;
     case CP_ACP: pszEncoding = "Windows"; break;
     case CP_ASCII: pszEncoding = "ASCII"; break;
-    case CP_UTF7: pszEncoding = "UTF-7"; break;
-    case CP_UTF8: pszEncoding = "UTF-8"; break;
-    case CP_UTF16: pszEncoding = "UTF-16"; break;
+    case CP_UTF7: pszEncoding = "UTF-7";
+      iHasBOM = !strncmp(pszBuffer, "\x2B\x2F\x76", 3) && ((pszBuffer[3] & '\xF8') == '\x38');
+      break;
+    case CP_UTF8: pszEncoding = "UTF-8";
+      iHasBOM = !strncmp(pszBuffer, "\xEF\xBB\xBF", 3);
+      break;
+    case CP_UTF16: pszEncoding = "UTF-16";
+      iHasBOM = !strncmp(pszBuffer, "\xFE\xFF", 2) || !strncmp(pszBuffer, "\xFF\xFE", 2);
+      break;
     case CP_UTF32: pszEncoding = "UTF-32"; break;
     default: sprintf(szEnc, "CP%d", cp); pszEncoding = szEnc; break;
   }
-  printf("%s\t%s\n", pszEncoding, pszName ? pszName : "");
+  if ((pOpts->iFlags & FLAG_BOM) && iHasBOM) pszBOM = "B";
+  printf("%s%s\t%s\n", pszEncoding, pszBOM, pszName ? pszName : "");
 
   free(pszBuffer);
 
