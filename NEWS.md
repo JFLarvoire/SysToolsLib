@@ -13,6 +13,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/Include/*.h, C/SysLib/*.h,*.c,*.cpp: Changed the encoding to UTF-8, and added a Unicode BOM to C/CPP sources.
 - C/Include/DOS.mak: Generate localized C sources only once for all DOS builds.
   This is faster, and also resolves the case of CPP sources including other CPP sources with a UTF-8 BOM.
+- C/SysLib/IsSwitch.c, C/SysLib/mainutil.h, C/SRC/*.c: Factored IsSwitch() out of C/SRC/*.c, and moved it to a new module in SysLib.
 
 ### Fixed
 - C/SysLib/WalkDirTree.c: Avoid errors in MacOS.

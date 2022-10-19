@@ -181,6 +181,7 @@
 *                   Version 3.13.					      *
 *    2022-02-08 JFL Fixed option -- to force ending switches. Version 3.13.1. *
 *    2022-08-08 JFL Fixed routine is_effective_dir(). Version 3.13.2.         *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.13.3.		      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -188,8 +189,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.13.2"
-#define PROGRAM_DATE    "2022-08-08"
+#define PROGRAM_VERSION "3.13.3"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -208,15 +209,12 @@
 #include <fnmatch.h>
 #include <iconv.h>
 #include <inttypes.h>
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
-#include "copyfile.h"		/* Copy file, and related functions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debugging macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "dirx.h"	/* SysLib Directory access functions eXtensions */
+#include "copyfile.h"	/* SysLib Copy file, and related functions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-#define FALSE 0
-#define TRUE 1
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -341,11 +339,6 @@ typedef unsigned long DWORD;
 #define min(a,b) ( ((a)<(b)) ? (a) : (b) )
 #endif
 
-#define TRUE 1
-#define FALSE 0
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
 #ifdef _MSDOS
 #define BUFFERSIZE 16384
 #else
@@ -391,7 +384,6 @@ typedef struct updOpts {
 /* Forward references */
 
 void usage(void);			/* Display usage */
-int IsSwitch(char *pszArg);		/* Is this a command-line switch? */
 int updateall(char *, char *);		/* Copy a set of files if newer */
 int update(char *, char *, updOpts *);	/* Copy a file if newer */
 #if defined(S_ISLNK) && S_ISLNK(S_IFLNK)/* In DOS it's defined, but always returns 0 */
@@ -861,36 +853,6 @@ Note: Relative junction targets can be read and set reliably on local drives,\n\
 
     do_exit(0);
     }
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

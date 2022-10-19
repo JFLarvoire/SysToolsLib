@@ -34,6 +34,7 @@
 *                   Remove C escape sequences, like \n \xXX, from the string. *
 *    2020-08-23 JFL Fixed a memory allocation bug that may cause a debug mode *
 *		    crash.                                                    *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib.				      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -41,7 +42,7 @@
 
 #define PROGRAM_DESCRIPTION "Display a Message Box and return the user's choice"
 #define PROGRAM_NAME    "msgbox"
-#define PROGRAM_VERSION "2020-08-23"
+#define PROGRAM_VERSION "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -52,6 +53,7 @@
 #include <windows.h>
 #include <stdio.h>	/* For displaying help on the console */
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #pragma comment(lib, "Gdi32.lib")
@@ -61,9 +63,6 @@
 #pragma warning(disable:4221)	/* Ignore the warning: nonstandard extension used : ... cannot be initialized using address of automatic variable ... */
 
 // #define USEHIDDENWINDOW
-
-#define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
-#define streqi(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
 // Define WIN32 replacements for Standard C library functions
 /* 2020-08-17 Bug fix: Do NOT redefine malloc/realloc/free as this breaks the release of blocks indirectly allocated by C library functions */
@@ -117,7 +116,6 @@ int iDebug = 0;
 /* Forward references */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int BreakArgLine(LPSTR fpParms, char *ppszArg[], int iMaxArgs);
 int _cdecl MessageBoxF(char *pszTitle, UINT uiStyle, const char *pszFormat, ...);
 #if defined(USEHIDDENWINDOW)
@@ -479,33 +477,6 @@ Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
 
   return;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description	    Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters	    char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-    case '/':
-      return TRUE;
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

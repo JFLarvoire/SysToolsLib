@@ -28,6 +28,7 @@
 COMMON_OBJECTS = \
     +$(O)/copydate.obj		\
     +$(O)/IsMBR.obj		\
+    +$(O)/IsSwitch.obj		\
     +$(O)/JoinPaths.obj		\
     +$(O)/oprintf.obj		\
     +$(O)/oprintf6.obj		\
@@ -117,6 +118,8 @@ $(S)/Int13.h:
 $(S)/IsMBR.c: $(S)/IsMBR.h
 
 $(S)/IsMBR.h: $(S)/SysLib.h
+
+$(S)/IsSwitch.c: $(S)/mainutil.h
 
 $(S)/JoinPaths.c: $(S)/pathnames.h
 

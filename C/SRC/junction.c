@@ -17,12 +17,13 @@
 *    2022-01-19 JFL Added option -l (dash-L) to list junctions non-recursively.
 *    2022-02-18 JFL Rewrote option -1 (dash-one) to record the junction       *
 *                   themselves in a binary tree. Renamed the old -1 as -o.    *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib.				      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-02-18"
+#define PROGRAM_VERSION "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -32,35 +33,16 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
-
-/* SysLib include files */
-#include "mainutil.h"	/* Main C routine utility routines */
-#include "pathnames.h"	/* Pathname management definitions and functions */
-
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debugging macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "pathnames.h"	/* SysLib Pathname management definitions and functions */
+#include "tree.h"	/* SysToolsLib Manage a binary tree */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-#include "tree.h"	/* Manage a binary tree */
-
-#define TRUE 1
-#define FALSE 0
 
 #ifndef _WIN32
 #error "Only Windows has junctions"
 #endif
-
-/* Check if an argument is a switch */
-int IsSwitch(char *arg) {
-  switch (*arg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)arg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
-}
 
 /* Local definitions and forward references */
 #define JCB_VERBOSE 0x0001

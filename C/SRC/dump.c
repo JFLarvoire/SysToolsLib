@@ -38,6 +38,7 @@
 *    2020-04-20 JFL Added support for MacOS. Version 1.3.                     *
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
 *		    Version 1.3.1.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.3.2.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -45,8 +46,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.3.1"
-#define PROGRAM_DATE    "2022-02-24"
+#define PROGRAM_VERSION "1.3.2"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -132,16 +133,12 @@
 /********************** End of OS-specific definitions ***********************/
 
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned long DWORD;
-
-#define TRUE 1
-#define FALSE 0
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 
 /* Global variables */
 
@@ -150,7 +147,6 @@ int paginate = FALSE;
 /* Forward references */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int between(DWORD floor, DWORD u, DWORD ceiling);
 void printflf(void);
 int GetScreenRows(void);
@@ -387,31 +383,6 @@ int between(DWORD floor, DWORD u, DWORD ceiling)
         return (u >= floor) && (u < ceiling);       /* TRUE if inside */
     else    /* 32 bits wraparound */
         return !((u < floor) && (u >= ceiling));    /* TRUE if outside */
-    }
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg)
-    {
-    return (   (*pszArg == '-')
-#ifndef _UNIX
-            || (*pszArg == '/')
-#endif
-           ); /* It's a switch */
     }
 
 /*---------------------------------------------------------------------------*\

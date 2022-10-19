@@ -237,6 +237,7 @@
 *                   Version 3.7.                                              *
 *    2022-10-12 JFL Separate new option -I (ignore <=2s) from -i (ignore TZ). *
 *                   Version 3.8.                                              *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.8.1.		      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -244,13 +245,10 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.8"
-#define PROGRAM_DATE    "2022-10-12"
+#define PROGRAM_VERSION "3.8.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
-
-#define FALSE 0
-#define TRUE 1
 
 #ifndef USE_TERMCAP
 #define USE_TERMCAP 0		/* 1=Use termcap lib; 0=Don't */
@@ -273,10 +271,10 @@
 #include <fnmatch.h>
 #include <iconv.h>
 #include <stdarg.h>
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "dirx.h"	/* SysLib Directory access functions eXtensions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
@@ -474,7 +472,6 @@ typedef enum {
 #define RETCODE_NO_MEMORY 3
 #define RETCODE_INACCESSIBLE 4
 
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
 /* File attributes not defined by MS-DOS (which stops at 0x20) */
@@ -554,7 +551,6 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 
 void usage(void);                   /* Display a brief help and exit */
 void finis(int retcode, ...);       /* Return to the initial drive & exit */
-int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
 
 int lis(char *, char *, int, int, int, time_t, time_t, t_opts); /* Scan a directory */
 int CDECL cmpfif(const fif **fif1, const fif **fif2, int ignorecase);
@@ -1144,30 +1140,6 @@ void finis(int retcode, ...) {
   chdir(init_dir); /* Don't test errors, as we're likely to be here due to another error */
 
   exit(retcode);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  return (   (*pszArg == '-')
-#ifndef _UNIX
-	  || (*pszArg == '/')
-#endif
-	 ); /* It's a switch */
 }
 
 /******************************************************************************

@@ -11,6 +11,7 @@
 *    2021-06-03 JFL Restructured error messages output.                       *
 *    2021-12-07 JFL Updated help screen.                                      *
 *    2022-10-18 JFL Added option -b to report the presence of a Unicode BOM.  *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib.				      *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -19,7 +20,7 @@
 #define PROGRAM_DESCRIPTION "Find the encoding of text files"
 #define PROGRAM_NAME "encoding"
 #define PROGRAM_VERSION "1.0"
-#define PROGRAM_DATE    "2022-10-18"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -33,10 +34,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <iconv.h>
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "dirx.h"	/* SysLib Directory access functions eXtensions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
@@ -119,10 +120,6 @@ HRESULT DetectInputCodepage(DWORD dwFlags, DWORD dwPrefCP, char *pszBuffer, INT 
 
 /********************** End of OS-specific definitions ***********************/
 
-/* My favorite string comparison routines. */
-#define streq(s1, s2) (!strcmp(s1, s2))     /* Test if strings are equal */
-#define strieq(s1, s2) (!strcmpi(s1, s2))   /* Idem, not case sensitive */
-
 #define verbose(args) if (iVerbose) do {fprintf args;} while (0)
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS applic. */
@@ -159,7 +156,6 @@ FILE *mf;			/* Message output file */
 /* Function prototypes */
 
 int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
-int IsSwitch(char *pszArg);
 int ShowAllFilesEncoding(char *pszName, encoding_detection_opts *pOpts);
 int ShowFileEncoding(char *pszName, encoding_detection_opts *pOpts);
 char *NewPathName(const char *path, const char *name);
@@ -648,36 +644,6 @@ int printError(char *pszFormat, ...) {
   va_end(vl);
 
   return n;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

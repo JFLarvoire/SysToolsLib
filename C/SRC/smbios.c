@@ -52,6 +52,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.3.2.      *
 *    2022-02-01 JFL Improved the interface to the optional HPE tables decoder.*
 *                   Version 2.4.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.4.1.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -59,8 +60,8 @@
 
 #define PROGRAM_DESCRIPTION "Display SMBIOS tables contents"
 #define PROGRAM_NAME      "smbios"
-#define PROGRAM_VERSION_0 "2.4"
-#define PROGRAM_DATE      "2022-02-01"
+#define PROGRAM_VERSION_0 "2.4.1"
+#define PROGRAM_DATE      "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -89,13 +90,12 @@
 #define PROGRAM_VERSION PROGRAM_VERSION_0 PROGRAM_VERSION_HPE
 
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
-
-/* A convenient macro */
-#define streq(s1, s2) (!strcmp(s1, s2))     /* Test if strings are equal */
 
 /************************ Win32-specific definitions *************************/
 
@@ -121,9 +121,6 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /********************** End of OS-specific definitions ***********************/
 
-#define FALSE 0
-#define TRUE 1
-
 /* Global variables */
 
 int iVerbose = 0;
@@ -132,7 +129,6 @@ int iVerbose = 0;
 /* ------------------------------------------------------------------------- */
 
 void usage(int retcode);
-int IsSwitch(char *pszArg);
 int PrintStringIfDefined(PSMBIOS21HEADER pDmi21Hdr, BYTE *pStruct, int iString, char *pszDescript);
 
 /* ------------- Optional extensions using the above prototypes ------------ */
@@ -1028,33 +1024,6 @@ Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 );
 
   exit(retcode);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|									      |
-|   Description:    Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters:     char *pszArg					      |
-|									      |
-|   Returns:	    TRUE or FALSE					      |
-|									      |
-|   Notes:								      |
-|									      |
-|   History:								      |
-|    1997-03-04 JFL Created this routine				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-    case '/':
-      return TRUE;
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

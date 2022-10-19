@@ -59,6 +59,7 @@
 *    2020-08-28 JFL Avoid double CR in Win32 error messages. Version 2.2.1.   *
 *    2020-11-05 JFL Moved copydate() to SysLib, adding ns resolution.         *
 *                   Version 2.3.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.3.1.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -66,8 +67,8 @@
 
 #define PROGRAM_DESCRIPTION "Create a numbered backup copy of a file"
 #define PROGRAM_NAME    "backnum"
-#define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2020-11-05"
+#define PROGRAM_VERSION "2.3.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -86,17 +87,14 @@
 #define FNM_MATCH 0
 #endif
 #include <unistd.h>		/* For access() */
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
-#include "copyfile.h"		/* Copy file, and related functions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
-#include "stversion.h"	/* SysToolsLib version strings. Include last. */
+#include "debugm.h"		/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"		/* SysLib helper routines for main() */
+#include "dirx.h"		/* SysLib Directory access functions eXtensions */
+#include "copyfile.h"		/* SysLib Copy file, and related functions */
+#include "stversion.h"		/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
-
-/* A convenient macro */
-#define streq(s1, s2) (!strcmp(s1, s2)) /* For the main test routine only */
 
 /************************ Win32-specific definitions *************************/
 
@@ -162,9 +160,6 @@ void _makepath(char *buf, const char *d, const char *p, const char *n, const cha
 
 /*********************** End of OS-specific definitions **********************/
 
-#define FALSE 0
-#define TRUE 1
-
 /* Global variables */
 
 int iVerbose = FALSE;
@@ -179,7 +174,6 @@ int iAppend = 1;	/* Append the extension */
 /* Prototypes */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int fcopy(char *name2, char *name1);
 
 /*---------------------------------------------------------------------------*\
@@ -470,30 +464,6 @@ Switches:\n\
 "\n"
 #endif
 );
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  return (   (*pszArg == '-')
-#ifndef _UNIX
-            || (*pszArg == '/')
-#endif
-  ); /* It's a switch */
 }
 
 /*---------------------------------------------------------------------------*\

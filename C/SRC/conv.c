@@ -77,6 +77,7 @@
 *		    Version 2.5.1.					      *
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
 *		    Version 2.5.2.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.5.3.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -84,8 +85,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert characters from one character set to another"
 #define PROGRAM_NAME "conv"
-#define PROGRAM_VERSION "2.5.2"
-#define PROGRAM_DATE    "2022-02-24"
+#define PROGRAM_VERSION "2.5.3"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS /* Avoid Visual C++ 2005 security warnings */
 #define STRSAFE_NO_DEPRECATE	/* Avoid VC++ 2005 platform SDK strsafe.h deprecations */
@@ -102,7 +103,8 @@
 #include <iconv.h>
 #include <errno.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
@@ -189,10 +191,6 @@ DWORD GetTrueWindowsVersion(void); /* Extend GetVersion() */
 /* Define easy to use functions for reading registry values, compatible with old versions of Windows */
 LONG RegGetString(HKEY rootKey, LPCTSTR pszKey, LPCTSTR pszValue, LPTSTR pszBuf, size_t nBufSize); /* Returns the string size, or (-error). */
 
-/* My favorite string comparison routines. */
-#define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
-#define strieq(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
-
 /* C front end to COM C++ method IMultiLanguage2::DetectInputCodepage() */
 #include <MLang.h>
 #include <objbase.h>
@@ -236,7 +234,6 @@ void fail(char *pszFormat, ...) { /* Display an error message, and abort leaving
 
 /* Function prototypes */
 
-int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	/* Check if a file handle is the console */
 int is_pipe(FILE *f);		/* Check if a file handle is a pipe */
 int ConvertCharacterSet(char *pszInput, size_t nInputSize,
@@ -851,36 +848,6 @@ open_df_failed:
 }
 
 #pragma warning(default:4706)	/* Restore the "assignment within conditional expression" warning */
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

@@ -74,6 +74,7 @@
 *                   Continue by default for all recursive operations.	      *
 *                   Version 3.5.					      *
 *    2022-01-12 JFL Added option -f to follow links to directories. Ver. 3.6. *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.6.1.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -81,8 +82,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.6"
-#define PROGRAM_DATE    "2022-01-13"
+#define PROGRAM_VERSION "3.6.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -100,18 +101,15 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <limits.h>
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "dirx.h"	/* SysLib Directory access functions eXtensions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
 typedef unsigned long uintmax_t;
 #endif
-
-#define FALSE 0
-#define TRUE 1
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
@@ -227,7 +225,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define RETCODE_NO_MEMORY 1
 #define RETCODE_INACCESSIBLE 2
 
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
 typedef struct _selectOpts {	/* Options for selecting files */
@@ -262,7 +259,6 @@ char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
 /* Function prototypes */
 
 void usage(void);                   /* Display a brief help and exit */
-int IsSwitch(char *pszArg);	    /* Is this a command-line switch? */
 void finis(int retcode, ...);       /* Return to the initial drive & exit */
 int parse_date(char *token, time_t *pdate); /* Convert the argument to a time_t */
 int Size2String(char *pBuf, total_t ll); /* Convert size to a decimal, with a comma every 3 digits */
@@ -626,36 +622,6 @@ void finis(int retcode, ...) {
 #endif
 
   exit(retcode);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /******************************************************************************

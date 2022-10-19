@@ -29,6 +29,7 @@
 *		    Avoid displaying success when no edit window was found.   *
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
 *		    Version 1.3.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.3.1.		      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -36,8 +37,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from stdin to the Windows Notepad"
 #define PROGRAM_NAME    "2note"
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2022-02-24"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -56,11 +57,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-// My favorite string comparison routines.
-#define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
 
 #define BLOCKSIZE (4096)	// Number of characters that will be allocated in each loop.
 
@@ -82,7 +81,6 @@ DEBUG_GLOBALS
 /* Function prototypes */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int PrintCError(const char *pszExplanation, ...);
 int PrintWin32Error(const char *pszExplanation, ...);
 int ToNotepadW(const WCHAR* pwBuffer, size_t nWChars);
@@ -293,36 +291,6 @@ System Code Page (Code page %u).\n\
 , cpANSI, cpOEM, cpCurrent, cpANSI);
 
   return;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_MSDOS) || defined(_WIN32)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

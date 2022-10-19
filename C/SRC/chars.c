@@ -24,6 +24,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.4.3.      *
 *    2020-04-19 JFL Added support for MacOS. Version 1.5.                     *
 *    2022-02-01 JFL Prevent a misalignment in Windows Terminal. Version 1.6.  *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.6.1.		      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -31,8 +32,8 @@
 
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.6"
-#define PROGRAM_DATE    "2022-02-01"
+#define PROGRAM_VERSION "1.6.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -94,17 +95,12 @@
 /********************** End of OS-specific definitions ***********************/
 
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-#define TRUE 1
-#define FALSE 0
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 
 char spaces[] = "            ";
 
 void usage(void);
-int IsSwitch(char *pszArg);
 #if SUPPORTS_UTF8
 int ToUtf8(unsigned int c, char *b);
 #endif /* SUPPORTS_UTF8 */
@@ -381,18 +377,6 @@ Switches:\n\
 #endif
 
   exit(0);
-}
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 #if SUPPORTS_UTF8

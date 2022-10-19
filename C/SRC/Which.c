@@ -101,6 +101,7 @@
 *    2021-01-06 JFL Show APPEXECLINKs and not their targets for now, as the   *
 *		    targets aren't always executable directly. Version 1.16.1.*
 *    2021-11-29 JFL Renamed MsvcLibX's GetReparseTag() as MlxGetReparseTag(). *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.16.2.		      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -108,8 +109,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
-#define PROGRAM_VERSION "1.16.1"
-#define PROGRAM_DATE    "2021-01-06"
+#define PROGRAM_VERSION "1.16.2"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -128,7 +129,8 @@
 #include <fnmatch.h>
 #include <ctype.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
@@ -251,14 +253,7 @@ int iMatchFlags = 0;	/* Case-dependant search */
 
 /********************** End of OS-specific definitions ***********************/
 
-#define streq(s1, s2) (!strcmp(s1, s2))
-#define strieq(s1, s2) (!_stricmp(s1, s2))
-#define strnieq(s1, s2, n) (!_strnicmp(s1, s2, n))
-
 typedef unsigned char BYTE;
-
-#define FALSE 0
-#define TRUE 1
 
 /* Search flags */
 
@@ -280,7 +275,6 @@ shell_t shell = DEFAULT_SHELL;
 /* Prototypes */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int SearchProgramWithAnyExt(char *pszPath, char *pszCommand, int iSearchFlags);
 int SearchProgramWithOneExt(char *pszPath, char *pszCommand, char *pszExt, int iSearchFlags);
 #if defined(_WIN32) && !defined(_WIN64) /* Special case for WIN32 on WIN64 */
@@ -650,36 +644,6 @@ Notes:\n\
 );
 
   exit(0);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

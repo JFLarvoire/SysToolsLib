@@ -42,6 +42,7 @@
 *		    Output the C cedilla in my first name in the help.	      *
 *		    Added option -l as an alias to -i to list installed CPs.  *
 *		    Version 1.3.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.3.1.		      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -49,8 +50,8 @@
 
 #define PROGRAM_DESCRIPTION "Get information about code pages on this system"
 #define PROGRAM_NAME    "codepage"
-#define PROGRAM_VERSION "1.3"
-#define PROGRAM_DATE    "2021-05-21"
+#define PROGRAM_VERSION "1.3.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 /* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
 
@@ -61,13 +62,9 @@
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For _setmode() */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
-#define TRUE 1
-#define FALSE 0
 
 /************************ Win32-specific definitions *************************/
 
@@ -288,7 +285,6 @@ char *GetCPName(int iCP, LPCPINFOEX lpCpi) {
 
 /* Forward declarations */
 void usage(void);
-int IsSwitch(char *pszArg);
 int CheckConsoleFont(void);
 
 /*---------------------------------------------------------------------------*\
@@ -581,30 +577,6 @@ Author: Jean-Fran%sois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ", szCCedilla);
 
   exit(0);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  return (   (*pszArg == '-')
-#ifndef __unix__
-	  || (*pszArg == '/')
-#endif
-         ); /* It's a switch */
 }
 
 /*---------------------------------------------------------------------------*\

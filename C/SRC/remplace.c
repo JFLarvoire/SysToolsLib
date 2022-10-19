@@ -159,6 +159,7 @@
 *		    Version 3.2.2.					      *
 *    2022-10-16 JFL Removed an unused variable.                               *
 *		    Version 3.2.3.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.2.4.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -166,8 +167,8 @@
 
 #define PROGRAM_DESCRIPTION "Replace substrings in a stream"
 #define PROGRAM_NAME    "remplace"
-#define PROGRAM_VERSION "3.2.3"
-#define PROGRAM_DATE    "2022-10-16"
+#define PROGRAM_VERSION "3.2.4"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -184,16 +185,11 @@
 #include <unistd.h>
 #include <errno.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #define SZ 255               /* Strings size */
-
-#define TRUE 1
-#define FALSE 0
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-#define strieq(string1, string2) (stricmp(string1, string2) == 0)
 
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
@@ -309,7 +305,6 @@ FILE *mf;			    /* Message output file */
 /* Forward references */
 
 void usage(int err);		    /* Display a brief help and exit */
-int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);	    /* Check if a file handle is the console */
 int GetEscChar(char *pszIn, char *pc); /* Get one escaped character */
 int GetRxCharSet(char *pszOld, char cSet[256], int *piSetSize, char *pcRepeat);
@@ -831,36 +826,6 @@ try_next_set:
   if (iVerbose) fprintf(mf, "// Remplace: %ld changes done.\n", lnChanges);
 
   return ((lnChanges>0) ? 0 : 1);              /* and exit */
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

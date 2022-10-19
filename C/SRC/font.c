@@ -24,6 +24,7 @@
 *		    Version 2.1.					      *
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.2.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.2.      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.1.3.		      *
 *		    							      *
 *         © Copyright 2018 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -31,8 +32,8 @@
 
 #define PROGRAM_DESCRIPTION "Manage the console fonts"
 #define PROGRAM_NAME    "font"
-#define PROGRAM_VERSION "2.1.2"
-#define PROGRAM_DATE    "2019-06-12"
+#define PROGRAM_VERSION "2.1.3"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _UTF8_SOURCE
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
@@ -42,13 +43,9 @@
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For _setmode() */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
-#define TRUE 1
-#define FALSE 0
 
 /************************ Win32-specific definitions *************************/
 
@@ -91,7 +88,6 @@ int iVerbose = FALSE;
 
 /* Forward declarations */
 void usage(void);
-int IsSwitch(char *pszArg);
 int ListFonts(DWORD dwCriteria);
 int ShowConsoleFont(DWORD dwFlags);	// Display the current console font
 int ListConsoleFontSizes(void);		// List available sizes for the console font
@@ -248,30 +244,6 @@ Notes:\n\
 Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
 ");
   exit(0);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|                                                                             |
-|   Description:    Test if an argument is a command-line switch.             |
-|                                                                             |
-|   Parameters:     char *pszArg	    Would-be argument		      |
-|                                                                             |
-|   Return value:   TRUE or FALSE					      |
-|                                                                             |
-|   Notes:								      |
-|                                                                             |
-|   History:								      |
-*                                                                             *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  return (   (*pszArg == '-')
-#ifndef __unix__
-	  || (*pszArg == '/')
-#endif
-         ); /* It's a switch */
 }
 
 /*---------------------------------------------------------------------------*\

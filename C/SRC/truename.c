@@ -26,6 +26,7 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.4.      *
 *    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.1.5.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -33,8 +34,8 @@
 
 #define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
-#define PROGRAM_VERSION "1.1.4"
-#define PROGRAM_DATE    "2020-03-19"
+#define PROGRAM_VERSION "1.1.5"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -45,7 +46,8 @@
 #include <unistd.h>	/* For the symlink and readlink functions */
 #include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
@@ -67,14 +69,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /********************** End of OS-specific definitions ***********************/
 
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
-#define TRUE 1
-#define FALSE 0
-
 /* Forward declarations */
 void usage(void);
-int IsSwitch(char *pszArg);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -279,36 +275,6 @@ Switches:\n\
 );
 
   exit(0);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

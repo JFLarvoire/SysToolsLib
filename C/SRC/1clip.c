@@ -54,6 +54,7 @@
 *    2022-06-29 JFL Added option -s to get the clipboard data size.           *
 *    2022-07-09 JFL Added option -L to get the clipboard text locale.         *
 *    2022-07-10 JFL Added a workaround for an Excel bug. Version 2.3.         *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.3.1.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -61,8 +62,8 @@
 
 #define PROGRAM_DESCRIPTION "Copy text from the Windows clipboard to stdout"
 #define PROGRAM_NAME    "1clip"
-#define PROGRAM_VERSION "2.3"
-#define PROGRAM_DATE    "2022-07-10"
+#define PROGRAM_VERSION "2.3.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _UTF8_SOURCE	/* Tell MsvcLibX that this program generates UTF-8 output */
 
@@ -75,7 +76,8 @@
 #include <windows.h>
 #include <iconv.h>	/* MsvcLibX output encoding definitions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings and routine. Include last. */
 
 // Define WIN32 replacements for common Standard C library functions.
@@ -85,10 +87,6 @@
 #define strcat lstrcat
 #define strlen lstrlen
 #define _tell(hf) _llseek(hf, 0, FILE_CURRENT)
-
-// My favorite string comparison routines.
-#define streq(s1, s2) (!lstrcmp(s1, s2))     /* Test if strings are equal */
-#define streqi(s1, s2) (!lstrcmpi(s1, s2))   /* Idem, not case sensitive */
 
 /* Constants for the CopyClip() routine */
 
@@ -119,7 +117,6 @@ UINT ActualCP(UINT cp) { /* Return the actual code page number for special const
 /* Function prototypes */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int CopyClip(UINT type, UINT codepage);
 int EnumClip(void);
 int SizeClip(UINT type);
@@ -335,36 +332,6 @@ Default output encoding: The current console code page (Code page %u)\n\
 );
 
   return;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

@@ -50,6 +50,7 @@
 *		    standard is to merge multiple parts into 1 single section.*
 *		    Version 2.1.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 2.2.                     *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.2.1.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,8 +58,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare .ini files, section by section, and item by item"
 #define PROGRAM_NAME    "inicomp"
-#define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "2.2.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -71,20 +72,14 @@
 #include <search.h>
 #include <ctype.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
 #include "dict.h"
 DICT_DEFINE_PROCS();
-
-/* Constants, structures, types, etc... */
-
-#define FALSE 0
-#define TRUE 1
-
-#define streq(s1, s2) (!strcmp(s1, s2))     /* String equal */
 
 /************************* OS/2-specific definitions *************************/
 
@@ -175,7 +170,6 @@ dict_t *NewIniMMap(void) { /* Duplicate keys allowed */
 
 /* Function prototypes */
 
-int IsSwitch(char *pszArg);
 char *processFile(char *argname, dict_t *sections);
 char *trimLeft(char *s);
 char *trimRight(char *s);
@@ -305,36 +299,6 @@ DEBUG_CODE(
   compare(name1, dict1, name2, dict2);
 
   return 0;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

@@ -44,6 +44,7 @@
 *		    Version 3.0.					      *
 *    2022-10-16 JFL Removed in release mode a variable only used in debug mode.
 *		    Version 3.0.1.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.0.2.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -51,24 +52,19 @@
 
 #define PROGRAM_DESCRIPTION "Remove Form Feeds from a text"
 #define PROGRAM_NAME    "deffeed"
-#define PROGRAM_VERSION "3.0.1"
-#define PROGRAM_DATE    "2022-10-16"
+#define PROGRAM_VERSION "3.0.2"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
-#include "stdio.h"
-#include "stdlib.h"
-#include "string.h"
-#include "fcntl.h"
-#include "stdlib.h"
-
-#define FALSE 0
-#define TRUE 1
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
 #define BUFSIZE 256
 #define DEFLPP 60       /* Default number of lines per page */
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 
 /************************ Win32-specific definitions *************************/
 
@@ -127,7 +123,9 @@ char *strlwr(char *psz)    /* Convenient Microsoft library routine not available
 /********************** End of OS-specific definitions ***********************/
 
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 /* Global variables */
@@ -140,7 +138,6 @@ char *buffer = NULL;
 /* Forward references */
 
 void usage(void);
-int IsSwitch(char *pszArg);
 int detab(char *line, int length, int tab);
 int output_line(int np, int nl, char *format, char *text, FILE *fdest);
 
@@ -366,8 +363,7 @@ int main(int argc, char *argv[]) {
     if (tab == -1) {
 #if NEEDED
       i = strlen(source);
-      if (   (strcmpi(source+i-2, ".C")==0)
-	  || (strcmpi(source+i-2, ".H")==0) ) {
+      if (strieq(source+i-2, ".C") || strieq(source+i-2, ".H")) {
 	tab = 4;
       } else
 #endif
@@ -606,36 +602,6 @@ Options:\n\
 #endif
 );
   exit(1);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (pszArg[1] != '\0');
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

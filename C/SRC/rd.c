@@ -26,6 +26,7 @@
 *    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 1.1.3.					      *
 *    2020-04-20 JFL Added support for MacOS. Version 1.2.                     *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.2.1.		      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -33,8 +34,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove a directory"
 #define PROGRAM_NAME    "rd"
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "1.2.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -45,18 +46,13 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>	/* For mkdir() */
-/* SysLib include files */
-#include "dirx.h"		/* Directory access functions eXtensions */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
+#include "dirx.h"	/* SysLib Directory access functions eXtensions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
-#define TRUE 1
-#define FALSE 0
 
 /************************* Unix-specific definitions *************************/
 
@@ -107,7 +103,6 @@ int printError(char *pszFormat, ...);	/* Print errors in a consistent format */
 
 /* Forward declarations */
 void usage(void);
-int IsSwitch(char *pszArg);
 /* zap functions options */
 typedef struct zapOpts {
   int iFlags;
@@ -373,36 +368,6 @@ int printError(char *pszFormat, ...) {
   va_end(vl);
 
   return n;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

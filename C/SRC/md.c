@@ -20,13 +20,14 @@
 *    2019-04-18 JFL Use the version strings from the new stversion.h. V.1.0.3.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.4.      *
 *    2020-04-20 JFL Added support for MacOS. Version 1.1.                     *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.1.1.		      *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Create a directory"
 #define PROGRAM_NAME    "md"
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "1.1.1"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _GNU_SOURCE	/* Use GNU extensions. And also MsvcLibX support for UTF-8 I/O */
 
@@ -38,15 +39,11 @@
 #include <unistd.h>
 #include <sys/stat.h>	/* For mkdir() */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-
-#define TRUE 1
-#define FALSE 0
 
 /************************* Unix-specific definitions *************************/
 
@@ -91,7 +88,6 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 /* Forward declarations */
 void usage(void);
-int IsSwitch(char *pszArg);
 int isdir(const char *pszPath); /* Is this an existing directory */
 int mkdir1(const char *path, mode_t mode, int iVerbose); /* Call mkdir() */
 int mkdirp(const char *path, mode_t mode, int iVerbose); /* Same as mkdir -p */
@@ -244,36 +240,6 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 
 );
   exit(0);
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

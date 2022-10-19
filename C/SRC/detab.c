@@ -51,6 +51,7 @@
 *		    Version 3.3.1.					      *
 *    2022-10-16 JFL Removed an unused variable.                               *
 *		    Version 3.3.2.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.3.3.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -58,8 +59,8 @@
 
 #define PROGRAM_DESCRIPTION "Convert tabs to spaces"
 #define PROGRAM_NAME    "detab"
-#define PROGRAM_VERSION "3.3.2"
-#define PROGRAM_DATE    "2022-10-16"
+#define PROGRAM_VERSION "3.3.3"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -76,7 +77,8 @@
 #include <unistd.h>
 #include <errno.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS		/* Define global variables used by our debugging macros */
@@ -125,12 +127,6 @@ DEBUG_GLOBALS		/* Define global variables used by our debugging macros */
 
 /********************** End of OS-specific definitions ***********************/
 
-#define TRUE 1
-#define FALSE 0
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-#define strieq(string1, string2) (stricmp(string1, string2) == 0)
-
 void fail(char *pszFormat, ...) {
   va_list vl;
 
@@ -145,7 +141,6 @@ void fail(char *pszFormat, ...) {
 #define FAIL(msg) fail("%s", msg);
 
 /* Forward definitions */
-int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
 int file_exists(const char *); 	/* Does this file exist? (TRUE/FALSE) */
@@ -449,36 +444,6 @@ open_df_failed:
 fail_no_mem:
   fail("Out of memory");
   return 1;
-}
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg) {
-  switch (*pszArg) {
-    case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-    case '/':
-#endif
-      return (*(short*)pszArg != (short)'-'); /* "-" is NOT a switch */
-    default:
-      return FALSE;
-  }
 }
 
 /*---------------------------------------------------------------------------*\

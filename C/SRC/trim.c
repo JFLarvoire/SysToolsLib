@@ -51,6 +51,7 @@
 *		    Version 2.1.1.					      *
 *    2022-10-16 JFL Removed an unused variable.                               *
 *		    Version 2.1.2.					      *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.1.3.		      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -58,8 +59,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "trim"
-#define PROGRAM_VERSION "2.1.2"
-#define PROGRAM_DATE    "2022-10-16"
+#define PROGRAM_VERSION "2.1.3"
+#define PROGRAM_DATE    "2022-10-19"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -76,13 +77,11 @@
 #include <unistd.h>
 #include <errno.h>
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
-
-#define TRUE 1
-#define FALSE 0
 
 #define LINESIZE 16384	/* Can't allocate more than 64K for stack in some OS. */
 
@@ -131,14 +130,6 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 #include <ctype.h>
 #include <dirent.h>
 
-char *strlwr(char *psz)    /* Convenient Microsoft library routine not available on Unix. */
-   {
-   char c;
-   char *psz0 = psz;
-   while ((c = *psz)) *(psz++) = (char)tolower(c);
-   return psz0;
-   }
-
 #define stricmp strcasecmp
 
 #define DIRSEPARATOR_CHAR '/'
@@ -149,9 +140,6 @@ char *strlwr(char *psz)    /* Convenient Microsoft library routine not available
 #endif
 
 /********************** End of OS-specific definitions ***********************/
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
-#define strieq(string1, string2) (stricmp(string1, string2) == 0)
 
 void fail(char *pszFormat, ...) {
   va_list vl;
@@ -175,7 +163,6 @@ FILE *mf;			    /* Message output file */
 /* Function prototypes */
 
 void usage(void);                   /* Display a brief help and exit */
-int IsSwitch(char *pszArg);
 int is_redirected(FILE *f);
 int IsSameFile(char *pszPathname1, char *pszPathname2);
 int file_exists(const char *); 	/* Does this file exist? (TRUE/FALSE) */
@@ -507,38 +494,6 @@ Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
 );
   exit(0);
 }
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    IsSwitch						      |
-|									      |
-|   Description     Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters      char *pszArg					      |
-|									      |
-|   Returns	    TRUE or FALSE					      |
-|									      |
-|   Notes								      |
-|									      |
-|   History								      |
-|    1997-03-04 JFL Created this routine				      |
-|    2016-08-25 JFL "-" alone is NOT a switch.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg)
-    {
-    switch (*pszArg)
-	{
-	case '-':
-#if defined(_WIN32) || defined(_MSDOS)
-	case '/':
-#endif
-	    return (pszArg[1] != '\0');
-	default:
-	    return FALSE;
-	}
-    }
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

@@ -8,6 +8,7 @@
 #									      #
 #   History								      #
 #    2014-12-03 JFL Initial version                                           #
+#    2022-10-19 JFL Added dependencies on mainutil.h.                         #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -152,4 +153,66 @@ ZIPSOURCES =		 \
   Which.c                \
   whichinc.c             \
   zap.c                  \
+
+#-----------------------------------------------------------------------------#
+#			Include files dependencies			      #
+#-----------------------------------------------------------------------------#
+
+SI=$(STINCLUDE)
+SL=$(SYSLIB)
+SX=$(MSVCLIBX)/include
+
+$(S)/1clip.c: $(SL)/mainutil.h
+
+$(S)/2clip.c: $(SL)/mainutil.h
+
+$(S)/2note.c: $(SL)/mainutil.h
+
+$(S)/backnum.c: $(SL)/mainutil.h
+
+$(S)/chars.c: $(SL)/mainutil.h
+
+$(S)/codepage.c: $(SL)/mainutil.h
+
+$(S)/conv.c: $(SL)/mainutil.h
+
+$(S)/deffeed.c: $(SL)/mainutil.h
+
+$(S)/detab.c: $(SL)/mainutil.h
+
+$(S)/dirc.c: $(SL)/mainutil.h
+
+$(S)/dirsize.c: $(SL)/mainutil.h
+
+$(S)/driver.c: $(SL)/mainutil.h
+
+$(S)/dump.c: $(SL)/mainutil.h
+
+$(S)/encoding.c: $(SL)/mainutil.h
+
+$(S)/font.c: $(SL)/mainutil.h
+
+$(S)/inicomp.c: $(SL)/mainutil.h
+
+$(S)/junction.c: $(SL)/mainutil.h
+
+$(S)/md.c: $(SL)/mainutil.h
+
+$(S)/msgbox.c: $(SL)/mainutil.h
+
+$(S)/rd.c: $(SL)/mainutil.h
+
+$(S)/remplace.c: $(SL)/mainutil.h
+
+$(S)/smbios.c: $(SL)/mainutil.h
+
+$(S)/trim.c: $(SL)/mainutil.h
+
+$(S)/truename.c: $(SL)/mainutil.h
+
+$(S)/update.c: $(SL)/mainutil.h
+
+$(S)/Which.c: $(SL)/mainutil.h
+
+$(S)/zap.c: $(SL)/mainutil.h
 

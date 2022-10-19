@@ -48,6 +48,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 2.1.2.      *
 *    2020-08-29 JFL Merged in changes from another PrintWin32Error().	      *
 *		    Removed unnecessary calls to oemprintf(). Version 2.1.3.  *
+*    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.1.4.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,8 +56,8 @@
 
 #define PROGRAM_DESCRIPTION "Manage system drivers and services"
 #define PROGRAM_NAME    "driver"
-#define PROGRAM_VERSION "2.1.3"
-#define PROGRAM_DATE    "2020-08-29"
+#define PROGRAM_VERSION "2.1.4"
+#define PROGRAM_DATE    "2022-10-19"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -80,7 +81,8 @@
 /* JFL's MsvcLibX library extensions */
 #include <iconv.h>		/* Code page conversion routines an variables */
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debug macros */
+#include "debugm.h"	/* SysToolsLib debug macros. Include first. */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 // NT Test
@@ -99,8 +101,6 @@
 
 /* My favorite definitions */
 
-#define streq(s1, s2) (!strcmp(s1, s2))     /* Test if strings are equal */
-
 #define WORD0(dw) (*((WORD *)(&(dw))+0))
 #define WORD1(dw) (*((WORD *)(&(dw))+1))
 #define BYTE0(dw) (*((BYTE *)(&(dw))+0))
@@ -117,7 +117,6 @@ int iVerbose = FALSE;
 
 void usage(int retcode);
 int PrintWin32Error(const char *pszFormat, ...);
-int IsSwitch(char *pszArg);
 int MyAnsiToUtf8(char *pszString);
 void _cdecl WaitForAnyKey(void);
 int _cdecl oemprintf(const char *pszFormat, ...);
@@ -671,36 +670,6 @@ int PrintWin32Error(const char *pszFormat, ...) {
 
   return n;
 }
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    IsSwitch						      |
-|									      |
-|   Description:    Test if a command line argument is a switch.	      |
-|									      |
-|   Parameters:     char *pszArg					      |
-|									      |
-|   Returns:	    TRUE or FALSE					      |
-|									      |
-|   Notes:								      |
-|									      |
-|   History:								      |
-|									      |
-|    1997/03/04 JFL Created this routine				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int IsSwitch(char *pszArg)
-    {
-    switch (*pszArg)
-	{
-	case '-':
-	case '/':
-	    return TRUE;
-	default:
-	    return FALSE;
-	}
-    }
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
