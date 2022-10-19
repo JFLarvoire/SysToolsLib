@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-10-19
+### Changed
+- encoding.exe: Added option -b to report the presence of a Unicode BOM with a B suffix.
+- C/SRC/macros.cpp: Output valid #define directives, to match Unix compilers (and now MSVC 16.8+) built-in abilities.                
+  Added a help screen, and a -V (get version) option.  	    
+  Fixed warnings in MS-DOS and MacOS LLVM builds.	    
+- C/Include/*.h, C/SysLib/*.h,*.c,*.cpp: Changed the encoding to UTF-8, and added a Unicode BOM to C/CPP sources.
+- C/Include/DOS.mak: Generate localized C sources only once for all DOS builds.
+  This is faster, and also resolves the case of CPP sources including other CPP sources with a UTF-8 BOM.
+
+### Fixed
+- C/SysLib/WalkDirTree.c: Avoid errors in MacOS.
+
 ## [Unreleased] 2022-10-13
 ### Changed
 - cfdt.tcl: Added options --pf and --ps, to better control the --m2n option effect.
@@ -12,7 +25,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ## [Unreleased] 2022-08-08
 ### Fixed
 - update.exe: Fixed errors "Failed to create directory PATHNAME. File exists." when updating files below a junction on
-  a network server.
+  a network server.                             
 
 ## [Unreleased] 2022-07-10
 ### Changed
