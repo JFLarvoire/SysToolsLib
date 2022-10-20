@@ -22,6 +22,7 @@
 *    2016-09-23 JFL Removed warnings. No functional code change.              *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.3.1.*
 *    2019-06-13 JFL Added PROGRAM_DESCRIPTION definition. Version 1.3.2.      *
+*    2022-10-20 JFL Use IsSwitch() for the arguments parsing. Version 1.3.3.  *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -29,8 +30,8 @@
 
 #define PROGRAM_DESCRIPTION "Find C include files used in a source file"
 #define PROGRAM_NAME    "whichinc"
-#define PROGRAM_VERSION "1.3.2"
-#define PROGRAM_DATE    "2019-06-13"
+#define PROGRAM_VERSION "1.3.3"
+#define PROGRAM_DATE    "2022-10-20"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -41,13 +42,12 @@
 #include <stdlib.h>
 #include <string.h>
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
-#define TRUE 1
-#define FALSE 0
-
-#define streq(s1, s2) (!strcmp(s1, s2))
-#define strieq(s1, s2) (!stricmp(s1, s2))
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+#define _UNIX
+#endif /* defined(__unix__) */
 
 #define LINESIZE 256
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 
     for (i=1; i<argc; i++)
 	{
-	if ((argv[i][0] == '-') || (argv[i][0] == '/')) /* It's a switch */
+	if (IsSwitch(argv[i])) /* It's a switch */
 	    {
 	    if (   streq(argv[i]+1, "help")
 	        || streq(argv[i]+1, "h")
@@ -237,7 +237,7 @@ Options:\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );

@@ -14,6 +14,7 @@
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.1.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.2.      *
 *    2021-01-06 JFL Fixed the exit code for the help screen. Version 1.1.3.   *
+*    2022-10-20 JFL Use IsSwitch() for the arguments parsing. Version 1.1.4.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -21,8 +22,8 @@
 
 #define PROGRAM_DESCRIPTION "Duplicate the input to several outputs"
 #define PROGRAM_NAME    "tee"
-#define PROGRAM_VERSION "1.1.3"
-#define PROGRAM_DATE    "2021-01-06"
+#define PROGRAM_VERSION "1.1.4"
+#define PROGRAM_DATE    "2022-10-20"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -33,13 +34,16 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <fcntl.h>
-#include <io.h>
+#include <sys/types.h>
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+#include <io.h>
 
 /* Avoid warnings for names that MSVC thinks deprecated */
 #define read _read
@@ -50,17 +54,25 @@
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define PATHNAME_SIZE FILENAME_MAX
-#define NODENAME_SIZE 13				/* 8.3 name length = 8+1+3+1 = 13 */
+#include <io.h>
 
 #endif
+
+/************************* Unix-specific definitions *************************/
+
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+
+#define _UNIX
+
+#error "Unsupported OS. Please add support if needed."
+
+#include <unistd.h>
+
+#endif /* defined(__unix__) */
 
 /********************** End of OS-specific definitions ***********************/
 
 /* Local definitions */
-
-#define TRUE 1
-#define FALSE 0
 
 #define BUFSIZE 1024
 
@@ -69,8 +81,6 @@ typedef struct _outStream {
   FILE *f;
   struct _outStream *next;
 } outStream;
-
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 
 /* Forward references */
 
@@ -116,7 +126,7 @@ int main(int argc, char *argv[]) {
 
   /* Parse the command line */
   for (i=1; i<argc; i++) {
-    if ((argv[i][0] == '-') || (argv[i][0] == '/')) { /* It's a switch */
+    if (IsSwitch(argv[i])) { /* It's a switch */
       char *option = argv[i]+1;
       if (streq(option, "?") || streq(option, "h") || streq(option, "-help")) {
 	usage();
@@ -194,7 +204,7 @@ Usage: tee [OPTIONS] [[-a] FILENAME] ...\n\
 Options:\n\
   -?	    Display this help screen.\n\
   -a	    Append to the next file. Default: Overwrite it.\n\
-  -b	    Set the buffer size. Default: %d\n\
+  -b	    Set the buffer size. Default: %lu\n\
   -V        Display the program version\n\
 \n\
 Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
@@ -205,7 +215,10 @@ Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
 "Author: Jean-François Larvoire"
 #endif
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-, GetDefaultBufSize());
+#ifdef _UNIX
+"\n"
+#endif
+, (unsigned long)GetDefaultBufSize());
   return;
 }
 
