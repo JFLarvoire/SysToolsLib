@@ -663,7 +663,7 @@ int main(int argc, char *argv[]) {
   DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
   DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
   DEBUG_PRINTF(("Size of dirent = %d bytes\n", (int)(sizeof(struct dirent))));
-#if  defined(__unix__) && defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
+#if  defined(_UNIX) && defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
   DEBUG_PRINTF(("Size of dirent64 = %d bytes\n", (int)(sizeof(struct dirent64))));
 #endif
 #if defined(_MSC_VER)

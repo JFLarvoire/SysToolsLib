@@ -99,7 +99,7 @@
 
 #if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
 
-#define TARGET_UNIX
+#define _UNIX
 
 #include <unistd.h>     /* Define getcwd(). */
 
@@ -597,7 +597,7 @@ Options:\n\
 \n"
 "Author: Jean-Francois Larvoire"
 " - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );

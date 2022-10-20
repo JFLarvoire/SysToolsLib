@@ -64,7 +64,13 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /*********************************** Other ***********************************/
 
 #else
-#error "Unidentified OS. Please define OS-specific settings for it."
+
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+#define _UNIX
+#endif /* defined(__unix__) */
+
+#error "Unsupported OS. Please add support for it if needed."
+
 #endif
 
 /********************** End of OS-specific definitions ***********************/
@@ -269,7 +275,7 @@ Switches:\n\
   -V          Display this program version and exit.\n\
 \n"
 "Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef __unix__
+#ifdef _UNIX
 "\n"
 #endif
 );
