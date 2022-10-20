@@ -640,7 +640,7 @@ typedef uint64_t QWORD;
 #endif /* !defined(QWORD_DEFINED) */
 
 
-#if defined(_WIN32) || defined(__unix__) /* All 32 or 64 bits compilers support 64-bits integers */
+#if !defined(_MSDOS) /* All 32 or 64 bits compilers support 64-bits integers */
 
 double Qword2Double(QWORD qw);
 #define Qword2Dword(qw) ((DWORD)(qw))
