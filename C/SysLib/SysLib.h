@@ -20,13 +20,15 @@
 
 /* Force linking with the SysLib.lib library */
 #if defined(_MSC_VER)
+
 #define _SYSLIB_LIB "SysLib.lib"
 #pragma message("Adding pragma comment(lib, \"" _SYSLIB_LIB "\")")
 #pragma comment(lib, _SYSLIB_LIB)
-#endif /* defined(_MSC_VER) */
 
-#if defined(__unix__)
+#else /* GCC, clang, etc. */
+
 #define _SYSLIB_LIB "libSysLib.a"
+
 #endif
 
 #endif /* defined(__SYSLIB_H__) */
