@@ -14,6 +14,8 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/Include/DOS.mak: Generate localized C sources only once for all DOS builds.
   This is faster, and also resolves the case of CPP sources including other CPP sources with a UTF-8 BOM.
 - C/SysLib/IsSwitch.c, C/SysLib/mainutil.h, C/SRC/*.c: Factored IsSwitch() out of C/SRC/*.c, and moved it to a new module in SysLib.
+- C/include/All.mak: Allow cleaning just one OS. Ex: `make "OS=DOS" clean`  
+  Also `make clean` does not delete Unix builds anymore.
 
 ### Fixed
 - C/SysLib/WalkDirTree.c: Avoid errors in MacOS.
