@@ -147,6 +147,8 @@
 #    2020-12-16 JFL Added a dependency on NUL for all pseudo-targets. This    #
 #		    makes sure that they run, even if a file with that name   #
 #                   exists. We had the case with a new `clean` Shell script.  #
+#    2022-10-20 JFL Allow cleaning just one OS. Ex: `make "OS=DOS" clean`     #
+#		    Also `make clean` does not delete Unix builds anymore.    #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -676,16 +678,19 @@ clean mostlyclean distclean: NUL
 !IF DEFINED(DIRS)
     for %%d in ($(DIRS)) do @$(BMAKE) -C %%d $@ 
 !ENDIF
-    if exist "$(MAKEPATH)\BIOS.mak"  $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\BIOS.mak" clean
-    if exist "$(MAKEPATH)\DOS.mak"   $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\DOS.mak" clean
-    if exist "$(MAKEPATH)\WIN95.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\WIN95.mak" clean
-    if exist "$(MAKEPATH)\WIN32.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\WIN32.mak" clean
-    if exist "$(MAKEPATH)\IA64.mak"  $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\IA64.mak" clean
-    if exist "$(MAKEPATH)\WIN64.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\WIN64.mak" clean
-    if exist "$(MAKEPATH)\ARM.mak"   $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\ARM.mak" clean
-    if exist "$(MAKEPATH)\ARM64.mak" $(MAKE) $(MAKEFLAGS_) /c /s /f "$(MAKEPATH)\ARM64.mak" clean
+    $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) clean
+    $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) clean
+    $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) clean
+    $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) clean
+    $(IFIA64)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\IA64.mak"  $(MAKEDEFS) clean
+    $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) clean
+    $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) clean
+    $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) clean
 !IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
-    -rd /S /Q $(OUTDIR)	>NUL 2>&1
+    -if "$@"=="distclean" rd /S /Q $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR, including Unix builds there
+    -if exist $(OUTDIR)\Lib rd $(OUTDIR)\Lib >NUL 2>&1		&:# Delete OUTDIR\Lib if it's empty
+    -if exist $(OUTDIR)\*.log del $(OUTDIR)\*.log >NUL 2>&1	&:# Delete OUTDIR\*.log
+    -if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1			&:# Delete OUTDIR if it's empty
 !ENDIF
     -del /Q *.bak	>NUL 2>&1
     -del /Q *~		>NUL 2>&1
@@ -699,6 +704,11 @@ clean mostlyclean distclean: NUL
 !ENDIF
 !IF DEFINED(DISTCLEAN_FILES) # Then clean each file
     -if "$@"=="distclean" for %%d in ($(DISTCLEAN_FILES)) do @if exist %%d del %%d >NUL 2>&1
+!ENDIF
+
+veryclean: clean
+!IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
+    -rd /S /Q $(OUTDIR) >NUL 2>&1 &:# Delete OUTDIR, including Unix builds there
 !ENDIF
 
 # Convert sources from Windows to Unix formats
@@ -721,8 +731,9 @@ Macro definitions:     (They must be quoted, else the = sign will be lost)
   "WINVER=4.0"         Target OS version. 4.0=Win95/NT4, 5.1=WinXP, 6.1=Win7
 
 Targets:
-  all                    Build all available sources
-  clean                  Erase all output files in BIOS, DOS, WIN32, WIN64
+  all                    Build all available programs and libraries
+  clean                  Erase all output files built by this make system
+  veryclean              Erase all output files, including Unix builds
   distclean              Erase all output files and all configuration files
   {prog}.com             Build BIOS and DOS versions of {prog}.com
   {prog}.exe             Build DOS and all Windows versions of {prog}.exe
