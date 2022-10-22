@@ -18,12 +18,13 @@
 *    2022-02-18 JFL Rewrote option -1 (dash-one) to record the junction       *
 *                   themselves in a binary tree. Renamed the old -1 as -o.    *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib.				      *
+*    2022-10-22 JFL Added option -t to list all types of reparse points.      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-10-19"
+#define PROGRAM_VERSION "2022-10-22"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -38,6 +39,7 @@
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "pathnames.h"	/* SysLib Pathname management definitions and functions */
 #include "tree.h"	/* SysToolsLib Manage a binary tree */
+#include "reparsept.h"  /* MsvcLibX Reparse Point management */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #ifndef _WIN32
@@ -45,8 +47,9 @@
 #endif
 
 /* Local definitions and forward references */
-#define JCB_VERBOSE 0x0001
-#define JCB_ONCE    0x0002
+#define JCB_VERBOSE   0x0001
+#define JCB_ONCE      0x0002
+#define JCB_ALLTYPES  0x0004
 typedef struct { /* Reference data to pass to the WalkDirTree callback */
   int iFlags;		/* Input: A combination of JCB_xxx flags */
   long nJunction;	/* Output: The number of junctions found */
@@ -90,6 +93,7 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
   -o      Make sure to search linked folders only once. (slower, useful w. -f)\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
   -r|-s DIR  List junctions recursively in a directory tree\n\
+  -t      With -l or -r, list all types of reparse points, with their types\n\
   -V      Display this program version and exit\n\
   -v      Verbose mode. Report both the junction and target. Show search stats.\n\
 \n\
@@ -161,6 +165,9 @@ int main(int argc, char *argv[]) {
 	action = ACT_RAWGET;
 	continue;
       }
+      if (streq(opt, "accepteula")) { /* For MS compatibility. Ignore that */
+	continue;
+      }
       if (streq(opt, "C")) {	/* Test the effect of WDT_CONTINUE  */
 	opts.iFlags &= ~WDT_CONTINUE;
 	continue;
@@ -183,13 +190,13 @@ int main(int argc, char *argv[]) {
 	action = ACT_GETID;
 	continue;
       }
-      if (streq(opt, "l")) {
+      if (streq(opt, "l")) {	/* List all junctions in a directory */
 	action = ACT_SCAN;
 	opts.iFlags |= WDT_NORECURSE;
 	continue;
       }
-      if (streq(opt, "nobanner")) {
-	continue;		/* For MS compatibility. Ignore that */
+      if (streq(opt, "nobanner")) { /* For MS compatibility. Ignore that */
+	continue;
       }
       if (streq(opt, "o")) {	/* Make sure to scan directories only once */
 	opts.iFlags |= WDT_ONCE; /* Slower, but ensures duplicate paths aren't explored twice */
@@ -199,9 +206,13 @@ int main(int argc, char *argv[]) {
 	opts.iFlags |= WDT_QUIET;
 	continue;
       }
-      if (streq(opt, "r") || streq(opt, "s")) {
+      if (streq(opt, "r") || streq(opt, "s")) {	/* List recursively all junctions in a directory tree */
 	action = ACT_SCAN;
 	opts.iFlags &= ~WDT_NORECURSE;
+	continue;
+      }
+      if (streq(opt, "t")) {	/* With -l or -r, list all types of reparse points, not just junctions */
+	jcbRef.iFlags |= JCB_ALLTYPES;
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
@@ -258,8 +269,9 @@ int main(int argc, char *argv[]) {
     char *pszDir = pszJunction ? pszJunction : ".";
     iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, &jcbRef);
     if (iVerbose) {
-      printf("# Scanned %lld entries in %lld directories, and found %ld junctions\n",
-	     (long long)opts.nFile, (long long)opts.nDir, jcbRef.nJunction);
+      printf("# Scanned %lld entries in %lld directories, and found %ld %s\n",
+	     (long long)opts.nFile, (long long)opts.nDir, jcbRef.nJunction,
+	     (jcbRef.iFlags & JCB_ALLTYPES) ? "reparse points" : "junctions");
     }
     if (opts.nErr) {
       int nSkipped = opts.nErr;
@@ -421,12 +433,17 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
   JCB_REF *pJcbRef = (JCB_REF *)pRef;
   int iVerbose = pJcbRef->iFlags & JCB_VERBOSE;
   int iOnce = pJcbRef->iFlags & JCB_ONCE;
+  int iAllTypes = pJcbRef->iFlags & JCB_ALLTYPES;
   tree *pTree = pJcbRef->pTree;
+  char buf[PATH_MAX];
+  char *pszTarget = buf;
+  char *pszType = "?";
+  char szTag[16];
 
   if (pDE->d_type != DT_LNK) return 0;
 
   dwTag = MlxGetReparseTag(pszRelPath);
-  if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) return 0;
+  if ((!iAllTypes) && (dwTag != IO_REPARSE_TAG_MOUNT_POINT)) return 0;
 
   if (iOnce) { /* Check if that same junction has been seen before */
     struct stat sStat;
@@ -473,13 +490,59 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
 
   pJcbRef->nJunction += 1;
 
-  if (iVerbose) {
-    char buf[PATH_MAX];
-    int iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
-    if (iErr == -1) buf[0] = '\0';
-    printf("%s -> %s\n", pszRelPath, buf);
+  if (iAllTypes) {
+    int iErr;
+    switch (dwTag) {
+      case IO_REPARSE_TAG_MOUNT_POINT: {
+	pszType = "Junction";
+	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+	if (iErr == -1) pszTarget = "?";
+	break;
+      }
+      case IO_REPARSE_TAG_SYMLINK: {
+      	pszType = "Symlink";
+	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+	if (iErr == -1) {
+	  pszTarget = "?";
+	} else {
+	  struct stat st;
+	  iErr = dirent2stat(pDE, &st);
+	  if ((!iErr) && (st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) pszType = "SymlinkD";
+	}
+	break;
+      }
+      case IO_REPARSE_TAG_LX_SYMLINK: {
+	pszType = "LinuxLink";
+	pszTarget = "?";
+	break;
+      }
+      case IO_REPARSE_TAG_APPEXECLINK: {
+	pszType = "AppExecLnk";
+	int iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
+	if (!iLen) pszTarget = "?";
+	break;
+      }
+      default: {
+	pszType = szTag;
+	sprintf(szTag, "0x%08X", (int)dwTag);
+	pszTarget = "?";
+	break;
+      }
+    }
+  }
+
+  if (!iVerbose) {
+    if (!iAllTypes) {
+      printf("%s\n", pszRelPath);
+    } else {
+      printf("%-10s %s\n", pszType, pszRelPath);
+    }
   } else {
-    printf("%s\n", pszRelPath);
+    if (!iAllTypes) {
+      printf("%s -> %s\n", pszRelPath, pszTarget);
+    } else {
+      printf("%-10s %s -> %s\n", pszType, pszRelPath, pszTarget);
+    }
   }
   return 0;
 
