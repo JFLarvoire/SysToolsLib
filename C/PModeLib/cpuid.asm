@@ -8,9 +8,10 @@
 ;   Notes:								      ;
 ;									      ;
 ;   History:								      ;
-;    1993/12/17 JFL Jean-Francois Larvoire created this file.		      ;
-;    1995/02/17 JFL Extracted the routine from the Pike BIOS.		      ;
-;    1995/09/04 JFL Removed an unnecessary instruction. Updated comments.     ;
+;    1993-12-17 JFL Jean-Francois Larvoire created this file.		      ;
+;    1995-02-17 JFL Extracted the routine from the Pike BIOS.		      ;
+;    1995-09-04 JFL Removed an unnecessary instruction. Updated comments.     ;
+;    2022-11-10 JFL Added the extended family calculation.                    ;
 ;									      ;
 ;      (c) Copyright 1993-2017 Hewlett Packard Enterprise Development LP      ;
 ; Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 ;
@@ -34,16 +35,24 @@ PAGE
 ;	    ON ENTRY:	None						      ;
 ;									      ;
 ;	    ON EXIT:	AX = Processor generation:			      ;
-;			     0 = 8086					      ;
-;			     1 = 80186					      ;
-;			     2 = 80286					      ;
-;			     Etc...					      ;
+;                           0 = 8086					      ;
+;                           1 = 80186					      ;
+;                           2 = 80286					      ;
+;                           3 = 80386					      ;
+;                           4 = 80486					      ;
+;                           5 = Pentium					      ;
+;                           6 = Pentium Pro, P2, P3, and all later Core procs.;
+;                           7 = Itanium					      ;
+;                           15 = Pentium 4				      ;
+;                           16 = Itanium 2 early steppings		      ;
+;                           17 = Itanium 2 later steppings		      ;
 ;									      ;
 ;	REGS ALTERED:	AX, BX, CX, DX, ES				      ;
 ;									      ;
 ;	HISTORY:							      ;
-;	  93/12/17 JFL	Created for Pike BIOS				      ;
-;	  95/09/04 JFL	Removed an unnecessary instruction. Updated comments. ;
+;	  1993-12-17 JFL Created for Pike BIOS				      ;
+;	  1995-09-04 JFL Removed an unnecessary instruction. Updated comments.;
+;         2022-11-10 JFL Added the extended family calculation.               ;
 ;									      ;
 ;=============================================================================;
 
@@ -161,8 +170,16 @@ identify_processor  proc    public
 
                 mov     eax, 1                  ; Request the Family/Model/Step
                 db      0FH, 0A2H               ; CPUID instruction
-		mov	dl, ah			; Family
-		and	dx, 0FH 		; in EAX bits 11:8
+		mov	dl, ah			; Family in EAX[11:8]
+		and	dx, 0FH 		; DX = Family
+
+		; Add the extended family if present
+
+		cmp	dx, 0FH			; Do we have an extended family?
+		jne	SHORT identified
+		shr	eax, 20			; Extended family in EAX[27:20]
+		and	ax, 0FFH		; AX = Extended family
+		add	dx, ax			; DX = Family + Extended family
 
 		.8086
 identified:

@@ -61,6 +61,7 @@
 *    2022-11-09 JFL Added option -c to manually test one CPUID call.          *
 *		    Added support for the WIN64 operating system.             *
 *    2022-11-10 JFL Rewrite support for cpuid(0x0B), replaced by cpuid(0x1F). *
+*		    Fixed the extended family calculation and display.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -340,14 +341,12 @@ int _cdecl main(int argc, char *argv[]) {
     }
   }
 
-  iFamily = identify_processor();
+  iFamily = identify_processor(); /* Actually the Family + Extended Family */
 
   if (iFamily < 5) {
     printf("\nThe processor is a 80%d\n", (iFamily * 100) + 86);
   } else { // if (iFamily >= 5)
     int iModel;
-    int iExtModel;
-    int iExtFamily;
     DWORD dwModel;
     char szBrand[48] = "";
 
@@ -355,13 +354,10 @@ int _cdecl main(int argc, char *argv[]) {
 
     /* Compute the extended model number */
     iModel = BYTE0(dwModel) >> 4;
-    iExtModel = BYTE2(dwModel) & 0x0F;
-    iModel |= (iExtModel << 4);
-
-    /* Compute the extended model number */
-    /* iFamily = BYTE1(dwModel) & 0x0F; */
-    iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
-    iFamily |= (iExtFamily << 4);
+    if ((iFamily == 6) || (iFamily == 15)) {
+      int iExtModel = BYTE2(dwModel) & 0x0F;
+      iModel |= (iExtModel << 4);
+    }
 
     /* On Pentium or better, get the processor brand name from CPUID output */
 
@@ -399,8 +395,32 @@ int _cdecl main(int argc, char *argv[]) {
       if (i < N_INTEL_PROCS) {
 	printf("\nThe processor is a %s\n", IntelProcList[i].pszName);
       } else {
-	printf("\nThe processor is a 80%d model %d\n",
-		    (iFamily * 100) + 86, iModel);
+      	char *pszFamily;
+      	char szFamily[16];
+      	switch (iFamily) {
+      	  /* Families < 5 are handled separately above */
+	  case 5:
+	    pszFamily = "Pentium";
+	    break;
+	  case 6:
+	    pszFamily = "P6";
+	    break;
+	  case 7:
+	    pszFamily = "Itanium";
+	    break;
+	  case 15:
+	    pszFamily = "Pentium 4";
+	    break;
+	  case 16:
+	  case 17:
+	    pszFamily = "Itanium 2";
+	    break;
+	  default:
+	    sprintf(szFamily, "Family %d", iFamily);
+	    pszFamily = szFamily;
+	    break;
+	}
+	printf("\nThe processor is a %s model %d\n", pszFamily, iModel);
       }
     }
 
@@ -958,8 +978,16 @@ void DisplayProcInfo(void) {
     // CPUID(1) : Request the Family/Model/Step
     _cpuid(1, &dwModel, &dwModel2, &dwFeatures2, &dwFeatures);
     iFamily = BYTE1(dwModel) & 0x0F;
+    if (iFamily == 0x0F) {
+      int iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
+      iFamily += iExtFamily;
+    }
     printf(" Family %d", iFamily);
     iModel = BYTE0(dwModel) >> 4;
+    if ((iFamily == 6) || (iFamily == 15)) {
+      int iExtModel = BYTE2(dwModel) & 0x0F;
+      iModel |= (iExtModel << 4);
+    }
     printf(" Model %d", iModel);
     printf(" Stepping %d", BYTE0(dwModel) & 0x0F);
     for (i=0; i<N_INTEL_PROCS; i++) {
@@ -1352,13 +1380,21 @@ void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
 |                        0 = 8086					      |
 |                        1 = 80186					      |
 |                        2 = 80286					      |
-|                        Etc...					              |
+|                        3 = 80386					      |
+|                        4 = 80486					      |
+|                        5 = Pentium					      |
+|                        6 = Pentium Pro, P2, P3, and all later Core procs.   |
+|                        7 = Itanium					      |
+|                        15 = Pentium 4					      |
+|                        16 = Itanium 2 early steppings			      |
+|                        17 = Itanium 2	later steppings			      |
 |                                                                             |
 |   Notes	    Assume that under Win32, the processor is a Pentium	      |
-|                   or better.                                                |
+|                   or better, so no need to test for earlier versions.       |
 |                                                                             |
 |   History								      |
 |    2010-09-06 JFL Created this Win32 version.				      |
+|    2022-11-10 JFL Fixed the extended family calculation.	              |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -1366,14 +1402,15 @@ void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
 int identify_processor(void) {
   DWORD dwModel;
   int iFamily;
-  int iExtFamily;
 
   dwModel = _cpuid(1, NULL, NULL, NULL, NULL);
 
   /* Compute the extended family number */
   iFamily = BYTE1(dwModel) & 0x0F;
-  iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
-  iFamily |= (iExtFamily << 4);
+  if (iFamily == 0x0F) {
+    int iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
+    iFamily += iExtFamily;
+  }
 
   return iFamily;
 }
