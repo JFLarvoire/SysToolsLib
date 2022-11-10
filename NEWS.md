@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-11-10
+### Changed
+- cpuid.exe: Added a WIN64 version.
+  Added option -c to manually test one CPUID call.
+  Rewrote support for cpuid(0x0B), now superseded by cpuid(0x1F).
+
+### Fixed
+- cpuid.exe: Fixed the extended family and model calculations and display.
+
+## [Unreleased] 2022-10-22
+### Changed
+- junction.exe: Added option -t, modifying options -l and -r, to list all types of reparse points, and displaying their type.
+
 ## [Unreleased] 2022-10-19
 ### Changed
 - encoding.exe: Added option -b to report the presence of a Unicode BOM with a B suffix.
