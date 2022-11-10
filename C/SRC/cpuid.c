@@ -17,6 +17,14 @@
 *		    chapter 28.2 (EPT) and appendix A (VMX Capability         *
 *		    Reporting Facility                                        *
 *                                                                             *
+*                   Microsoft's amd64 C compiler does not support inline      *
+*                   assembly. Instead, use the intrinsic functions that       *
+*                   allow emitting cpuid or readmsr, etc, instructions.       *
+*                   Reference:                                                *
+*                   https://learn.microsoft.com/en-us/cpp/intrinsics/compiler-intrinsics
+*                   https://learn.microsoft.com/en-us/cpp/intrinsics/cpuid-cpuidex
+*                   https://learn.microsoft.com/en-us/cpp/intrinsics/readmsr  *
+*                                                                             *
 *   History								      *
 *    1997-06-13 JFL Created this file.					      *
 *    1997-09-03 JFL Updated comments.					      *
@@ -50,6 +58,9 @@
 *		    Skip head spaces in brand string, if any.		      *
 *    2020-03-02 JFL Display the CPUID index for every set of feature flags.   *
 *		    Corrected typos and errors about MTRR registers.	      *
+*    2022-11-09 JFL Added option -c to manually test one CPUID call.          *
+*		    Added support for the WIN64 operating system.             *
+*    2022-11-10 JFL Rewrite support for cpuid(0x0B), replaced by cpuid(0x1F). *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,7 +68,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2020-03-02"
+#define PROGRAM_VERSION "2022-11-10"
 
 /* Definitions */
 
@@ -65,7 +76,26 @@
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
+#if defined(_WIN64)
+
+/* As the Microsoft amd64 compiler does not support inline assembly, the only
+   way to invoke cpuid and rdmsr instructions is to use compiler intrinsics */
+
+#include <intrin.h>
+
+#elif defined(_WIN32)	/* Automatically defined when targeting a Win32 applic. */
+
+/* These intrinsics could also be used for the x86 compiler, but as this was
+   already implemented using inline assembly, leaving it this way for now */
+
+   // Definitions, from MS-DOS' pmode.h, for data emission within the code stream.
+#define DB(x) __asm _emit x			// BYTE
+#define DW(x) DB((x) & 0xFF) DB((x) >> 8U)	// WORD
+#define DD(x) DW((x) & 0xFFFF) DW((x) >> 16U)	// DWORD
+
+#endif
+
+#ifdef _WIN32		/* Automatically defined when targeting both WIN32 and WIN64 apps. */
 
 #define SUPPORTED_OS 1
 
@@ -94,11 +124,6 @@
 #define BYTE5(qw) (((BYTE *)(&(qw)))[5])
 #define BYTE6(qw) (((BYTE *)(&(qw)))[6])
 #define BYTE7(qw) (((BYTE *)(&(qw)))[7])
-
-// Definitions, from MS-DOS' pmode.h, for data emission within the code stream.
-#define DB(x) __asm _emit x			// BYTE
-#define DW(x) DB((x) & 0xFF) DB((x) >> 8U)	// WORD
-#define DD(x) DW((x) & 0xFFFF) DW((x) >> 16U)	// DWORD
 
 int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
@@ -181,7 +206,7 @@ INTEL_PROC IntelProcList[] =
     { 6,    29,  "",		"Xeon MP 45nm" },
 
     { 15,    0,  "Willamette",	"Pentium 4 model 0 180nm" },
-    { 15,    1,  "",		"Pentium 4 model 1 180nm" },
+    { 15,    1,  "Willamette",	"Pentium 4 model 1 180nm" },
     { 15,    2,  "Northwood",	"Pentium 4 model 2 130nm" },
     { 15,    3,  "Prescott",	"Pentium 4 model 3 90nm" },
     { 15,    4,  "Prescott-2M",	"Pentium 4 model 4 90nm" }, // 64 bits
@@ -246,6 +271,28 @@ int _cdecl main(int argc, char *argv[]) {
 	iVerbose = TRUE;
 	continue;
       }
+      if (streq(opt, "c")) {		/* -c: Call the CPUID instruction */
+	DWORD dwEAX, dwEBX, dwECX, dwEDX;
+	dwEAX = dwEBX = dwECX = dwEDX = 0;
+	if (((i+1) < argc) && sscanf(argv[i+1], "%X", &dwEAX)) {   /* Leaf number */
+	  i += 1;
+	  if (((i+1) < argc) && sscanf(argv[i+1], "%X", &dwECX)) { /* Sub-leaf number */
+	    i += 1;
+	    printf("CPUID(0x%lX, %0xlX)\n", (unsigned long)dwEAX, (unsigned long)dwECX);
+	  } else {
+	    printf("CPUID(0x%lX)\n", (unsigned long)dwEAX);
+	  }
+          _cpuid(dwEAX, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+	  printf("EAX = 0x%08lX\n", (unsigned long)dwEAX);
+	  printf("EBX = 0x%08lX\n", (unsigned long)dwEBX);
+	  printf("ECX = 0x%08lX\n", (unsigned long)dwECX);
+	  printf("EDX = 0x%08lX\n", (unsigned long)dwEDX);
+	  exit(0);
+	} else {
+	  fprintf(stderr, "Missing or invalid CPUID leaf number\n");
+	  exit(1);
+	}
+      }
       if (streq(opt, "m")) {		/* -m: Read MSR (Experimental)*/
 	int iMSR;
 	if (((i+1) < argc) && sscanf(argv[i+1], "%X", &iMSR)) {
@@ -257,7 +304,7 @@ int _cdecl main(int argc, char *argv[]) {
 	  printf("MSR(0x%X) = 0x%08ulX:%08ulX\n", iMSR, pdwMSR[1], pdwMSR[0]);
 	  exit(0);
 	} else {
-	  fprintf(stderr, "Missing of invalid MSR number\n");
+	  fprintf(stderr, "Missing or invalid MSR number\n");
 	  exit(1);
 	}
       }
@@ -450,10 +497,11 @@ Usage: CPUID [switches]\n\
 \n\
 Optional switches:\n\
 \n\
+  -c EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n\
   -v    Display detailed processor capabilities information\n\
   -V    Display this program version and exit\n\
 \n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
+Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
 ");
   exit(0);
 }
@@ -497,7 +545,14 @@ DWORD _rdtsc(void) {
 #pragma warning(default:4035)
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN64)
+
+DWORD _rdtsc(void) {
+  return (DWORD)__rdtsc();
+}
+
+#elif defined(_WIN32)
+
 DWORD _rdtsc(void) {
    _asm {
 	rdtsc
@@ -1027,29 +1082,35 @@ void DisplayProcInfo(void) {
       nMaxThreads = (int)((dwEAX >> 14) & 0xFFF) + 1;
       printf(" CPUID(4):  Silicon supports %d cores and %d threads/core\n", nMaxCores, nMaxThreads);
     }
-    if (dwMaxValue >= 11) {
+    if (dwMaxValue >= 0x0B) {
+      int iFunction = (dwMaxValue >= 0x1F) ? 0x1F : 0x0B; /* Function 0x1F is the preferred replacement, if available */
+      int iLevel = 0;
       DWORD dwEAX, dwEBX, dwECX, dwEDX;
-      int nMaxCores, nMaxThreads, nMaxLast, nMaxNext;
-      int nLevel;
+      int nLogicalProcs;
+      int iType;
+      char *pszType;
 
-      dwECX = 0;
-      _cpuid(11, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      nMaxThreads = WORD0(dwEBX);
-      if (nMaxThreads) { /* Some CPU models set dwMaxValue >= 11, yet return 0 here, and generate an exception if any further call is made */
-	dwECX = 1;
-	_cpuid(11, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	nMaxLast = WORD0(dwEBX);
-	nMaxCores = WORD0(dwEBX) / nMaxThreads;
-	printf(" CPUID(11): Factory enabled %d cores and %d threads/core\n", nMaxCores, nMaxThreads);
-	/* The CPUID spec mentions future procs will have more levels. Loop untested as of January 2013, as no available CPU has any. */
-	if (nMaxLast) for (nLevel = 2; ; nLevel++) {
-	  dwECX = nLevel;
-	  _cpuid(11, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	  nMaxNext = WORD0(dwEBX) / nMaxLast;
-	  nMaxLast = WORD0(dwEBX);
-	  if (!nMaxLast) break; /* No more data. We've reached the last processor set level. */
-	  printf(" CPUID(11): Factory enabled %d level %d core sets\n", nMaxLast, nLevel);
+      for (iLevel = 0; ; iLevel++) { /* Loop untested with any level > 1 */
+	dwECX = iLevel;
+	_cpuid(iFunction, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+	iType = (int)BYTE1(dwECX);
+	if (!iType) break; /* Enumeration complete */
+	nLogicalProcs = WORD0(dwEBX);
+	if (!nLogicalProcs) break; /* Some CPU models set dwMaxValue >= 11, yet return 0 here, and generate an exception if any further call is made.
+				      (But we were not testing iType at that time.) */
+	switch (iType) {
+	  case 1: pszType = "SMT (Simultaneous MultiThreading)"; break;
+	  case 2: pszType = "Core"; break;
+	  case 3: pszType = "Module"; break;
+	  case 4: pszType = "Tile"; break;
+	  case 5: pszType = "Die"; break;
+	  default: pszType = "Unknown type"; break;
 	}
+	printf(" CPUID(0x%X, %d): %d logical processors at %s level\n",
+	       iFunction, iLevel, nLogicalProcs, pszType);
+	/* The APIC ID returned in EDX varies from one execution to the next,
+	   as the process is executed on a random logical processor. */
+	/* We _might_ have to loop using instead: iLevel = dwEDX >> (dwEAX & 0x1F) */
       }
     }
   }
@@ -1147,7 +1208,24 @@ no_edx:
 }
 #endif // defined(_MSDOS)
 
-#ifdef _WIN32
+#if defined(_WIN64)
+
+DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx) {
+  int cpuInfo[4];
+  cpuInfo[0] = pEax ? (int)*pEax : 0;
+  cpuInfo[1] = pEbx ? (int)*pEbx : 0;
+  cpuInfo[2] = pEcx ? (int)*pEcx : 0;
+  cpuInfo[3] = pEdx ? (int)*pEdx : 0;
+  __cpuidex(cpuInfo, (int)dwId, (int)cpuInfo[2]);
+  if (pEax) *pEax = (DWORD)(cpuInfo[0]);
+  if (pEbx) *pEbx = (DWORD)(cpuInfo[1]);
+  if (pEcx) *pEcx = (DWORD)(cpuInfo[2]);
+  if (pEdx) *pEdx = (DWORD)(cpuInfo[3]);
+  return (DWORD)(cpuInfo[0]);
+}
+
+#elif defined(_WIN32)
+
 DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx) {
    DWORD dwRet;
 
@@ -1240,7 +1318,14 @@ void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
 }
 #endif // defined(_MSDOS)
 
-#ifdef _WIN32
+#if defined(_WIN64)
+
+void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
+  *(__int64 *)pdwMSR = __readmsr((int)dwECX);
+}
+
+#elif defined(_WIN32)
+
 void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
    _asm {
 	mov	ecx, dwECX
@@ -1340,7 +1425,7 @@ int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf) {
   language = SysAllocString(L"WQL");
   lpwszPropName = (LPWSTR)malloc(sizeof(WCHAR)*(lPropName + 1));
   if (lpwszPropName) {
-    MultiByteToWideChar(CP_ACP, 0, lpszPropName, lPropName + 1, lpwszPropName, lPropName + 1);
+    MultiByteToWideChar(CP_ACP, 0, lpszPropName, (int)lPropName + 1, lpwszPropName, (int)lPropName + 1);
   }
   lpwszBuf = (LPWSTR)malloc(sizeof(WCHAR)*(lPropName + 30));
   if (lpwszBuf) {
@@ -1405,7 +1490,7 @@ int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf) {
       	if (lBuf >= 4) *(ULONG *)lpBuf = vtProp.ulVal;
       	break;
       case VT_BSTR:
-      	WideCharToMultiByte(CP_ACP, 0, vtProp.bstrVal, -1, lpBuf, lBuf, "?", NULL);
+      	WideCharToMultiByte(CP_ACP, 0, vtProp.bstrVal, -1, lpBuf, (int)lBuf, "?", NULL);
       	break;
       default:
 	iResult = -1;

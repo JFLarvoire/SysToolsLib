@@ -12,6 +12,7 @@
 #    2017-05-17 JFL Prevent a link warning U4004: too many rules for target.  #
 #    2018-03-02 JFL Use new variable SKIP_THIS to prevent builds.             #
 #    2019-02-10 JFL Added (non)support for ARM, ARM64 and IA64.		      #
+#    2022-11-09 JFL But DO support WIN64 now.                   	      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -31,7 +32,7 @@ EXENAME=cpuid.exe
 SKIP_THIS=The DOS version of this program requires the BIOSLIB, LODOSLIB, and PMODE libraries.
 !ENDIF
 
-!IF "$(T)"=="WIN64" || "$(T)"=="ARM" || "$(T)"=="ARM64" || "$(T)"=="IA64"
+!IF "$(T)"!="DOS" && "$(T)"!="WIN95" && "$(T)"!="WINXP" && "$(T)"!="WIN32" && "$(T)"!="WIN64" # Ex: ARM, ARM64, IA64, etc
 SKIP_THIS=There's no $(T) version of this program yet.
 !ENDIF
 
