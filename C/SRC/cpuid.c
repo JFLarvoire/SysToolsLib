@@ -62,6 +62,9 @@
 *		    Added support for the WIN64 operating system.             *
 *    2022-11-10 JFL Rewrite support for cpuid(0x0B), replaced by cpuid(0x1F). *
 *		    Fixed the extended family calculation and display.	      *
+*    2022-11-11 JFL Added many new feature bits definitions.                  *
+*		    Added the short alias for each feature bit.		      *
+*		    Don't display a computed name if we have the brand string.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -69,7 +72,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-10"
+#define PROGRAM_VERSION "2022-11-11"
 
 /* Definitions */
 
@@ -206,12 +209,23 @@ INTEL_PROC IntelProcList[] =
     { 6,    28,  "",		"Atom 45nm" },
     { 6,    29,  "",		"Xeon MP 45nm" },
 
+    { 7,     0,  "Merced",	"Itanium" },
+
     { 15,    0,  "Willamette",	"Pentium 4 model 0 180nm" },
     { 15,    1,  "Willamette",	"Pentium 4 model 1 180nm" },
     { 15,    2,  "Northwood",	"Pentium 4 model 2 130nm" },
     { 15,    3,  "Prescott",	"Pentium 4 model 3 90nm" },
     { 15,    4,  "Prescott-2M",	"Pentium 4 model 4 90nm" }, // 64 bits
     { 15,    6,  "Cedar Mill",	"Pentium 4 model 6 65nm" }, // 64 bits
+
+    { 16,    0,  "McKinley",	"Itanium 2 180nm" },
+    { 16,    1,  "Madison",	"Itanium 2 130nm" },
+    { 16,    2,  "Madison 9M",	"Itanium 2 130nm" },
+    /* The Itanium processor list in Wikipedia...
+       https://en.wikipedia.org/wiki/List_of_Intel_Itanium_processors
+       ... has inconsistent family numbers for subsequent itanium processors.
+       It's unlikely that any one of them ever ran DOS or Windows anyway, so
+       no need to extend the list here. */
     };
 #define N_INTEL_PROCS (sizeof(IntelProcList) / sizeof(INTEL_PROC))
 
@@ -345,6 +359,7 @@ int _cdecl main(int argc, char *argv[]) {
 
   if (iFamily < 5) {
     printf("\nThe processor is a 80%d\n", (iFamily * 100) + 86);
+    /* TODO: Distinguish siblings, like 8086/8088 or 386DX/386SX, etc */
   } else { // if (iFamily >= 5)
     int iModel;
     DWORD dwModel;
@@ -382,47 +397,48 @@ int _cdecl main(int argc, char *argv[]) {
       }
       // Display the readable brand string.
       printf("\nThe processor is an %s\n", pszBrand);
-    }
-
-    /* Else compute the processor name from the CPUID family and model numbers */
-    if ((!szBrand[0]) || iVerbose) {
-      for (i=0; i<N_INTEL_PROCS; i++) {
-	if (   (IntelProcList[i].iFamily == iFamily)
-	    && (IntelProcList[i].iModel == iModel)) {
-	  break;
+    } else {
+      /* Else compute the processor name from the CPUID family and model numbers */
+      if ((!szBrand[0]) || iVerbose) {
+	for (i=0; i<N_INTEL_PROCS; i++) {
+	  if (   (IntelProcList[i].iFamily == iFamily)
+	      && (IntelProcList[i].iModel == iModel)) {
+	    break;
+	  }
+	}
+	if (i < N_INTEL_PROCS) {
+	  printf("\nThe processor is a %s\n", IntelProcList[i].pszName);
+	} else {
+	  char *pszFamily;
+	  char szFamily[16];
+	  switch (iFamily) {
+	    /* Families < 5 are handled separately above */
+	    case 5:
+	      pszFamily = "Pentium";
+	      break;
+	    case 6:
+	      pszFamily = "P6";
+	      break;
+	    case 7:
+	      pszFamily = "Itanium";
+	      break;
+	    case 15:
+	      pszFamily = "Pentium 4";
+	      break;
+	    case 16:
+	    case 17:
+	      pszFamily = "Itanium 2";
+	      break;
+	    default:
+	      sprintf(szFamily, "Family %d", iFamily);
+	      pszFamily = szFamily;
+	      break;
+	  }
+	  printf("\nThe processor is a %s model %d\n", pszFamily, iModel);
 	}
       }
-      if (i < N_INTEL_PROCS) {
-	printf("\nThe processor is a %s\n", IntelProcList[i].pszName);
-      } else {
-      	char *pszFamily;
-      	char szFamily[16];
-      	switch (iFamily) {
-      	  /* Families < 5 are handled separately above */
-	  case 5:
-	    pszFamily = "Pentium";
-	    break;
-	  case 6:
-	    pszFamily = "P6";
-	    break;
-	  case 7:
-	    pszFamily = "Itanium";
-	    break;
-	  case 15:
-	    pszFamily = "Pentium 4";
-	    break;
-	  case 16:
-	  case 17:
-	    pszFamily = "Itanium 2";
-	    break;
-	  default:
-	    sprintf(szFamily, "Family %d", iFamily);
-	    pszFamily = szFamily;
-	    break;
-	}
-	printf("\nThe processor is a %s model %d\n", pszFamily, iModel);
-      }
     }
+    printf("\n");
 
     /* On Pentium or better, compute the processor frequency using the TSC */
     /* Note: This algorithm is compatible with Windows 95 & NT */
@@ -488,7 +504,7 @@ int _cdecl main(int argc, char *argv[]) {
       dwt1 *= 100;
       dwt1 /= 6;
     }
-    printf("Frequency: %ld MHz\n", dwt1);
+    printf("Measured frequency: %ld MHz\n", dwt1);
   }
 
   return 0;
@@ -665,187 +681,222 @@ long getms(void) {
 #pragma warning(disable:4704)	// Ignore the inline assembler etc... warning
 
 char *ppszFeatures[32] = { /* Intel Features Flags - EAX=1 -> EDX */
-  /* 0x00000001  0 */ "Integrated FPU",
-  /* 0x00000002  1 */ "Enhanced V86 mode",
-  /* 0x00000004  2 */ "I/O breakpoints",
-  /* 0x00000008  3 */ "4 MB pages",
-  /* 0x00000010  4 */ "Time stamp counter",
-  /* 0x00000020  5 */ "Model-specific registers",
-  /* 0x00000040  6 */ "Physical address extensions",
-  /* 0x00000080  7 */ "Machine-check exception",
-  /* 0x00000100  8 */ "CMPXCHG8B instruction",
-  /* 0x00000200  9 */ "Integrated APIC",
+  /* 0x00000001  0 */ "fpu - Integrated FPU",
+  /* 0x00000002  1 */ "vme - Enhanced V86 mode",
+  /* 0x00000004  2 */ "de - I/O breakpoints",
+  /* 0x00000008  3 */ "pse - 4 MB pages",
+  /* 0x00000010  4 */ "tsc - Time stamp counter",
+  /* 0x00000020  5 */ "msr - Model-specific registers",
+  /* 0x00000040  6 */ "pae - Physical address extensions",
+  /* 0x00000080  7 */ "mce - Machine-check exception",
+  /* 0x00000100  8 */ "cx8 - CMPXCHG8B instruction",
+  /* 0x00000200  9 */ "apic - Integrated APIC",
   /* 0x00000400 10 */ "(EDX bit 10 reserved)",
-  /* 0x00000800 11 */ "SYSENTER/SYSEXIT instructions",
-  /* 0x00001000 12 */ "MTRR registers, and the MTRR_CAP register",
-  /* 0x00002000 13 */ "Page Global Enable bit in CR4",
-  /* 0x00004000 14 */ "Machine check architecture",
-  /* 0x00008000 15 */ "CMOV instructions",
-  /* 0x00010000 16 */ "Page Attribute table in MTRRs",
-  /* 0x00020000 17 */ "36-bit page size extensions",
-  /* 0x00040000 18 */ "Processor Serial Number in CPUID#3",
-  /* 0x00080000 19 */ "CLFLUSH instruction",
+  /* 0x00000800 11 */ "sep - SYSENTER/SYSEXIT instructions",
+  /* 0x00001000 12 */ "mttr - MTRR registers, and the MTRR_CAP register",
+  /* 0x00002000 13 */ "pge - Page Global Enable bit in CR4",
+  /* 0x00004000 14 */ "mca - Machine check architecture",
+  /* 0x00008000 15 */ "cmov - CMOV instructions",
+  /* 0x00010000 16 */ "pat - Page Attribute table in MTRRs",
+  /* 0x00020000 17 */ "pse-36 - 36-bit page size extensions",
+  /* 0x00040000 18 */ "psn - Processor Serial Number in CPUID#3",
+  /* 0x00080000 19 */ "clfsh - CLFLUSH instruction",
   /* 0x00100000 20 */ "(EDX bit 20 reserved)",
-  /* 0x00200000 21 */ "Debug Trace Store & Event Mon.",
-  /* 0x00400000 22 */ "ACPI thermal and clock control registers",
-  /* 0x00800000 23 */ "MMX instructions",
-  /* 0x01000000 24 */ "FXSAVE and FXRSTOR Instructions",
-  /* 0x02000000 25 */ "SSE (Streaming SIMD Extensions)",
-  /* 0x04000000 26 */ "SSE2 (Streaming SIMD Extensions v2)",
-  /* 0x08000000 27 */ "Self-Snoop memory and caches",
-  /* 0x10000000 28 */ "Hyper-threading capable",
-  /* 0x20000000 29 */ "Thermal monitoring circuit",
-  /* 0x40000000 30 */ "IA64 capable",
-  /* 0x80000000 31 */ "Pending Break Enable (PBE# pin) wakeup capability",
+  /* 0x00200000 21 */ "ds - Debug Trace Store & Event Mon.",
+  /* 0x00400000 22 */ "acpi - ACPI thermal and clock control registers",
+  /* 0x00800000 23 */ "mmx - MMX instructions",
+  /* 0x01000000 24 */ "fxsr - FXSAVE and FXRSTOR Instructions",
+  /* 0x02000000 25 */ "sse - SSE (Streaming SIMD Extensions)",
+  /* 0x04000000 26 */ "sse2 - SSE 2 (Streaming SIMD Extensions v2)",
+  /* 0x08000000 27 */ "ss - Self-Snoop memory and caches",
+  /* 0x10000000 28 */ "htt - Hyper-threading capable",
+  /* 0x20000000 29 */ "tm - Thermal monitoring circuit",
+  /* 0x40000000 30 */ "ia64 - IA64 capable",
+  /* 0x80000000 31 */ "pbe - Pending Break Enable (PBE# pin) wakeup capability",
 };
 
 char *ppszFeatures2[32] = { /* Intel Features Flags - EAX=1 -> ECX */
-  /* 0x00000001  0 */ "SSE3 (Streaming SIMD Extensions v3)",
-  /* 0x00000002  1 */ "PCLMULDQ instruction",
-  /* 0x00000004  2 */ "64-Bit Debug Store",
-  /* 0x00000008  3 */ "MONITOR and MWAIT instructions",
-  /* 0x00000010  4 */ "CPL Qualified Debug Store",
-  /* 0x00000020  5 */ "VMX (Virtual Machine Extensions)",
-  /* 0x00000040  6 */ "Safer Mode Extensions (Trusted Execution)",
-  /* 0x00000080  7 */ "Enhanced SpeedStep Technology",
-  /* 0x00000100  8 */ "Thermal Monitor 2 Control Circuit",
-  /* 0x00000200  9 */ "SSSE3 (Suplemental Streaming SIMD Extensions v3)",
-  /* 0x00000400 10 */ "L1 data cache Context ID",
-  /* 0x00000800 11 */ "SDBG (Silicon Debug interface)",
-  /* 0x00001000 12 */ "Fused Multiply Add extensions",
-  /* 0x00002000 13 */ "CMPXCHG16B instruction",
-  /* 0x00004000 14 */ "Send Task Priority Messages update control",
-  /* 0x00008000 15 */ "Perfmon and Debug Capability",
+  /* 0x00000001  0 */ "sse3 - SSE 3 (Streaming SIMD Extensions v3)",
+  /* 0x00000002  1 */ "pclmulqdq - PCLMULDQ instruction",
+  /* 0x00000004  2 */ "dtes64 - 64-Bit Debug Store",
+  /* 0x00000008  3 */ "monitor - MONITOR and MWAIT instructions",
+  /* 0x00000010  4 */ "ds-cpl - CPL Qualified Debug Store",
+  /* 0x00000020  5 */ "vmx - VMX (Virtual Machine Extensions)",
+  /* 0x00000040  6 */ "smx - Safer Mode Extensions (Trusted Execution)",
+  /* 0x00000080  7 */ "est - Enhanced SpeedStep Technology",
+  /* 0x00000100  8 */ "tm2 - Thermal Monitor 2 Control Circuit",
+  /* 0x00000200  9 */ "ssse3 - SSSE 3 (Suplemental Streaming SIMD Extensions v3)",
+  /* 0x00000400 10 */ "cnxt-id - L1 data cache Context ID",
+  /* 0x00000800 11 */ "sdbg - SDBG (Silicon Debug interface)",
+  /* 0x00001000 12 */ "fma - Fused Multiply Add extensions",
+  /* 0x00002000 13 */ "cx16 - CMPXCHG16B instruction",
+  /* 0x00004000 14 */ "xtpr - Send Task Priority Messages update control",
+  /* 0x00008000 15 */ "pdcm - Perfmon and Debug Capability",
   /* 0x00010000 16 */ "(ECX bit 16 reserved)",
-  /* 0x00020000 17 */ "Process Context Identifiers (CR4 bit 17)",
-  /* 0x00040000 18 */ "Direct Cache Access for DMA writes",
-  /* 0x00080000 19 */ "SSE4.1 (Streaming SIMD Extensions 4.1)",
-  /* 0x00100000 20 */ "SSE4.2 (Streaming SIMD Extensions 4.2)",
-  /* 0x00200000 21 */ "Extended xAPIC Support",
-  /* 0x00400000 22 */ "MOVBE Instruction",
-  /* 0x00800000 23 */ "POPCNT Instruction",
-  /* 0x01000000 24 */ "Timestamp Counter Deadline",
-  /* 0x02000000 25 */ "AES instruction",
-  /* 0x04000000 26 */ "XSAVE/XRESTOR instructions",
-  /* 0x08000000 27 */ "OS-Enabled SXAVE/XRESTOR Management",
-  /* 0x10000000 28 */ "AVX (Advanced Vector eXtensions)",
-  /* 0x20000000 29 */ "16-bit Floating Point Conversion instructions",
-  /* 0x40000000 30 */ "RDRAND instruction",
-  /* 0x80000000 31 */ "Hypervisor present (always zero on physical CPUs)",
+  /* 0x00020000 17 */ "pcid - Process Context Identifiers (CR4 bit 17)",
+  /* 0x00040000 18 */ "dca - Direct Cache Access for DMA writes",
+  /* 0x00080000 19 */ "sse4.1 - SSE 4.1 (Streaming SIMD Extensions 4.1)",
+  /* 0x00100000 20 */ "sse4.2 - SSE 4.2 (Streaming SIMD Extensions 4.2)",
+  /* 0x00200000 21 */ "x2apic - Extended xAPIC Support",
+  /* 0x00400000 22 */ "movbe - MOVBE Instruction",
+  /* 0x00800000 23 */ "popcnt - POPCNT Instruction",
+  /* 0x01000000 24 */ "tsc-deadline - Timestamp Counter Deadline",
+  /* 0x02000000 25 */ "aes - AES instruction",
+  /* 0x04000000 26 */ "xsave - XSAVE/XRESTOR instructions",
+  /* 0x08000000 27 */ "osxsave - OS-Enabled SXAVE/XRESTOR Management",
+  /* 0x10000000 28 */ "Aavx - VX (Advanced Vector eXtensions)",
+  /* 0x20000000 29 */ "f16c - 16-bit Floating Point Conversion instructions",
+  /* 0x40000000 30 */ "rdrnd - RDRAND instruction",
+  /* 0x80000000 31 */ "hypervisor - Hypervisor present (always zero on physical CPUs)",
 };
 
 char *ppszFeatures70b[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=0 -> EBX */
-  /* 0x00000001  0 */ "FSGSBASE instructions (RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE)",
+  /* 0x00000001  0 */ "fsgsbase - FSGSBASE instructions (RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE)",
   /* 0x00000002  1 */ "IA32_TSC_ADJUST MSR is supported",
-  /* 0x00000004  2 */ "SGX (Software Guard Extensions)",
-  /* 0x00000008  3 */ "BMI1 (Bit Manipulation Instruction Set 1)",
-  /* 0x00000010  4 */ "HLE (Hardware Lock Elision)",
-  /* 0x00000020  5 */ "AVX2 (Advanced Vector Extensions 2)",
+  /* 0x00000004  2 */ "sgx - SGX (Software Guard Extensions)",
+  /* 0x00000008  3 */ "bmi1 - BMI1 (Bit Manipulation Instruction Set 1)",
+  /* 0x00000010  4 */ "hle - HLE (Hardware Lock Elision)",
+  /* 0x00000020  5 */ "avx2 - AVX2 (Advanced Vector Extensions 2)",
   /* 0x00000040  6 */ "x87 FPU Data Pointer updated only on x87 exceptions",
-  /* 0x00000080  7 */ "SMEP (Supervisor-Mode Execution Prevention)",
-  /* 0x00000100  8 */ "BMI2 (Bit Manipulation Instruction Set 2)",
-  /* 0x00000200  9 */ "Enhanced REP MOVSB/STOSB",
-  /* 0x00000400 10 */ "INVPCID instruction",
-  /* 0x00000800 11 */ "RTM (Restricted Transactional Memory) instructions",
-  /* 0x00001000 12 */ "RDT-M (Resource Director Technology Monitoring)",
+  /* 0x00000080  7 */ "smep - SMEP (Supervisor-Mode Execution Prevention)",
+  /* 0x00000100  8 */ "bmi2 - BMI2 (Bit Manipulation Instruction Set 2)",
+  /* 0x00000200  9 */ "erms - Enhanced REP MOVSB/STOSB",
+  /* 0x00000400 10 */ "invpcid - INVPCID instruction",
+  /* 0x00000800 11 */ "rtm - RTM (Restricted Transactional Memory) instructions",
+  /* 0x00001000 12 */ "rdt-m - RDT-M (Resource Director Technology Monitoring)",
   /* 0x00002000 13 */ "FPU CS and DS values deprecated",
-  /* 0x00004000 14 */ "MPX (Memory Protection Extensions)",
-  /* 0x00008000 15 */ "RDT-A (Resource Director Technology Allocation)",
-  /* 0x00010000 16 */ "AVX512F",
-  /* 0x00020000 17 */ "AVX512DQ",
-  /* 0x00040000 18 */ "RDSEED instruction",
-  /* 0x00080000 19 */ "ADX (Multi-Precision Add-Carry Instruction Extensions)",
-  /* 0x00100000 20 */ "SMAP (Supervisor-Mode Access Prevention) instructions",
-  /* 0x00200000 21 */ "AVX512_IFMA",
-  /* 0x00400000 22 */ "PCOMMIT (Persistent Memory Commit) instruction",	// Deprecated: https://software.intel.com/en-us/blogs/2016/09/12/deprecate-pcommit-instruction
-  /* 0x00800000 23 */ "CLFLUSHOPT Instruction",
-  /* 0x01000000 24 */ "CLWB (Cache Line Write Back) instruction",
-  /* 0x02000000 25 */ "Intel Processor Trace",
-  /* 0x04000000 26 */ "AVX512PF",
-  /* 0x08000000 27 */ "AVX512ER",
-  /* 0x10000000 28 */ "AVX512CD",
-  /* 0x20000000 29 */ "SHA (Secure Hash Algorithm Extensions)",
-  /* 0x40000000 30 */ "AVX512BW",
-  /* 0x80000000 31 */ "AVX512VL",
+  /* 0x00004000 14 */ "mpx - MPX (Memory Protection Extensions)",
+  /* 0x00008000 15 */ "rdt-a - RDT-A (Resource Director Technology Allocation)",
+  /* 0x00010000 16 */ "avx512-f	- AVX-512 Foundation Instructions",
+  /* 0x00020000 17 */ "avx512-dq - AVX-512 Doubleword and Quadword Instructions",
+  /* 0x00040000 18 */ "rdseed - RDSEED instruction",
+  /* 0x00080000 19 */ "adx - ADX (Multi-Precision Add-Carry Instruction Extensions)",
+  /* 0x00100000 20 */ "smap - SMAP (Supervisor-Mode Access Prevention) instructions",
+  /* 0x00200000 21 */ "avx512-ifma - AVX-512 Integer Fused Multiply-Add Instructions",
+  /* 0x00400000 22 */ "pcommit - PCOMMIT (Persistent Memory Commit) instruction", // Deprecated: https://software.intel.com/en-us/blogs/2016/09/12/deprecate-pcommit-instruction
+  /* 0x00800000 23 */ "clflushopt - CLFLUSHOPT Instruction",
+  /* 0x01000000 24 */ "clwb - CLWB (Cache Line Write Back) instruction",
+  /* 0x02000000 25 */ "pt - Intel Processor Trace",
+  /* 0x04000000 26 */ "avx512-pf - AVX-512 Prefetch Instructions",
+  /* 0x08000000 27 */ "avx512-er - AVX-512 Exponential and Reciprocal Instructions",
+  /* 0x10000000 28 */ "avx512-cd - AVX-512 Conflict Detection Instructions",
+  /* 0x20000000 29 */ "sha - SHA (Secure Hash Algorithm Extensions)",
+  /* 0x40000000 30 */ "avx512-bw - AVX-512 Byte and Word Instructions",
+  /* 0x80000000 31 */ "avx512-vl - AVX-512 Vector Length Extensions",
 };
 
 char *ppszFeatures70c[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=0 -> ECX */
-  /* 0x00000001  0 */ "PREFETCHWT1 instruction",
-  /* 0x00000002  1 */ "AVX-512 Vector Bit Manipulation Instructions",
-  /* 0x00000004  2 */ "User-mode Instruction Prevention",
-  /* 0x00000008  3 */ "PKU (Memory Protection Keys for User-mode pages)",
-  /* 0x00000010  4 */ "PKU enabled by OS",
-  /* 0x00000020  5 */ "WAITPKG (UMWAIT instruction)",
-  /* 0x00000040  6 */ "AVX-512 Vector Bit Manipulation Instructions 2",
-  /* 0x00000080  7 */ "SHSTK (Shadow Stack instructions)",
-  /* 0x00000100  8 */ "GFNI (Galois Field instructions)",
-  /* 0x00000200  9 */ "VAES (Vector AES instruction set (VEX-256/EVEX))",
-  /* 0x00000400 10 */ "CLMUL instruction set (VEX-256/EVEX)",
-  /* 0x00000800 11 */ "AVX-512 Vector Neural Network Instructions",
-  /* 0x00001000 12 */ "AVX-512 BITALG instructions",
-  /* 0x00002000 13 */ "(ECX bit 13 reserved)",
-  /* 0x00004000 14 */ "AVX-512 Vector Population Count Double and Quad-word",
+  /* 0x00000001  0 */ "prefetchwt1 - PREFETCHWT1 instruction",
+  /* 0x00000002  1 */ "avx512-vbmi - AVX-512 Vector Bit Manipulation Instructions",
+  /* 0x00000004  2 */ "umip - User-mode Instruction Prevention",
+  /* 0x00000008  3 */ "pku - PKU (Memory Protection Keys for User-mode pages)",
+  /* 0x00000010  4 */ "ospke - PKU enabled by OS",
+  /* 0x00000020  5 */ "waitpkg - WAITPKG (UMWAIT instruction)",
+  /* 0x00000040  6 */ "avx512-vbmi2 - AVX-512 Vector Bit Manipulation Instructions 2",
+  /* 0x00000080  7 */ "cet_ss - Control flow enforcement (CET) shadow stack instructions",
+  /* 0x00000100  8 */ "gnfi - GFNI (Galois Field instructions)",
+  /* 0x00000200  9 */ "vaes - VAES (Vector AES instruction set (VEX-256/EVEX))",
+  /* 0x00000400 10 */ "vpclmulqdq - CLMUL instruction set (VEX-256/EVEX)",
+  /* 0x00000800 11 */ "avx512-vnni - AVX-512 Vector Neural Network Instructions",
+  /* 0x00001000 12 */ "avx512-bitalg - AVX-512 BITALG instructions",
+  /* 0x00002000 13 */ "tme - IA32_TME related MSRs",
+  /* 0x00004000 14 */ "avx512-vpopcntdq - AVX-512 Vector Population Count Double and Quad-word",
   /* 0x00008000 15 */ "(ECX bit 15 reserved)",
-  /* 0x00010000 16 */ "5-level paging",
-  /* 0x00020000 17 */ "MPX Address-Width Adjust bit 0",
-  /* 0x00040000 18 */ "MPX Address-Width Adjust bit 1",
-  /* 0x00080000 19 */ "MPX Address-Width Adjust bit 2",
-  /* 0x00100000 20 */ "MPX Address-Width Adjust bit 3",
-  /* 0x00200000 21 */ "MPX Address-Width Adjust bit 4",
-  /* 0x00400000 22 */ "RDPID (Read Processor ID) instruction",
-  /* 0x00800000 23 */ "(ECX bit 23 reserved)",
-  /* 0x01000000 24 */ "(ECX bit 24 reserved)",
-  /* 0x02000000 25 */ "CLDEMOTE (Cache Line Demote) instruction",
+  /* 0x00010000 16 */ "la57 - 5-level paging",
+  /* 0x00020000 17 */ "mawau - MPX Address-Width Adjust bit 0",
+  /* 0x00040000 18 */ "mawau - MPX Address-Width Adjust bit 1",
+  /* 0x00080000 19 */ "mawau - MPX Address-Width Adjust bit 2",
+  /* 0x00100000 20 */ "mawau - MPX Address-Width Adjust bit 3",
+  /* 0x00200000 21 */ "mawau - MPX Address-Width Adjust bit 4",
+  /* 0x00400000 22 */ "rdpid - RDPID (Read Processor ID) instruction",
+  /* 0x00800000 23 */ "kl - Key Locker",
+  /* 0x01000000 24 */ "BUS_LOCK_DETECT",
+  /* 0x02000000 25 */ "cldemote - CLDEMOTE (Cache Line Demote) instruction",
   /* 0x04000000 26 */ "(ECX bit 26 reserved)",
-  /* 0x08000000 27 */ "MOVDIR (Direct Store) instructions",
-  /* 0x10000000 28 */ "MOVDIR64B (Direct Store) instructions",
-  /* 0x20000000 29 */ "(ECX bit 29 reserved)",
-  /* 0x40000000 30 */ "SGX (Software Guard Extensions) instructions",
-  /* 0x80000000 31 */ "(ECX bit 31 reserved)",
+  /* 0x08000000 27 */ "movdiri - MOVDIR (Direct Store) instructions",
+  /* 0x10000000 28 */ "movdir64b - MOVDIR64B (Direct Store) instructions",
+  /* 0x20000000 29 */ "enqcmd - Enqueue Stores",
+  /* 0x40000000 30 */ "sgx-lc - SGX Launch Configuration instructions",
+  /* 0x80000000 31 */ "pks - Protection keys for supervisor-mode pages",
 };
 
 char *ppszFeatures70d[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=0 -> EDX */
-  /* 0x00000001  0 */ "",
-  /* 0x00000002  1 */ "",
-  /* 0x00000004  2 */ "AVX-512 4-register Neural Network instructions",
-  /* 0x00000008  3 */ "AVX-512 4-register Multiply Accumulation Single precision",
-  /* 0x00000010  4 */ "FSRM (Fast Short REP MOVSB)",
-  /* 0x00000020  5 */ "",
-  /* 0x00000040  6 */ "",
-  /* 0x00000080  7 */ "",
-  /* 0x00000100  8 */ "",
-  /* 0x00000200  9 */ "",
-  /* 0x00000400 10 */ "",
-  /* 0x00000800 11 */ "",
-  /* 0x00001000 12 */ "",
-  /* 0x00002000 13 */ "",
-  /* 0x00004000 14 */ "",
-  /* 0x00008000 15 */ "",
-  /* 0x00010000 16 */ "",
-  /* 0x00020000 17 */ "",
-  /* 0x00040000 18 */ "PCONFIG Platform Configuration (Memory Encryption)",
-  /* 0x00080000 19 */ "",
-  /* 0x00100000 20 */ "IBT (Indirect-Branch Tracking)",
-  /* 0x00200000 21 */ "",
-  /* 0x00400000 22 */ "",
-  /* 0x00800000 23 */ "",
-  /* 0x01000000 24 */ "",
-  /* 0x02000000 25 */ "",
-  /* 0x04000000 26 */ "IBRS_IBPB (Indirect Branch Restricted Speculation)",
-  /* 0x08000000 27 */ "STIBP (Single Thread Indirect Branch Predictor)",
-  /* 0x10000000 28 */ "",
-  /* 0x20000000 29 */ "Speculative Side Channel Mitigations",
-  /* 0x40000000 30 */ "",
-  /* 0x80000000 31 */ "SSBD (Speculative Store Bypass Disable)",
+  /* 0x00000001  0 */ "(EDX bit 0 reserved)",
+  /* 0x00000002  1 */ "(EDX bit 1 reserved)",
+  /* 0x00000004  2 */ "avx512-4vnniw - AVX-512 4-register Neural Network instructions",
+  /* 0x00000008  3 */ "avx512-4fmaps - AVX-512 4-register Multiply Accumulation Single precision",
+  /* 0x00000010  4 */ "fsrm - FSRM (Fast Short REP MOVSB)",
+  /* 0x00000020  5 */ "uintr - User Inter-processor Interrupts",
+  /* 0x00000040  6 */ "(EDX bit 6 reserved)",
+  /* 0x00000080  7 */ "(EDX bit 7 reserved)",
+  /* 0x00000100  8 */ "avx512-vp2intersect - AVX-512 VP2INTERSECT Doubleword and Quadword Instructions",
+  /* 0x00000200  9 */ "srdbs-ctrl - Special Register Buffer Data Sampling Mitigations",
+  /* 0x00000400 10 */ "mc-clear - VERW instruction clears CPU buffers",
+  /* 0x00000800 11 */ "rtm-always-abort - All TSX transactions are aborted",
+  /* 0x00001000 12 */ "(EDX bit 12 reserved)",
+  /* 0x00002000 13 */ "TSX_FORCE_ABORT MSR is available",
+  /* 0x00004000 14 */ "serialize - SERIALIZE instruction",
+  /* 0x00008000 15 */ "hybrid - Mixture of CPU types in processor topology",
+  /* 0x00010000 16 */ "tsxldtrk - TSXLDTRK instruction",
+  /* 0x00020000 17 */ "(EDX bit 17 reserved)",
+  /* 0x00040000 18 */ "pconfig - PCONFIG Platform Configuration (Memory Encryption)",
+  /* 0x00080000 19 */ "lbr - Architectural Last Branch Records",
+  /* 0x00100000 20 */ "cet-ibt - Control flow enforcement (CET) indirect branch tracking",
+  /* 0x00200000 21 */ "(EDX bit 21 reserved)",
+  /* 0x00400000 22 */ "amx-bf16 - Tile computation on bfloat16 numbers",
+  /* 0x00800000 23 */ "avx512-fp16 - AVX512-FP16 half-precision floating-point instructions",
+  /* 0x01000000 24 */ "amx-tile - Tile architecture",
+  /* 0x02000000 25 */ "amx-int8 - Tile computation on 8-bit integers",
+  /* 0x04000000 26 */ "spec_ctrl - IBRS_IBPB (Indirect Branch Restricted Speculation)",
+  /* 0x08000000 27 */ "stibp - STIBP (Single Thread Indirect Branch Predictor)",
+  /* 0x10000000 28 */ "l1d_flush - IA32_FLUSH_CMD MSR",
+  /* 0x20000000 29 */ "IA32_ARCH_CAPABILITIES Speculative Side Channel Mitigations",
+  /* 0x40000000 30 */ "IA32_CORE_CAPABILITIES MSR (lists model-specific core capabilities)",
+  /* 0x80000000 31 */ "ssbd - SSBD (Speculative Store Bypass Disable)",
 };
 
 char *ppszFeatures71a[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=1 -> EAX */
   /* 0x00000001  0 */ "",
   /* 0x00000002  1 */ "",
   /* 0x00000004  2 */ "",
+  /* 0x00000008  3 */ "rao-int - RAO-INT instructions",
+  /* 0x00000010  4 */ "avx-vnni - AVX Vector Neural Network Instructions",
+  /* 0x00000020  5 */ "avx512-bf16 - AVX-512 BFLOAT16 instructions",
+  /* 0x00000040  6 */ "",
+  /* 0x00000080  7 */ "cmpccxadd - CMPccXADD instructions",
+  /* 0x00000100  8 */ "archperfmonext - Architectural Performance Monitoring Extended Leaf (EAX=23h)",
+  /* 0x00000200  9 */ "",
+  /* 0x00000400 10 */ "fast_zero_rep_movsb - Fast zero-length MOVSB",
+  /* 0x00000800 11 */ "fast_short_rep_stosb - Fast zero-length STOSB",
+  /* 0x00001000 12 */ "fast_short_rep_cmpsb_scasb - Fast zero-length CMPSB and SCASB",
+  /* 0x00002000 13 */ "",
+  /* 0x00004000 14 */ "",
+  /* 0x00008000 15 */ "",
+  /* 0x00010000 16 */ "",
+  /* 0x00020000 17 */ "fred - Flexible Return and Event Delivery",
+  /* 0x00040000 18 */ "lkgs - LKGS Instruction",
+  /* 0x00080000 19 */ "wrmsrns - WRMSRNS instruction",
+  /* 0x00100000 20 */ "",
+  /* 0x00200000 21 */ "amx-fp16 - AMX instructions for FP16 numbers",
+  /* 0x00400000 22 */ "hreset - HRESET instruction and management system",
+  /* 0x00800000 23 */ "avx-ifma - AVX IFMA instructions",
+  /* 0x01000000 24 */ "",
+  /* 0x02000000 25 */ "",
+  /* 0x04000000 26 */ "lam - Linear Address Masking",
+  /* 0x08000000 27 */ "msrlist - RDMSRLIST and WRMSRLIST instructions and msr",
+  /* 0x10000000 28 */ "",
+  /* 0x20000000 29 */ "",
+  /* 0x40000000 30 */ "",
+  /* 0x80000000 31 */ "",
+};
+
+char *ppszFeatures71b[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=1 -> EBX */
+  /* 0x00000001  0 */ "IA32_PPIN and IA32_PPIN_CTL MSRs",
+  /* 0x00000002  1 */ "",
+  /* 0x00000004  2 */ "",
   /* 0x00000008  3 */ "",
   /* 0x00000010  4 */ "",
-  /* 0x00000020  5 */ "AVX-512 BFLOAT16 instructions",
+  /* 0x00000020  5 */ "",
   /* 0x00000040  6 */ "",
   /* 0x00000080  7 */ "",
   /* 0x00000100  8 */ "",
@@ -874,57 +925,20 @@ char *ppszFeatures71a[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
   /* 0x80000000 31 */ "",
 };
 
-char *ppszExtFeatures[32] = { /* AMD Extended Features Flags - EDX */
-  /* Unknown bits, with a "" definition, will not be displayed. */
-  /* Flags that are just a copy of the corresponding Intel Features Flag are commented-out */
-  /* 0x00000001  0 */ "", // "Integrated FPU",
+char *ppszFeatures71c[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=1 -> ECX */
+  /* 0x00000001  0 */ "",
   /* 0x00000002  1 */ "",
   /* 0x00000004  2 */ "",
   /* 0x00000008  3 */ "",
-  /* 0x00000010  4 */ "", // "Time stamp counter",
+  /* 0x00000010  4 */ "",
   /* 0x00000020  5 */ "",
   /* 0x00000040  6 */ "",
   /* 0x00000080  7 */ "",
-  /* 0x00000100  8 */ "", // "CMPXCHG8B instruction",
-  /* 0x00000200  9 */ "",
-  /* 0x00000400 10 */ "",
-  /* 0x00000800 11 */ "SYSCALL and SYSRET instructions",
-  /* 0x00001000 12 */ "",
-  /* 0x00002000 13 */ "",
-  /* 0x00004000 14 */ "",
-  /* 0x00008000 15 */ "", // "CMOV instructions",
-  /* 0x00010000 16 */ "",
-  /* 0x00020000 17 */ "",
-  /* 0x00040000 18 */ "",
-  /* 0x00080000 19 */ "",
-  /* 0x00100000 20 */ "Execution disable bit",
-  /* 0x00200000 21 */ "",
-  /* 0x00400000 22 */ "AMD extensions to MMX",
-  /* 0x00800000 23 */ "", // "MMX instructions",
-  /* 0x01000000 24 */ "", // "FXSAVE and FXRSTOR Instructions",
-  /* 0x02000000 25 */ "", // "SSE instructions",
-  /* 0x04000000 26 */ "",
-  /* 0x08000000 27 */ "RDTSCP instruction",
-  /* 0x10000000 28 */ "PDPE1GB Gibibyte pages",
-  /* 0x20000000 29 */ "64 bit instructions (=long mode/EM64T/x86_64)",
-  /* 0x40000000 30 */ "AMD extensions to 3DNow!",
-  /* 0x80000000 31 */ "3DNow! instructions",
-};
-
-char *ppszExtFeatures2[32] = { /* AMD Extended Features Flags - ECX */
-  /* 0x00000001  0 */ "LAHF and SAHF in 64-bits mode",
-  /* 0x00000002  1 */ "",
-  /* 0x00000004  2 */ "Secure Virtual Machine instructions",
-  /* 0x00000008  3 */ "",
-  /* 0x00000010  4 */ "Use of LOCK prefix to read CR8",
-  /* 0x00000020  5 */ "LZCNT instruction (Count leading Zeros)",
-  /* 0x00000040  6 */ "SSE4A Instructions",
-  /* 0x00000080  7 */ "",
-  /* 0x00000100  8 */ "3DNow! PREFETCH/PREFETCHW instructions",
+  /* 0x00000100  8 */ "",
   /* 0x00000200  9 */ "",
   /* 0x00000400 10 */ "",
   /* 0x00000800 11 */ "",
-  /* 0x00001000 12 */ "DEV support",
+  /* 0x00001000 12 */ "",
   /* 0x00002000 13 */ "",
   /* 0x00004000 14 */ "",
   /* 0x00008000 15 */ "",
@@ -935,7 +949,7 @@ char *ppszExtFeatures2[32] = { /* AMD Extended Features Flags - ECX */
   /* 0x00100000 20 */ "",
   /* 0x00200000 21 */ "",
   /* 0x00400000 22 */ "",
-  /* 0x00800000 23 */ "POPCNT instruction",
+  /* 0x00800000 23 */ "",
   /* 0x01000000 24 */ "",
   /* 0x02000000 25 */ "",
   /* 0x04000000 26 */ "",
@@ -943,6 +957,113 @@ char *ppszExtFeatures2[32] = { /* AMD Extended Features Flags - ECX */
   /* 0x10000000 28 */ "",
   /* 0x20000000 29 */ "",
   /* 0x40000000 30 */ "",
+  /* 0x80000000 31 */ "",
+};
+
+char *ppszFeatures71d[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=1 -> EDX */
+  /* 0x00000001  0 */ "",
+  /* 0x00000002  1 */ "",
+  /* 0x00000004  2 */ "",
+  /* 0x00000008  3 */ "",
+  /* 0x00000010  4 */ "avx-vnn-int8 - AVX VNNI INT8 instructions",
+  /* 0x00000020  5 */ "avx-ne-convert - AVX NE CONVERT instructions",
+  /* 0x00000040  6 */ "",
+  /* 0x00000080  7 */ "",
+  /* 0x00000100  8 */ "",
+  /* 0x00000200  9 */ "",
+  /* 0x00000400 10 */ "",
+  /* 0x00000800 11 */ "",
+  /* 0x00001000 12 */ "",
+  /* 0x00002000 13 */ "",
+  /* 0x00004000 14 */ "prefetchiti - PREFETCHIT0 and PREFETCHIT1 instructions",
+  /* 0x00008000 15 */ "",
+  /* 0x00010000 16 */ "",
+  /* 0x00020000 17 */ "",
+  /* 0x00040000 18 */ "",
+  /* 0x00080000 19 */ "",
+  /* 0x00100000 20 */ "",
+  /* 0x00200000 21 */ "",
+  /* 0x00400000 22 */ "",
+  /* 0x00800000 23 */ "",
+  /* 0x01000000 24 */ "",
+  /* 0x02000000 25 */ "",
+  /* 0x04000000 26 */ "",
+  /* 0x08000000 27 */ "",
+  /* 0x10000000 28 */ "",
+  /* 0x20000000 29 */ "",
+  /* 0x40000000 30 */ "",
+  /* 0x80000000 31 */ "",
+};
+
+char *ppszExtFeatures[32] = { /* AMD Extended Features Flags - EDX */
+  /* Unknown bits, with a "" definition, will not be displayed. */
+  /* Flags that are just a copy of the corresponding Intel Features Flag are commented-out */
+  /* 0x00000001  0 */ "", // "fpu - Integrated FPU",
+  /* 0x00000002  1 */ "", // "vme - Enhanced V86 mode",
+  /* 0x00000004  2 */ "", // "de - I/O breakpoints",
+  /* 0x00000008  3 */ "", // "pse - 4 MB pages",
+  /* 0x00000010  4 */ "", // "tsc - Time stamp counter",
+  /* 0x00000020  5 */ "", // "msr - Model-specific registers",
+  /* 0x00000040  6 */ "", // "pae - Physical address extensions",
+  /* 0x00000080  7 */ "", // "mce - Machine-check exception",
+  /* 0x00000100  8 */ "", // "cx8 - CMPXCHG8B instruction",
+  /* 0x00000200  9 */ "", // "apic - Integrated APIC",
+  /* 0x00000400 10 */ "", // "(EDX bit 10 reserved)",
+  /* 0x00000800 11 */ "syscall - SYSCALL and SYSRET instructions",
+  /* 0x00001000 12 */ "", // "mttr - MTRR registers, and the MTRR_CAP register",
+  /* 0x00002000 13 */ "", // "pge - Page Global Enable bit in CR4",
+  /* 0x00004000 14 */ "", // "mca - Machine check architecture",
+  /* 0x00008000 15 */ "", // "cmov - CMOV instructions",
+  /* 0x00010000 16 */ "", // "pat - Page Attribute table in MTRRs",
+  /* 0x00020000 17 */ "", // "pse-36 - 36-bit page size extensions",
+  /* 0x00040000 18 */ "",
+  /* 0x00080000 19 */ "mp - Multiprocessor Capable",
+  /* 0x00100000 20 */ "nx - Execution disable bit",
+  /* 0x00200000 21 */ "",
+  /* 0x00400000 22 */ "mmxext - AMD extensions to MMX",
+  /* 0x00800000 23 */ "", // "mmx - MMX instructions",
+  /* 0x01000000 24 */ "", // "fxsr - FXSAVE and FXRSTOR Instructions",
+  /* 0x02000000 25 */ "fxsr_opt	- FXSAVE/FXRSTOR optimizations",
+  /* 0x04000000 26 */ "pdpe1gb - Gigabyte pages",
+  /* 0x08000000 27 */ "rdtscp - RDTSCP instruction",
+  /* 0x10000000 28 */ "",
+  /* 0x20000000 29 */ "lm - 64 bit instructions (=long mode/EM64T/x86_64)",
+  /* 0x40000000 30 */ "3dnowext - AMD extensions to 3DNow!",
+  /* 0x80000000 31 */ "3dnow - 3DNow! instructions",
+};
+
+char *ppszExtFeatures2[32] = { /* AMD Extended Features Flags - ECX */
+  /* 0x00000001  0 */ "lahf_lm - LAHF and SAHF in 64-bits mode",
+  /* 0x00000002  1 */ "cmp_legacy - Hyperthreading not valid",
+  /* 0x00000004  2 */ "svm - Secure Virtual Machine instructions",
+  /* 0x00000008  3 */ "extapic - Extended APIC space",
+  /* 0x00000010  4 */ "cr8_legacy - Use of LOCK prefix to read CR8 in 32-bit mode",
+  /* 0x00000020  5 */ "abm - Advanced bit manipulation (lzcnt and popcnt instructions)",
+  /* 0x00000040  6 */ "sse4a - SSE4A Instructions",
+  /* 0x00000080  7 */ "misalignsse - Misaligned SSE mode",
+  /* 0x00000100  8 */ "3dnowprefetch - 3DNow! PREFETCH/PREFETCHW instructions",
+  /* 0x00000200  9 */ "osvw - OS Visible Workaround",
+  /* 0x00000400 10 */ "ibs - Instruction Based Sampling",
+  /* 0x00000800 11 */ "xop - XOP instruction set",
+  /* 0x00001000 12 */ "skinit - SKINIT/STGI instructions",
+  /* 0x00002000 13 */ "wdt - Watchdog timer",
+  /* 0x00004000 14 */ "",
+  /* 0x00008000 15 */ "lwp - Light Weight Profiling",
+  /* 0x00010000 16 */ "fma4 - 4 operands fused multiply-add",
+  /* 0x00020000 17 */ "tce - Translation Cache Extension",
+  /* 0x00040000 18 */ "",
+  /* 0x00080000 19 */ "nodeid_msr - NodeID MSR",
+  /* 0x00100000 20 */ "",
+  /* 0x00200000 21 */ "tbm - Trailing Bit Manipulation",
+  /* 0x00400000 22 */ "topoext - Topology Extensions",
+  /* 0x00800000 23 */ "perfctr_core - Core performance counter extensions",
+  /* 0x01000000 24 */ "perfctr_nb - NB performance counter extensions",
+  /* 0x02000000 25 */ "",
+  /* 0x04000000 26 */ "dbx - Data breakpoint extensions",
+  /* 0x08000000 27 */ "perftsc - Performance TSC",
+  /* 0x10000000 28 */ "pcx_l2i - L2I perf counter extensions",
+  /* 0x20000000 29 */ "monitorx - MONITORX and MWAITX instructions",
+  /* 0x40000000 30 */ "addr_mask_ext - ?",
   /* 0x80000000 31 */ "",
 };
 
@@ -1043,30 +1164,73 @@ void DisplayProcInfo(void) {
     /* Structured Extended Feature Flags */
     if (dwMaxValue >= 7) {
       DWORD dwEAX, dwEBX, dwECX, dwEDX;
-      int nLeaves;
+      int nSubLeaves;
 
       dwECX = 0;
       _cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      nLeaves = (int)dwEAX; /* Max ECX input value for cpuid(7) */
-      printf("CPUID(7): Extended Features Flags: EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEBX, dwECX, dwEDX);
-      for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	char *pszName = ppszFeatures70b[i];
-	printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
+      printf("CPUID(7, 0): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      nSubLeaves = (int)dwEAX + 1;
+      printf(" EAX        Max sub-leave = %ld\n\n", dwEAX);
+      if (dwEBX) {
+	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	  char *pszName = ppszFeatures70b[i];
+	  printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
+	}
+	printf("\n");
       }
-      printf("\n");
-      for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	char *pszName = ppszFeatures70c[i];
-	printf(" ECX %2d %-3s %s\n", i, YesNo(dwECX & dwMask), pszName);
+      if (dwECX) {
+	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	  char *pszName = ppszFeatures70c[i];
+	  printf(" ECX %2d %-3s %s\n", i, YesNo(dwECX & dwMask), pszName);
+	}
+	printf("\n");
       }
-      printf("\n");
-      for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	char *pszName = ppszFeatures70d[i];
-	if (pszName[0])
-	  printf(" EDX %2d %-3s %s\n", i, YesNo(dwEDX & dwMask), pszName);
+      if (dwEDX) {
+	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	  char *pszName = ppszFeatures70d[i];
+	  if (pszName[0])
+	    printf(" EDX %2d %-3s %s\n", i, YesNo(dwEDX & dwMask), pszName);
+	}
+	printf("\n");
       }
-      printf("\n");
-      if (nLeaves > 0) {
-	printf("ECX=%d => There are more Extended Feature Flags leaves\n\n", nLeaves); 
+
+      if (nSubLeaves > 1) {
+	dwECX = 1;
+	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+	printf("CPUID(7, 1): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+	if (dwEAX) {
+	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	    char *pszName = ppszFeatures71a[i];
+	    printf(" EAX %2d %-3s %s\n", i, YesNo(dwEAX & dwMask), pszName);
+	  }
+	  printf("\n");
+	}
+	if (dwEBX) {
+	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	    char *pszName = ppszFeatures71b[i];
+	    printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
+	  }
+	  printf("\n");
+	}
+	if (dwECX) {
+	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	    char *pszName = ppszFeatures71c[i];
+	    printf(" ECX %2d %-3s %s\n", i, YesNo(dwECX & dwMask), pszName);
+	  }
+	  printf("\n");
+	}
+	if (dwEDX) {
+	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
+	    char *pszName = ppszFeatures71d[i];
+	    if (pszName[0])
+	      printf(" EDX %2d %-3s %s\n", i, YesNo(dwEDX & dwMask), pszName);
+	  }
+	  printf("\n");
+	}
+      }
+
+      if (nSubLeaves > 2) {
+	printf("There are %d sub-leaves, so there are more to decode\n\n", nSubLeaves); 
       }
     }
 
