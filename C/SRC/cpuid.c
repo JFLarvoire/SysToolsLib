@@ -65,6 +65,9 @@
 *    2022-11-11 JFL Added many new feature bits definitions.                  *
 *		    Added the short alias for each feature bit.		      *
 *		    Don't display a computed name if we have the brand string.*
+*		    Use debug and experimental features in debug builds only. *
+*		    Restructured main() to use action flags and subroutines.  *
+*		    Added options -a, -f, -n, -t to invoke individual actions.*
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -131,6 +134,16 @@
 
 int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 
+#if _DEBUG
+#ifdef _MSVCLIBX_H_
+extern int iDebug;
+#else
+int iDebug = FALSE;
+#endif
+#endif
+
+#pragma warning(disable:4996)	// Ignore the sscanf function or variable may be unsafe.... warning
+
 #endif /* _WIN32 */
 
 /************************ MS-DOS-specific definitions ************************/
@@ -147,6 +160,10 @@ int identify_processor(void); // 0=8086, 1=80186, 2=80286, etc...
 #include "pmode.h"
 
 #define vcpi2prot vm2prot
+
+#if _DEBUG
+int iDebug = FALSE;
+#endif
 
 #endif /* _MSDOS */
 
@@ -229,14 +246,28 @@ INTEL_PROC IntelProcList[] =
     };
 #define N_INTEL_PROCS (sizeof(IntelProcList) / sizeof(INTEL_PROC))
 
+/* Action flags */
+
+#define SHOW_NAME	0x0001
+#define SHOW_FEATURES	0x0002
+#define SHOW_FREQUENCY	0x0004
+
+/* Global variables */
+
+int iVerbose = FALSE;
+
 /* Forward references */
 
 void usage(void);
 DWORD _rdtsc(void);
 long getms(void);
+int GetProcessorName(int iFamily, char *pBuf, int iBufSize);
+int MeasureProcSpeed(void);
 void DisplayProcInfo(void);
 DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx);
+#if _DEBUG
 void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]);
+#endif
 #ifdef _WIN32
 int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf);
 void DisplayProcWmiInfo(void);
@@ -261,10 +292,9 @@ void DisplayProcWmiInfo(void);
 int _cdecl main(int argc, char *argv[]) {
   int i;
   int iFamily;
-  long lt0, lt1;
-  DWORD dwt0, dwt1;
-  int iVerbose = FALSE;
-  int iDebug = FALSE;
+  int iFrequency;
+  int iAction = 0;
+  int iFirst = TRUE;
 
 #ifdef _MSDOS
   int iErr;
@@ -281,9 +311,8 @@ int _cdecl main(int argc, char *argv[]) {
       if (streq(opt, "?")) {		/* -?: Help */
 	usage();                            /* Display help */
       }
-      if (streq(opt, "d")) {		/* -d: Debug information */
-	iDebug = TRUE;
-	iVerbose = TRUE;
+      if (streq(opt, "a")) {		/* -f: Show all */
+	iAction = ~0;
 	continue;
       }
       if (streq(opt, "c")) {		/* -c: Call the CPUID instruction */
@@ -308,6 +337,18 @@ int _cdecl main(int argc, char *argv[]) {
 	  exit(1);
 	}
       }
+#if _DEBUG
+      if (streq(opt, "d")) {		/* -d: Debug information */
+        iDebug = TRUE;
+        iVerbose = TRUE;
+	  continue;
+      }
+#endif
+      if (streq(opt, "f")) {		/* -f: Show features */
+	iAction |= SHOW_FEATURES;
+	continue;
+      }
+#if _DEBUG
       if (streq(opt, "m")) {		/* -m: Read MSR (Experimental)*/
 	int iMSR;
 	if (((i+1) < argc) && sscanf(argv[i+1], "%X", &iMSR)) {
@@ -322,6 +363,15 @@ int _cdecl main(int argc, char *argv[]) {
 	  fprintf(stderr, "Missing or invalid MSR number\n");
 	  exit(1);
 	}
+      }
+#endif /* _DEBUG */
+      if (streq(opt, "n")) {		/* -n: Show name */
+	iAction |= SHOW_NAME;
+	continue;
+      }
+      if (streq(opt, "t")) {		/* -t: Measure the frequency using the TSC */
+	iAction |= SHOW_FREQUENCY;
+	continue;
       }
       if (streq(opt, "v")) {		/* -v: Verbose information */
 	iVerbose = TRUE;
@@ -351,160 +401,48 @@ int _cdecl main(int argc, char *argv[]) {
 	return 0;
       }
 #endif // defined(_WIN32)
-
     }
   }
 
+  if (!iAction) iAction = SHOW_NAME;
+
   iFamily = identify_processor(); /* Actually the Family + Extended Family */
 
-  if (iFamily < 5) {
-    printf("\nThe processor is a 80%d\n", (iFamily * 100) + 86);
-    /* TODO: Distinguish siblings, like 8086/8088 or 386DX/386SX, etc */
-  } else { // if (iFamily >= 5)
-    int iModel;
-    DWORD dwModel;
-    char szBrand[48] = "";
+  /* Display the processor name */
 
-    dwModel = _cpuid(1, NULL, NULL, NULL, NULL);
+  if (iAction & SHOW_NAME) {
+    char szName[64] = "";
 
-    /* Compute the extended model number */
-    iModel = BYTE0(dwModel) >> 4;
-    if ((iFamily == 6) || (iFamily == 15)) {
-      int iExtModel = BYTE2(dwModel) & 0x0F;
-      iModel |= (iExtModel << 4);
+    if (GetProcessorName(iFamily, szName, sizeof(szName))) {
+      /* if (!iFirst) printf("\n"); */ iFirst = FALSE;
+      if (iVerbose) printf("The processor is an ");
+      printf("%s\n", szName);
+    }
+  }
+
+  /* The following actions can only be done on a Pentium or better */
+
+  if (iFamily >= 5) {
+    /* On Pentium or better, display the processor feature flags */
+    if (iAction & SHOW_FEATURES) {
+      if (!iFirst) printf("\n"); iFirst = FALSE;
+      DisplayProcInfo();
     }
 
-    /* On Pentium or better, get the processor brand name from CPUID output */
-
-    /* Use the brand string if available */
-    if (_cpuid(0x80000000, NULL, NULL, NULL, NULL) >= 0x80000004) {
-      DWORD *pdwBrand = (DWORD *)szBrand;
-      char *pszBrand;
-      char *pc;
-
-      // CPUID(0x80000002 - 0x80000004) : Get brand string.
-      _cpuid(0x80000002, pdwBrand+0, pdwBrand+1, pdwBrand+2, pdwBrand+3);
-      _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
-      _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
-      // Skip leading spaces
-      for (pszBrand = szBrand; *pszBrand == ' '; pszBrand++) ;
-      // Compress multiple spaces into a single space
-      for (pc=pszBrand; *pc; pc++) {
-	while ((pc[0]==' ') && (pc[1]==' ')) {
-	  char *pc2;
-	  for (pc2=pc; (pc2[0]=pc2[1]) != '\0'; pc2++) ;
-	}
-      }
-      // Display the readable brand string.
-      printf("\nThe processor is an %s\n", pszBrand);
-    } else {
-      /* Else compute the processor name from the CPUID family and model numbers */
-      if ((!szBrand[0]) || iVerbose) {
-	for (i=0; i<N_INTEL_PROCS; i++) {
-	  if (   (IntelProcList[i].iFamily == iFamily)
-	      && (IntelProcList[i].iModel == iModel)) {
-	    break;
-	  }
-	}
-	if (i < N_INTEL_PROCS) {
-	  printf("\nThe processor is a %s\n", IntelProcList[i].pszName);
-	} else {
-	  char *pszFamily;
-	  char szFamily[16];
-	  switch (iFamily) {
-	    /* Families < 5 are handled separately above */
-	    case 5:
-	      pszFamily = "Pentium";
-	      break;
-	    case 6:
-	      pszFamily = "P6";
-	      break;
-	    case 7:
-	      pszFamily = "Itanium";
-	      break;
-	    case 15:
-	      pszFamily = "Pentium 4";
-	      break;
-	    case 16:
-	    case 17:
-	      pszFamily = "Itanium 2";
-	      break;
-	    default:
-	      sprintf(szFamily, "Family %d", iFamily);
-	      pszFamily = szFamily;
-	      break;
-	  }
-	  printf("\nThe processor is a %s model %d\n", pszFamily, iModel);
-	}
-      }
+#ifdef _WIN32
+    if (iAction & SHOW_FEATURES) {
+      if (!iFirst) printf("\n"); iFirst = FALSE;
+      DisplayProcWmiInfo();
     }
-    printf("\n");
+#endif // defined(_WIN32)
 
     /* On Pentium or better, compute the processor frequency using the TSC */
     /* Note: This algorithm is compatible with Windows 95 & NT */
-
-    if (iVerbose) {
-      DisplayProcInfo();
-
-#ifdef _WIN32
-      DisplayProcWmiInfo();
-#endif // defined(_WIN32)
+    if (iAction & SHOW_FREQUENCY) {
+      if (!iFirst) printf("\n"); iFirst = FALSE;
+      iFrequency = MeasureProcSpeed();
+      printf("Measured frequency: %ld MHz\n", iFrequency);
     }
-
-#ifdef _MSDOS
-    // Switch to protected mode since the time-stamp counter is NOT
-    // accessible in virtual 86 mode.
-    if (dpmi_detect() == 0) {
-      if (iDebug) printf("Switching to 16-bits PM using DPMI.\n");
-      iErr = dpmi2prot();
-      if (iErr) {
-	fprintf(stderr, "DPMI error %d switching to protected mode.\n", iErr);
-	exit(1);
-      }
-    } else if (vcpi_detect() == 0) {
-      if (iDebug) printf("Switching to 16-bits PM using VCPI.\n");
-      iErr = vcpi2prot();
-      if (iErr) {
-	fprintf(stderr, "VCPI error %d switching to protected mode.\n", iErr);
-	exit(1);
-      }
-    } else { // No virtual machine control program detected.
-      if (iDebug) printf("Staying in real mode.\n");
-    }
-#endif // defined(_MSDOS)
-
-#ifdef _MSDOS
-    BeginCriticalSection();
-#endif // defined(_MSDOS)
-    // Wait for the end of the current tick
-    lt0 = getms();
-    while (lt0 == (lt1 = getms())) ;
-    lt0 = lt1;
-    dwt0 = _rdtsc();
-    // Wait for 1 second
-    while ((lt1 = getms()) < (lt0 + 1000)) {}
-    dwt1 = _rdtsc();
-#ifdef _MSDOS
-    EndCriticalSection();
-#endif // defined(_MSDOS)
-    // Compute frequency
-    dwt1 -= dwt0;			// Number of cycles
-    lt1 -= lt0;			// Number of 1/1000th of a second
-    if (iDebug) printf("Counted %lu cycles in %ld ms\n", dwt1, lt1);
-    if (lt1 < 0) lt1 += 86400000;	// Possible wrap-around at midnight
-    lt1 *= 1000;			// Convert to microseconds
-    dwt1 += lt1/2;			// Round quotient to the nearest value
-    dwt1 /= lt1;			// First frequency evaluation
-    if (iDebug) printf("Raw frequency measure: %lu MHz\n", dwt1);
-    // Round to the nearest multiple of 16.66666 = (100/6)
-    if (dwt1 > 95) {	// Rule applies only for processors above 100 MHz
-      dwt1 *= 6;
-      dwt1 += 50;
-      dwt1 /= 100;
-      dwt1 *= 100;
-      dwt1 /= 6;
-    }
-    printf("Measured frequency: %ld MHz\n", dwt1);
   }
 
   return 0;
@@ -533,9 +471,28 @@ Usage: CPUID [switches]\n\
 \n\
 Optional switches:\n\
 \n\
-  -c EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n\
-  -v    Display detailed processor capabilities information\n\
-  -V    Display this program version and exit\n\
+  -a        Display all we know about the processor\n\
+  -c EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n"
+#if _DEBUG
+"\
+  -d        Output debug information\n"
+#endif
+"\
+  -f        Display detailed processor features\n"
+#if _DEBUG
+"\
+  -m MSR    Read a Model Specific Register\n\
+  -n        Display the processor name (Default)\n"
+#endif
+"\
+  -t        Measure the CPU clock frequency using the Time Stamp Counter\n\
+  -v        Verbose mode\n\
+  -V        Display this program version and exit\n"
+#if defined(_WIN32)
+"\
+  -w PROP   Get a WMI Win32_Processor property\n"
+#endif
+"\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
 ");
@@ -635,7 +592,7 @@ long _dos_get100th(void) {
 
   return l;
 }
-    
+
 long getms(void) {
   return _dos_get100th() * 10;
 }
@@ -647,7 +604,7 @@ long getms(void) {
   SYSTEMTIME wintime;
 
   GetSystemTime(&wintime);
-  
+
   l = wintime.wHour;
   l *= 60;
   l += wintime.wMinute;
@@ -659,7 +616,192 @@ long getms(void) {
   return l;
 }
 #endif // defined(_WIN32)
-    
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetProcessorName					      |
+|									      |
+|   Description	    Get or build the processor name                           |
+|									      |
+|   Parameters	    None						      |
+|									      |
+|   Returns	    							      |
+|                                                                             |
+|   History								      |
+|    2022-11-11 JFL Extracted this routine from cpuid.c main routine.	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int GetProcessorName(int iFamily, char *pBuf, int iBufSize) {
+  int i;
+
+  if (iBufSize < 49) return 0; /* We need that much for the brand string */
+  if (iFamily < 5) {
+    sprintf(pBuf, "80%d", (iFamily * 100) + 86);
+    /* TODO: Distinguish siblings, like 8086/8088 or 386DX/386SX, etc */
+  } else { // if (iFamily >= 5)
+    int iModel;
+    DWORD dwModel;
+
+    dwModel = _cpuid(1, NULL, NULL, NULL, NULL);
+
+    /* Compute the extended model number */
+    iModel = BYTE0(dwModel) >> 4;
+    if ((iFamily == 6) || (iFamily == 15)) {
+      int iExtModel = BYTE2(dwModel) & 0x0F;
+      iModel |= (iExtModel << 4);
+    }
+
+    /* On Pentium or better, get the processor brand name from CPUID output */
+    if (_cpuid(0x80000000, NULL, NULL, NULL, NULL) >= 0x80000004) {
+      DWORD *pdwBrand = (DWORD *)pBuf;
+      char *pszName;
+      char *pc;
+
+      // CPUID(0x80000002 - 0x80000004) : Get brand string.
+      _cpuid(0x80000002, pdwBrand+0, pdwBrand+1, pdwBrand+2, pdwBrand+3);
+      _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
+      _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
+      // Skip leading spaces
+      for (pszName = pBuf; *pszName == ' '; pszName++) ;
+      // Compress multiple spaces into a single space
+      for (pc=pszName; *pc; pc++) {
+	while ((pc[0]==' ') && (pc[1]==' ')) {
+	  char *pc2;
+	  for (pc2=pc; (pc2[0]=pc2[1]) != '\0'; pc2++) ;
+	}
+      }
+    } else {
+      /* Else compute the processor name from the CPUID family and model numbers */
+      for (i=0; i<N_INTEL_PROCS; i++) {
+	if (   (IntelProcList[i].iFamily == iFamily)
+	    && (IntelProcList[i].iModel == iModel)) {
+	  break;
+	}
+      }
+      if (i < N_INTEL_PROCS) {
+	strcpy(pBuf, IntelProcList[i].pszName);
+      } else {
+	char *pszFamily;
+	char szFamily[16];
+	switch (iFamily) {
+	  /* Families < 5 are handled separately above */
+	  case 5:
+	    pszFamily = "Pentium";
+	    break;
+	  case 6:
+	    pszFamily = "P6";
+	    break;
+	  case 7:
+	    pszFamily = "Itanium";
+	    break;
+	  case 15:
+	    pszFamily = "Pentium 4";
+	    break;
+	  case 16:
+	  case 17:
+	    pszFamily = "Itanium 2";
+	    break;
+	  default:
+	    sprintf(szFamily, "Family %d", iFamily);
+	    pszFamily = szFamily;
+	    break;
+	}
+	sprintf(pBuf, "%s model %d", pszFamily, iModel);
+      }
+    }
+  }
+  return (int)strlen(pBuf);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    MeasureProcSpeed					      |
+|									      |
+|   Description	    Measure the processor speed                               |
+|									      |
+|   Parameters	    None						      |
+|									      |
+|   Returns	    The speed in MHz					      |
+|                                                                             |
+|   History								      |
+|    2022-11-11 JFL Extracted this routine from cpuid.c main routine.	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int MeasureProcSpeed() {
+  long lt0, lt1;
+  DWORD dwt0, dwt1;
+#ifdef _MSDOS
+  int iErr;
+#endif // defined(_MSDOS)
+
+#ifdef _MSDOS
+  // Switch to protected mode since the time-stamp counter is NOT
+  // accessible in virtual 86 mode.
+  if (dpmi_detect() == 0) {
+#if _DEBUG
+    if (iDebug) printf("Switching to 16-bits PM using DPMI.\n");
+#endif
+    iErr = dpmi2prot();
+    if (iErr) {
+      fprintf(stderr, "DPMI error %d switching to protected mode.\n", iErr);
+      exit(1);
+    }
+  } else if (vcpi_detect() == 0) {
+#if _DEBUG
+    if (iDebug) printf("Switching to 16-bits PM using VCPI.\n");
+#endif
+    iErr = vcpi2prot();
+    if (iErr) {
+      fprintf(stderr, "VCPI error %d switching to protected mode.\n", iErr);
+      exit(1);
+    }
+  } else { // No virtual machine control program detected.
+#if _DEBUG
+    if (iDebug) printf("Staying in real mode.\n");
+#endif
+  }
+#endif // defined(_MSDOS)
+
+#ifdef _MSDOS
+  BeginCriticalSection();
+#endif // defined(_MSDOS)
+  // Wait for the end of the current tick
+  lt0 = getms();
+  while (lt0 == (lt1 = getms())) ;
+  lt0 = lt1;
+  dwt0 = _rdtsc();
+  // Wait for 1 second
+  while ((lt1 = getms()) < (lt0 + 1000)) {}
+  dwt1 = _rdtsc();
+#ifdef _MSDOS
+  EndCriticalSection();
+#endif // defined(_MSDOS)
+  // Compute frequency
+  dwt1 -= dwt0;			// Number of cycles
+  lt1 -= lt0;			// Number of 1/1000th of a second
+#if _DEBUG
+  if (iDebug) printf("Counted %lu cycles in %ld ms\n", dwt1, lt1);
+#endif
+  if (lt1 < 0) lt1 += 86400000;	// Possible wrap-around at midnight
+  lt1 *= 1000;			// Convert to microseconds
+  dwt1 += lt1/2;			// Round quotient to the nearest value
+  dwt1 /= lt1;			// First frequency evaluation
+#if _DEBUG
+  if (iDebug) printf("Raw frequency measure: %lu MHz\n", dwt1);
+#endif
+  // Round to the nearest multiple of 16.66666 = (100/6)
+  if (dwt1 > 95) {	// Rule applies only for processors above 100 MHz
+    dwt1 *= 6;
+    dwt1 += 50;
+    dwt1 /= 100;
+    dwt1 *= 100;
+    dwt1 /= 6;
+  }
+  return (int)dwt1;
+}
+
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function	    DisplayProcInfo					      |
@@ -1068,7 +1210,7 @@ char *ppszExtFeatures2[32] = { /* AMD Extended Features Flags - ECX */
 };
 
 char *YesNo(unsigned long n) {
-  if (n != 0) 
+  if (n != 0)
     return "Yes";
   else
     return "No";
@@ -1090,7 +1232,7 @@ void DisplayProcInfo(void) {
   int i;
   int nCores;
 
-  // CPUID(0) : 
+  // CPUID(0) :
   _cpuid(0, &dwMaxValue, (DWORD *)(szName+0), (DWORD *)(szName+8), (DWORD *)(szName+4));
   szName[12] = '\0';
   printf("%s", szName);
@@ -1230,7 +1372,7 @@ void DisplayProcInfo(void) {
       }
 
       if (nSubLeaves > 2) {
-	printf("There are %d sub-leaves, so there are more to decode\n\n", nSubLeaves); 
+	printf("There are %d sub-leaves, so there are more to decode\n\n", nSubLeaves);
       }
     }
 
@@ -1306,7 +1448,6 @@ void DisplayProcInfo(void) {
       }
     }
   }
-  printf("\n");
 }
 
 #pragma warning(default:4704)   // Ignore the inline assembler etc... warning
@@ -1472,6 +1613,8 @@ no_edx:
 
 #pragma warning(default:4704)   // Ignore the inline assembler etc... warning
 
+#if _DEBUG
+
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function	    _rdmsr						      |
@@ -1531,6 +1674,8 @@ void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]) {
 #endif // defined(_WIN32)
 
 #pragma warning(default:4704)   // Ignore the inline assembler etc... warning
+
+#endif /* _DEBUG */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -1670,7 +1815,7 @@ int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf) {
 
       hr = pObj->lpVtbl->Get(pObj, lpwszPropName, 0, &vtProp, 0, 0);
       if (FAILED(hr)) goto cleanup_and_exit;
-      
+
       // Copy the result to the caller's buffer
       iResult = vtProp.vt;
       memset(lpBuf, 0, lBuf);
@@ -1773,7 +1918,6 @@ void DisplayProcWmiInfo(void) {
       break;
     }
   }
-  printf("\n");
 }
 
 #endif // defined(_WIN32)
