@@ -68,6 +68,7 @@
 *		    Use debug and experimental features in debug builds only. *
 *		    Restructured main() to use action flags and subroutines.  *
 *		    Added options -a, -f, -n, -t to invoke individual actions.*
+*		    Added option -q to query if a given feature is available. *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -263,7 +264,7 @@ DWORD _rdtsc(void);
 long getms(void);
 int GetProcessorName(int iFamily, char *pBuf, int iBufSize);
 int MeasureProcSpeed(void);
-void DisplayProcInfo(void);
+int DisplayProcInfo(char *pszQuery);
 DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx);
 #if _DEBUG
 void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]);
@@ -293,6 +294,7 @@ int _cdecl main(int argc, char *argv[]) {
   int i;
   int iFamily;
   int iFrequency;
+  char *pszQuery = NULL;
   int iAction = 0;
   int iFirst = TRUE;
 
@@ -369,6 +371,16 @@ int _cdecl main(int argc, char *argv[]) {
 	iAction |= SHOW_NAME;
 	continue;
       }
+      if (streq(opt, "q")) {		/* -q: Query if a feature is supported */
+	if ((i+1) < argc) {
+	  pszQuery = argv[++i];
+	} else {
+	  fprintf(stderr, "Missing feature name\n");
+	  exit(1);
+	}
+	iAction |= SHOW_FEATURES;
+	continue;
+      }
       if (streq(opt, "t")) {		/* -t: Measure the frequency using the TSC */
 	iAction |= SHOW_FREQUENCY;
 	continue;
@@ -426,11 +438,11 @@ int _cdecl main(int argc, char *argv[]) {
     /* On Pentium or better, display the processor feature flags */
     if (iAction & SHOW_FEATURES) {
       if (!iFirst) printf("\n"); iFirst = FALSE;
-      DisplayProcInfo();
+      DisplayProcInfo(pszQuery);
     }
 
 #ifdef _WIN32
-    if (iAction & SHOW_FEATURES) {
+    if ((iAction & SHOW_FEATURES) && !pszQuery) {
       if (!iFirst) printf("\n"); iFirst = FALSE;
       DisplayProcWmiInfo();
     }
@@ -467,7 +479,7 @@ void usage(void) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: CPUID [switches]\n\
+Usage: cpuid [SWITCHES]\n\
 \n\
 Optional switches:\n\
 \n\
@@ -485,6 +497,7 @@ Optional switches:\n\
   -n        Display the processor name (Default)\n"
 #endif
 "\
+  -q FEAT   Query if the given feature is available (1)\n\
   -t        Measure the CPU clock frequency using the Time Stamp Counter\n\
   -v        Verbose mode\n\
   -V        Display this program version and exit\n"
@@ -493,6 +506,11 @@ Optional switches:\n\
   -w PROP   Get a WMI Win32_Processor property\n"
 #endif
 "\
+\n\
+(1) FEAT = A short feature name, as defined in Wikipedia page\n\
+    https://en.wikipedia.org/wiki/CPUID\n\
+    Ex: \"fpu\" or \"pae\"\n\
+    Option -f shows the short feature name ahead of each description.\n\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
 ");
@@ -808,15 +826,16 @@ int MeasureProcSpeed() {
 |									      |
 |   Description	    Display detailed processor information, from CPUID output.|
 |									      |
-|   Parameters	    None						      |
+|   Parameters	    char *pszQuery	Name of a feature to check	      |
 |									      |
-|   Returns	    None						      |
+|   Returns	    TRUE if the feature was found (Whether enabled or not)    |
 |                                                                             |
 |   History								      |
-|    1998/03/18 JFL Created this routine				      |
-|    2009/08/31 JFL Restructured to display both enabled and disabled features|
+|    1998-03-18 JFL Created this routine				      |
+|    2009-08-31 JFL Restructured to display both enabled and disabled features|
 |		    Added the definitions of numerous AMD extended features.  |
-|    2009/09/01 JFL Renamed from DisplayProcId to DisplayProcInfo.            |
+|    2009-09-01 JFL Renamed from DisplayProcId to DisplayProcInfo.            |
+|    2022-11-11 JFL Restructured to allow searching for features.             |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -1216,7 +1235,37 @@ char *YesNo(unsigned long n) {
     return "No";
 }
 
-void DisplayProcInfo(void) {
+int ReportFeatures(char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], char *pszQuery) {
+  int i;
+  size_t nQueryLen = 0;
+
+  if (!(dwValue || pszQuery)) return FALSE; /* Speed things up is no bit is set */
+
+  if (pszQuery) nQueryLen = strlen(pszQuery);
+
+  for (i = 0; i < 32; i++) {
+    char *pszName = ppszFeatureNames[i];
+    DWORD dwMask = (DWORD)1 << i;
+    if (pszQuery) {
+      char *pszSpace = strchr(pszName, ' ');
+      size_t nLen = (int)(pszSpace ? (pszSpace - pszName) : strlen(pszName));
+      if ((nLen == nQueryLen) && !strncmp(pszQuery, pszName, nLen)) {
+	printf("%-3s %s\n", YesNo(dwValue & dwMask), pszName);
+        return TRUE;
+      } else {
+      	pszName = "";
+      }
+    }
+    if (pszName[0]) {
+      printf(" %s %2d %-3s %s\n", pszRegName, i, YesNo(dwValue & dwMask), pszName);
+    }
+  }
+  if (!pszQuery) printf("\n");
+
+  return FALSE;
+}
+
+int DisplayProcInfo(char *pszQuery) {
   DWORD dwMaxValue;
   DWORD dwMaxValueX;
   DWORD dwModel;
@@ -1225,7 +1274,6 @@ void DisplayProcInfo(void) {
   DWORD dwFeatures2;
   DWORD dwFeatures3;
   DWORD dwFeatures4;
-  DWORD dwMask;
   char szName[14];
   int iFamily;
   int iModel;
@@ -1235,72 +1283,60 @@ void DisplayProcInfo(void) {
   // CPUID(0) :
   _cpuid(0, &dwMaxValue, (DWORD *)(szName+0), (DWORD *)(szName+8), (DWORD *)(szName+4));
   szName[12] = '\0';
-  printf("%s", szName);
+  if (!pszQuery) printf("%s", szName);
 
   if (dwMaxValue >= 1) {
     // CPUID(1) : Request the Family/Model/Step
     _cpuid(1, &dwModel, &dwModel2, &dwFeatures2, &dwFeatures);
-    iFamily = BYTE1(dwModel) & 0x0F;
-    if (iFamily == 0x0F) {
-      int iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
-      iFamily += iExtFamily;
-    }
-    printf(" Family %d", iFamily);
-    iModel = BYTE0(dwModel) >> 4;
-    if ((iFamily == 6) || (iFamily == 15)) {
-      int iExtModel = BYTE2(dwModel) & 0x0F;
-      iModel |= (iExtModel << 4);
-    }
-    printf(" Model %d", iModel);
-    printf(" Stepping %d", BYTE0(dwModel) & 0x0F);
-    for (i=0; i<N_INTEL_PROCS; i++) {
-      if (   (IntelProcList[i].iFamily == iFamily)
-	  && (IntelProcList[i].iModel == iModel)) {
-	printf(": %s \"%s\"", IntelProcList[i].pszName,
-			      IntelProcList[i].pszCodeName);
-	break;
+    if (!pszQuery) {
+      iFamily = BYTE1(dwModel) & 0x0F;
+      if (iFamily == 0x0F) {
+	int iExtFamily = (WORD1(dwModel) >> 4) & 0xFF;
+	iFamily += iExtFamily;
       }
+      printf(" Family %d", iFamily);
+      iModel = BYTE0(dwModel) >> 4;
+      if ((iFamily == 6) || (iFamily == 15)) {
+	int iExtModel = BYTE2(dwModel) & 0x0F;
+	iModel |= (iExtModel << 4);
+      }
+      printf(" Model %d", iModel);
+      printf(" Stepping %d", BYTE0(dwModel) & 0x0F);
+      for (i=0; i<N_INTEL_PROCS; i++) {
+	if (   (IntelProcList[i].iFamily == iFamily)
+	    && (IntelProcList[i].iModel == iModel)) {
+	  printf(": %s \"%s\"", IntelProcList[i].pszName,
+				IntelProcList[i].pszCodeName);
+	  break;
+	}
+      }
+      printf("\n\n");
     }
-    printf("\n\n");
 
     // CPUID(0x80000000) : Get max extended function supported.
-    printf("Max base function: 0x%08lX\n", dwMaxValue);
+    if (!pszQuery) printf("Max base function: 0x%08lX\n", dwMaxValue);
     dwMaxValueX = _cpuid(0x80000000, NULL, NULL, NULL, NULL);
-    if (dwMaxValueX >= 0x80000000)
-      printf("Max extended function: 0x%08lX\n", dwMaxValueX);
-    else
-      printf("No extended CPUID functions.\n");
-    printf("\n");
+    if (!pszQuery) {
+      if (dwMaxValueX >= 0x80000000)
+	printf("Max extended function: 0x%08lX\n", dwMaxValueX);
+      else
+	printf("No extended CPUID functions.\n");
+      printf("\n");
+    }
 
     /* Intel Feature Flags */
-    printf("CPUID(1): Intel Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
-    for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-      printf(" EDX %2d %-3s %s\n", i, YesNo(dwFeatures & dwMask), ppszFeatures[i]);
-    }
-    printf("\n");
-    for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-      printf(" ECX %2d %-3s %s\n", i, YesNo(dwFeatures2 & dwMask), ppszFeatures2[i]);
-    }
-    printf("\n");
+    if (!pszQuery) printf("CPUID(1): Intel Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
+    if (ReportFeatures("EDX", dwFeatures, ppszFeatures, pszQuery)) return TRUE;
+    if (ReportFeatures("ECX", dwFeatures2, ppszFeatures2, pszQuery)) return TRUE;
 
     /* AMD Extended Features Flags */
     if (dwMaxValueX >= 0x80000001) {
       /* Only display those that are documented in recent Intel's manuals */
       // CPUID(0x80000001) : Get extended feature flags.
       _cpuid(0x80000001, NULL, NULL, &dwFeatures4, &dwFeatures3);
-      printf("CPUID(0x80000001): AMD Extended Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
-      for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	char *pszName = ppszExtFeatures[i];
-	if (pszName[0])
-	  printf(" EDX %2d %-3s %s\n", i, YesNo(dwFeatures3 & dwMask), pszName);
-      }
-      printf("\n");
-      for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	char *pszName = ppszExtFeatures2[i];
-	if (pszName[0])
-	    printf(" ECX %2d %-3s %s\n", i, YesNo(dwFeatures4 & dwMask), pszName);
-      }
-      printf("\n");
+      if (!pszQuery) printf("CPUID(0x80000001): AMD Extended Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
+      if (ReportFeatures("EDX", dwFeatures3, ppszExtFeatures, pszQuery)) return TRUE;
+      if (ReportFeatures("ECX", dwFeatures4, ppszExtFeatures2, pszQuery)) return TRUE;
     }
 
     /* Structured Extended Feature Flags */
@@ -1310,70 +1346,31 @@ void DisplayProcInfo(void) {
 
       dwECX = 0;
       _cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      printf("CPUID(7, 0): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (!pszQuery) printf("CPUID(7, 0): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
       nSubLeaves = (int)dwEAX + 1;
-      printf(" EAX        Max sub-leave = %ld\n\n", dwEAX);
-      if (dwEBX) {
-	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	  char *pszName = ppszFeatures70b[i];
-	  printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
-	}
-	printf("\n");
-      }
-      if (dwECX) {
-	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	  char *pszName = ppszFeatures70c[i];
-	  printf(" ECX %2d %-3s %s\n", i, YesNo(dwECX & dwMask), pszName);
-	}
-	printf("\n");
-      }
-      if (dwEDX) {
-	for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	  char *pszName = ppszFeatures70d[i];
-	  if (pszName[0])
-	    printf(" EDX %2d %-3s %s\n", i, YesNo(dwEDX & dwMask), pszName);
-	}
-	printf("\n");
-      }
+      if (!pszQuery) printf(" EAX        Max sub-leave = %ld\n\n", dwEAX);
+      if (ReportFeatures("EBX", dwEBX, ppszFeatures70b, pszQuery)) return TRUE;
+      if (ReportFeatures("ECX", dwECX, ppszFeatures70c, pszQuery)) return TRUE;
+      if (ReportFeatures("EDX", dwEDX, ppszFeatures70d, pszQuery)) return TRUE;
 
       if (nSubLeaves > 1) {
 	dwECX = 1;
 	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	printf("CPUID(7, 1): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
-	if (dwEAX) {
-	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	    char *pszName = ppszFeatures71a[i];
-	    printf(" EAX %2d %-3s %s\n", i, YesNo(dwEAX & dwMask), pszName);
-	  }
-	  printf("\n");
-	}
-	if (dwEBX) {
-	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	    char *pszName = ppszFeatures71b[i];
-	    printf(" EBX %2d %-3s %s\n", i, YesNo(dwEBX & dwMask), pszName);
-	  }
-	  printf("\n");
-	}
-	if (dwECX) {
-	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	    char *pszName = ppszFeatures71c[i];
-	    printf(" ECX %2d %-3s %s\n", i, YesNo(dwECX & dwMask), pszName);
-	  }
-	  printf("\n");
-	}
-	if (dwEDX) {
-	  for (i = 0, dwMask = 1; dwMask; i++, dwMask <<= 1) {
-	    char *pszName = ppszFeatures71d[i];
-	    if (pszName[0])
-	      printf(" EDX %2d %-3s %s\n", i, YesNo(dwEDX & dwMask), pszName);
-	  }
-	  printf("\n");
-	}
+	if (!pszQuery) printf("CPUID(7, 1): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+	if (ReportFeatures("EAX", dwEAX, ppszFeatures71a, pszQuery)) return TRUE;
+	if (ReportFeatures("EBX", dwEBX, ppszFeatures71b, pszQuery)) return TRUE;
+	if (ReportFeatures("ECX", dwECX, ppszFeatures71c, pszQuery)) return TRUE;
+	if (ReportFeatures("EDX", dwEDX, ppszFeatures71d, pszQuery)) return TRUE;
       }
 
       if (nSubLeaves > 2) {
-	printf("There are %d sub-leaves, so there are more to decode\n\n", nSubLeaves);
+	fprintf(stderr, "Warning: There are %d sub-leaves, so there are more registers to decode\n\n", nSubLeaves);
       }
+    }
+
+    if (pszQuery) {
+      fprintf(stderr, "Unknown feature: %s\n", pszQuery);
+      return(FALSE);
     }
 
     /* Brand string */
@@ -1448,6 +1445,8 @@ void DisplayProcInfo(void) {
       }
     }
   }
+
+  return(FALSE);
 }
 
 #pragma warning(default:4704)   // Ignore the inline assembler etc... warning
