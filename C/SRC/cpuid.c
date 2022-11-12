@@ -841,6 +841,8 @@ int MeasureProcSpeed() {
 
 #pragma warning(disable:4704)	// Ignore the inline assembler etc... warning
 
+/* CAUTION: Make sure the strings below do not contain any TAB character! */
+
 char *ppszFeatures[32] = { /* Intel Features Flags - EAX=1 -> EDX */
   /* 0x00000001  0 */ "fpu - Integrated FPU",
   /* 0x00000002  1 */ "vme - Enhanced V86 mode",
@@ -928,7 +930,7 @@ char *ppszFeatures70b[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
   /* 0x00002000 13 */ "FPU CS and DS values deprecated",
   /* 0x00004000 14 */ "mpx - MPX (Memory Protection Extensions)",
   /* 0x00008000 15 */ "rdt-a - RDT-A (Resource Director Technology Allocation)",
-  /* 0x00010000 16 */ "avx512-f	- AVX-512 Foundation Instructions",
+  /* 0x00010000 16 */ "avx512-f - AVX-512 Foundation Instructions",
   /* 0x00020000 17 */ "avx512-dq - AVX-512 Doubleword and Quadword Instructions",
   /* 0x00040000 18 */ "rdseed - RDSEED instruction",
   /* 0x00080000 19 */ "adx - ADX (Multi-Precision Add-Carry Instruction Extensions)",
@@ -1184,7 +1186,7 @@ char *ppszExtFeatures[32] = { /* AMD Extended Features Flags - EDX */
   /* 0x00400000 22 */ "mmxext - AMD extensions to MMX",
   /* 0x00800000 23 */ "", // "mmx - MMX instructions",
   /* 0x01000000 24 */ "", // "fxsr - FXSAVE and FXRSTOR Instructions",
-  /* 0x02000000 25 */ "fxsr_opt	- FXSAVE/FXRSTOR optimizations",
+  /* 0x02000000 25 */ "fxsr_opt - FXSAVE/FXRSTOR optimizations",
   /* 0x04000000 26 */ "pdpe1gb - Gigabyte pages",
   /* 0x08000000 27 */ "rdtscp - RDTSCP instruction",
   /* 0x10000000 28 */ "",
