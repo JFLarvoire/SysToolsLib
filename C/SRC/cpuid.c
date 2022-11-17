@@ -69,6 +69,9 @@
 *		    Restructured main() to use action flags and subroutines.  *
 *		    Added options -a, -f, -n, -t to invoke individual actions.*
 *		    Added option -q to query if a given feature is available. *
+*    2022-11-15 JFL Improved option -q to support feature sets.               *
+*    2022-11-16 JFL Added option -ls to list feature sets.                    *
+*    2022-11-17 JFL Option -c is implied when passing arguments.              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -76,7 +79,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-11"
+#define PROGRAM_VERSION "2022-11-17"
 
 /* Definitions */
 
@@ -249,9 +252,12 @@ INTEL_PROC IntelProcList[] =
 
 /* Action flags */
 
-#define SHOW_NAME	0x0001
-#define SHOW_FEATURES	0x0002
-#define SHOW_FREQUENCY	0x0004
+#define SHOW_NAME		0x0001
+#define SHOW_FEATURES		0x0002
+#define SHOW_FREQUENCY		0x0004
+#define SHOW_CPUID_LEAF		0x0008
+#define SHOW_CPUID_SUBLEAF	0x0010
+#define SHOW_FEATURE_SETS	0x0020
 
 /* Global variables */
 
@@ -265,6 +271,8 @@ long getms(void);
 int GetProcessorName(int iFamily, char *pBuf, int iBufSize);
 int MeasureProcSpeed(void);
 int DisplayProcInfo(char *pszQuery);
+int QueryFeature(char *pszFeature);
+void ShowFeatureSets();
 DWORD _cpuid(DWORD dwId, DWORD *pEax, DWORD *pEbx, DWORD *pEcx, DWORD *pEdx);
 #if _DEBUG
 void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]);
@@ -297,6 +305,7 @@ int _cdecl main(int argc, char *argv[]) {
   char *pszQuery = NULL;
   int iAction = 0;
   int iFirst = TRUE;
+  DWORD dwEAX=0, dwEBX=0, dwECX=0, dwEDX=0;
 
 #ifdef _MSDOS
   int iErr;
@@ -318,26 +327,18 @@ int _cdecl main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "c")) {		/* -c: Call the CPUID instruction */
-	DWORD dwEAX, dwEBX, dwECX, dwEDX;
-	dwEAX = dwEBX = dwECX = dwEDX = 0;
 	if (((i+1) < argc) && sscanf(argv[i+1], "%X", &dwEAX)) {   /* Leaf number */
 	  i += 1;
+	  iAction = SHOW_CPUID_LEAF;
 	  if (((i+1) < argc) && sscanf(argv[i+1], "%X", &dwECX)) { /* Sub-leaf number */
 	    i += 1;
-	    printf("CPUID(0x%lX, %0xlX)\n", (unsigned long)dwEAX, (unsigned long)dwECX);
-	  } else {
-	    printf("CPUID(0x%lX)\n", (unsigned long)dwEAX);
+	    iAction = SHOW_CPUID_SUBLEAF;
 	  }
-          _cpuid(dwEAX, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	  printf("EAX = 0x%08lX\n", (unsigned long)dwEAX);
-	  printf("EBX = 0x%08lX\n", (unsigned long)dwEBX);
-	  printf("ECX = 0x%08lX\n", (unsigned long)dwECX);
-	  printf("EDX = 0x%08lX\n", (unsigned long)dwEDX);
-	  exit(0);
 	} else {
 	  fprintf(stderr, "Missing or invalid CPUID leaf number\n");
-	  exit(1);
+	  return 1;
 	}
+	continue;
       }
 #if _DEBUG
       if (streq(opt, "d")) {		/* -d: Debug information */
@@ -350,6 +351,10 @@ int _cdecl main(int argc, char *argv[]) {
 	iAction |= SHOW_FEATURES;
 	continue;
       }
+      if (streq(opt, "ls")) {		/* -ls: List feature sets */
+	iAction |= SHOW_FEATURE_SETS;
+	continue;
+      }
 #if _DEBUG
       if (streq(opt, "m")) {		/* -m: Read MSR (Experimental)*/
 	int iMSR;
@@ -360,10 +365,10 @@ int _cdecl main(int argc, char *argv[]) {
 	  fflush(stdout);
 	  _rdmsr(iMSR, pdwMSR);
 	  printf("MSR(0x%X) = 0x%08ulX:%08ulX\n", iMSR, pdwMSR[1], pdwMSR[0]);
-	  exit(0);
+	  return 0;
 	} else {
 	  fprintf(stderr, "Missing or invalid MSR number\n");
-	  exit(1);
+	  return 1;
 	}
       }
 #endif /* _DEBUG */
@@ -373,10 +378,10 @@ int _cdecl main(int argc, char *argv[]) {
       }
       if (streq(opt, "q")) {		/* -q: Query if a feature is supported */
 	if ((i+1) < argc) {
-	  pszQuery = argv[++i];
+	  pszQuery = strlwr(argv[++i]);
 	} else {
 	  fprintf(stderr, "Missing feature name\n");
-	  exit(1);
+	  return 1;
 	}
 	iAction |= SHOW_FEATURES;
 	continue;
@@ -413,10 +418,47 @@ int _cdecl main(int argc, char *argv[]) {
 	return 0;
       }
 #endif // defined(_WIN32)
+      fprintf(stderr, "Error: Unsupported switch %s\n", arg);
+      return 1;
+    } /* End if it's a switch */
+    /* If it's an argument */
+    if (!iAction) {
+      if (!sscanf(arg, "%X", &dwEAX)) goto err_unexpected_arg;
+      iAction = SHOW_CPUID_LEAF;
+      continue;
     }
+    if (iAction == SHOW_CPUID_LEAF) {
+      if (!sscanf(arg, "%X", &dwECX)) goto err_unexpected_arg;
+      iAction = SHOW_CPUID_SUBLEAF;
+      continue;
+    }
+err_unexpected_arg:
+    fprintf(stderr, "Error: Unexpected argument \"%s\"\n", arg);
+    return 1;
   }
 
   if (!iAction) iAction = SHOW_NAME;
+
+  /* First process the action flags that are exclusive of the others */
+
+  if (iAction == SHOW_FEATURE_SETS) {
+    ShowFeatureSets();
+    return 0;
+  }
+
+  if ((iAction == SHOW_CPUID_LEAF) || (iAction == SHOW_CPUID_SUBLEAF)) {
+    printf("CPUID(0x%lX", (unsigned long)dwEAX);
+    if (iAction == SHOW_CPUID_SUBLEAF) printf(", 0x%lX", (unsigned long)dwECX);
+    printf("):\n");
+    _cpuid(dwEAX, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+    printf("EAX = 0x%08lX\n", (unsigned long)dwEAX);
+    printf("EBX = 0x%08lX\n", (unsigned long)dwEBX);
+    printf("ECX = 0x%08lX\n", (unsigned long)dwECX);
+    printf("EDX = 0x%08lX\n", (unsigned long)dwEDX);
+    return 0;
+  }
+
+  /* Then process all other action flags */
 
   iFamily = identify_processor(); /* Actually the Family + Extended Family */
 
@@ -438,7 +480,11 @@ int _cdecl main(int argc, char *argv[]) {
     /* On Pentium or better, display the processor feature flags */
     if (iAction & SHOW_FEATURES) {
       if (!iFirst) printf("\n"); iFirst = FALSE;
-      DisplayProcInfo(pszQuery);
+      if (pszQuery) {
+      	QueryFeature(pszQuery);
+      } else {
+        DisplayProcInfo(pszQuery);
+      }
     }
 
 #ifdef _WIN32
@@ -484,19 +530,20 @@ Usage: cpuid [SWITCHES]\n\
 Optional switches:\n\
 \n\
   -a        Display all we know about the processor\n\
-  -c EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n"
+ [-c] EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n"
 #if _DEBUG
 "\
   -d        Output debug information\n"
 #endif
 "\
-  -f        Display detailed processor features\n"
+  -f        Display detailed processor features\n\
+  -ls       List supported feature sets\n"
 #if _DEBUG
 "\
-  -m MSR    Read a Model Specific Register\n\
-  -n        Display the processor name (Default)\n"
+  -m MSR    Read a Model Specific Register\n"
 #endif
 "\
+  -n        Display the processor name (Default)\n\
   -q FEAT   Query if the given feature is available (1)\n\
   -t        Measure the CPU clock frequency using the Time Stamp Counter\n\
   -v        Verbose mode\n\
@@ -511,6 +558,11 @@ Optional switches:\n\
     https://en.wikipedia.org/wiki/CPUID\n\
     Ex: \"fpu\" or \"pae\"\n\
     Option -f shows the short feature name ahead of each description.\n\
+\n\
+    Or FEAT = A feature set name, based on the processor alias names and\n\
+    corresponding instruction sets in the GCC documentation page:\n\
+    https://gcc.gnu.org/onlinedocs/gcc/gcc-command-options/machine-dependent-options/x86-options.html\n\
+    Use option -ls to list the supported feature sets\n\
 \n\
 Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
 ");
@@ -906,8 +958,8 @@ char *ppszFeatures2[32] = { /* Intel Features Flags - EAX=1 -> ECX */
   /* 0x01000000 24 */ "tsc-deadline - Timestamp Counter Deadline",
   /* 0x02000000 25 */ "aes - AES instruction",
   /* 0x04000000 26 */ "xsave - XSAVE/XRESTOR instructions",
-  /* 0x08000000 27 */ "osxsave - OS-Enabled SXAVE/XRESTOR Management",
-  /* 0x10000000 28 */ "Aavx - VX (Advanced Vector eXtensions)",
+  /* 0x08000000 27 */ "osxsave - OS-Enabled XSAVE/XRESTOR Management",
+  /* 0x10000000 28 */ "avx - AVX (Advanced Vector eXtensions)",
   /* 0x20000000 29 */ "f16c - 16-bit Floating Point Conversion instructions",
   /* 0x40000000 30 */ "rdrnd - RDRAND instruction",
   /* 0x80000000 31 */ "hypervisor - Hypervisor present (always zero on physical CPUs)",
@@ -1158,6 +1210,41 @@ char *ppszFeatures71d[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
   /* 0x80000000 31 */ "",
 };
 
+char *ppszFeaturesd1a[32] = { /* Processor Extended State Feature Flags - EAX=0x0D, ECX=1 -> EAX */
+  /* 0x00000001  0 */ "xsaveopt - XSAVEOPT instruction",
+  /* 0x00000002  1 */ "xsavec - XSAVEC and the compacted form of XRSTOR instructions",
+  /* 0x00000004  2 */ "xgetbv_ecx1 - XGETBV with ECX=1 support",
+  /* 0x00000008  3 */ "xss - XSAVES and XRSTORS instructions",
+  /* 0x00000010  4 */ "",
+  /* 0x00000020  5 */ "",
+  /* 0x00000040  6 */ "",
+  /* 0x00000080  7 */ "",
+  /* 0x00000100  8 */ "",
+  /* 0x00000200  9 */ "",
+  /* 0x00000400 10 */ "",
+  /* 0x00000800 11 */ "",
+  /* 0x00001000 12 */ "",
+  /* 0x00002000 13 */ "",
+  /* 0x00004000 14 */ "",
+  /* 0x00008000 15 */ "",
+  /* 0x00010000 16 */ "",
+  /* 0x00020000 17 */ "",
+  /* 0x00040000 18 */ "",
+  /* 0x00080000 19 */ "",
+  /* 0x00100000 20 */ "",
+  /* 0x00200000 21 */ "",
+  /* 0x00400000 22 */ "",
+  /* 0x00800000 23 */ "",
+  /* 0x01000000 24 */ "",
+  /* 0x02000000 25 */ "",
+  /* 0x04000000 26 */ "",
+  /* 0x08000000 27 */ "",
+  /* 0x10000000 28 */ "",
+  /* 0x20000000 29 */ "",
+  /* 0x40000000 30 */ "",
+  /* 0x80000000 31 */ "",
+};
+
 char *ppszExtFeatures[32] = { /* AMD Extended Features Flags - EDX */
   /* Unknown bits, with a "" definition, will not be displayed. */
   /* Flags that are just a copy of the corresponding Intel Features Flag are commented-out */
@@ -1276,6 +1363,7 @@ int DisplayProcInfo(char *pszQuery) {
   DWORD dwFeatures2;
   DWORD dwFeatures3;
   DWORD dwFeatures4;
+  DWORD dwEAX, dwEBX, dwECX, dwEDX;
   char szName[14];
   int iFamily;
   int iModel;
@@ -1343,7 +1431,6 @@ int DisplayProcInfo(char *pszQuery) {
 
     /* Structured Extended Feature Flags */
     if (dwMaxValue >= 7) {
-      DWORD dwEAX, dwEBX, dwECX, dwEDX;
       int nSubLeaves;
 
       dwECX = 0;
@@ -1365,9 +1452,26 @@ int DisplayProcInfo(char *pszQuery) {
 	if (ReportFeatures("EDX", dwEDX, ppszFeatures71d, pszQuery)) return TRUE;
       }
 
-      if (nSubLeaves > 2) {
-	fprintf(stderr, "Warning: There are %d sub-leaves, so there are more registers to decode\n\n", nSubLeaves);
+      for (i=2; i<nSubLeaves; i++) {
+	dwECX = i;
+	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+	if (!pszQuery) {
+	  printf("CPUID(7, %d): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
+	} else {
+	  static int iReported = 0;
+	  if (!iReported) fprintf(stderr, "\nWarning: There are unknown bits to decode in CPUID(7, %d)\n\n", i);
+	  iReported = 1;
+	}
       }
+    }
+
+    /* Extended State feature flags */
+
+    if (dwMaxValue >= 0x0D) {
+      dwECX = 1;
+      _cpuid(0x0D, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+      if (!pszQuery) printf("CPUID(0x0D, 1): Extended State Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (ReportFeatures("EAX", dwEAX, ppszFeaturesd1a, pszQuery)) return TRUE;
     }
 
     if (pszQuery) {
@@ -1406,7 +1510,6 @@ int DisplayProcInfo(char *pszQuery) {
     if (dwFeatures & (1L << 28)) nCores = (int)BYTE2(dwModel2);
     printf(" CPUID(1):  Silicon supports %d logical processors\n", nCores);
     if (dwMaxValue >= 4) {
-      DWORD dwEAX, dwEBX, dwECX, dwEDX;
       int nMaxCores, nMaxThreads;
 
       dwECX = 0;
@@ -1418,7 +1521,6 @@ int DisplayProcInfo(char *pszQuery) {
     if (dwMaxValue >= 0x0B) {
       int iFunction = (dwMaxValue >= 0x1F) ? 0x1F : 0x0B; /* Function 0x1F is the preferred replacement, if available */
       int iLevel = 0;
-      DWORD dwEAX, dwEBX, dwECX, dwEDX;
       int nLogicalProcs;
       int iType;
       char *pszType;
@@ -1451,8 +1553,173 @@ int DisplayProcInfo(char *pszQuery) {
   return(FALSE);
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    QueryFeature					      |
+|									      |
+|   Description	    Check if a feature or feature set is available	      |
+|									      |
+|   Parameters	    char *pszFeature	The feature or set name to search     |
+|									      |
+|   Returns	    							      |
+|                                                                             |
+|   Notes								      |
+|                                                                             |
+|   History								      |
+|    2022-11-12 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
 #pragma warning(default:4704)   // Ignore the inline assembler etc... warning
 
+typedef struct _sFeatureNode {
+  char *pszSetName;
+  char *pszBaseSetName;
+  char *pszFeature1;
+  char *pszFeature2;
+  char *pszFeature3;
+} sFeatureNode;
+
+// Feature sets names and feature sets come from CPU types in the GCC documentation:
+// https://gcc.gnu.org/onlinedocs/gcc/gcc-command-options/machine-dependent-options/x86-options.html
+
+// But the instruction names are sometimes corrected to match the official CPUID feature
+// name mnemonics in "Intel 64 and IA-32 Architectures Software Developer's Manual",
+// or the short name in the Wikipedia page: https://en.wikipedia.org/wiki/CPUID
+//
+//	GCC instruct.	Wikipedia short feature name
+//
+//	SAHF		lahf_lm
+//	PCLMUL		pclmulqdq
+//	AVX		avx1
+//	BMI		bmi1
+//	LZCNT		abm
+//	XSAVES		xss
+//	ADCX		adx
+
+// To avoid defining many times the same features, each structure is defined
+// with a pointer to a base (previous) model of which it is a superset.
+// Then only the new features introduced in the current model are listed.
+// Not having found how to declare a pointer to an anonymous substructure with
+// varying number of features, I resolved to using fixed size feature lists,
+// with size 3 being a good compromise.
+sFeatureNode featureSets[] = {
+  // Name       Based on     Feat_1 Feat_2 Feat_3         // Processor (code) name	Feature list from GCC doc
+  {"pentium2",  NULL,	     "mmx", "fxsr", NULL},	  // Intel Pentium II		MMX and FXSR
+  {"pentium3",  "pentium2",  "sse", NULL, NULL},	  // Intel Pentium III		MMX, FXSR and SSE
+  {"pentium4",  "pentium3",  "sse2", NULL, NULL},	  // Intel Pentium 4		MMX, SSE, SSE2 and FXSR
+  {"prescott",  "pentium4",  "sse3", NULL, NULL},	  // Intel Pentium 4		MMX, SSE, SSE2, SSE3 and FXSR
+  {"nocona",    "prescott",  "lm", NULL, NULL},		  // Improved version of Intel Pentium 4 with 64-bit extensions (All subsequent Intel processors have that)
+  {"core2",     "nocona",    "ssse3", "cx16", "lahf_lm"}, // Intel Core 2		MMX, SSE, SSE2, SSE3, SSSE3, CX16, SAHF and FXSR
+  {"nehalem",   "core2",     "sse4.1", "sse4.2", "popcnt"}, // Intel Nehalem (G1)	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF and FXSR
+  {"westmere",  "nehalem",   "pclmulqdq", NULL, NULL},	  // Intel Westmere		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR and PCLMUL
+  {"sandybridge","westmere", "avx", "xsave", NULL},	  // Intel Sandy Bridge (G2)	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE and PCLMUL
+  {"ivybridge", "sandybridge", "fsgsbase", "rdrnd", "f16c"}, // Intel Ivy Bridge (G3)	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND and F16C
+  {"haswell/1", "ivybridge", "avx2", "bmi1", "bmi2"},     // Intel Haswell (G4)		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE and HLE
+  {"haswell/2", "haswell/1", "abm", "fma", "movbe"},      // Intel Haswell (G4)		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE and HLE
+  {"haswell",   "haswell/2", "hle", NULL, NULL},          // Intel Haswell (G4)		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE and HLE
+  {"broadwell", "haswell", "rdseed", "adx", "prefetchwt1"}, // Intel Broadwell (G5)	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE, HLE, RDSEED, ADCX and PREFETCHW
+  {"skylake/1", "broadwell", "aes", "clflushopt", "xsavec"}, // Intel Skylake (G6)	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE, HLE, RDSEED, ADCX, PREFETCHW, AES, CLFLUSHOPT, XSAVEC, XSAVES and SGX
+  {"skylake", "skylake/1", "xss", "sgx", NULL},		  // Intel Skylake (G6)		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, AVX, XSAVE, PCLMUL, FSGSBASE, RDRND, F16C, AVX2, BMI, BMI2, LZCNT, FMA, MOVBE, HLE, RDSEED, ADCX, PREFETCHW, AES, CLFLUSHOPT, XSAVEC, XSAVES and SGX
+
+  {"bonnell", "nocona", "ssse3", NULL, NULL},		  // Intel Bonnell		MMX, SSE, SSE2, SSE3 and SSSE3
+  {"silvermont", "westmere", "prefetchwt1", "rdrnd", NULL}, // Intel Silvermont		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, PCLMUL, PREFETCHW and RDRND
+  {"goldmont/1", "silvermont", "aes", "sha", "rdseed"},	  // Intel Goldmont		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, PCLMUL, PREFETCHW, RDRND, AES, SHA, RDSEED, XSAVE, XSAVEC, XSAVES, XSAVEOPT, CLFLUSHOPT and FSGSBASE
+  {"goldmont/2", "goldmont/1", "xsave", "xsavec", "xss"}, // Intel Goldmont		MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, PCLMUL, PREFETCHW, RDRND, AES, SHA, RDSEED, XSAVE, XSAVEC, XSAVES, XSAVEOPT, CLFLUSHOPT and FSGSBASE
+  {"goldmont", "goldmont/2", "xsaveopt", "clflushopt", "fsgsbase"}, // Intel Goldmont	MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CX16, SAHF, FXSR, PCLMUL, PREFETCHW, RDRND, AES, SHA, RDSEED, XSAVE, XSAVEC, XSAVES, XSAVEOPT, CLFLUSHOPT and FSGSBASE
+
+  {"k6", NULL, "mmx", NULL, NULL},			  // AMD k6			MMX
+  {"k6-2", "k6", "3dnow", NULL, NULL},			  // AMD k6-2			MMX and 3DNow!
+  {"k6-3", "k6-2", NULL, NULL, NULL},			  // AMD k6-3			MMX and 3DNow!
+  {"athlon", "k6-3", "3dnowext", "3dnowprefetch", NULL},  // AMD Athlon			MMX, 3dNOW!, enhanced 3DNow! and SSE prefetch
+  {"opteron", "athlon", "lm", "sse", "sse2"},		  // AMD K8 based CPUs		MMX, SSE, SSE2, 3DNow!, enhanced 3DNow! and 64-bit instruction set extensions
+  {"opteron-sse3", "opteron", "sse3", NULL, NULL},	  // AMD K8 improved		MMX, SSE, SSE2, SSE3
+  {"barcelona", "opteron-sse3", "sse4a", "abm", NULL},	  // AMD Family 10h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM
+  {"bdver1/1", "barcelona", "fma4", "avx", "xop"},	  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2
+  {"bdver1/2", "bdver1/1", "lwp", "aes", "pclmulqdq"},	  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2
+  {"bdver1/3", "bdver1/2", "ssse3", "sse4.1", "sse4.2"},  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2
+  {"bdver1", "bdver1/3", "cx16", NULL, NULL},		  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2
+  {"bdver2/1", "bdver1", "bmi1", "tbm", "f16c"},	  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA
+  {"bdver2", "bdver2/1", "fma", NULL, NULL},		  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA
+  {"bdver3", "bdver2", "fsgsbase", NULL, NULL},		  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA, FSGSBASE
+  {"bdver4", "bdver3", "movbe", "avx2", "bmi2"},	  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA, FSGSBASE, MOVBE, AVX2, BMI2
+};                                                                                                                                                                                                                 
+
+/* Alias
+   k8		opteron
+   athlon64	opteron
+   athlon-fx	opteron
+*/
+                                                                                                                                                                                                                                  
+#define N_FEATURE_SETS (sizeof(featureSets) / sizeof(featureSets[0]))
+
+typedef int (*pFeatureCB)(char *pszFeature, void *pRef);
+
+int ScanFeatureSets(char *pszFeatureSet, pFeatureCB FeatureCB, void *pRef) {
+  int i;
+  for (i=0; i<N_FEATURE_SETS; i++) {
+    if (!strcmp(pszFeatureSet, featureSets[i].pszSetName)) {
+      if (featureSets[i].pszBaseSetName) {
+      	ScanFeatureSets(featureSets[i].pszBaseSetName, FeatureCB, pRef);
+      }
+      if (featureSets[i].pszFeature1) {
+      	FeatureCB(featureSets[i].pszFeature1, pRef);
+      }
+      if (featureSets[i].pszFeature2) {
+      	FeatureCB(featureSets[i].pszFeature2, pRef);
+      }
+      if (featureSets[i].pszFeature3) {
+      	FeatureCB(featureSets[i].pszFeature3, pRef);
+      }
+      return TRUE;
+    } 
+  }
+  return FALSE;
+}
+
+#pragma warning(disable:4100)       /* Ignore the 'pRef': unreferenced formal parameter warning */
+
+int ScanFeatureSetCB(char *pszFeature, void *pRef) {
+  printf(" %s", pszFeature);
+  return 0;
+}
+
+#pragma warning(default:4100)       /* Restore the 'pRef': unreferenced formal parameter warning */
+
+void ShowFeatureSets() {
+  int i;
+  for (i=0; i<N_FEATURE_SETS; i++) {
+    char *pszSetName = featureSets[i].pszSetName;
+    char *pszSlash = strchr(pszSetName, '/');
+    if (pszSlash) {
+      char cBuf[16];
+      int iLen = (int)(pszSlash - pszSetName);
+      strcpy(cBuf, pszSetName);
+      cBuf[iLen] = '\0';
+      pszSetName = cBuf;
+    }
+    printf("%-11s", pszSetName);
+    ScanFeatureSets(pszSetName, ScanFeatureSetCB, NULL);
+    printf("\n");
+    while (pszSlash) pszSlash = strchr(featureSets[++i].pszSetName, '/');
+  }
+}
+
+#pragma warning(disable:4100)       /* Ignore the 'pRef': unreferenced formal parameter warning */
+
+int QueryFeatureCB(char *pszFeature, void *pRef) {
+  return DisplayProcInfo(pszFeature);
+}
+
+#pragma warning(default:4100)       /* Restore the 'pRef': unreferenced formal parameter warning */
+
+int QueryFeature(char *pszFeature) {
+  int iDone = ScanFeatureSets(pszFeature, QueryFeatureCB, NULL);
+  if (iDone) return (iDone);
+  DisplayProcInfo(pszFeature);
+  return TRUE;
+}
+  
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function	    _cpuid						      |
