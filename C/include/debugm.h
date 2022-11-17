@@ -5,7 +5,7 @@
 *   Description     Debug macros					      *
 *		    							      *
 *   Notes	    OS-independant macros for managing distinct debug and     *
-*		    release versions of a C or C++ program.		      * 
+*		    release versions of a C or C++ program.		      *
 *		    The debug version is generated if the _DEBUG constant     *
 *		    is defined. Else the release version is generated.	      *
 *		    These macros produce no extra code in the release version,*
@@ -149,11 +149,13 @@
 
 #ifndef _DEBUGM_H
 #define _DEBUGM_H	1
-								  
+
+#ifndef __CLIBDEF_H__
 #include <stdio.h>	/* Macros use printf */
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>	/* Macros use malloc */
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -337,7 +339,7 @@ extern char *debug_dasprintf(const char *fmt, ...);	  /* Shorter alternative use
 				   Debug code executed if debug mode is on */
 #define XDEBUG_CODE_IF_ON(code) DEBUG_CODE(if (XDEBUG_IS_ON()) {code}) /*
 				   Debug code executed if extra debug mode is on */
-				   
+
 extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define DEBUG_INDENT_STEP 2	/* How many spaces to add for each indentation level */
 #define DEBUG_PRINT_INDENT() printf("%*s", iIndent, "")
@@ -542,4 +544,3 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #endif
 
 #endif /* !defined(_DEBUGM_H) */
-
