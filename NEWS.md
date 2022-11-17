@@ -4,11 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2022-11-10
+## [Unreleased] 2022-11-17
 ### Changed
 - cpuid.exe: Added a WIN64 version.
   Added option -c to manually test one CPUID call.
   Rewrote support for cpuid(0x0B), now superseded by cpuid(0x1F).
+  Added many new feature bits definitions.
+  Added the short alias for each feature bit.
+  Don't display a computed processor name if we have the brand string.
+  Use debug and experimental features in debug builds only.
+  Restructured main() to use action flags and subroutines.
+  Added options -a, -f, -n, -t to invoke individual actions.
+  Added option -q to query if a given feature or feature set is available.
+  Added option -ls to list supported feature sets.
 
 ### Fixed
 - cpuid.exe: Fixed the extended family and model calculations and display.
