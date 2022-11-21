@@ -78,6 +78,11 @@
 *    2022-11-17 JFL Option -c is implied when passing arguments.              *
 *    2022-11-18 JFL Decode leafs 16H, 17H, 1AH.			              *
 *    2022-11-20 JFL Decode leaf 18H.				              *
+*    2022-11-21 JFL Display the reserved feature bits that are set.           *
+*		    Streamlined the output in non-verbose mode.		      *
+*		    Decode the cache parameters in leaf 4.		      *
+*		    Fixed a bug displaying the measured frequency in DOS.     *
+*		    Option -w alone calls DisplayWmiProcInfo().		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -85,7 +90,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-20"
+#define PROGRAM_VERSION "2022-11-21"
 
 /* Definitions */
 
@@ -186,9 +191,8 @@ int iDebug = FALSE;
 /********************** End of OS-specific definitions ***********************/
 
 /* SysToolsLib include files */
+#include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
-
-#define streq(s1, s2) (!strcmp(s1, s2))     /* Test if strings are equal */
 
 /* Intel processors list */
 
@@ -264,6 +268,7 @@ INTEL_PROC IntelProcList[] =
 #define SHOW_CPUID_LEAF		0x0008
 #define SHOW_CPUID_SUBLEAF	0x0010
 #define SHOW_FEATURE_SETS	0x0020
+#define SHOW_WMI_PROPS		0x0040
 
 /* Global variables */
 
@@ -285,7 +290,8 @@ void _rdmsr(DWORD dwECX, DWORD pdwMSR[2]);
 #endif
 #ifdef _WIN32
 int GetWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf);
-void DisplayProcWmiInfo(void);
+int FormatWmiProcInfo(char *lpszPropName, void *lpBuf, size_t lBuf);
+void DisplayWmiProcInfo(void);
 #endif // defined(_WIN32)
 
 /*---------------------------------------------------------------------------*\
@@ -312,7 +318,9 @@ int _cdecl main(int argc, char *argv[]) {
   int iAction = 0;
   int iFirst = TRUE;
   DWORD dwEAX=0, dwEBX=0, dwECX=0, dwEDX=0;
-
+#if defined(_WIN32)
+  char *pszWmiPropName = NULL;
+#endif
 #ifdef _MSDOS
   int iErr;
 
@@ -323,7 +331,7 @@ int _cdecl main(int argc, char *argv[]) {
 
   for (i=1 ; i<argc ; i++) {
     char *arg = argv[i];
-    if ((arg[0] == '-') || (arg[0] == '/')) {  /* It's a switch */
+    if (IsSwitch(arg)) {  /* It's a switch */
       char *opt = arg+1;
       if (streq(opt, "?")) {		/* -?: Help */
 	usage();                            /* Display help */
@@ -350,7 +358,7 @@ int _cdecl main(int argc, char *argv[]) {
       if (streq(opt, "d")) {		/* -d: Debug information */
         iDebug = TRUE;
         iVerbose = TRUE;
-	  continue;
+	continue;
       }
 #endif
       if (streq(opt, "f")) {		/* -f: Show features */
@@ -406,26 +414,15 @@ int _cdecl main(int argc, char *argv[]) {
       }
 #if defined(_WIN32)
       if (streq(opt, "w")) {		/* -w: Get WMI processor information */
-      	char buf[1024];
-      	char *pszPropName = argv[++i];
-	int iResult = GetWmiProcInfo(pszPropName, buf, sizeof(buf));
-	switch (iResult) {
-	case -1: {
-	  HRESULT hr = *(HRESULT *)buf;
-	  fprintf(stderr, "Failed to get WMI Win32_Processor property %s. HRESULT 0x%X", pszPropName, hr);
-	  break; }
-	case VT_BSTR:
-	  printf("%s = %s\n", pszPropName, buf);
-	  break;
-	default:
-	  printf("%s = %d\n", pszPropName, *(int *)buf);
-	  break;
+	if (((i+1) < argc) && !IsSwitch(argv[i+1])) {
+	  pszWmiPropName = argv[++i];
 	}
-	return 0;
+	iAction |= SHOW_WMI_PROPS;
+	continue;
       }
 #endif // defined(_WIN32)
       fprintf(stderr, "Error: Unsupported switch %s\n", arg);
-      return 1;
+      exit(1);
     } /* End if it's a switch */
     /* If it's an argument */
     if (!iAction) {
@@ -440,7 +437,7 @@ int _cdecl main(int argc, char *argv[]) {
     }
 err_unexpected_arg:
     fprintf(stderr, "Error: Unexpected argument \"%s\"\n", arg);
-    return 1;
+    exit(1);
   }
 
   if (!iAction) iAction = SHOW_NAME;
@@ -453,9 +450,11 @@ err_unexpected_arg:
   }
 
   if ((iAction == SHOW_CPUID_LEAF) || (iAction == SHOW_CPUID_SUBLEAF)) {
-    printf("CPUID(0x%lX", (ULONG)dwEAX);
-    if (iAction == SHOW_CPUID_SUBLEAF) printf(", 0x%lX", (ULONG)dwECX);
-    printf("):\n");
+    if (iVerbose) {
+      printf("CPUID(0x%lX", (ULONG)dwEAX);
+      if (iAction == SHOW_CPUID_SUBLEAF) printf(", 0x%lX", (ULONG)dwECX);
+      printf("):\n");
+    }
     _cpuid(dwEAX, &dwEAX, &dwEBX, &dwECX, &dwEDX);
     printf("EAX = 0x%08lX\n", (ULONG)dwEAX);
     printf("EBX = 0x%08lX\n", (ULONG)dwEBX);
@@ -492,20 +491,35 @@ err_unexpected_arg:
         DisplayProcInfo(pszQuery);
       }
     }
+  }
 
 #ifdef _WIN32
-    if ((iAction & SHOW_FEATURES) && !pszQuery) {
-      if (!iFirst) printf("\n"); iFirst = FALSE;
-      DisplayProcWmiInfo();
+  /* WMI properties allow double-checking some results of DisplayProcInfo() */
+  if (iAction & SHOW_WMI_PROPS) {	/* -w: Get WMI processor information */
+    if (!iFirst) printf("\n"); iFirst = FALSE;
+    if (pszWmiPropName) {
+      char buf[1024];
+      int iResult = FormatWmiProcInfo(pszWmiPropName, buf, sizeof(buf));
+      if (iResult == -1) {
+	HRESULT hr = *(HRESULT *)buf;
+	fprintf(stderr, "Failed to get WMI Win32_Processor property %s. HRESULT 0x%X", pszWmiPropName, hr);
+	return 1;
+      }
+      if (iVerbose) printf("%s = ", pszWmiPropName);
+      printf("%s\n", buf);
+    } else {
+      DisplayWmiProcInfo();
     }
+  }
 #endif // defined(_WIN32)
 
+  if (iFamily >= 5) {
     /* On Pentium or better, compute the processor frequency using the TSC */
     /* Note: This algorithm is compatible with Windows 95 & NT */
     if (iAction & SHOW_FREQUENCY) {
       if (!iFirst) printf("\n"); iFirst = FALSE;
       iFrequency = MeasureProcSpeed();
-      printf("Measured frequency: %ld MHz\n", iFrequency);
+      printf("Measured frequency: %d MHz\n", iFrequency);
     }
   }
 
@@ -531,12 +545,15 @@ void usage(void) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: cpuid [SWITCHES]\n\
+Usage: cpuid [SWITCHES] [LEAF [SUBLEAF]]\n\
+\n\
+Get a CPUID leaf (EAX) and optional subleaf (ECX)\n\
+Default: Get the CPU name\n\
 \n\
 Optional switches:\n\
 \n\
   -a        Display all we know about the processor\n\
- [-c] EAX [ECX]  Get one given CPUID leaf and optional sub-leaf\n"
+ [-c] LEAF [SUBLEAF]  Get a CPUID leaf (EAX) and optional sub-leaf (ECX)\n"
 #if _DEBUG
 "\
   -d        Output debug information\n"
@@ -556,7 +573,8 @@ Optional switches:\n\
   -V        Display this program version and exit\n"
 #if defined(_WIN32)
 "\
-  -w PROP   Get a WMI Win32_Processor property\n"
+  -w [PROP] Get a WMI Win32_Processor property (2)\n\
+            Default: Display a selection of properties\n"
 #endif
 "\
 \n\
@@ -569,7 +587,16 @@ Optional switches:\n\
     corresponding instruction sets in the GCC documentation page:\n\
     https://gcc.gnu.org/onlinedocs/gcc/gcc-command-options/machine-dependent-options/x86-options.html\n\
     Use option -ls to list the supported feature sets\n\
-\n\
+\n"
+#if defined(_WIN32)
+"\
+(2) WMI Win32_Processor properties can be listed by running in a cmd shell:\n\
+    wmic cpu get * /format:list\n\
+    or in PowerShell:\n\
+    Get-WmiObject Win32_Processor | fl *\n\
+\n"
+#endif
+"\
 Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
 ");
   exit(0);
@@ -840,7 +867,19 @@ int MeasureProcSpeed() {
   }
 #endif // defined(_MSDOS)
 
+/* TODO: This code generates an exception every other time it's run in DOS!
+         This is reproducible in both Windows 95 and Windows XP VMs.
+         The exception occurs at a seemingly random place after this point,
+         so this does not seem to be related to a particular instruction,
+         but rather to the critical section itself, or even to the switch
+         to protected mode.
+         When fixed, remove the debug output of "." inside the critical
+         section below.
+*/
 #ifdef _MSDOS
+#if _DEBUG
+  if (iDebug) printf("BeginCriticalSection()\n"); fflush(stdout);
+#endif
   BeginCriticalSection();
 #endif // defined(_MSDOS)
   // Wait for the end of the current tick
@@ -849,10 +888,19 @@ int MeasureProcSpeed() {
   lt0 = lt1;
   dwt0 = _rdtsc();
   // Wait for 1 second
-  while ((lt1 = getms()) < (lt0 + 1000)) {}
+  while ((lt1 = getms()) < (lt0 + 1000)) {
+#ifdef _MSDOS
+#if _DEBUG
+  if (iDebug) printf("."); fflush(stdout);
+#endif
+#endif
+  }
   dwt1 = _rdtsc();
 #ifdef _MSDOS
   EndCriticalSection();
+#if _DEBUG
+  if (iDebug) printf("\nEndCriticalSection()\n"); fflush(stdout);
+#endif
 #endif // defined(_MSDOS)
   // Compute frequency
   dwt1 -= dwt0;			// Number of cycles
@@ -912,7 +960,7 @@ char *ppszFeatures[32] = { /* Intel Features Flags - EAX=1 -> EDX */
   /* 0x00000080  7 */ "mce - Machine-check exception",
   /* 0x00000100  8 */ "cx8 - CMPXCHG8B instruction",
   /* 0x00000200  9 */ "apic - Integrated APIC",
-  /* 0x00000400 10 */ "(EDX bit 10 reserved)",
+  /* 0x00000400 10 */ "", // EDX bit 10 reserved
   /* 0x00000800 11 */ "sep - SYSENTER/SYSEXIT instructions",
   /* 0x00001000 12 */ "mttr - MTRR registers, and the MTRR_CAP register",
   /* 0x00002000 13 */ "pge - Page Global Enable bit in CR4",
@@ -922,7 +970,7 @@ char *ppszFeatures[32] = { /* Intel Features Flags - EAX=1 -> EDX */
   /* 0x00020000 17 */ "pse-36 - 36-bit page size extensions",
   /* 0x00040000 18 */ "psn - Processor Serial Number in CPUID#3",
   /* 0x00080000 19 */ "clfsh - CLFLUSH instruction",
-  /* 0x00100000 20 */ "(EDX bit 20 reserved)",
+  /* 0x00100000 20 */ "", // EDX bit 20 reserved
   /* 0x00200000 21 */ "ds - Debug Trace Store & Event Mon.",
   /* 0x00400000 22 */ "acpi - ACPI thermal and clock control registers",
   /* 0x00800000 23 */ "mmx - MMX instructions",
@@ -953,7 +1001,7 @@ char *ppszFeatures2[32] = { /* Intel Features Flags - EAX=1 -> ECX */
   /* 0x00002000 13 */ "cx16 - CMPXCHG16B instruction",
   /* 0x00004000 14 */ "xtpr - Send Task Priority Messages update control",
   /* 0x00008000 15 */ "pdcm - Perfmon and Debug Capability",
-  /* 0x00010000 16 */ "(ECX bit 16 reserved)",
+  /* 0x00010000 16 */ "", // ECX bit 16 reserved
   /* 0x00020000 17 */ "pcid - Process Context Identifiers (CR4 bit 17)",
   /* 0x00040000 18 */ "dca - Direct Cache Access for DMA writes",
   /* 0x00080000 19 */ "sse4.1 - SSE 4.1 (Streaming SIMD Extensions 4.1)",
@@ -1022,7 +1070,7 @@ char *ppszFeatures70c[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
   /* 0x00001000 12 */ "avx512-bitalg - AVX-512 BITALG instructions",
   /* 0x00002000 13 */ "tme - IA32_TME related MSRs",
   /* 0x00004000 14 */ "avx512-vpopcntdq - AVX-512 Vector Population Count Double and Quad-word",
-  /* 0x00008000 15 */ "(ECX bit 15 reserved)",
+  /* 0x00008000 15 */ "", // ECX bit 15 reserved
   /* 0x00010000 16 */ "la57 - 5-level paging",
   /* 0x00020000 17 */ "mawau - MPX Address-Width Adjust bit 0",
   /* 0x00040000 18 */ "mawau - MPX Address-Width Adjust bit 1",
@@ -1033,7 +1081,7 @@ char *ppszFeatures70c[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
   /* 0x00800000 23 */ "kl - Key Locker",
   /* 0x01000000 24 */ "BUS_LOCK_DETECT",
   /* 0x02000000 25 */ "cldemote - CLDEMOTE (Cache Line Demote) instruction",
-  /* 0x04000000 26 */ "(ECX bit 26 reserved)",
+  /* 0x04000000 26 */ "", // ECX bit 26 reserved
   /* 0x08000000 27 */ "movdiri - MOVDIR (Direct Store) instructions",
   /* 0x10000000 28 */ "movdir64b - MOVDIR64B (Direct Store) instructions",
   /* 0x20000000 29 */ "enqcmd - Enqueue Stores",
@@ -1042,28 +1090,28 @@ char *ppszFeatures70c[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=
 };
 
 char *ppszFeatures70d[32] = { /* Structured Extended Feature Flags - EAX=7, ECX=0 -> EDX */
-  /* 0x00000001  0 */ "(EDX bit 0 reserved)",
-  /* 0x00000002  1 */ "(EDX bit 1 reserved)",
+  /* 0x00000001  0 */ "", // EDX bit 0 reserved
+  /* 0x00000002  1 */ "", // EDX bit 1 reserved
   /* 0x00000004  2 */ "avx512-4vnniw - AVX-512 4-register Neural Network instructions",
   /* 0x00000008  3 */ "avx512-4fmaps - AVX-512 4-register Multiply Accumulation Single precision",
   /* 0x00000010  4 */ "fsrm - FSRM (Fast Short REP MOVSB)",
   /* 0x00000020  5 */ "uintr - User Inter-processor Interrupts",
-  /* 0x00000040  6 */ "(EDX bit 6 reserved)",
-  /* 0x00000080  7 */ "(EDX bit 7 reserved)",
+  /* 0x00000040  6 */ "", // EDX bit 6 reserved
+  /* 0x00000080  7 */ "", // EDX bit 7 reserved
   /* 0x00000100  8 */ "avx512-vp2intersect - AVX-512 VP2INTERSECT Doubleword and Quadword Instructions",
   /* 0x00000200  9 */ "srdbs-ctrl - Special Register Buffer Data Sampling Mitigations",
   /* 0x00000400 10 */ "mc-clear - VERW instruction clears CPU buffers",
   /* 0x00000800 11 */ "rtm-always-abort - All TSX transactions are aborted",
-  /* 0x00001000 12 */ "(EDX bit 12 reserved)",
+  /* 0x00001000 12 */ "", // EDX bit 12 reserved
   /* 0x00002000 13 */ "TSX_FORCE_ABORT MSR is available",
   /* 0x00004000 14 */ "serialize - SERIALIZE instruction",
   /* 0x00008000 15 */ "hybrid - Mixture of CPU types in processor topology",
   /* 0x00010000 16 */ "tsxldtrk - TSXLDTRK instruction",
-  /* 0x00020000 17 */ "(EDX bit 17 reserved)",
+  /* 0x00020000 17 */ "", // EDX bit 17 reserved
   /* 0x00040000 18 */ "pconfig - PCONFIG Platform Configuration (Memory Encryption)",
   /* 0x00080000 19 */ "lbr - Architectural Last Branch Records",
   /* 0x00100000 20 */ "cet-ibt - Control flow enforcement (CET) indirect branch tracking",
-  /* 0x00200000 21 */ "(EDX bit 21 reserved)",
+  /* 0x00200000 21 */ "", // EDX bit 21 reserved
   /* 0x00400000 22 */ "amx-bf16 - Tile computation on bfloat16 numbers",
   /* 0x00800000 23 */ "avx512-fp16 - AVX512-FP16 half-precision floating-point instructions",
   /* 0x01000000 24 */ "amx-tile - Tile architecture",
@@ -1330,7 +1378,7 @@ char *YesNo(unsigned long n) {
     return "No";
 }
 
-int ReportFeatures(char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], char *pszQuery) {
+int ReportFeatures(char *pszLeaf, char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], char *pszQuery) {
   int i;
   size_t nQueryLen = 0;
 
@@ -1347,13 +1395,20 @@ int ReportFeatures(char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], 
       char *pszSpace = strchr(pszName, ' ');
       size_t nLen = (int)(pszSpace ? (pszSpace - pszName) : strlen(pszName));
       if ((nLen == nQueryLen) && !strncmp(pszQuery, pszName, nLen)) {
-	printf("%-3s %s\n", YesNo(dwValue & dwMask), pszName);
+	printf("%-3s %s", YesNo(dwValue & dwMask), pszName);
+      	if (iVerbose) printf(" - CPUID(%s) %s[%d]", pszLeaf, pszRegName, i);
+      	printf("\n");
         return TRUE;
       } else {
-      	pszName = "";
+      	continue;
       }
     }
-    if (pszName[0]) {
+    if (pszName[0] || iVerbose || (dwValue & dwMask)) { // Do report reserved bits that are set
+      char szReserved[32];
+      if (!pszName[0]) { // If reporting a reserved bit, generate a dummy name
+      	sprintf(szReserved, "(%s bit %d reserved)", pszRegName, i);
+      	pszName = szReserved;
+      }
       printf(" %s %2d %-3s %s\n", pszRegName, i, YesNo(dwValue & dwMask), pszName);
     }
   }
@@ -1378,13 +1433,13 @@ int DisplayProcInfo(char *pszQuery) {
   int nCores;
   char *pszErrMsg = NULL;
 
-  // CPUID(0) :
+  // CPUID(0) - Basic CPUID Information
   _cpuid(0, &dwMaxValue, (DWORD *)(szName+0), (DWORD *)(szName+8), (DWORD *)(szName+4));
   szName[12] = '\0';
   if (!pszQuery) printf("%s", szName);
 
   if (dwMaxValue >= 1) {
-    // CPUID(1) : Request the Family/Model/Step
+    // Request the Family/Model/Step
     _cpuid(1, &dwModel, &dwModel2, &dwFeatures2, &dwFeatures);
     if (!pszQuery) {
       iFamily = BYTE1(dwModel) & 0x0F;
@@ -1411,7 +1466,7 @@ int DisplayProcInfo(char *pszQuery) {
       printf("\n");
     }
 
-    // CPUID(0x80000000) : Get max extended function supported.
+    /* CPUID(0x80000000) - Get max extended function supported */
     if (!pszQuery) printf("\nMax base function: 0x%08lX\n", dwMaxValue);
     dwMaxValueX = _cpuid(0x80000000, NULL, NULL, NULL, NULL);
     if (!pszQuery) {
@@ -1422,48 +1477,48 @@ int DisplayProcInfo(char *pszQuery) {
     }
 
     /* Intel Feature Flags */
-    if (!pszQuery) printf("\nCPUID(1): Intel Features Flags:\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
-    if (ReportFeatures("EDX", dwFeatures, ppszFeatures, pszQuery)) return TRUE;
-    if (ReportFeatures("ECX", dwFeatures2, ppszFeatures2, pszQuery)) return TRUE;
+    if (!pszQuery) printf("\nCPUID(1): Intel Features Flags\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
+    if (ReportFeatures("1", "EDX", dwFeatures, ppszFeatures, pszQuery)) return TRUE;
+    if (ReportFeatures("1", "ECX", dwFeatures2, ppszFeatures2, pszQuery)) return TRUE;
 
     /* AMD Extended Features Flags */
     if (dwMaxValueX >= 0x80000001) {
       /* Only display those that are documented in recent Intel's manuals */
       // CPUID(0x80000001) : Get extended feature flags.
       _cpuid(0x80000001, NULL, NULL, &dwFeatures4, &dwFeatures3);
-      if (!pszQuery) printf("\nCPUID(0x80000001): AMD Extended Features Flags:\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
-      if (ReportFeatures("EDX", dwFeatures3, ppszExtFeatures, pszQuery)) return TRUE;
-      if (ReportFeatures("ECX", dwFeatures4, ppszExtFeatures2, pszQuery)) return TRUE;
+      if (!pszQuery) printf("\nCPUID(0x80000001): AMD Extended Features Flags\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
+      if (ReportFeatures("0x80000001", "EDX", dwFeatures3, ppszExtFeatures, pszQuery)) return TRUE;
+      if (ReportFeatures("0x80000001", "ECX", dwFeatures4, ppszExtFeatures2, pszQuery)) return TRUE;
     }
 
-    /* Structured Extended Feature Flags */
+    /* CPUID(7, *) - Structured Extended Feature Flags */
     if (dwMaxValue >= 7) {
       int nSubLeaves;
 
       dwECX = 0;
       _cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      if (!pszQuery) printf("\nCPUID(7, 0): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (!pszQuery) printf("\nCPUID(7, 0): Extended Features Flags\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
       nSubLeaves = (int)dwEAX + 1;
       if (!pszQuery) printf("\n EAX        Max sub-leave = %ld\n", dwEAX);
-      if (ReportFeatures("EBX", dwEBX, ppszFeatures70b, pszQuery)) return TRUE;
-      if (ReportFeatures("ECX", dwECX, ppszFeatures70c, pszQuery)) return TRUE;
-      if (ReportFeatures("EDX", dwEDX, ppszFeatures70d, pszQuery)) return TRUE;
+      if (ReportFeatures("7, 0", "EBX", dwEBX, ppszFeatures70b, pszQuery)) return TRUE;
+      if (ReportFeatures("7, 0", "ECX", dwECX, ppszFeatures70c, pszQuery)) return TRUE;
+      if (ReportFeatures("7, 0", "EDX", dwEDX, ppszFeatures70d, pszQuery)) return TRUE;
 
       if (nSubLeaves > 1) {
 	dwECX = 1;
 	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	if (!pszQuery) printf("\nCPUID(7, 1): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
-	if (ReportFeatures("EAX", dwEAX, ppszFeatures71a, pszQuery)) return TRUE;
-	if (ReportFeatures("EBX", dwEBX, ppszFeatures71b, pszQuery)) return TRUE;
-	if (ReportFeatures("ECX", dwECX, ppszFeatures71c, pszQuery)) return TRUE;
-	if (ReportFeatures("EDX", dwEDX, ppszFeatures71d, pszQuery)) return TRUE;
+	if (!pszQuery) printf("\nCPUID(7, 1): Extended Features Flags\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+	if (ReportFeatures("7, 1", "EAX", dwEAX, ppszFeatures71a, pszQuery)) return TRUE;
+	if (ReportFeatures("7, 1", "EBX", dwEBX, ppszFeatures71b, pszQuery)) return TRUE;
+	if (ReportFeatures("7, 1", "ECX", dwECX, ppszFeatures71c, pszQuery)) return TRUE;
+	if (ReportFeatures("7, 1", "EDX", dwEDX, ppszFeatures71d, pszQuery)) return TRUE;
       }
 
       for (i=2; i<nSubLeaves; i++) {
 	dwECX = i;
 	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
 	if (!pszQuery) {
-	  printf("\nCPUID(7, %d): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
+	  printf("\nCPUID(7, %d): Extended Features Flags\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
 	} else {
 	  if (!pszErrMsg) {
 	    pszErrMsg = malloc(80);
@@ -1473,12 +1528,12 @@ int DisplayProcInfo(char *pszQuery) {
       }
     }
 
-    /* Extended State feature flags */
+    /* CPUID(0x0D) - Extended State feature flags */
     if (dwMaxValue >= 0x0D) {
       dwECX = 1;
       _cpuid(0x0D, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      if (!pszQuery) printf("\nCPUID(0x0D, 1): Extended State Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
-      if (ReportFeatures("EAX", dwEAX, ppszFeaturesd1a, pszQuery)) return TRUE;
+      if (!pszQuery) printf("\nCPUID(0x0D, 1): Extended State Features Flags\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (ReportFeatures("0x0D, 1", "EAX", dwEAX, ppszFeaturesd1a, pszQuery)) return TRUE;
     }
 
     /* Done scanning feature bits. Report search failure if not found earlier. */
@@ -1488,7 +1543,47 @@ int DisplayProcInfo(char *pszQuery) {
       return(FALSE);
     }
 
-    /* Number of cores and threads */
+    /* CPUID(4, *) - Deterministic Cache Parameters */
+    if (dwMaxValue >= 4) {
+      printf("\nMemory Caches\n");
+      for (i=0; ; i++) {
+      	int iType;
+      	char *pszType;
+      	int iLevel;
+      	int iWays;
+      	int iParts;
+      	int iLineSZ;
+      	long nSets;
+      	long nSize;
+      	
+      	dwECX = i;
+	_cpuid(4, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+	iType = (int)(dwEAX & 0x1F);
+	if (!iType) break;
+	printf(" CPUID(4, %d): EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
+	switch (iType) {
+	  case 1: pszType = "Data Cache"; break;
+	  case 2: pszType = "Instruction Cache"; break;
+	  case 3: pszType = "Unified Cache"; break;
+	  default: pszType = "Unknown type"; break;
+	}
+	iLevel = (int)((dwEAX >> 5) & 0x07);
+	/* Cache Size in Bytes
+	   = (Ways + 1) * (Partitions + 1) * (Line_Size + 1) * (Sets + 1)
+	   = (EBX[31:22] + 1) * (EBX[21:12] + 1) * (EBX[11:0] + 1) * (ECX + 1) */
+	iLineSZ = (int)(dwEBX & 0xFFF) + 1;
+	iParts = (int)((dwEBX >> 12) & 0x3FF) + 1;
+	iWays = (int)((dwEBX >> 22) & 0x3FF) + 1;
+	nSets = (long)(dwECX) + 1;
+	/* Remove 10 bits from the factors, to directly get a result in kilo-bytes,
+	   while avoiding an integer overflow in DOS mode. */
+	nSize = (iWays >> 2) * iParts * (iLineSZ >> 4) * (nSets >> 4);
+	printf("  Level %d %ld KB %s", iLevel, nSize, pszType);
+	printf(" (%ld sets of %d-way %d-level %d-byte lines)\n", nSets, iWays, iParts, iLineSZ);
+      }
+    }
+
+    /* CPUID(0x0B, *) / CPUID(0x1F, *) - Number of cores and threads */
     printf("\nCores and threads\n");
     nCores = 1;
     if (dwFeatures & (1L << 28)) nCores = (int)BYTE2(dwModel2);
@@ -1500,7 +1595,7 @@ int DisplayProcInfo(char *pszQuery) {
       _cpuid(4, &dwEAX, &dwEBX, &dwECX, &dwEDX);
       nMaxCores = (int)((dwEAX >> 26) & 0x3F) + 1;
       nMaxThreads = (int)((dwEAX >> 14) & 0xFFF) + 1;
-      printf(" CPUID(4):  Silicon supports %d cores and %d threads/core\n", nMaxCores, nMaxThreads);
+      printf(" CPUID(4, 0):  Silicon supports %d cores and %d threads/core\n", nMaxCores, nMaxThreads);
     }
     if (dwMaxValue >= 0x0B) {
       int iFunction = (dwMaxValue >= 0x1F) ? 0x1F : 0x0B; /* Function 0x1F is the preferred replacement, if available */
@@ -1533,7 +1628,7 @@ int DisplayProcInfo(char *pszQuery) {
       }
     }
 
-    /* Virtual and Physical address Sizes */
+    /* CPUID(0x16) - Virtual and Physical address Sizes */
     if (dwMaxValue >= 0x16) {
       _cpuid(0x16, &dwEAX, &dwEBX, &dwECX, NULL);
       printf("\nCPUID(0x16): Processor Frequency Information\n");
@@ -1542,7 +1637,7 @@ int DisplayProcInfo(char *pszQuery) {
       printf(" Bus Frequency = %d MHz\n", (int)dwECX);
     }
 
-    /* System-On-Chip Vendor Attribute */
+    /* CPUID(0x17) - System-On-Chip Vendor Attribute */
     if (dwMaxValue >= 0x17) {
       char szSocVendor[50];
       for (i=0; i<3; i++) {
@@ -1551,15 +1646,15 @@ int DisplayProcInfo(char *pszQuery) {
 	_cpuid(0x17, pdw+0, pdw+1, pdw+2, pdw+3);
       }
       szSocVendor[48] = '\0';
-      printf("\nCPUID(0x17): System-On-Chip Vendor Name:\n \"%s\"\n", szSocVendor);
+      printf("\nCPUID(0x17): System-On-Chip Vendor Name\n \"%s\"\n", szSocVendor);
     }
 
-    /* Deterministic Address Translation Parameters */
+    /* CPUID(0x18) - Deterministic Address Translation Parameters */
     if (dwMaxValue >= 0x18) {
       int iMax18;
       dwECX = 0;
       _cpuid(0x18, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      printf("\nCPUID(0x18, 0): Deterministic Address Translation Parameters:\n");
+      printf("\nCPUID(0x18, 0): Deterministic Address Translation Parameters\n");
       iMax18 = (int)dwEAX;
       if (!iMax18 && !(dwEDX & 0x1F)) {
       	printf(" Not specified\n");
@@ -1600,7 +1695,7 @@ int DisplayProcInfo(char *pszQuery) {
       }
     }
 
-    /* Hybrid Information Enumeration */
+    /* CPUID(0x1A) - Hybrid Information Enumeration */
     if (dwMaxValue >= 0x1A) {
       DWORD dwModelId;
       int iCoreType;
@@ -1614,12 +1709,12 @@ int DisplayProcInfo(char *pszQuery) {
 	case 0x40: pszTypeName = "Intel Core"; break;
 	default:   pszTypeName = "Unknown core type"; break;
       }
-      printf("\nCPUID(0x1A): Hybrid Information Enumeration:\n");
+      printf("\nCPUID(0x1A): Hybrid Information Enumeration\n");
       printf(" Core type = 0x%02X = %s\n", iCoreType, pszTypeName);
       printf(" Model ID = %lu\n", (ULONG)dwModelId);
     }
 
-    /* Brand string */
+    /* CPUID(0x80000002) - Brand string */
     if (dwMaxValueX >= 0x80000004) {
       char szBrand[48];
       DWORD *pdwBrand = (DWORD *)szBrand;
@@ -1630,10 +1725,10 @@ int DisplayProcInfo(char *pszQuery) {
       _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
       _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
       while (*pszBrand == ' ') pszBrand++; // Skip head spaces, if any
-      printf("\nCPUID(0x80000002...0x80000004): Brand string:\n \"%s\"\n", pszBrand);
+      printf("\nCPUID(0x80000002...0x80000004): Brand string\n \"%s\"\n", pszBrand);
     }
 
-    /* Virtual and Physical address Sizes */
+    /* CPUID(0x80000008) - Virtual and Physical address Sizes */
     if (dwMaxValueX >= 0x80000008) {
       DWORD dwInfo;
 
@@ -1739,14 +1834,14 @@ sFeatureNode featureSets[] = {
   {"bdver2", "bdver2/1", "fma", NULL, NULL},		  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA
   {"bdver3", "bdver2", "fsgsbase", NULL, NULL},		  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA, FSGSBASE
   {"bdver4", "bdver3", "movbe", "avx2", "bmi2"},	  // AMD Family 15h cores	MMX, SSE, SSE2, SSE3, SSE4A, ABM, FMA4, AVX, XOP, LWP, AES, PCLMUL, CX16, SSSE3, SSE4.1, SSE4.2, BMI, TBM, F16C, FMA, FSGSBASE, MOVBE, AVX2, BMI2
-};                                                                                                                                                                                                                 
+};
 
 /* Alias
    k8		opteron
    athlon64	opteron
    athlon-fx	opteron
 */
-                                                                                                                                                                                                                                  
+
 #define N_FEATURE_SETS (sizeof(featureSets) / sizeof(featureSets[0]))
 
 typedef int (*pFeatureCB)(char *pszFeature, void *pRef);
@@ -1768,7 +1863,7 @@ int ScanFeatureSets(char *pszFeatureSet, pFeatureCB FeatureCB, void *pRef) {
       	FeatureCB(featureSets[i].pszFeature3, pRef);
       }
       return TRUE;
-    } 
+    }
   }
   return FALSE;
 }
@@ -1815,7 +1910,7 @@ int QueryFeature(char *pszFeature) {
   DisplayProcInfo(pszFeature);
   return TRUE;
 }
-  
+
 /*---------------------------------------------------------------------------*\
 *                                                                             *
 |   Function	    _cpuid						      |
@@ -2234,7 +2329,7 @@ cleanup_and_exit:
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    DisplayProcWmiInfo					      |
+|   Function	    DisplayWmiProcInfo					      |
 |									      |
 |   Description	    Display a few WMI properties			      |
 |									      |
@@ -2251,7 +2346,50 @@ cleanup_and_exit:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-void DisplayProcWmiInfo(void) {
+int FormatWmiProcInfo(char *pszPropName, void *lpBuf, size_t nBufSize) {
+  int iType = GetWmiProcInfo(pszPropName, lpBuf, nBufSize);
+  char *pszType = "";
+  if (iVerbose) switch (iType) {
+    case -1:
+      break;
+    case VT_BOOL:
+      pszType = "(bool)";
+      break;
+    case VT_I1:
+    case VT_UI1:
+      pszType = "(char)";
+      break;
+    case VT_I2:
+    case VT_UI2:
+      pszType = "(int16)";
+      break;
+    case VT_I4:
+    case VT_UI4:
+    case VT_INT:
+    case VT_UINT:
+      pszType = "(int32)";
+      break;
+    case VT_BSTR:
+      pszType = "(string)";
+      break;
+    default:
+      pszType = "(unknown)";
+      break;
+  }
+  switch (iType) {
+  case -1:
+    break;
+  case VT_BOOL:
+    sprintf(lpBuf, "%s%s", pszType, *(BOOL *)lpBuf ? "True" : "False");
+    break;
+  default:
+    sprintf(lpBuf, "%s%d", pszType, *(int *)lpBuf);
+    break;
+  }
+  return iType;
+}
+
+void DisplayWmiProcInfo(void) {
   char *pszProps[] = {
     "L2CacheSize",
     "L3CacheSize",
@@ -2261,25 +2399,14 @@ void DisplayProcWmiInfo(void) {
 
   printf("WMI Win32_Processor information\n");
   for (i=0; i<(sizeof(pszProps)/sizeof(char *)); i++) {
-    char *pszPropName;
-    int iRet;
-    char buf[256];
-    pszPropName = pszProps[i];
-    iRet = GetWmiProcInfo(pszPropName, buf, sizeof(buf));
-    switch (iRet) {
-    case -1: {
+    char *pszPropName = pszProps[i];
+    char buf[1024];
+    int iRet = FormatWmiProcInfo(pszPropName, buf, sizeof(buf));
+    if (iRet == -1) {
       HRESULT hr = *(HRESULT *)buf;
       printf(" %s = (WMI Error. HRESULT = 0x%X)\n", pszPropName, hr);
-      break; }
-    case VT_BOOL:
-      printf(" %s = %s\n", pszPropName, *(BOOL *)buf ? "True" : "False");
-      break;
-    case VT_BSTR:
+    } else {
       printf(" %s = %s\n", pszPropName, buf);
-      break;
-    default:
-      printf(" %s = %d\n", pszPropName, *(int *)buf);
-      break;
     }
   }
 }
