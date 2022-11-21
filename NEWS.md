@@ -4,7 +4,7 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2022-11-17
+## [Unreleased] 2022-11-21
 ### Changed
 - cpuid.exe: Added a WIN64 version.
   Added option -c to manually test one CPUID call.
@@ -17,9 +17,14 @@ For more details about changes in a particular area, see the README.txt and/or N
   Added options -a, -f, -n, -t to invoke individual actions.
   Added option -q to query if a given feature or feature set is available.
   Added option -ls to list supported feature sets.
+  Decode leafs 4, 16H, 17H, 18H, 1AH.
+  Display the reserved feature bits that are set.
+  Streamlined the output in non-verbose mode; Additional details in verbose mode.
+  Option -w alone calls DisplayWmiProcInfo().
 
 ### Fixed
 - cpuid.exe: Fixed the extended family and model calculations and display.
+  Fixed a bug displaying the measured frequency in DOS.
 
 ## [Unreleased] 2022-10-22
 ### Changed
