@@ -16,6 +16,10 @@
 *		    See Intel's IA32 Software Development Manual volume 3     *
 *		    chapter 28.2 (EPT) and appendix A (VMX Capability         *
 *		    Reporting Facility                                        *
+*                   And reading MSRs requires using a device driver.          *
+*                   https://stackoverflow.com/questions/45428588/can-i-read-the-cpu-performance-counters-from-a-user-mode-program-in-windows
+*                   https://github.com/intel/pcm/tree/master/src/WinMSRDriver *
+*                   https://github.com/intel/pcm/blob/master/doc/WINDOWS_HOWTO.md
 *                                                                             *
 *                   Microsoft's amd64 C compiler does not support inline      *
 *                   assembly. Instead, use the intrinsic functions that       *
@@ -72,6 +76,8 @@
 *    2022-11-15 JFL Improved option -q to support feature sets.               *
 *    2022-11-16 JFL Added option -ls to list feature sets.                    *
 *    2022-11-17 JFL Option -c is implied when passing arguments.              *
+*    2022-11-18 JFL Decode leafs 16H, 17H, 1AH.			              *
+*    2022-11-20 JFL Decode leaf 18H.				              *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -79,7 +85,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-17"
+#define PROGRAM_VERSION "2022-11-20"
 
 /* Definitions */
 
@@ -447,14 +453,14 @@ err_unexpected_arg:
   }
 
   if ((iAction == SHOW_CPUID_LEAF) || (iAction == SHOW_CPUID_SUBLEAF)) {
-    printf("CPUID(0x%lX", (unsigned long)dwEAX);
-    if (iAction == SHOW_CPUID_SUBLEAF) printf(", 0x%lX", (unsigned long)dwECX);
+    printf("CPUID(0x%lX", (ULONG)dwEAX);
+    if (iAction == SHOW_CPUID_SUBLEAF) printf(", 0x%lX", (ULONG)dwECX);
     printf("):\n");
     _cpuid(dwEAX, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-    printf("EAX = 0x%08lX\n", (unsigned long)dwEAX);
-    printf("EBX = 0x%08lX\n", (unsigned long)dwEBX);
-    printf("ECX = 0x%08lX\n", (unsigned long)dwECX);
-    printf("EDX = 0x%08lX\n", (unsigned long)dwEDX);
+    printf("EAX = 0x%08lX\n", (ULONG)dwEAX);
+    printf("EBX = 0x%08lX\n", (ULONG)dwEBX);
+    printf("ECX = 0x%08lX\n", (ULONG)dwECX);
+    printf("EDX = 0x%08lX\n", (ULONG)dwEDX);
     return 0;
   }
 
@@ -1332,6 +1338,8 @@ int ReportFeatures(char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], 
 
   if (pszQuery) nQueryLen = strlen(pszQuery);
 
+  if (!pszQuery) printf("\n");
+
   for (i = 0; i < 32; i++) {
     char *pszName = ppszFeatureNames[i];
     DWORD dwMask = (DWORD)1 << i;
@@ -1349,7 +1357,6 @@ int ReportFeatures(char *pszRegName, DWORD dwValue, char *ppszFeatureNames[32], 
       printf(" %s %2d %-3s %s\n", pszRegName, i, YesNo(dwValue & dwMask), pszName);
     }
   }
-  if (!pszQuery) printf("\n");
 
   return FALSE;
 }
@@ -1369,6 +1376,7 @@ int DisplayProcInfo(char *pszQuery) {
   int iModel;
   int i;
   int nCores;
+  char *pszErrMsg = NULL;
 
   // CPUID(0) :
   _cpuid(0, &dwMaxValue, (DWORD *)(szName+0), (DWORD *)(szName+8), (DWORD *)(szName+4));
@@ -1400,22 +1408,21 @@ int DisplayProcInfo(char *pszQuery) {
 	  break;
 	}
       }
-      printf("\n\n");
+      printf("\n");
     }
 
     // CPUID(0x80000000) : Get max extended function supported.
-    if (!pszQuery) printf("Max base function: 0x%08lX\n", dwMaxValue);
+    if (!pszQuery) printf("\nMax base function: 0x%08lX\n", dwMaxValue);
     dwMaxValueX = _cpuid(0x80000000, NULL, NULL, NULL, NULL);
     if (!pszQuery) {
       if (dwMaxValueX >= 0x80000000)
 	printf("Max extended function: 0x%08lX\n", dwMaxValueX);
       else
 	printf("No extended CPUID functions.\n");
-      printf("\n");
     }
 
     /* Intel Feature Flags */
-    if (!pszQuery) printf("CPUID(1): Intel Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
+    if (!pszQuery) printf("\nCPUID(1): Intel Features Flags:\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures, dwFeatures2);
     if (ReportFeatures("EDX", dwFeatures, ppszFeatures, pszQuery)) return TRUE;
     if (ReportFeatures("ECX", dwFeatures2, ppszFeatures2, pszQuery)) return TRUE;
 
@@ -1424,7 +1431,7 @@ int DisplayProcInfo(char *pszQuery) {
       /* Only display those that are documented in recent Intel's manuals */
       // CPUID(0x80000001) : Get extended feature flags.
       _cpuid(0x80000001, NULL, NULL, &dwFeatures4, &dwFeatures3);
-      if (!pszQuery) printf("CPUID(0x80000001): AMD Extended Features Flags: EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
+      if (!pszQuery) printf("\nCPUID(0x80000001): AMD Extended Features Flags:\n EDX=0x%08lX ECX=0x%08lX\n", dwFeatures3, dwFeatures4);
       if (ReportFeatures("EDX", dwFeatures3, ppszExtFeatures, pszQuery)) return TRUE;
       if (ReportFeatures("ECX", dwFeatures4, ppszExtFeatures2, pszQuery)) return TRUE;
     }
@@ -1435,9 +1442,9 @@ int DisplayProcInfo(char *pszQuery) {
 
       dwECX = 0;
       _cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      if (!pszQuery) printf("CPUID(7, 0): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (!pszQuery) printf("\nCPUID(7, 0): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
       nSubLeaves = (int)dwEAX + 1;
-      if (!pszQuery) printf(" EAX        Max sub-leave = %ld\n\n", dwEAX);
+      if (!pszQuery) printf("\n EAX        Max sub-leave = %ld\n", dwEAX);
       if (ReportFeatures("EBX", dwEBX, ppszFeatures70b, pszQuery)) return TRUE;
       if (ReportFeatures("ECX", dwECX, ppszFeatures70c, pszQuery)) return TRUE;
       if (ReportFeatures("EDX", dwEDX, ppszFeatures70d, pszQuery)) return TRUE;
@@ -1445,7 +1452,7 @@ int DisplayProcInfo(char *pszQuery) {
       if (nSubLeaves > 1) {
 	dwECX = 1;
 	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-	if (!pszQuery) printf("CPUID(7, 1): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+	if (!pszQuery) printf("\nCPUID(7, 1): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
 	if (ReportFeatures("EAX", dwEAX, ppszFeatures71a, pszQuery)) return TRUE;
 	if (ReportFeatures("EBX", dwEBX, ppszFeatures71b, pszQuery)) return TRUE;
 	if (ReportFeatures("ECX", dwECX, ppszFeatures71c, pszQuery)) return TRUE;
@@ -1456,56 +1463,33 @@ int DisplayProcInfo(char *pszQuery) {
 	dwECX = i;
 	_cpuid(7, &dwEAX, &dwEBX, &dwECX, &dwEDX);
 	if (!pszQuery) {
-	  printf("CPUID(7, %d): Extended Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
+	  printf("\nCPUID(7, %d): Extended Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEAX, dwEBX, dwECX, dwEDX);
 	} else {
-	  static int iReported = 0;
-	  if (!iReported) fprintf(stderr, "\nWarning: There are unknown bits to decode in CPUID(7, %d)\n\n", i);
-	  iReported = 1;
+	  if (!pszErrMsg) {
+	    pszErrMsg = malloc(80);
+	    if (pszErrMsg) sprintf(pszErrMsg, "Warning: There are unknown bits to decode in CPUID(7, %d)", i);
+	  }
 	}
       }
     }
 
     /* Extended State feature flags */
-
     if (dwMaxValue >= 0x0D) {
       dwECX = 1;
       _cpuid(0x0D, &dwEAX, &dwEBX, &dwECX, &dwEDX);
-      if (!pszQuery) printf("CPUID(0x0D, 1): Extended State Features Flags: EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
+      if (!pszQuery) printf("\nCPUID(0x0D, 1): Extended State Features Flags:\n EAX=0x%08lX EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", dwEAX, dwEBX, dwECX, dwEDX);
       if (ReportFeatures("EAX", dwEAX, ppszFeaturesd1a, pszQuery)) return TRUE;
     }
 
+    /* Done scanning feature bits. Report search failure if not found earlier. */
     if (pszQuery) {
+      if (pszErrMsg) fprintf(stderr, "%s\n", pszErrMsg);
       fprintf(stderr, "Unknown feature: %s\n", pszQuery);
       return(FALSE);
     }
 
-    /* Brand string */
-    if (dwMaxValueX >= 0x80000004) {
-      char szBrand[48];
-      DWORD *pdwBrand = (DWORD *)szBrand;
-      char *pszBrand = szBrand;
-
-      // CPUID(0x80000002 - 0x80000004) : Get brand string.
-      _cpuid(0x80000002, pdwBrand+0, pdwBrand+1, pdwBrand+2, pdwBrand+3);
-      _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
-      _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
-      while (*pszBrand == ' ') pszBrand++; // Skip head spaces, if any
-      printf("Brand string: \"%s\"\n", pszBrand);
-      printf("\n");
-    }
-
-    /* Virtual and Physical address Sizes */
-    if (dwMaxValueX >= 0x80000008) {
-      DWORD dwInfo;
-
-      _cpuid(0x80000008, &dwInfo, NULL, NULL, NULL);
-      printf("Physical Address Size: %d bits\n", BYTE0(dwInfo));
-      printf("Virtual Address Size: %d bits\n", BYTE1(dwInfo));
-      printf("\n");
-    }
-
     /* Number of cores and threads */
-    printf("Cores and threads\n");
+    printf("\nCores and threads\n");
     nCores = 1;
     if (dwFeatures & (1L << 28)) nCores = (int)BYTE2(dwModel2);
     printf(" CPUID(1):  Silicon supports %d logical processors\n", nCores);
@@ -1548,6 +1532,118 @@ int DisplayProcInfo(char *pszQuery) {
 	/* We _might_ have to loop using instead: iLevel = dwEDX >> (dwEAX & 0x1F) */
       }
     }
+
+    /* Virtual and Physical address Sizes */
+    if (dwMaxValue >= 0x16) {
+      _cpuid(0x16, &dwEAX, &dwEBX, &dwECX, NULL);
+      printf("\nCPUID(0x16): Processor Frequency Information\n");
+      printf(" Processor Base Frequency = %d MHz\n", (int)dwEAX);
+      printf(" Processor Maximum Frequency = %d MHz\n", (int)dwEBX);
+      printf(" Bus Frequency = %d MHz\n", (int)dwECX);
+    }
+
+    /* System-On-Chip Vendor Attribute */
+    if (dwMaxValue >= 0x17) {
+      char szSocVendor[50];
+      for (i=0; i<3; i++) {
+      	DWORD *pdw = (DWORD *)szSocVendor + (4*i);
+	pdw[2] = i;	// ECX
+	_cpuid(0x17, pdw+0, pdw+1, pdw+2, pdw+3);
+      }
+      szSocVendor[48] = '\0';
+      printf("\nCPUID(0x17): System-On-Chip Vendor Name:\n \"%s\"\n", szSocVendor);
+    }
+
+    /* Deterministic Address Translation Parameters */
+    if (dwMaxValue >= 0x18) {
+      int iMax18;
+      dwECX = 0;
+      _cpuid(0x18, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+      printf("\nCPUID(0x18, 0): Deterministic Address Translation Parameters:\n");
+      iMax18 = (int)dwEAX;
+      if (!iMax18 && !(dwEDX & 0x1F)) {
+      	printf(" Not specified\n");
+      } else {
+        printf(" EAX        Max sub-leave = %d\n", (int)dwEAX);
+      	for (i=0; i<=iMax18; i++) {
+      	  int iType;
+      	  char *pszType;
+      	  int iLevel;
+      	  if (i > 0) { // Avoid repeating the call for i == 0
+	    dwECX = i;
+	    _cpuid(0x18, &dwEAX, &dwEBX, &dwECX, &dwEDX);
+      	  }
+      	  iType = (int)(dwEDX & 0x1F);
+      	  if (!iType) continue;
+      	  switch (iType) {
+	    case 1: pszType = "Data TLB"; break;
+	    case 2: pszType = "Instruction TLB"; break;
+	    case 3: pszType = "Unified TLB"; break;
+	    case 4: pszType = "Load Only TLB"; break;
+	    case 5: pszType = "Store Only TLB"; break;
+	    default: pszType = "Unknown TLB type"; break;
+	  }
+      	  iLevel = (int)(dwEDX & 0xE0) >> 5;
+	  printf("CPUID(0x18, %d): EBX=0x%08lX ECX=0x%08lX EDX=0x%08lX\n", i, dwEBX, dwECX, dwEDX);
+	  printf(" level %d %s, supporting", iLevel, pszType);
+	  if (dwEBX & 0x01) printf(" 4KB");
+	  if ((dwEBX & 0x01) && (dwEBX & 0x02)) printf(" &");
+	  if (dwEBX & 0x02) printf(" 2MB");
+	  if ((dwEBX & 0x03) && (dwEBX & 0x04)) printf(" &");
+	  if (dwEBX & 0x04) printf(" 4MB");
+	  if ((dwEBX & 0x07) && (dwEBX & 0x08)) printf(" &");
+	  if (dwEBX & 0x08) printf(" 1GB");
+	  if ((dwEBX & 0x0F) && (dwEBX & 0xF0)) printf(" &");
+	  if (dwEBX & 0xF0) printf(" other");
+	  printf(" page sizes\n");
+	}
+      }
+    }
+
+    /* Hybrid Information Enumeration */
+    if (dwMaxValue >= 0x1A) {
+      DWORD dwModelId;
+      int iCoreType;
+      char *pszTypeName;
+      _cpuid(0x1A, &dwModelId, NULL, NULL, NULL);
+      iCoreType = BYTE3(dwModelId);
+      BYTE3(dwModelId) = 0;
+      switch (iCoreType) {
+	case 0:    pszTypeName = "Not specified"; break;
+	case 0x20: pszTypeName = "Intel Atom"; break;
+	case 0x40: pszTypeName = "Intel Core"; break;
+	default:   pszTypeName = "Unknown core type"; break;
+      }
+      printf("\nCPUID(0x1A): Hybrid Information Enumeration:\n");
+      printf(" Core type = 0x%02X = %s\n", iCoreType, pszTypeName);
+      printf(" Model ID = %lu\n", (ULONG)dwModelId);
+    }
+
+    /* Brand string */
+    if (dwMaxValueX >= 0x80000004) {
+      char szBrand[48];
+      DWORD *pdwBrand = (DWORD *)szBrand;
+      char *pszBrand = szBrand;
+
+      // CPUID(0x80000002 - 0x80000004) : Get brand string.
+      _cpuid(0x80000002, pdwBrand+0, pdwBrand+1, pdwBrand+2, pdwBrand+3);
+      _cpuid(0x80000003, pdwBrand+4, pdwBrand+5, pdwBrand+6, pdwBrand+7);
+      _cpuid(0x80000004, pdwBrand+8, pdwBrand+9, pdwBrand+10, pdwBrand+11);
+      while (*pszBrand == ' ') pszBrand++; // Skip head spaces, if any
+      printf("\nCPUID(0x80000002...0x80000004): Brand string:\n \"%s\"\n", pszBrand);
+    }
+
+    /* Virtual and Physical address Sizes */
+    if (dwMaxValueX >= 0x80000008) {
+      DWORD dwInfo;
+
+      _cpuid(0x80000008, &dwInfo, NULL, NULL, NULL);
+      printf("\nCPUID(0x80000008): Physical and virtual address sizes\n");
+      printf(" Physical Address Size: %d bits\n", BYTE0(dwInfo));
+      printf(" Virtual Address Size: %d bits\n", BYTE1(dwInfo));
+    }
+  } else {
+    printf("\n");
   }
 
   return(FALSE);
