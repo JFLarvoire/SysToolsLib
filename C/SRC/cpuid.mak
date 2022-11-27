@@ -13,6 +13,7 @@
 #    2018-03-02 JFL Use new variable SKIP_THIS to prevent builds.             #
 #    2019-02-10 JFL Added (non)support for ARM, ARM64 and IA64.		      #
 #    2022-11-09 JFL But DO support WIN64 now.                   	      #
+#    2022-11-27 JFL Force the DOS app to actually be a LODOS app.	      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -21,6 +22,7 @@
 !IF "$(T)"=="DOS"
 SOURCES=cpuid.c
 OBJECTS=$(O)\cpuid.obj
+EXETYPE=LODOS	# Actually build a LODOS application in the DOS directory
 !ELSE # WIN95, WIN32, WIN64
 SOURCES=cpuid.c $(O)\cpuid.rc
 OBJECTS=$(O)\cpuid.obj $(O)\cpuid.res

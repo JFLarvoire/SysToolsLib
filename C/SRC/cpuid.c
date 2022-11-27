@@ -83,6 +83,8 @@
 *		    Decode the cache parameters in leaf 4.		      *
 *		    Fixed a bug displaying the measured frequency in DOS.     *
 *		    Option -w alone calls DisplayWmiProcInfo().		      *
+*    2022-11-27 JFL Make sure lodos.h is included before BiosLib's clibdef.h. *
+*		    This way, the DOS program output can be redirected.       *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -90,7 +92,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-21"
+#define PROGRAM_VERSION "2022-11-24"
 
 /* Definitions */
 
@@ -169,9 +171,9 @@ int iDebug = FALSE;
 
 #pragma warning(disable:4209)	// Ignore the benign typedef redefinition warning
 				// as several of the following redefine CHAR, WORD, DWORD
+#include "lodos.h"
 #include "clibdef.h"
 #include "utildef.h"
-#include "lodos.h"
 #include "pmode.h"
 
 #define vcpi2prot vm2prot
