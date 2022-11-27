@@ -89,7 +89,6 @@
 #		    LINK16  	16-bits Linker				      #
 #		    LIBPATH16   16-bits libraries paths			      #
 #		    LIB16   	16-bits librarian     			      #
-#		    RC16    	16-bits Resource compiler		      #
 #		    MAPSYM	16-bits Linker .map file to .sym converter    #
 #		    TMP	    	Temporary directory	 		      #
 #									      #
@@ -120,13 +119,14 @@
 #    2018-02-28 JFL Added $(LSX) Library SuffiX definition.		      #
 #    2018-03-02 JFL Added variable SKIP_THIS, to prevent building specific    #
 #		    versions.						      #
+#    2022-11-25 JFL Catch up on numerous changes and bug fixes.               #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.
-.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .mak
+.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .cc .cxx .mak .rc
 
 ###############################################################################
 #									      #
@@ -233,6 +233,7 @@ BP=$(B)\			#
 LP=$(L)\			#
 
 BR=$(T)$(DS)\BIN\$(MEM)		# Idem, relative to sources
+BRD=DOS$(DS)\BIN\$(MEM)		# Idem, relative to sources for DOS
 
 BB=$(BD)			# Final destination of executable files
 
@@ -264,22 +265,22 @@ LFLAGS=$(LFLAGS) /co
 RFLAGS=$(DD)
 
 INCPATH=$(BIOSLIB)
-LIBPATH=$(BIOSLIB)
+LIBPATH=$(BIOSLIB)\$(OUTDIR)
 LIBS=bios.lib
 !IF DEFINED(LODOSLIB)
 INCPATH=$(INCPATH);$(LODOSLIB)
-LIBPATH=$(LIBPATH);$(LODOSLIB)
+LIBPATH=$(LIBPATH);$(LODOSLIB)\$(OUTDIR)
 LIBS=$(LIBS) + lodos.lib
 !ENDIF
-!IF DEFINED(PMODE)
-INCPATH=$(INCPATH);$(PMODE)
-LIBPATH=$(LIBPATH);$(PMODE)
+!IF DEFINED(PMODELIB)
+INCPATH=$(INCPATH);$(PMODELIB)
+LIBPATH=$(LIBPATH);$(PMODELIB)\$(OUTDIR)
 LIBS=$(LIBS) + pmode.lib
 !ENDIF
 !IF DEFINED(SYSLIB)
 INCPATH=$(INCPATH);$(SYSLIB)
-LIBPATH=$(LIBPATH);$(SYSLIB)\$(B)
-LIBS=$(LIBS) + syslib.lib
+LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\LIB
+LIBS=$(LIBS) + syslib$(LSX).lib
 !ENDIF
 !IF DEFINED(GNUEFI)
 INCPATH=$(INCPATH);$(GNUEFI)\INC
@@ -294,11 +295,11 @@ LIBS=$(LIBS) $(USER_LIBS)
 LIB=$(LIBPATH)
 LB=$(DOS_LB)
 
-STARTCOM=$(BIOSLIB)\OBJ\startcom.obj
-STARTEXE=$(LODOSLIB)\OBJ\startexe.obj
+STARTCOM=$(BIOSLIB)\$(OUTDIR)\OBJ\startcom.obj
+STARTEXE=$(LODOSLIB)\$(OUTDIR)\OBJ\startexe.obj
 !ENDIF # !DEFINED(T_VARS)
 
-# Forward library detections by configure.bat to the C compiler
+# Forward library detections by configure.bat to the C compiler and assembler
 CFLAGS=$(CFLAGS) $(HAS_SDK_FLAGS)
 AFLAGS=$(AFLAGS) $(HAS_SDK_FLAGS)
 
@@ -379,6 +380,10 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 .c.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .c.exe:
+    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" $@
+
+.asm.exe:
+    @echo Applying $(T).mak inference rule (PROGRAM undefined) .asm.exe:
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" $@
 
 .cpp.com:
@@ -681,11 +686,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).obj
 
-.rc.res:
-    @echo Applying $(T).mak inference rule (PROGRAM defined) .rc.res:
-    $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
-    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).res
-
 .cpp.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .cpp.exe:
     $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
@@ -857,8 +857,10 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Linking $(B)\$(@F) ...
     set LIB=$(LIB)
     set PATH=$(PATH)
-    copy << $(L)\$(*B).LNK
-$(STARTCOM) $**
+    rem # Copy all dependents, except library files
+    $(STINCLUDE)\RemLibs.bat $(STARTCOM) $** >$(L)\$(*B).LNK
+    rem # Then append the rest of the linker response file
+    type << >>$(L)\$(*B).LNK
 $@
 $(L)\$(*F)
 $(LIBS)
@@ -879,8 +881,10 @@ $(LFLAGS) /tiny
     $(MSG) Linking $(B)\$(@F) ...
     set LIB=$(LIB)
     set PATH=$(PATH)
-    copy << $(L)\$(*B).LNK
-$(STARTEXE) $**
+    rem # Copy all dependents, except library files
+    $(STINCLUDE)\RemLibs.bat $(STARTEXE) $** >$(L)\$(*B).LNK
+    rem # Then append the rest of the linker response file
+    type << >>$(L)\$(*B).LNK
 $@
 $(L)\$(*F)
 $(LIBS)
@@ -960,7 +964,6 @@ OBJECTS=$(O)\$(PROGRAM).obj
 # Generate LIBRARIES based on LIB & LIBS
 !IF DEFINED(LIBS) && !DEFINED(LIBRARIES)
 !  INCLUDE lib2libs.mak # Generate LIBRARIES based on LIB & LIBS
-LIBS= # Avoid having them defined twice in the linker input list
 !ENDIF
 
 # Dependencies for the specified program

@@ -1,40 +1,61 @@
 ###############################################################################
 #									      #
-#   File name:	    dos.mak						      #
+#   File name:	    lodos.mak						      #
 #									      #
-#   Description:    A NMake makefile to build DOS programs.		      #
+#   Description:    A NMake makefile to build LODOS programs		      #
 #									      #
 #   Notes:	    Use with make.bat, which defines the necessary variables. #
-#		    Usage: make -f dos.mak [definitions] [targets]	      #
+#		    Usage: make -f lodos.mak [definitions] [targets]	      #
 #									      #
+#		    LODOS programs are DOS programs that _only_ use low DOS   #
+#		    and BIOS function calls, defined in the LoDosLib and      #
+#		    BiosLib libraries.					      #
+#		    This also allows creating tiny DOS programs, much smaller #
+#		    than the ones linked with MSVC's standard C library.      #
+#		    This can be very useful on systems with extremely limited #
+#		    storage space, like JFL's Universal Boot Disks (UBD).     #
+#		    Compared to MINICOM programs (See BIOS.mak), LODOS .com   #
+#		    programs are barely bigger, and their output can be	      #
+#		    redirected, which is often convenient.		      #
+#		    							      #
+#		    The LoDosLib library allows building hybrid programs,     #
+#		    using mostly BIOS calls, and a few selected DOS calls.    #
+#		    It's useful for building DOS drivers and TSRs, that need  #
+#		    to be as small as possible, and can call only a few       #
+#                   limited DOS functions.                                    #
+#		    							      #
+#		    The PMode library allows building BIOS & DOS programs     #
+#		    that switch between the x86 real, v86, and protected mode.#
+#		    							      #
+#		    The SysLib library defines a set of utility routines      #
+#		    usable in all environments.				      #
+#		    							      #
 #		    Targets:						      #
-#		    clean	    Erase all files in the DOS subdirectory.  #
-#		    {prog}.com	    Build DOS[\Debug]\{prog}.com.	      #
-#		    {prog}.exe	    Build DOS[\Debug]\{prog}.exe.	      #
-#		    {prog}.obj	    Build DOS[\Debug]\OBJ\$(MEM)\{prog}.obj.  #
-#		    {prog}.res	    Build DOS[\Debug]\OBJ\{prog}.res.	      #
-#		    DOS\{prog}.com       Build the DOS release version.       #
-#		    DOS\Debug\{prog}.com Build the DOS debug version.         #
-#		    DOS\{prog}.exe       Build the DOS release version.       #
-#		    DOS\Debug\{prog}.exe Build the DOS debug version.         #
-#		    DOS\OBJ\{prog}.obj       Compile the DOS release version. #
-#		    DOS\Debug\OBJ\{prog}.obj Compile the DOS debug version.   #
-#		    DOS\OBJ\{prog}.res       Compile WIN16 release resources. #
-#		    DOS\Debug\OBJ\{prog}.res Compile WIN16 debug resources.   #
-#		    DOS[\Debug][\OBJ]\T\*  Compile/Build the tiny version.    #
-#		    DOS[\Debug][\OBJ]\S\*  Compile/Build the small version.   #
-#		    DOS[\Debug][\OBJ]\L\*  Compile/Build the large version.   #
+#		    clean	    Erase all files in the LODOS subdirectory.#
+#		    {prog}.com	    Build LODOS[\Debug]\{prog}.com.	      #
+#		    {prog}.obj	    Build LODOS[\Debug]\OBJ\{prog}.obj.	      #
+#		    LODOS\{prog}.com       Build the BIOS release version.    #
+#		    LODOS\Debug\{prog}.com Build the BIOS debug version.      #
+#		    LODOS\OBJ\{prog}.obj   Compile the LODOS release version. #
+#		    LODOS\Debug\OBJ\{prog}.obj Compile the LODOS debug version.
 #									      #
 #		    Command-line definitions:				      #
-#		    DEBUG=0	 Build the release ver. (<=> program in DOS)  #
-#		    DEBUG=1	 Build the debug ver. (<=> pgm in DOS\DEBUG)  #
+#		    DEBUG=0	 Build the release ver. (<=> program in LODOS)#
+#		    DEBUG=1	 Build the debug ver. (<=> pgm in LODOS\DEBUG)#
 #		    MEM=T	 Build the tiny ver.  (<=> objects in OBJ\T)  #
 #		    MEM=S	 Build the small ver. (<=> objects in OBJ\S)  #
 #		    MEM=L	 Build the large ver. (<=> objects in OBJ\L)  #
-#		    OUTDIR=path  Output to path\DOS\. Default: To bin\DOS\    #
+#		    OUTDIR=path  Output to path\LODOS\. Default: To bin\LODOS\#
 #		    PROGRAM=name Set the output file base name		      #
 #									      #
-#		    If a specific target [path\]{prog}.exe is specified,      #
+#		    The MEM variable is left to minimize differences with     #
+#		    the DOS.MAK make file. But the default value T should     #
+#		    work in all cases here.				      #
+#		    							      #
+#		    Likewise, rules for building .exe targets are left in.    #
+#		    They should never be needed either.			      #
+#		    							      #
+#		    If a specific target [path\]{prog}.com is specified,      #
 #		    includes the corresponding {prog}.mak if it exists.       #
 #		    This make file, defines the files to use beyond the       #
 #		    default {prog}.c/{prog}.obj; Compiler options; etc.       #
@@ -53,7 +74,7 @@
 #		    the same program under Unix/Linux too. So for example,    #
 #		    all paths must contain forward slashes.		      #
 #									      #
-#		    Another design goal is to use that same dos.mak	      #
+#		    Another design goal is to use that same bios.mak	      #
 #		    in complex 1-project environments (One Files.mak defines  #
 #		    all project components); And in simple multiple-project   #
 #		    environments (No Files.mak; Most programs have a single   #
@@ -69,81 +90,12 @@
 #		    LINK16  	16-bits Linker				      #
 #		    LIBPATH16   16-bits libraries paths			      #
 #		    LIB16   	16-bits librarian     			      #
-#		    RC16    	16-bits Resource compiler		      #
 #		    MAPSYM	16-bits Linker .map file to .sym converter    #
 #		    TMP	    	Temporary directory	 		      #
-#		    							      #
-#		    The MSVC compiler for DOS does not support UTF-8 sources. #
-#		    This make file converts the sources to the DOS encoding   #
-#		    configured on the Windows host.			      #
-#		    							      #
+#									      #
 #  History:								      #
-#    2000-09-21 JFL Adapted from earlier projects.			      #
-#    2001-01-11 JFL Added generation of 32-bit EXE.			      #
-#    2001-01-11 JFL Generalized for use on multiple programs.		      #
-#    2002-04-08 JFL Use debug versions of the MultiOS libraries.	      #
-#    2002-05-21 JFL Build either a debug or a release version.		      #
-#    2002-11-29 JFL Give the same name to the 16-bits EXE as to the 32-bits   #
-#		    version, but put it in a different directory.	      #
-#    2002-12-18 JFL And name these directories DOS and WIN32 repectively.     #
-#    2003-03-21 JFL Move file dependancies to a sub-makefile called Files.mak.#
-#		    Restructure directories as DOS, DOS\OBJ, DOS\LIST, etc.   #
-#    2003-03-31 JFL Renamed as DosWin32.mak, and coupled with new make.bat.   #
-#    2003-04-15 JFL Added inference rules for making {OS_NAME}\{prog}.exe     #
-#		     targets.						      #
-#    2003-06-16 JFL Fixed bound DOS+Win32 builds, broken in last change.      #
-#    2003-06-16 JFL Fixed problem with files.mak, which must NOT be present   #
-#                    if we don't mean to use it.			      #
-#    2010-03-19 JFL Added support for building 64-bits Windows programs.      #
-#    2010-03-26 JFL Restrucured macros w. more generic 16/32/64 bits versions.#
-#    2010-04-07 JFL Added dynamic generation of OBJECTS by src2objs.bat.      #
-#		    Split in 4: DosWin.mak dos.mak win32.mak win64.mak        #
-#    2012-10-16 JFL Added an optional subdir. level for each memory model.    #
-#		    Renamed the variable specifying the memory model as MEM.  #
-#    2012-10-17 JFL Changed the output directories structure to:	      #
-#		    DOS[\$(MEM)][\Debug][\OBJ|\LIST]			      #
-#		    Removed the special handling of MultiOS.lib.	      #
-#    2014-03-05 JFL Fail immediately if CC16 or LINK16 aren't present.        #
-#    2015-01-16 JFL Pass selected cmd-line definitions thru to sub-make files.#
-#    2015-10-27 JFL Added support for .com targets.			      #
-#    2012-10-17 JFL Changed the output directories structure to:	      #
-#		    DOS[\Debug]\[BIN|OBJ|LIST]\$(MEM)			      #
-#		    Then copy binary files to DOS[\Debug]		      #
-#		    This makes the make file more orthogonal, and allows      #
-#		    finding both .com and .exe programs in the same place.    #
-#    2015-11-03 JFL Added rules to build a library from a .mak file.          #
-#    2015-11-13 JFL Use new generic environment definition variables.         #
-#		    Allow including this file from another, such as BIOS.mak. #
-#    2015-12-07 JFL Added support for a base output directory other than .\   #
-#    2016-04-01 JFL Do not change the PROGRAM value, once it has been set.    #
-#		    Added an inference rule for compiling resident C modules. #
-#    2016-04-14 JFL Forward HAS_<lib> flags to the C compiler.		      #
-#    2016-08-24 JFL Added scripts for removing the UTF-8 BOM from C sources.  #
-#    2016-09-21 JFL Fixed an issue that caused double definition warnings.    #
-#    2016-09-28 JFL Display FAILED messages when compilation or link fails.   #
-#		    Avoid having the word "Error" in the log unnecessarily.   #
-#    2016-10-04 JFL Use the shell PID to generate unique temp file names.     #
-#		    Display messages only if variable MESSAGES is defined.    #
-#    2016-10-11 JFL Adapted for use in SysToolsLib global C include dir.      #
-#    2016-10-21 JFL Added missing inference rules for assembly language.      #
-#		    Define _MSDOS and _MODEL constants for the assembler.     #
-#    2017-03-02 JFL Fixed src2objs.bat and use it indirectly via src2objs.mak.#
-#    2017-08-29 JFL Bugfix: The help target did output a "1 file copied" msg. #
-#    2017-10-22 JFL Changed OUTDIR default to the bin subdirectory.           #
-#    2018-01-12 JFL Added $(LIBRARIES) to the $(PROGRAM).* dependency list,   #
-#		    so that it is relinked if one of its libraries changes.   #
-#		    The LIBRARIES variable is generated by lib2libs.mak/.bat  #
-#		    based on the LIB and LIBS variables.		      #
-#    2018-02-28 JFL Added $(LSX) Library SuffiX definition.		      #
-#    2018-03-02 JFL Added variable SKIP_THIS, to prevent building specific    #
-#		    versions.						      #
-#    2022-10-18 JFL Generate localized C sources only once for all DOS builds.#
-#		    This is faster, and also resolves the case of CPP sources #
-#		    including other CPP sources with a UTF-8 BOM.	      #
-#    2022-11-25 JFL Allow defining an APPTYPE in the make file, to build      #
-#		    a BIOS or LODOS app instead of the default DOS app.       #
+#    2022-11-25 JFL Adapted from BIOS.mak.                                    #
 #		    							      #
-#      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
@@ -156,11 +108,9 @@
 #									      #
 ###############################################################################
 
-!IF !DEFINED(T)
-T=DOS				# Target OS
-!ENDIF
+T=LODOS				# Target OS
 !IF DEFINED(MESSAGES)
-!MESSAGE Started $(T).mak in $(MAKEDIR) # Display this file name, or the caller's name
+!MESSAGE Started $(T).mak in $(MAKEDIR) # Display this file name
 !ENDIF
 
 # Command-line definitions that need carrying through to sub-make instances
@@ -170,11 +120,9 @@ MAKEDEFS=
 MAKEDEFS=$(MAKEDEFS) "MEM=$(MEM)"
 !ENDIF
 
-THIS_MAKEFILE=dos.mak		# This very make file name
-MAKEFILE=$(T).mak		# The OS-specific make file name
+MAKEFILE=lodos.mak		# This make file name
 !IF (!EXIST("$(MAKEFILE)")) && EXIST("$(STINCLUDE)\$(MAKEFILE)")
 MAKEFILE=$(STINCLUDE)\$(MAKEFILE)
-THIS_MAKEFILE=$(STINCLUDE)\$(THIS_MAKEFILE)
 !ENDIF
 
 # Debug-mode-specific definitions
@@ -191,6 +139,7 @@ NDEBUG=				# MS tools define this in release mode.
 DD=/DNDEBUG
 DS=
 !ENDIF
+DD=$(DD) /D_LODOS /DMINICOMS	# Tell sources what environment they're built for
 
 # If possible, load the 16-bits memory model definition from the make file for the current program.
 # Do not load the rest of the make file, as it may contain more rules depending on other variables defined further down.
@@ -203,7 +152,7 @@ TMPMAK=$(TMP)\$(T)_mem.$(PID).mak # Using the shell PID to generate a unique nam
 
 # Memory model for 16-bit C compilation (T|S|C|D|L|H)
 !IF !DEFINED(MEM)
-MEM=S				# Memory model for C compilation
+MEM=T				# Memory model for C compilation
 !IF DEFINED(MESSAGES)
 !MESSAGE Using the default memory model $(MEM).
 !ENDIF
@@ -240,13 +189,12 @@ LCMEM=h
 S=.				# Where to find source files
 !IF !DEFINED(OUTDIR)
 OUTDIR=bin
-R=$(OUTDIR)\$(T)			# Root output path - In the default bin subdirectory
+R=$(OUTDIR)\$(T)		# Root output path - In the default bin subdirectory
 !ELSEIF "$(OUTDIR)"=="."
 R=$(T)				# Root output path - In the current directory
 !ELSE # It's defined and not empty
 R=$(OUTDIR)\$(T)		# Root output path - In the specified directory
 !ENDIF
-CS=$(R)\SRC			# C sources converted from UTF-8 to DOS CP
 BD=$(R)$(DS)
 B=$(BD)\BIN\$(MEM)		# Where to store binary executable files
 O=$(BD)\OBJ\$(MEM)		# Where to store object files
@@ -259,6 +207,7 @@ BP=$(B)\			#
 LP=$(L)\			#
 
 BR=$(T)$(DS)\BIN\$(MEM)		# Idem, relative to sources
+BRD=DOS$(DS)\BIN\$(MEM)		# Idem, relative to sources for DOS
 
 BB=$(BD)			# Final destination of executable files
 
@@ -274,33 +223,54 @@ TMP=.
 !IF !DEFINED(T_VARS)
 T_VARS=1	# Make sure OS-type-specific variables are defined only once
 # Tools and options
-AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /San /Zdim /D_MSDOS "/D_MODEL=$(MMN)"
-CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ /G3 /Oaes /W4 /Zpi
+AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /San /Zdim
+CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ /G2rs /Oaes /W4 /Zpil
 !IF DEFINED(DOS_VCINC)
 CFLAGS=$(CFLAGS) "/DMSVCINCLUDE=$(DOS_VCINC:\=/)" # Path of MSVC compiler include files, without quotes, and with forward slashes
 !ENDIF
 !IF DEFINED(DOS_CRTINC)
 CFLAGS=$(CFLAGS) "/DUCRTINCLUDE=$(DOS_CRTINC:\=/)" # Path of MSVC CRT library include files, without quotes, and with forward slashes
 !ENDIF
-LFLAGS=/map /li /batch /noe /onerror:noexe
+LFLAGS=/map /li /batch /nod /noe /onerror:noexe
 !IF "$(DEBUG)"=="1"
 # Note: The MSVC 1.52 linker does not support the /debug option
 LFLAGS=$(LFLAGS) /co
 !ENDIF
 RFLAGS=$(DD)
 
+INCPATH=$(LODOSLIB)
+LIBPATH=$(LODOSLIB)\$(OUTDIR)
+LIBS=lodos.lib
+!IF DEFINED(BIOSLIB)
+INCPATH=$(INCPATH);$(BIOSLIB)
+LIBPATH=$(LIBPATH);$(BIOSLIB)\$(OUTDIR)
+LIBS=$(LIBS) + bios.lib
+!ENDIF
+!IF DEFINED(PMODELIB)
+INCPATH=$(INCPATH);$(PMODELIB)
+LIBPATH=$(LIBPATH);$(PMODELIB)\$(OUTDIR)
+LIBS=$(LIBS) + pmode.lib
+!ENDIF
+!IF DEFINED(SYSLIB)
+INCPATH=$(INCPATH);$(SYSLIB)
+LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\LIB
+LIBS=$(LIBS) + syslib$(LSX).lib
+!ENDIF
+!IF DEFINED(GNUEFI)
+INCPATH=$(INCPATH);$(GNUEFI)\INC
+!ENDIF
+
 PATH=$(DOS_PATH)
 CC=$(DOS_CC)
 AS=$(DOS_AS)
-INCLUDE=$(S);$(STINCLUDE);$(DOS_INCPATH);$(USER_INCLUDE)
+INCLUDE=$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
 LK=$(DOS_LK)
-LIBS=$(DOS_LIBS) $(USER_LIBS)
-LIB=$(DOS_LIBPATH)
+LIBS=$(LIBS) $(USER_LIBS)
+LIB=$(LIBPATH)
 LB=$(DOS_LB)
-RC=$(DOS_RC)
 
-STARTCOM=$(MSVC)\LIB\CRTCOM.LIB
-STARTEXE=
+STARTCOM=$(BIOSLIB)\$(OUTDIR)\OBJ\startcom.obj
+STARTEXE=$(LODOSLIB)\$(OUTDIR)\OBJ\startexe.obj
 !ENDIF # !DEFINED(T_VARS)
 
 # Forward library detections by configure.bat to the C compiler and assembler
@@ -376,10 +346,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 .asm.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .asm.obj:
-    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" $@
-
-.rc.res:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) .rc.res:
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(*F)" $@
 
 .cpp.exe:
@@ -493,15 +459,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\OBJ\L\}.obj:
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $@
 
-# Inference rules to compile a Windows 16-bits resource file, inferring the debug mode from the output path specified.
-{$(S)\}.rc{$(R)\OBJ\}.res:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\OBJ\}.res:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $@
-
-{$(S)\}.rc{$(R)\Debug\OBJ\}.res:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\Debug\OBJ\}.res:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $@
-
 # Inference rules to assemble an ASM program, inferring the memory model and debug mode from the output path specified.
 #   First rules for a target with no memory model defined. Output directly into the $(R)[\Debug] directory.
 {$(S)\}.asm{$(R)\OBJ\}.obj:
@@ -520,33 +477,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 {$(S)\}.asm{$(R)\Debug\OBJ\T\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\OBJ\T\}.obj:
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $@
-
-#   Rules for the small memory model. Output into the $(R)[\Debug]\OBJ\S directory.
-{$(S)\}.asm{$(R)\OBJ\S\}.obj:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\OBJ\S\}.obj:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $@
-
-{$(S)\}.asm{$(R)\Debug\OBJ\S\}.obj:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\OBJ\S\}.obj:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $@
-
-#   Rules for the large memory model. Output into the $(R)[\Debug]\OBJ\L directory.
-{$(S)\}.asm{$(R)\OBJ\L\}.obj:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\OBJ\L\}.obj:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $@
-
-{$(S)\}.asm{$(R)\Debug\OBJ\L\}.obj:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\OBJ\L\}.obj:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $@
-
-# Inference rules to compile a Windows 16-bits resource file, inferring the debug mode from the output path specified.
-{$(S)\}.rc{$(R)\OBJ\}.res:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\OBJ\}.res:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $@
-
-{$(S)\}.rc{$(R)\Debug\OBJ\}.res:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\Debug\OBJ\}.res:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $@
 
 # Inference rules to build a C++ program, inferring the memory model and debug mode from the output path specified.
 # (Define C++ inferences rules before C inferences rules, so that if both a .c and .cpp file are present, the .cpp is used preferably.)
@@ -653,23 +583,14 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) large debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
 
-# Inference rules to build an ASM program, inferring the memory model and debug mode from the output path specified.
-#   First rules for a target with no memory model defined. Output directly into the $(R)[\Debug] directory.
+# Inference rules to build an ASM program.
 {$(S)\}.asm{$(R)\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\}.com:
     $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
-{$(S)\}.asm{$(R)\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\}.exe:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $@
-
 {$(S)\}.asm{$(R)\Debug\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\}.com:
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
-
-{$(S)\}.asm{$(R)\Debug\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\}.exe:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $@
 
 #   Rules for the tiny memory model. Output into the $(R)[\Debug][\OBJ\T] directory.
 {$(S)\}.asm{$(R)\BIN\T\}.com:
@@ -681,28 +602,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\T\}.com:
     $(HEADLINE) Building $(@F) $(T) tiny debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
-
-#   Rules for the small memory model. Output into the $(R)[\Debug][\OBJ\S] directory.
-{$(S)\}.asm{$(R)\BIN\S\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
-
-{$(S)\}.asm{$(R)\Debug\BIN\S\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
-
-#   Rules for the large memory model. Output into the $(R)[\Debug][\OBJ\L] directory.
-{$(S)\}.asm{$(R)\BIN\L\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
-
-{$(S)\}.asm{$(R)\Debug\BIN\L\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
 
 # Inference rules to build a library, inferring the memory model and debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.lib:
@@ -761,11 +660,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).obj
 
-.rc.res:
-    @echo Applying $(T).mak inference rule (PROGRAM defined) .rc.res:
-    $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
-    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).res
-
 .cpp.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .cpp.exe:
     $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
@@ -773,11 +667,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 
 .c.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .c.exe:
-    $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
-    $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
-
-.asm.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM defined) .asm.exe:
     $(HEADLINE) Building $(@F) $(T) $(MMN) $(DM) version
     $(SUBMAKE) "DEBUG=$(DEBUG)" "PROGRAM=$(PROGRAM)" dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
@@ -876,16 +765,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(HEADLINE) Building $(@F) $(T) $(MMN) debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(PROGRAM)" dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
 
-{$(S)\}.asm{$(R)\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(T) $(MMN) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(PROGRAM)" dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
-
-{$(S)\}.asm{$(R)\Debug\}.exe:
-    @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(T) $(MMN) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(PROGRAM)" dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
-
 # Inference rules to build a library, inferring the memory model and debug mode from the output path specified.
 .mak.lib:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .mak.lib:
@@ -913,8 +792,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation
@@ -923,8 +802,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for C compilation of resident modules
@@ -933,8 +812,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
-    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /NTRESID /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
+    $(REMOVE_UTF8_BOM) $< $(O)\$(<F)
+    $(COMPACT_PATHS) & $(CC) $(CFLAGS) /NTRESID /c $(TC) $(O)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule for Assembly language.
@@ -944,15 +823,6 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
     $(COMPACT_PATHS) & $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)
-    $(MSG) ... done.
-
-# Inference rule to compile Windows 16-bits resources
-{$(S)\}.rc{$(O)\}.res:
-    @echo Applying $(T).mak inference rule {$$(S)\}.rc{$$(O)\}.res:
-    $(MSG) Compiling $(<F) resources ...
-    set INCLUDE=$(INCLUDE)
-    set PATH=$(PATH)
-    $(COMPACT_PATHS) & $(RC) /Fo$@ $(RFLAGS) /r $< || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Inference rule to link a program
@@ -1047,50 +917,13 @@ TMPMAK=$(TMP)\$(T)_vars.$(PID).mak # Using the shell PID to generate a unique na
 !  ENDIF
 !ELSE
 !  MESSAGE There are no specific rules.
-EXENAME=_-_-_-_.exe	# An unlikely name, to prevent the $(EXENAME) dependency rule below from firing.
+EXENAME=_-_-_-_.com	# An unlikely name, to prevent the $(EXENAME) dependency rule below from firing.
 OBJECTS=
 LIBRARIES=
 !ENDIF
 
 !IF !DEFINED(EXENAME)
-EXENAME=$(PROGRAM).exe	# Both DOS and Windows expect this extension.
-!ENDIF
-
-# Change the default libraries search order for BIOS and LODOS applications
-!IF DEFINED(APPTYPE)
-!  IF "$(APPTYPE)"=="BIOS"
-INCPATH=$(BIOSLIB);$(LODOSLIB)
-LIB=$(BIOSLIB)\$(OUTDIR);$(LODOSLIB)\$(OUTDIR)
-LIBS=bios.lib lodos.lib
-!  ELSE IF "$(APPTYPE)"=="LODOS"
-INCPATH=$(LODOSLIB);$(BIOSLIB)
-LIB=$(LODOSLIB)\$(OUTDIR);$(BIOSLIB)\$(OUTDIR)
-LIBS=lodos.lib bios.lib
-!  ELSE IF "$(APPTYPE)"=="DOS"
-# Do nothing, as this is the default in DOS.mak
-!  ELSE
-!    ERROR "Invalid APPTYPE=$(APPTYPE). Must be either BIOS or LODOS or DOS."
-!  ENDIF
-!  IF "$(APPTYPE)"!="DOS" # That is for BIOS and LODOS apps
-!    IF DEFINED(PMODELIB)
-INCPATH=$(INCPATH);$(PMODELIB)
-LIB=$(LIB);$(PMODELIB)\$(OUTDIR)
-LIBS=$(LIBS) pmode.lib
-!    ENDIF
-!    IF DEFINED(SYSLIB)
-INCPATH=$(INCPATH);$(SYSLIB)
-LIB=$(LIB);$(SYSLIB)\$(OUTDIR)\LIB
-LIBS=$(LIBS) syslib$(LSX).lib
-!    ENDIF
-!    IF DEFINED(GNUEFI)
-INCPATH=$(INCPATH);$(GNUEFI)\INC
-!    ENDIF
-INCLUDE=$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
-LIBS=$(LIBS) $(USER_LIBS)
-LFLAGS=$(LFLAGS) /nod # Make sure we don't pull anything from MS C library
-STARTCOM=$(BIOSLIB)\$(OUTDIR)\obj\startcom.obj
-STARTEXE=$(LODOSLIB)\$(OUTDIR)\obj\startexe.obj
-!  ENDIF
+EXENAME=$(PROGRAM).com
 !ENDIF
 
 # If needed, convert the SOURCES list to an OBJECTS list
@@ -1107,28 +940,9 @@ OBJECTS=$(O)\$(PROGRAM).obj
 !  INCLUDE lib2libs.mak # Generate LIBRARIES based on LIB & LIBS
 !ENDIF
 
-# Generic rule to build program
+# Dependencies for the specified program
 !IF !DEFINED(SKIP_THIS)
 $(B)\$(EXENAME): $(OBJECTS:+=) $(LIBRARIES)
-    @echo Applying $(T).mak build rule $$(B)\$$(EXENAME):
-    $(MSG) Linking $(B)\$(@F) ...
-    set LIB=$(LIB)
-    set PATH=$(PATH)
-    copy << $(L)\$(*B).LNK
-$(STARTEXE) $(OBJECTS:+=)
-"$@"
-$(L)\$(*F)
-$(LIBS)
-$(LFLAGS) /knoweas /stack:32768
-<<NOKEEP
-    @echo "	type $(L)\$(*B).LNK"
-    @$(COMSPEC) /c "type $(L)\$(*B).LNK"
-    $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
-    if exist $@ copy $@ $(BB)
-    cd $(L)
-    -$(MAPSYM) $(*F).map
-    cd $(MAKEDIR)
-    $(MSG) ... done.
 
 # Generic rule to build a library
 $(B)\$(PROGRAM).lib: $(OBJECTS:+=) $(LIBRARIES)
@@ -1170,12 +984,8 @@ $(L):
     if not exist $(L) $(MSG) Creating directory $(L)
     if not exist $(L) mkdir $(L)
 
-$(CS):
-    if not exist $(CS) $(MSG) Creating directory $(CS)
-    if not exist $(CS) mkdir $(CS)
-
 !IF !DEFINED(SKIP_THIS)
-dirs: $(B) $(O) $(L) $(CS) files localize_C_sources
+dirs: $(B) $(O) $(L) files
 
 files: $(UTF8_BOM_FILE) $(REMOVE_UTF8_BOM) $(CONV_SCRIPT) $(COMPACT_PATHS)
 !ELSE
@@ -1197,7 +1007,7 @@ $(UTF8_BOM_FILE): $(MAKEFILE)
 	WriteBinaryFile(args(0), szBOM);
 	WScript.Quit(0);
 <<NOKEEP
-	
+
 $(REMOVE_UTF8_BOM): $(MAKEFILE)
     $(MSG) Generating script $@
     copy <<$@ NUL
@@ -1265,14 +1075,6 @@ $(COMPACT_PATHS): $(MAKEFILE)
 	)
 <<KEEP
 
-# Remove BOMs from all modified C source and include files, and convert them to the OEM character set
-localize_C_sources: NUL
-    $(MSG) Updating localized C sources in $(CS) ...
-    -for %%e in (h c r cpp) do for /f "delims=: tokens=2" %%f in ( \
-       'xcopy /c /d /l /y *.%%e $(CS) 2^>NUL ^| findstr ":"' \
-     ) do $(MSG) %%f & $(REMOVE_UTF8_BOM) %%f $(CS)\%%f
-    $(MSG) ... done.
-
 # Erase all output files
 clean: NUL
     -rd /S /Q $(R)	>NUL 2>&1
@@ -1283,32 +1085,22 @@ clean: NUL
 help: NUL
     type <<
 Targets:
-  clean                    Erase all files in the $(R) directory
+  clean                     Erase all files in the $(R) directory
   $(R)\{prog}.com           Build {prog}.com release version from {prog}.c/cpp
   $(R)\Debug\{prog}.com     Build {prog}.com debug version from {prog}.c/cpp
-  $(R)\{prog}.exe           Build {prog}.exe release version from {prog}.c/cpp
-  $(R)\Debug\{prog}.exe     Build {prog}.exe debug version from {prog}.c/cpp
   $(R)\OBJ\{prog}.obj       Compile {prog}.obj release version from {prog}.c/cpp
   $(R)\Debug\OBJ\{prog}.obj Compile {prog}.obj debug version from {prog}.c/cpp
-  $(R)[\Debug][\OBJ]\T\*    Compile/Build the tiny version of *
-  $(R)[\Debug][\OBJ]\S\*    Compile/Build the small version of *
-  $(R)[\Debug][\OBJ]\L\*    Compile/Build the large version of *
-  {prog}.com               Build $(R)[\Debug]\{prog}.com from {prog}.c/cpp
-  {prog}.exe               Build $(R)[\Debug]\{prog}.exe from {prog}.c/cpp
-  {prog}.obj               Compile $(R)[\Debug]\OBJ\{prog}.obj from {prog}.c/cpp
-  {prog}.res               Compile $(R)[\Debug]\OBJ\{prog}.res from {prog}.rc
+
+  {prog}.com                Build $(R)[\Debug]\{prog}.com from {prog}.c/cpp
+
+  {prog}.obj                Compile $(R)[\Debug]\OBJ\{prog}.obj from {prog}.c/cpp
+
 
 The debug mode is set based on the first definition found in...
  1) The nmake command line option "DEBUG=0|1"
  2) The target directory $(R)|$(R)\Debug
  3) The environment variable DEBUG=0|1
  4) Default: DEBUG=0
-
-The memory model is set based on the first definition found in...
- 1) The nmake command line option "MEM=T|S|L"
- 2) The target directory $(R)[\Debug]\T|S|L
- 3) The {prog}.mak definition MEM=T|S|L
- 4) Default: MEM=S for .exe targets, or MEM=T for .com targets
 <<NOKEEP
 
 !ENDIF # !DEFINED(DISPATCH_OS)

@@ -149,13 +149,14 @@
 #                   exists. We had the case with a new `clean` Shell script.  #
 #    2022-10-20 JFL Allow cleaning just one OS. Ex: `make "OS=DOS" clean`     #
 #		    Also `make clean` does not delete Unix builds anymore.    #
+#    2022-11-25 JFL Added support for the LODOS build type.                   #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.
-.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .res .rc .def .manifest .mak
+.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .cc .cxx .res .rc .def .manifest .mak
 
 !IFNDEF TMP
 !IFDEF TEMP
@@ -229,6 +230,9 @@ OS=
 !IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\bios.mak")
 OS=$(OS) BIOS
 !ENDIF
+!IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\lodos.mak")
+OS=$(OS) LODOS
+!ENDIF
 !IF DEFINED(DOS_CC) && EXIST("$(MAKEPATH)\dos.mak")
 OS=$(OS) DOS
 !ENDIF
@@ -261,6 +265,7 @@ OS=$(OS) ARM64
 
 # Convert that text list to boolean variables, one for each OS.
 DOBIOS=0
+DOLODOS=0
 DODOS=0
 DOWIN95=0
 DOWIN32=0
@@ -270,6 +275,9 @@ DOARM=0
 DOARM64=0
 !IF [for %o in ($(OS)) do @if /i "%o"=="BIOS" exit 1]
 DOBIOS=1
+!ENDIF
+!IF [for %o in ($(OS)) do @if /i "%o"=="LODOS" exit 1]
+DOLODOS=1
 !ENDIF
 !IF [for %o in ($(OS)) do @if /i "%o"=="DOS" exit 1]
 DODOS=1
@@ -292,9 +300,10 @@ DOARM=1
 !IF [for %o in ($(OS)) do @if /i "%o"=="ARM64" exit 1]
 DOARM64=1
 !ENDIF
-# !MESSAGE DOBIOS=$(DOBIOS) DODOS=$(DODOS) DOWIN32=$(DOWIN32) DOWIN64=$(DOWIN64)
+# !MESSAGE DOBIOS=$(DOBIOS) DOLODOS=$(DOLODOS) DODOS=$(DODOS) DOWIN32=$(DOWIN32) DOWIN64=$(DOWIN64)
 # Generate guard macros for each OS
 IFBIOS=rem
+IFLODOS=rem
 IFDOS=rem
 IFWIN95=rem
 IFWIN32=rem
@@ -304,6 +313,9 @@ IFARM=rem
 IFARM64=rem
 !IF $(DOBIOS)
 IFBIOS=
+!ENDIF
+!IF $(DOLODOS)
+IFLODOS=
 !ENDIF
 !IF $(DODOS)
 IFDOS=
@@ -326,7 +338,7 @@ IFARM=
 !IF $(DOARM64)
 IFARM64=
 !ENDIF
-# !MESSAGE IFBIOS=$(IFBIOS) IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM) IFARM64=$(IFARM64)
+# !MESSAGE IFBIOS=$(IFBIOS) IFLODOS=$(IFLODOS) IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM) IFARM64=$(IFARM64)
 
 MSG=>con echo		# Command for writing a progress message on the console
 HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
@@ -358,11 +370,13 @@ _OBJ = .obj
 .c.com:
     @echo Applying inference rule .c.com:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
 
 .c.exe:
     @echo Applying inference rule .c.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -374,11 +388,13 @@ _OBJ = .obj
 .cpp.com:
     @echo Applying inference rule .cpp.com:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
 
 .cpp.exe:
     @echo Applying inference rule .cpp.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -390,6 +406,7 @@ _OBJ = .obj
 .asm.exe:
     @echo Applying inference rule .asm.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -402,6 +419,7 @@ _OBJ = .obj
 .mak.exe:
     @echo Applying inference rule .mak.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -414,6 +432,7 @@ _OBJ = .obj
 .mak.lib:
     @echo Applying inference rule .mak.lib:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -425,7 +444,6 @@ _OBJ = .obj
 # Inference rule to build a makefile-defined DLL. Build BIOS, DOS, Win32, and Win64 versions.
 .mak.dll:
     @echo Applying inference rule .mak.dll:
-    $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $@
@@ -438,11 +456,13 @@ _OBJ = .obj
 {.\}.c{Debug\}.com:
     @echo Applying inference rule {.\}.c{Debug\}.com:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.c{Debug\}.exe:
     @echo Applying inference rule {.\}.c{Debug\}.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -454,11 +474,13 @@ _OBJ = .obj
 {.\}.cpp{Debug\}.com:
     @echo Applying inference rule {.\}.cpp{Debug\}.com:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
 
 {.\}.cpp{Debug\}.exe:
     @echo Applying inference rule {.\}.cpp{Debug\}.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -470,6 +492,7 @@ _OBJ = .obj
 {.\}.asm{Debug\}.exe:
     @echo Applying inference rule {.\}.asm{Debug\}.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -482,6 +505,7 @@ _OBJ = .obj
 {.\}.mak{Debug\}.exe:
     @echo Applying inference rule {.\}.mak{Debug\}.exe:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -494,6 +518,7 @@ _OBJ = .obj
 {.\}.mak{Debug\}.lib:
     @echo Applying inference rule {.\}.mak{Debug\}.lib:
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) $(OD)LODOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -505,7 +530,6 @@ _OBJ = .obj
 # Inference rule to build a makefile-defined DLL. Build BIOS, DOS, Win32, and Win64 versions.
 {.\}.mak{Debug\}.dll:
     @echo Applying inference rule {.\}.mak{Debug\}.dll:
-    $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) $(OD)BIOS\$@
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) $(OD)DOS\$@
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) $(OD)WIN95\$@
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) $(OD)WIN32\$@
@@ -520,6 +544,9 @@ _OBJ = .obj
 # Does not work, due to late evaluation of nmake macros.
 # So using make.bat instead to generate the correct make file.
 # DISPATCH_OS=BIOS
+# !INCLUDE "Dispatch.mak"
+# 
+# DISPATCH_OS=LODOS
 # !INCLUDE "Dispatch.mak"
 # 
 # DISPATCH_OS=DOS
@@ -679,6 +706,7 @@ clean mostlyclean distclean: NUL
     for %%d in ($(DIRS)) do @$(BMAKE) -C %%d $@ 
 !ENDIF
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) clean
+    $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) clean
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) clean
     $(IFWIN95) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN95.mak" $(MAKEDEFS) clean
     $(IFWIN32) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN32.mak" $(MAKEDEFS) clean
@@ -742,6 +770,12 @@ Targets:
   Debug\{prog}.exe       Build DOS, WIN32, and WIN64 debug versions of the same
   BIOS\{prog}.com        Build the BIOS release version of {prog}.com
   BIOS\Debug\{prog}.com  Build the BIOS debug version of {prog}.com
+  LODOS\{prog}.com       Build the low DOS release version of {prog}.com
+  LODOS\Debug\{prog}.com Build the low DOS debug version of {prog}.com
+  LODOS\{prog}.exe       Build the low DOS release version of {prog}.exe
+  LODOS\Debug\{prog}.exe Build the low DOS debug version of {prog}.exe
+  LODOS\{prog}.sys       Build the low DOS release version of {prog}.sys
+  LODOS\Debug\{prog}.sys Build the low DOS debug version of {prog}.sys
   DOS\{prog}.com         Build the DOS release version of {prog}.com
   DOS\Debug\{prog}.com   Build the DOS debug version of {prog}.com
   DOS\{prog}.exe         Build the DOS release version of {prog}.exe

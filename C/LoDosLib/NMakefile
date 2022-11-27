@@ -29,6 +29,7 @@
 #		    Rebuild dosdrv.inc only after a distclean. Avoids warngs. #
 #    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
 #    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
+#    2022-11-24 JFL Added Nchkstk.asm, Fchkstk.asm, puts.c, fputc.c.	      #
 #		    							      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -207,12 +208,14 @@ SOURCES = \
     dosver.c		\
     doswrite.asm	\
     extdopen.asm	\
+    fchkstk.asm		\
     fgetc.c		\
     fgetenv.c		\
     fgets.c		\
     filelen.c		\
     find_tsr.asm	\
     fopen.c		\
+    fputc.c		\
     fputs.c		\
     fread.c		\
     freemem.asm		\
@@ -231,6 +234,8 @@ SOURCES = \
     ioctldr.c		\
     lockvol.c		\
     lseek.asm		\
+    nchkstk.asm		\
+    puts.c		\
     remove.asm		\
     resetdrv.asm	\
     setblock.asm	\
@@ -324,6 +329,8 @@ $(S)\filelen.c:     lodos.h
 
 $(S)\fopen.c:	    lodos.h $(N)\clibdef.h
 
+$(S)\fputc.c:	    lodos.h
+
 $(S)\fputs.c:	    lodos.h $(N)\clibdef.h
 
 $(S)\fread.c:	    lodos.h
@@ -359,6 +366,8 @@ $(S)\ioctldr.c:     msdos.h lodos.h
 $(S)\lockvol.c:     lodos.h
 
 $(S)\lseek.asm:     dos.inc $(N)\adefine.inc
+
+$(S)\puts.c:	    lodos.h
 
 $(S)\remove.asm:    $(N)\adefine.inc
 

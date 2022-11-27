@@ -9,6 +9,8 @@
 *   History								      *
 *    1993-10-06 JFL Separated this file from CLIBC.C.			      *
 *    2016-04-11 JFL Renamed putstr() as cputs().			      *
+*    2022-11-24 JFL Use fputs(), so that it can be overridden by LoDosLib's   *
+*                   fputs() if desired.                                       *
 *                                                                             *
 *      (c) Copyright 1987-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -43,12 +45,11 @@
 //+
 //+--------------------------------------------------------------------------
 
-int _cdecl printf(const char *format, ...)
-{
-   char uneligne[1024];
-   int n;
-
-   n = sprintf1(uneligne, &format);
-   cputs(uneligne);
-   return n;
+int _cdecl printf(const char *format, ...) {
+  char uneligne[1024];
+  int n;
+  
+  n = sprintf1(uneligne, &format);
+  fputs(uneligne, stdout);
+  return n;
 }

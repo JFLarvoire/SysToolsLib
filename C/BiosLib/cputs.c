@@ -10,6 +10,7 @@
 *    1987       JFL Created routine putstr().          			      *
 *    1993-10-06 JFL Separated this file from CLIBC.C.			      *
 *    2016-04-11 JFL Renamed putstr() as cputs().			      *
+*    2022-11-26 JFL Renamed cputs() as _cputs().			      *
 *		    							      *
 *      (c) Copyright 1987-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -20,7 +21,7 @@
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    cputs						      |
+|   Function:	    _cputs						      |
 |									      |
 |   Description:    Output a string to the console			      |
 |									      |
@@ -32,11 +33,12 @@
 |		    							      |
 |   History:								      |
 |    1987       JFL Created routine putstr().          			      |
-*    2016-04-11 JFL Renamed putstr() as cputs().			      *
+|    2016-04-11 JFL Renamed putstr() as cputs().			      |
+|    2022-11-26 JFL Renamed cputs() as _cputs().			      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int cputs(const char *s) {
+int _cputs(const char *s) {
   char c;
 
   while (c = *s++) {

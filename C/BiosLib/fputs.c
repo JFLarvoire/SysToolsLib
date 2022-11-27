@@ -1,18 +1,14 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename	    fprintf.c						      *
+*   Filename	    fputs.c						      *
 *									      *
-*   Description:    A limited fprintf() for writing to the BIOS console	      *
+*   Description     A limited fputs() for writing to the BIOS console	      *
 *                                                                             *
-*   Notes:	    							      *
+*   Notes	    							      *
 *		    							      *
-*   History:								      *
-*    2015-12-10 JFL Created this module.				      *
-*    2016-04-11 JFL Renamed putstr() as cputs().			      *
-*    2022-11-24 JFL Use fputs(), so that it can be overridden by LoDosLib's   *
-*                   fputs() if desired.                                       *
+*   History								      *
+*    2022-11-24 JFL Created this module.				      *
 *                                                                             *
-*      (c) Copyright 2015-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -21,27 +17,22 @@
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function        fprintf	                                              |
+|   Function        fputs	                                              |
 |                                                                             |
-|   Description     Redefinition of a C library routine			      |
+|   Description     Write a string into a file				      |
 |                                                                             |
-|   Parameters      See a C library reference for the list of arguments       |
+|   Parameters      const char *pszLine		String to write		      |
+|		    FILE *hf			File handle		      |
 |                                                                             |
-|   Returns         See a C library reference for the return value            |
+|   Returns	    >=0 if success, else EOF and set errno.		      |
 |                                                                             |
-|   Notes           See SPRINTF.C for the limited list of supported formats.  |
-|                   The output must not be longer than 1024 bytes. Else crash!|
+|   Notes	    Standard C library routine. 			      |
 |                                                                             |
 |   History 								      |
-|    2015-12-10 JFL Created this routine.				      |
+|    2022-11-24 JFL Created this routine.				      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-int _cdecl fprintf(FILE *f, const char *format, ...) {
-  char uneligne[1024];
-  int n;
-
-  n = sprintf1(uneligne, &format);
-  fputs(uneligne, f);
-  return n;
+int fputs(const char *pszString, FILE *f) {
+  return cputs(pszString); /* BiosLib's cputs() translates \n to \r\n */
 }

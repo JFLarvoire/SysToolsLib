@@ -4,8 +4,17 @@
 *									      *
 *   Description:    LODOS.LIB global definitions			      *
 *									      *
-*   Notes:								      *
+*   Notes:	    The routines defined in assembly language modules must    *
+*		     use either the _cdecl or the _fastcall keywords, to show *
+*		     what parameter passing convention has been implemented.  *
 *									      *
+*		    The routines defined in C language modules with variable  *
+*		     number of arguments must use the _cdecl keyword.         *
+*		    Else those with a fixed number of arguments must use the  *
+*		     _callconv keyword, defined ahead of this file.	      *
+*		     Currently BiosLib is compiled with the /Gr switch, which *
+*		     makes them default to the _fastcall calling convention.  *
+*		    							      *
 *   History:								      *
 *    1995-08-25 JFL Created this file					      *
 *    1995-11-28 JFL Moved functions definitions from MSDOS.H back into this   *
@@ -13,6 +22,9 @@
 *		     in case MSDOS.H is not included first.		      *
 *    2015-10-27 JFL Added the generation of a library search record.	      *
 *    2017-04-04 JFL Redefine stdin, stdout, stderr to be FILE *. Avoids warng.*
+*    2022-11-25 JFL Explicitly specify the calling convention for all C       *
+*		    functions, to make sure that minicom programs compiled    *
+*		    in _MSDOS environments do call C lib functions correctly. *
 *									      *
 *      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -20,6 +32,8 @@
 
 #ifndef __LODOS_H__   // Prevent multiple inclusions
 #define __LODOS_H__
+
+#define _callconv _fastcall // The default calling convention for C routines
 
 /* Force linking with the lodos.lib library */
 #define _LODOS_LIB "lodos.lib"
@@ -139,7 +153,7 @@ extern WORD _cdecl _dos_setftime(int hf, WORD wDate, WORD wTime);
 extern WORD _fastcall _dos_version(void);
 
 // doswrite.asm
-extern int _cdecl _dos_write(int hFile, void far *lpBuf, WORD wCount,
+extern int _cdecl _dos_write(int hFile, const void far *lpBuf, WORD wCount,
 				    WORD *pwNumWritten);
 
 // extdopen.asm
@@ -147,7 +161,7 @@ extern int _cdecl ExtendedOpen(char *pszName, WORD wMode, WORD wAttrib,
 				WORD wAction, WORD *pwHandle);
 
 // fgetenv.c
-extern char far *_fgetenv(char *pszName);
+extern char far * _callconv _fgetenv(char *pszName);
 
 // find_tsr.asm
 // Locate a TSR using the standard int2F method
@@ -158,7 +172,7 @@ extern int _fastcall find_tsr(char *id_string);
 extern int _fastcall _dos_freemem(WORD wSeg);
 
 // getcwd.c
-extern char *_getcwd(char *pszBuf, int iLen);
+extern char * _callconv _getcwd(char *pszBuf, int iLen);
 #define getcwd _getcwd	// Unix-compatible alias
 
 // getdate.asm
@@ -190,13 +204,13 @@ extern void _fastcall _dos_getdate(_dosdate_t *pDate);
 // Defined in msdos.h to avoid having to include msdos.h every time
 
 // getenv.c
-extern char *getenv(char *pszName);
+extern char * _callconv getenv(char *pszName);
 
 // getpsp.c
 #ifdef MINICOMS     // No need to use a function within a minicom program.
 #define GetPsp() _psp
 #else
-WORD GetPsp(void);  // Define function anyway for normal DOS programs.
+WORD _callconv GetPsp(void);  // Define function anyway for normal DOS programs.
 #endif
 
 // gettime.asm
@@ -220,17 +234,17 @@ extern int _cdecl IoctlDiskRead(WORD iDrive, WORD iCyl, WORD iHead,
 			 WORD iSect, WORD n, void far *lpcBuffer);
 
 // lockvol.c
-int LockLogicalVolume(int iDrive, WORD wLockLevel, WORD wPermissions);
-int UnlockLogicalVolume(int iDrive);
+extern int _callconv LockLogicalVolume(int iDrive, WORD wLockLevel, WORD wPermissions);
+extern int _callconv UnlockLogicalVolume(int iDrive);
 
 // lseek.asm
 extern long _cdecl lseek(int hFile, DWORD dwOffset, WORD wOrigin);
 
 // remove.asm
-int _fastcall remove(char *pszPathname);
+extern int _fastcall remove(char *pszPathname);
 
 // resetdrv.asm
-int _fastcall ResetDrive(int iDrive, int iFlushFlag);
+extern int _fastcall ResetDrive(int iDrive, int iFlushFlag);
 
 // setblock.asm
 // Change a memory block size
@@ -240,14 +254,14 @@ extern int _fastcall _dos_setblock(WORD wLen, WORD wSeg, WORD *pMax);
 // Defined in msdos.h to avoid having to include msdos.h every time
 
 // setmenv.c
-int SetMasterEnv(char *pszName, char *pszValue);
+extern int _callconv SetMasterEnv(char *pszName, char *pszValue);
 
 // setvect.asm
 // Set the int. vect.
 extern void _fastcall _dos_setvect(int iIntNumber, DWORD dwHandler);
 
 // system.c
-int system(char *pszCommand);
+extern int _callconv system(char *pszCommand);
 
 // truename.asm
 extern int _fastcall TrueName(char *pszDest, char *pszSource);
@@ -278,10 +292,10 @@ typedef unsigned int size_t;
 
 FILE *fopen(char *pszName, char *pszMode);
 #define fclose(hf) _dos_close(fileno(hf))
-size_t fread(void *pBuf, size_t nBytes, size_t nCount, FILE *hf);
-size_t fwrite(void *pBuf, size_t nBytes, size_t nCount, FILE *hf);
-int fseek(FILE *hf, long offset, int origin);
-long filelength(int hf);
+extern size_t _callconv fread(void *pBuf, size_t nBytes, size_t nCount, FILE *hf);
+extern size_t _callconv fwrite(const void *pBuf, size_t nBytes, size_t nCount, FILE *hf);
+extern int _callconv fseek(FILE *hf, long offset, int origin);
+extern long _callconv filelength(int hf);
 #define _filelength filelength
 // int fflush(FILE *hf)
 #define fflush(hf) _dos_commit(fileno(hf))
@@ -289,7 +303,7 @@ long filelength(int hf);
 #define SEEK_CUR 1
 #define SEEK_END 2
 #define SEEK_SET 0
-int fseek(FILE *hf, long offset, int origin);
+extern int _callconv fseek(FILE *hf, long offset, int origin);
 // void rewind(FILE *hf);
 #define rewind(hf) fseek(hf, 0, SEEK_SET)
 
@@ -297,9 +311,11 @@ int fseek(FILE *hf, long offset, int origin);
 
 // long ftell(FILE *hf);
 #define ftell(hf) lseek(fileno(hf), 0, SEEK_CUR)
-int fgetc(FILE *hf);
-char *fgets(char *pszLine, int iSize, FILE *hf);
-int fputs(char *pszLine, FILE *hf);
+extern int _callconv fgetc(FILE *hf);
+extern char * _callconv fgets(char *pszLine, int iSize, FILE *hf);
+extern int _callconv fputs(const char *pszLine, FILE *hf);
+extern int _callconv  puts(const char *pszLine);
+extern int _callconv fputc(int c, FILE *hf);
 
 /*****************************************************************************/
 
@@ -310,7 +326,7 @@ void _cdecl Abs2PhysSector(DEVICEPARAMS *pdp, DWORD dwLogSect,
                    WORD *pwCyl, WORD *pwHead, WORD *pwSect);
 
 // clus2abs.c
-long Cluster2Sector(DEVICEPARAMS *pdp, WORD wCluster);
+long _callconv Cluster2Sector(DEVICEPARAMS *pdp, WORD wCluster);
 
 // getdevpa.c
 extern int _cdecl GetDeviceParams(int drive, DEVICEPARAMS *pdp);

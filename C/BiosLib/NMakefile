@@ -245,6 +245,7 @@ SOURCES = \
     fmemmove.asm	\
     fmemset.c		\
     fprintf.c		\
+    fputs.c		\
     fstrcmp.c		\
     fstrlen.c		\
     fstrncat.c		\
@@ -378,6 +379,8 @@ $(S)\fmemmove.asm:   $(S)\adefine.inc
 $(S)\fmemset.c:      $(S)\clibdef.h
 
 $(S)\fprintf.c:	     $(S)\clibdef.h
+
+$(S)\fputs.c:	     $(S)\clibdef.h
 
 $(S)\fstrcmp.c:      $(S)\clibdef.h
 

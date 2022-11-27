@@ -36,20 +36,20 @@
 |									      |
 |   History:								      |
 |									      |
-|    1998/05/24 JFL Created this routine				      |
+|    1998-05-24 JFL Created this routine				      |
+|    2022-11-24 JFL Added the const keyword to the first argument.	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-size_t fwrite(void *pBuf, size_t nBytes, size_t nCount, FILE *hf)
-    {
-    WORD wDone;
-    WORD wSize;
-    int iErr;
-
-    wSize = (WORD)(nBytes * nCount);	// Incorrect result if >64K
-
-    iErr = _dos_write(fileno(hf), pBuf, wSize, &wDone);
-    if (iErr) return 0;
-
-    return wDone / nBytes;
-    }
+size_t fwrite(const void *pBuf, size_t nBytes, size_t nCount, FILE *hf) {
+  WORD wDone;
+  WORD wSize;
+  int iErr;
+  
+  wSize = (WORD)(nBytes * nCount);	// Incorrect result if >64K
+  
+  iErr = _dos_write(fileno(hf), pBuf, wSize, &wDone);
+  if (iErr) return 0;
+  
+  return wDone / nBytes;
+}

@@ -40,6 +40,6 @@
 
 /* Main C modules utility routines */
 int IsSwitch(char *pszArg);		/* Test if a command-line argument is a switch */
-int pferror(char *pszFormat, ...);	/* Print error messages on stderr, in a standardized format */
+int _cdecl pferror(char *pszFormat, ...); /* Print error messages on stderr, in a standardized format */
 
 #endif /* _SYSLIB_MAINUTIL_H_ */

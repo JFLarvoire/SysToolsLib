@@ -1,44 +1,44 @@
 /*****************************************************************************\
 *									      *
-*   File name:	    fputs.c						      *
+*   File name	    fputs.c						      *
 *									      *
-*   Description:    Put one line into a file				      *
+*   Description     Put one line into a file				      *
 *									      *
-*   Notes:								      *
+*   Notes								      *
 *									      *
-*   History:								      *
-*    1998/05/24 JFL Created this file					      *
+*   History								      *
+*    1998-05-24 JFL Created this file					      *
+*    2022-11-24 JFL Rewrote using fputc(), to get \n -> \r\n translation.     *
 *									      *
 *      (c) Copyright 1998-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#include "clibdef.h"		    // For string functions
 #include "lodos.h"
+#include "clibdef.h"		    // For string functions
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    fputs						      |
+|   Function        fputs	                                              |
 |									      |
-|   Description:    Put a line into a file				      |
+|   Description     Write a string into a file				      |
 |									      |
-|   Parameters:     char *pszLine	The line to write		      |
-|		    FILE *hf		File handle			      |
+|   Parameters      const char *pszLine		String to write		      |
+|		    FILE *hf			File handle		      |
 |									      |
-|   Returns:	    The number of characters written.			      |
+|   Returns	    >=0 if success, else EOF and set errno.		      |
 |									      |
-|   Notes:	    Standard C library routine. 			      |
+|   Notes	    Standard C library routine. 			      |
 |									      |
-|   History:								      |
-|									      |
-|    1998/05/24 JFL Created this routine				      |
+|   History								      |
+|    1998-05-24 JFL Created this routine.				      |
+|    2022-11-24 JFL Rewrote using fputc(), to get \n -> \r\n translation.     |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int fputs(char *pszLine, FILE *hf)
-    {
-    int iLen;
+int fputs(const char *pszLine, FILE *hf) {
+  char c;
 
-    iLen = strlen(pszLine);
-    return fwrite(pszLine, 1, iLen, hf);
-    }
+  while (c = *pszLine++) fputc(c, hf); /* fputc() translates \n to \r\n */
+  return 0;
+}
