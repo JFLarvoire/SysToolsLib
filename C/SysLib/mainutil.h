@@ -38,8 +38,14 @@
 #define strnieq(s1, s2, n) (!strncasecmp(s1, s2, n))
 #endif
 
+#if defined(_MSDOS)
+#define CDECL _cdecl
+#else
+#define CDECL
+#endif
+
 /* Main C modules utility routines */
 int IsSwitch(char *pszArg);		/* Test if a command-line argument is a switch */
-int _cdecl pferror(char *pszFormat, ...); /* Print error messages on stderr, in a standardized format */
+int CDECL pferror(char *pszFormat, ...); /* Print error messages on stderr, in a standardized format */
 
 #endif /* _SYSLIB_MAINUTIL_H_ */
