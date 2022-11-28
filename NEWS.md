@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2022-11-27
+### Changed
+- zap.exe: Added the ability to get the list of pathnames to delete from stdin.
+
+### New
+- C/include/LODOS.mak: New make "OS=LODOS" option, for generating  executables that only use the LoDosLib and BiosLib
+  libraries. The advantage compared to pure BiosLib-based program (ie. MINICOM programs) is that the standard output
+  can be redirected.
+- C/include, C/BiosLib, C/LoDosLib: Many changes and additions to support generating BIOS, LODOS, and DOS versions of
+  the same program without conditional compilations in its source.
+
+### Fixed
+- cpuid.exe: Fixed the DOS version output which could not be redirected, by making sure it actually builds as a LODOS app.
+
 ## [Unreleased] 2022-11-21
 ### Changed
 - cpuid.exe: Added a WIN64 version.
