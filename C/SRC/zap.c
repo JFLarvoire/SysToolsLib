@@ -36,13 +36,15 @@
 *		    recursive deletion of fixed names. Version 1.4.1.         *
 *    2022-02-08 JFL Added option -- to force the end of switches. Version 1.5.*
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.5.1.		      *
+*    2022-11-27 JFL Added PATHNAME - to get the list of pathnames from stdin. *
+*                   Version 1.6.					      *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.5.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.6"
+#define PROGRAM_DATE    "2022-11-27"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -135,6 +137,8 @@ typedef struct zapOpts {
 #define FLAG_RECURSE	0x0004		/* Recursive operation */
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
+#define FLAG_ZAPBAK	0x0020		/* Zap backup files */
+int zap(char *arg, zapOpts *pzo); /* Remove whatever the argument refers to */
 int zapFiles(const char *pathname, zapOpts *pzo); /* Remove files in a directory */
 int zapBaks(const char *path, zapOpts *pzo); /* Remove backup files in a dir */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
@@ -166,9 +170,7 @@ int main(int argc, char *argv[]) {
   int iRet = 0;
   unsigned long nDeleted = 0;
   zapOpts zo = {FLAG_VERBOSE | (IGNORECASE ? FLAG_NOCASE : 0), "", NULL};
-  int iZapBackup = FALSE;
   int nZaps = 0;
-  size_t len;
   int iProcessSwitches = TRUE;
 
   zo.pNDeleted = &nDeleted;
@@ -185,7 +187,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "b")) {	/* Zap Backup Files */
-	iZapBackup = TRUE;
+	zo.iFlags |= FLAG_ZAPBAK;
 	continue;
       }
       DEBUG_CODE(
@@ -245,49 +247,25 @@ int main(int argc, char *argv[]) {
     } /* End if it's a switch */
     /* If it's an argument */
     nZaps += 1;
-    len = strlen(arg);
-#if defined(_MSDOS) || defined(_WIN32) /* Make sure the path uses only native \ separators */
-    { int j; for (j=0; (unsigned)j<len; j++) if (arg[j] == '/') arg[j] = '\\'; }
-#endif
-    if (iZapBackup) {
-      nErr += zapBaks(arg, &zo);
-      continue;
+    if (streq(arg, "-")) {
+      nErr += zap(NULL, &zo); /* Get the list of files to erase from stdin */
+    } else {
+      nErr += zap(arg, &zo);  /* Zap the specified pathname */
     }
-    if (!len) {
-      printError("Error: Empty pathname");
-      nErr += 1;
-      continue;
-    }
-#if OS_HAS_DRIVES /* If it's just a drive, append the implicit . path */
-    if ((len == 2) && (arg[1] == ':')) {
-      char *arg2 = "C:.";
-      arg2[0] = arg[0];
-      arg = arg2;
-    }
-#endif
-    if (isRootDir(arg)) {
-      printError(szHalRefusal);
-      nErr += 1;
-      continue;
-    }
-    if (arg[len-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name, but not root */
-      nErr += zapDirs(arg, &zo);		/* Remove whole directories */
-      continue;
-    }
-    if (isEffectiveDir(arg)) { /* If the pathname refers to an existing directory */
-      nErr += zapDir(arg, &zo);   /* Remove a whole directory */
-      continue;
-    }
-    nErr += zapFiles(arg, &zo);
-    continue;
   }
 
-  if (iZapBackup && !nZaps) {
+  if ((zo.iFlags & FLAG_ZAPBAK) && !nZaps) {
     nZaps += 1;
     nErr += zapBaks(NULL, &zo);
   }
 
-  if (!nZaps) usage(); /* No deletion was requested */ 
+  if (!nZaps) {
+    if (!isatty(fileno(stdin))) nErr += zap(NULL, &zo);
+    /* But if stdin is the console, don't block as there's nothing to do */
+    DEBUG_CODE(
+      else DEBUG_PRINTF(("// Nothing to do as input is from console\n"));
+    )
+  }
 
   if (nErr) {
     /* Display the error summary if we tried deleting more than one file */
@@ -346,13 +324,17 @@ When using wildcards in recursive mode, a search is made in each subdirectory.\n
 Without a trailing " DIRSEPARATOR_STRING ", wildcards refer to files and links only.\n\
 With a trailing " DIRSEPARATOR_STRING ", wildcards refer to directories only.\n\
 \n\
+If PATHNAME is \"-\", then get the list of pathnames to zap from standard input.\n\
+If no argument is provided, and input is not from the console, do like for \"-\".\n\
+Ex: dir /b | findstr /F:/ /C:TOPSECRET /m | zap\n\
+\n\
 Notes:\n\
 * Deleting a non-existent file or directory is not an error. Nothing's output.\n\
 * If pathname is . then all . contents will be deleted, but not . itself.\n\
 * Deleting a non-empty directory (including .) requires using option -r or -f.\n\
 * For your own safety, the program will refuse to delete root directories.\n\
 \n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+Author: Jean-François Larvoire - jf.larvoire@free.fr\n"
 #ifdef _UNIX
 "\n"
 #endif
@@ -994,3 +976,69 @@ cleanup_and_return:
 #ifdef _MSC_VER
 #pragma warning(default:4706)
 #endif
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    zap							      |
+|									      |
+|   Description     Delete whatever a pathname refers to 		      |
+|									      |
+|   Parameters	    char *arg	    The pathname to delete. May be modified.  |
+|				    If NULL, get the list from stdin.	      |
+|		    zapOpts *pzo    Zap options				      |
+|		    							      |
+|   Returns	    The number of errors encountered			      |
+|									      |
+|   History								      |
+|    2022-11-27 JFL Extracted from the main routine.			      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* Remove whatever an argument refers to */
+int zap(char *arg, zapOpts *pzo) {
+  size_t l;
+  DEBUG_ENTER(("zap(\"%s\", %p);\n", arg, pzo));
+  if (!arg) { /* Get the list of files to erase from stdin */
+    char szLine[PATH_MAX];
+    int nErr = 0;
+    DEBUG_PRINTF(("// Getting list of pathnames from stdin\n"));
+    while (fgets(szLine, PATH_MAX, stdin)) {
+      szLine[PATH_MAX - 1] = '\0';
+      l = strlen(szLine);
+      for (; l && ((szLine[l-1]=='\r') || (szLine[l-1]=='\n')); ) szLine[--l] = '\0'; /* Trim trailing CR/LF */
+      DEBUG_PRINTF(("szLine = \"%s\"\n", szLine));
+      if (szLine[0]) nErr += zap(szLine, pzo);
+    }
+    RETURN_INT(nErr);
+  }
+  l = strlen(arg);
+#if defined(_MSDOS) || defined(_WIN32) /* Make sure the path uses only native \ separators */
+  { unsigned j; for (j=0; j<l; j++) if (arg[j] == '/') arg[j] = '\\'; }
+#endif
+  if (!l) {
+    printError("Error: Empty pathname");
+    RETURN_INT(1);
+  }
+#if OS_HAS_DRIVES /* If it's just a drive, append the implicit . path */
+  if ((l == 2) && (arg[1] == ':')) {
+    char *arg2 = "C:.";
+    arg2[0] = arg[0];
+    arg = arg2;
+  }
+#endif
+  if (isRootDir(arg)) {
+    printError(szHalRefusal);
+    RETURN_INT(1);
+  }
+  if (pzo->iFlags & FLAG_ZAPBAK) {
+    RETURN_INT(zapBaks(arg, pzo));
+  }
+  if (arg[l-1] == DIRSEPARATOR_CHAR) { /* If the name is explicitly flagged as a directory name, but not root */
+    RETURN_INT(zapDirs(arg, pzo));     /* Remove whole directories */
+  }
+  if (isEffectiveDir(arg)) { /* If the pathname refers to an existing directory */
+    RETURN_INT(zapDir(arg, pzo)); /* Remove a whole directory */
+  }
+  RETURN_INT(zapFiles(arg, pzo));
+}
+
