@@ -43,6 +43,10 @@
 *    2016-04-11 JFL Renamed NODOSLIB as BIOSLIB.                              *
 *    2016-04-24 JFL Added defs in getticks.asm, gettime.asm and getdate.asm.  *
 *    2016-04-25 JFL Added comment lib bios.h to tell the linker to use it.    *
+*    2022-11-29 JFL Explicitly specify the calling convention for all C       *
+*		    functions, to make sure that minicom programs compiled in *
+*		    _MSDOS environments do call bioslib functions correctly.  *
+*		    Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. *
 *									      *
 *      (c) Copyright 1990-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -50,6 +54,10 @@
 
 #ifndef __UTILDEF_H__
 #define __UTILDEF_H__
+
+#ifndef BIOSLIBCCC
+#define BIOSLIBCCC _fastcall /* The default C calling convention for BiosLib */
+#endif
 
 /* Force linking with the bios.lib library */
 #ifndef BIOS_LIB
@@ -67,9 +75,11 @@ extern "C"
 #ifndef DWORD_DEFINED
 #define DWORD_DEFINED
 
+#pragma warning(disable:4209)	/* Ignore the benign typedef redefinition warning */
 typedef unsigned char   BYTE;   /*  8-bits unsigned integer */
 typedef unsigned short	WORD;	/* 16-bits unsigned integer */
 typedef unsigned long	DWORD;	/* 32-bits unsigned integer */
+#pragma warning(default:4209)	/* Restore the benign typedef redefinition warning */
 
 /* Define the FAR qualifier for DOS, but not for Windows */
 #ifdef _H2INC
@@ -163,9 +173,11 @@ WORD FixRelocationParallax(WORD wReloc);
 
 #define ARGLINESIZE 127
 
+#if !(defined(_INC_STDLIB) || defined(__CLIBDEF_H__)) /* Also prototyped in clibdef.h for historical reasons */
 extern unsigned short _psp;         /* Not defined for device drivers */
 /* ~~jfl 2000/09/28 Using unsigned short instead of WORD for _psp,
 		    to allow to define it here and in clibdef.h. */
+#endif
 extern WORD EndOfAllocMem;          /* Not defined for device drivers */
 extern WORD SegEnv;                 /* Not defined for device drivers */
 extern BYTE ArgLineSize;            /* Not defined for device drivers */
@@ -181,7 +193,7 @@ extern char ArgLine[ARGLINESIZE];   /* Not defined for device drivers */
 /* In breakarg.c */
 
 extern char ArgLineCopy[ARGLINESIZE];
-extern int BreakArgLine(char far *fpParms, char *pszArg[], int iMaxArgs);
+extern int BIOSLIBCCC BreakArgLine(char far *fpParms, char *pszArg[], int iMaxArgs);
 
 
 /* CHS Sector index origin used in all BIOS access routines */
@@ -197,13 +209,13 @@ extern int _cdecl BiosDiskWrite(WORD iDrive, WORD iCyl, WORD iHead,
 
 
 /* In isswitch.c */
-extern int IsSwitch(char *pszArg);
+extern int _cdecl IsSwitch(char *pszArg);
 
 /* In dumpbuf.c */
-extern void DumpBuf(void far *lpBuf, WORD wStart, WORD wStop);
+extern void BIOSLIBCCC DumpBuf(void far *lpBuf, WORD wStart, WORD wStop);
 
 /* In sqrt.c */
-int isqrt(unsigned int n);
+extern int BIOSLIBCCC isqrt(unsigned int n);
 
 /* In assembly language modules */
 
@@ -276,10 +288,10 @@ extern short    _fastcall   check_no_ram(void);
 
 /* In C language modules */
 
-extern void cputs_color(short, const char *);
+extern void     BIOSLIBCCC  cputs_color(short, const char *);
 #define putstr_color cputs_color; /* For a long time I had an putstr routine, then I learned about cputs which did the same as my putstr */
-extern void display_field(short, short, short, const char *, short);
-extern short xlate_key(short);
+extern void     BIOSLIBCCC  display_field(short, short, short, const char *, short);
+extern short    BIOSLIBCCC  xlate_key(short);
 
 /* In both timebios.asm and timedos.asm */
 
@@ -752,7 +764,7 @@ typedef struct
 
 #pragma pack()
 
-LPVOID FindHeader(DWORD dwExpected);	/* Locate a PnP BIOS-type header */
+LPVOID BIOSLIBCCC FindHeader(DWORD dwExpected);	/* Locate a PnP BIOS-type header */
 
 /* Various signatures used to identify the type of header */
 #define $PnP 0x506E5024 /* "$PnP" Signature for PnP BIOS and SMBIOS 2.0+ API */
@@ -765,4 +777,4 @@ LPVOID FindHeader(DWORD dwExpected);	/* Locate a PnP BIOS-type header */
 }
 #endif
 
-#endif /* __UTILDEF_H__ */
+#endif /* defined(__UTILDEF_H__) */

@@ -17,7 +17,7 @@
 *		    The routines defined in C language modules with variable  *
 *		     number of arguments must use the _cdecl keyword.         *
 *		    Else those with a fixed number of arguments must use the  *
-*		     _callconv keyword, defined ahead of this file.	      *
+*		     BIOSLIBCCC keyword, defined ahead of this file.	      *
 *		     Currently BiosLib is compiled with the /Gr switch, which *
 *		     makes them default to the _fastcall calling convention.  *
 *		    							      *
@@ -56,15 +56,18 @@
 *    2022-11-25 JFL Explicitly specify the calling convention for all C       *
 *		    functions, to make sure that minicom programs compiled    *
 *		    in _MSDOS environments do call C lib functions correctly. *
+*    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. *
 *		    							      *
-*      (c) Copyright 1990-2017 Hewlett Packard Enterprise Development LP      *
+*      (C) Copyright 1990-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #ifndef __CLIBDEF_H__   /* Prevent multiple inclusions */
 #define __CLIBDEF_H__
 
-#define _callconv _fastcall // The default calling convention for BiosLib C routines
+#ifndef BIOSLIBCCC
+#define BIOSLIBCCC _fastcall /* The default C calling convention for BiosLib */
+#endif
 
 /* Force linking with the bios.lib library */
 #ifndef BIOS_LIB
@@ -80,9 +83,10 @@ extern "C" {
 #define FALSE 0
 #define TRUE 1
 
-#ifndef __LODOS_H__   // Prevent multiple inclusions
+#ifndef _SIZE_T_DEFINED		/* Prevent multiple inclusions */
 typedef unsigned int size_t;
-#endif
+#define _SIZE_T_DEFINED
+#endif 
 
 /* Define NULL pointer value */
 
@@ -126,7 +130,9 @@ void _cdecl outp(int, int);
 
 /* In .asm files. Call specifiers _cdecl or _fastcall MUST be provided */
 
-extern unsigned short _psp;	/* Not defined for device drivers. Also prototyped in utildef.h for historical reasons. */
+#if !(defined(_INC_STDLIB) || defined(__UTILDEF_H__)) /* Also prototyped in utildef.h for historical reasons */
+extern unsigned short _psp;	/* Not defined for device drivers */
+#endif
 #define _getpid() _psp
 #define getpid() _psp
 
@@ -164,56 +170,56 @@ extern int _fstrlen(char far *lpsz);
 extern int _cdecl fprintf(FILE *, const char *, ...);
 extern int _cdecl printf(const char *, ...);
 extern int _cdecl sprintf(char *, const char *, ...);
-extern int _callconv vsprintf(char *, const char *, va_list);
-extern int _callconv sprintf1(char *, const char **);  /* Used internally by the library */
+extern int BIOSLIBCCC vsprintf(char *, const char *, va_list);
+extern int BIOSLIBCCC sprintf1(char *, const char **);  /* Used internally by the library */
 extern int _cdecl _snprintf(char *pszOutput, size_t uSize, const char *pszFormat, ...);
-extern int _callconv _vsnprintf(char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs);
+extern int BIOSLIBCCC _vsnprintf(char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs);
 
 int atoi(const char *pszString);
 long atol(const char *pszString);
-extern int _callconv stcd_i(const char *, int *);      /* Used internally by the library */
-extern int _callconv stch_i(const char *, int *);      /* Used internally by the library */
-extern int _callconv stci_h(char *, int); 	       /* Used internally by the library */
-extern int _callconv stci_d(char *, int);              /* Used internally by the library */
-extern int _callconv stcli_h(char *, unsigned long);   /* Used internally by the library */
-extern int _callconv stcli_d(char *, long);	       /* Used internally by the library */
-extern int _callconv stcu_d(char *, unsigned int);     /* Used internally by the library */
-extern int _callconv stclh_u(const char *string, unsigned long *pul); /* Useful too */
-extern int _callconv stcld_u(const char *string, unsigned long *pul); /* so is this one */
+extern int BIOSLIBCCC stcd_i(const char *, int *);      /* Used internally by the library */
+extern int BIOSLIBCCC stch_i(const char *, int *);      /* Used internally by the library */
+extern int BIOSLIBCCC stci_h(char *, int); 	       /* Used internally by the library */
+extern int BIOSLIBCCC stci_d(char *, int);              /* Used internally by the library */
+extern int BIOSLIBCCC stcli_h(char *, unsigned long);   /* Used internally by the library */
+extern int BIOSLIBCCC stcli_d(char *, long);	       /* Used internally by the library */
+extern int BIOSLIBCCC stcu_d(char *, unsigned int);     /* Used internally by the library */
+extern int BIOSLIBCCC stclh_u(const char *string, unsigned long *pul); /* Useful too */
+extern int BIOSLIBCCC stcld_u(const char *string, unsigned long *pul); /* so is this one */
 
-extern long _callconv strtol(const char *pszString, char **ppszEnd, int iBase);
-extern unsigned long _callconv strtoul(const char *pszString, char **ppszEnd, int iBase);
+extern long BIOSLIBCCC strtol(const char *pszString, char **ppszEnd, int iBase);
+extern unsigned long BIOSLIBCCC strtoul(const char *pszString, char **ppszEnd, int iBase);
 
-extern int _callconv fputs(const char *, FILE *);      /* Standard routine, outputing a string and a new line to stdout */
-extern int _callconv puts(const char *);               /* Standard routine, outputing a string and a new line to stdout */
-extern int _callconv _cputs(const char *);             /* Microsoft-specific routine, outputing just the string to the console */
+extern int BIOSLIBCCC fputs(const char *, FILE *);      /* Standard routine, outputing a string and a new line to stdout */
+extern int BIOSLIBCCC puts(const char *);               /* Standard routine, outputing a string and a new line to stdout */
+extern int BIOSLIBCCC _cputs(const char *);             /* Microsoft-specific routine, outputing just the string to the console */
 #define putstr _cputs		/* For a long time I had a putstr routine, then I learned about cputs which did the same */
 #define cputs _cputs		/* And a non-standard-but-friendly alias */ 
-extern char * _callconv gets(char *);		     /* Input string from console */
+extern char * BIOSLIBCCC gets(char *);		     /* Input string from console */
 
-extern int _callconv strlen(const char *);
-extern char * _callconv strcpy(char *, const char *);
-extern char * _callconv strncpy(char *, const char *, size_t);
-extern char * _callconv strcat(char *, const char *);
+extern int BIOSLIBCCC strlen(const char *);
+extern char * BIOSLIBCCC strcpy(char *, const char *);
+extern char * BIOSLIBCCC strncpy(char *, const char *, size_t);
+extern char * BIOSLIBCCC strcat(char *, const char *);
 
-extern char far * _callconv far _fstrncpy(char far *, const char far *, size_t);
-extern char far * _callconv far _fstrncat(char far *, const char far *, size_t);
-extern int _callconv _fstrcmp(const char far *, const char far *);
-extern int _callconv _fcputs(const char far *);
+extern char far * BIOSLIBCCC far _fstrncpy(char far *, const char far *, size_t);
+extern char far * BIOSLIBCCC far _fstrncat(char far *, const char far *, size_t);
+extern int BIOSLIBCCC _fstrcmp(const char far *, const char far *);
+extern int BIOSLIBCCC _fcputs(const char far *);
 #define fputstr _fcputs; /* For a long time I had an fputstr routine, then I learned about cputs which did the same as my putstr */
-extern int _callconv _fmemcmp(void far *lp1, void far *lp2, size_t l);
-extern void _callconv memset(void *pBuf, int c, size_t len);
-extern void _callconv _fmemset(void far *lpBuf, int c, size_t len);
+extern int BIOSLIBCCC _fmemcmp(void far *lp1, void far *lp2, size_t l);
+extern void BIOSLIBCCC memset(void *pBuf, int c, size_t len);
+extern void BIOSLIBCCC _fmemset(void far *lpBuf, int c, size_t len);
 
-extern char * _callconv strlwr(char *);
-extern char * _callconv strupr(char *);
+extern char * BIOSLIBCCC strlwr(char *);
+extern char * BIOSLIBCCC strupr(char *);
 #define _strlwr strlwr	/* Microsoft-specific, so the name should start with an _ */
 #define _strupr strupr	/* Microsoft-specific, so the name should start with an _ */
 
-extern size_t _callconv strspn(const char *string1, const char *string2);
-extern size_t _callconv strcspn(const char *string1, const char *string2);
-extern char * _callconv strpbrk(const char *string1, const char *string2);
-extern char * _callconv strstr(const char *string1, const char *string2);
+extern size_t BIOSLIBCCC strspn(const char *string1, const char *string2);
+extern size_t BIOSLIBCCC strcspn(const char *string1, const char *string2);
+extern char * BIOSLIBCCC strpbrk(const char *string1, const char *string2);
+extern char * BIOSLIBCCC strstr(const char *string1, const char *string2);
 
 extern int _cdecl sscanf(const char *pszString, const char *pszFormat, ...);
 extern int _cdecl vscanf(const char *pszString, const char **ppVarList);
@@ -244,4 +250,4 @@ inline void _cdecl operator delete(void *pMem) {
 #define DEL(object) (delete object)
 #endif
 
-#endif /* end if CLIBDEF_INCLUDED */
+#endif /* defined(__CLIBDEF_H__) */

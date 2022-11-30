@@ -9,7 +9,11 @@
 *   History								      *
 *    1998-05-25 JFL Created this file in BiosLib.			      *
 *    2022-10-19 JFL Moved to SysLib, with support for non-Microsoft OSs.      *
-*									      *
+*    2022-11-29 JFL Use the CDECL calling convention, to get the same API     *
+*		    as the old version in BiosLib.			      *
+*		    Note that using _fastcall in SysLib causes a warning      *
+*		    C4124: __fastcall with stack checking is inefficient      *
+*		    							      *
 *      (c) Copyright 1997-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -34,7 +38,7 @@
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg) {
+int CDECL IsSwitch(char *pszArg) {
   switch (*pszArg) {
     case '-': /* All operating systems, including Unix, MacOS, FreeBSD, ... */
 #if defined(_WIN32) || defined(_MSDOS)

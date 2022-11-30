@@ -13,6 +13,7 @@
 *    1995-02-16 JFL Added support for C++.				      *
 *		    Moved functions definitions to PMODE.H.		      *
 *    2017-06-29 JFL Include the real windef.h if it's available.	      *
+*    2022-11-28 JFL Add a workaround for benign typedef redefinition warnings.*
 *									      *
 *      (C) Copyright 1994-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,6 +35,8 @@ extern "C" {
 #endif
 
 /****** Common definitions and typedefs ******/
+
+#pragma warning(disable:4209)	/* Ignore the benign typedef redefinition warning */
 
 #define VOID void
 
@@ -114,6 +117,8 @@ typedef UINT HWND;
 typedef UINT HGLOBAL;
 
 typedef void (CALLBACK *FARPROC)(void);
+
+#pragma warning(default:4209)	/* Restore the benign typedef redefinition warning */
 
 #ifdef __cplusplus
 }

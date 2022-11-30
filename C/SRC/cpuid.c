@@ -98,6 +98,10 @@
 
 #pragma warning(disable:4001)       /* Ignore the // C++ comment warning */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 /************************ Win32-specific definitions *************************/
 
 #if defined(_WIN64)
@@ -127,8 +131,6 @@
 
 #define _WIN32_DCOM
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <windows.h>
 
 // Manipulate bytes, words and dwords. Can be used both as rvalue and as lvalue.
@@ -169,12 +171,9 @@ int iDebug = FALSE;
 
 #define SUPPORTED_OS 1
 
-#pragma warning(disable:4209)	// Ignore the benign typedef redefinition warning
-				// as several of the following redefine CHAR, WORD, DWORD
-#include "lodos.h"
-#include "clibdef.h"
-#include "utildef.h"
-#include "pmode.h"
+#include "lodos.h"	/* LoDosLib definitions */
+#include "utildef.h"	/* BiosLib definitions */
+#include "pmode.h"	/* PModeLib definitions */
 
 #define vcpi2prot vm2prot
 

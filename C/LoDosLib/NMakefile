@@ -30,6 +30,7 @@
 #    2017-10-27 JFL Changed OUTDIR default to the bin subdirectory.           #
 #    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
 #    2022-11-24 JFL Added Nchkstk.asm, Fchkstk.asm, puts.c, fputc.c.	      #
+#    2022-11-28 JFL Define the _LODOS constant when compiling sources.	      #
 #		    							      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -77,14 +78,14 @@ HEADLINE=$(MSG).&$(MSG)	# Output a blank line, then a message
 REPORT_FAILURE=$(MSG) ... FAILED. & exit /b # Report that a build failed, and forward the error code.
 
 # Generalized rule for C compilation
-CFLAGS=/A$(MODELE) /Fc$(L)\ /Fo$(O)\ /G2rs /I$(N) /Oaes /W3 /Zpil
+CFLAGS=/A$(MODELE) /Fc$(L)\ /Fo$(O)\ /G2rs /I$(N) /Oaes /W3 /Zpil /D_LODOS
 {$(S)}.c{$(O)}.obj:
     $(MSG) Compiling $(<F) ...
     $(CC) $(CFLAGS) /c $< || $(REPORT_FAILURE)
     $(MSG) ... done.
 
 # Generalized rule for Assembly language
-AFLAGS=/Cx /Fl$(L)\ /Fo$(O)\ /I$(N) /Sn /Zim
+AFLAGS=/Cx /Fl$(L)\ /Fo$(O)\ /I$(N) /Sn /Zim /D_LODOS
 {$(S)}.asm{$(O)}.obj:
     $(MSG) Assembling $(<F) ...
     $(AS) $(AFLAGS) /c $< || $(REPORT_FAILURE)

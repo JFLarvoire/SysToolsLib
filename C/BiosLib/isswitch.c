@@ -7,7 +7,7 @@
 *   Notes:								      *
 *									      *
 *   History:								      *
-*    1998/05/25 JFL Created this file					      *
+*    1998-05-25 JFL Created this file					      *
 *									      *
 *      (c) Copyright 1997-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -29,12 +29,13 @@
 |   Notes:								      |
 |									      |
 |   History:								      |
-|									      |
-|    1997/03/04 JFL Created this routine				      |
+|    1997-03-04 JFL Created this routine				      |
+|    2022-11-30 JFL Changed to the _cdecl calling convention, to avoid a      |
+|		    conflict with the eponym routine in SysLib.		      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int IsSwitch(char *pszArg)
+int _cdecl IsSwitch(char *pszArg)
     {
     switch (*pszArg)
 	{

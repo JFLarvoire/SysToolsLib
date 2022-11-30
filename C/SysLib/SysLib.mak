@@ -13,6 +13,7 @@
 #    2016-09-30 JFL Rewrote clean rules for building C files that	      #
 #		    conditionally include other C files.		      #
 #    2021-03-01 JFL Compile R0Ios.c, Ring0.c, VxDCall.c only for WIN95.       #
+#    2022-11-28 JFL Added support for LODOS OS type builds.                   #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -26,7 +27,7 @@ OBJECTS = \
 !IF DEFINED(GNUEFI)
     +$(O)\Crc32.obj		\
 !ENDIF
-!IF "$(T)"!="BIOS"
+!IF "$(T)"!="BIOS" && "$(T)"!="LODOS"
     +$(O)\File.obj		\
 !ENDIF
     +$(O)\FloppyDisk.obj	\
@@ -39,7 +40,7 @@ OBJECTS = \
     +$(O)\LogDisk.obj		\
 !ENDIF
     +$(O)\MacAddr.obj		\
-!IF !("$(T)"=="BIOS" || ("$(T)"=="DOS" && !DEFINED(LMPTK)))
+!IF !("$(T)"=="BIOS" || "$(T)"=="LODOS" || ("$(T)"=="DOS" && !DEFINED(LMPTK)))
     +$(O)\NetBios.obj		\
 !ENDIF
     +$(O)\SmBios.obj		\
@@ -56,7 +57,7 @@ h2inc: $(SYSLIB)\int13.inc
 
 # Force building C files that conditionally include other C files
 $(O)\HardDisk.obj: $(S)\HardDisk.cpp \
-!IF "$(T)"=="BIOS" || "$(T)"=="DOS"
+!IF "$(T)"=="BIOS" || "$(T)"=="LODOS" || "$(T)"=="DOS"
                    $(S)\HDiskdos.cpp
 !ELSEIF "$(T)"=="WIN95"
                    $(S)\HDiskw32.cpp $(S)\HDisk95.cpp
@@ -65,7 +66,7 @@ $(O)\HardDisk.obj: $(S)\HardDisk.cpp \
 !ENDIF
 
 $(O)\LogDisk.obj: $(S)\LogDisk.cpp \
-!IF "$(T)"=="BIOS" || "$(T)"=="DOS"
+!IF "$(T)"=="BIOS" || "$(T)"=="LODOS" || "$(T)"=="DOS"
                   $(S)\LDiskdos.cpp
 !ELSEIF "$(T)"=="WIN95"
                   $(S)\LDiskw32.cpp $(S)\LDisk95.cpp

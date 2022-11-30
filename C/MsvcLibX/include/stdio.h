@@ -20,7 +20,9 @@
 *    2018-04-24 JFL Added fputsW, vfprintfW(), fprintfW() and printfW().      *
 *    2020-06-26 JFL Added asprintf() family of routines.		      *
 *    2020-07-28 JFL Added standard implementations of snprintf(), vnsprintf().*
-*									      *
+*    2022-11-29 JFL Make sure all functions with variable # of arguments      *
+*		    use the _cdecl calling convention.			      *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -49,7 +51,7 @@ extern "C" {
 #define snprintf snprintf
 #define vsnprintf vsnprintf
 #else 		   /* But older implementations are absent, or duplicate the non-standard _snprintf(), etc */
-extern int correct_snprintf(char *ppszBuf, size_t nBufSize, const char *pszFormat, ...);
+extern int _cdecl correct_snprintf(char *ppszBuf, size_t nBufSize, const char *pszFormat, ...);
 #define snprintf correct_snprintf
 extern int correct_vsnprintf(char *ppszBuf, size_t nBufSize, const char *pszFormat, va_list vl);
 #define vsnprintf correct_vsnprintf
@@ -57,10 +59,10 @@ extern int correct_vsnprintf(char *ppszBuf, size_t nBufSize, const char *pszForm
 
 /* GNU extensions: asprintf(), etc */
 extern int vasprintf(char **ppszBuf, const char *pszFormat, va_list vl);
-extern int asprintf(char **ppszBuf, const char *pszFormat, ...);
+extern int _cdecl asprintf(char **ppszBuf, const char *pszFormat, ...);
 /* MsvcLibX-specific alternatives, used internally for debugging */
 extern char *dvasprintf(const char *pszFormat, va_list vl);
-extern char *dasprintf(const char *pszFormat, ...);
+extern char * _cdecl dasprintf(const char *pszFormat, ...);
 
 /************************ MS-DOS-specific definitions ************************/
 

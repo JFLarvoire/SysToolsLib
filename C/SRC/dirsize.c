@@ -123,7 +123,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define IGNORECASE TRUE
 
-#define CDECL __cdecl
+/* CDECL is defined in syslib.h, which is included indirectly by SysLib *.h */
 
 #endif /* defined(_MSDOS) */
 

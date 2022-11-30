@@ -9,6 +9,7 @@
 *   History                                                                   *
 *    2021-12-15 JFL Created this file.					      *
 *    2022-10-19 JFL Added definitions for IsSwitch() and for streqi().	      *
+*    2022-11-29 JFL Moved the CDECL declaration to SysLib.h.                  *
 *                                                                             *
 \*****************************************************************************/
 
@@ -38,14 +39,8 @@
 #define strnieq(s1, s2, n) (!strncasecmp(s1, s2, n))
 #endif
 
-#if defined(_MSDOS)
-#define CDECL _cdecl
-#else
-#define CDECL
-#endif
-
 /* Main C modules utility routines */
-int IsSwitch(char *pszArg);		/* Test if a command-line argument is a switch */
+int CDECL IsSwitch(char *pszArg);	 /* Test if a command-line argument is a switch */
 int CDECL pferror(char *pszFormat, ...); /* Print error messages on stderr, in a standardized format */
 
 #endif /* _SYSLIB_MAINUTIL_H_ */

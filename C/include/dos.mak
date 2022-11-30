@@ -142,6 +142,7 @@
 #		    including other CPP sources with a UTF-8 BOM.	      #
 #    2022-11-25 JFL Allow defining an APPTYPE in the make file, to build      #
 #		    a BIOS or LODOS app instead of the default DOS app.       #
+#    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -275,7 +276,10 @@ TMP=.
 T_VARS=1	# Make sure OS-type-specific variables are defined only once
 # Tools and options
 AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /San /Zdim /D_MSDOS "/D_MODEL=$(MMN)"
-CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ /G3 /Oaes /W4 /Zpi
+!IF !DEFINED(DOS_CGFLAGS)	# Allow changing the Code Generation flags for DOS
+DOS_CGFLAGS=/G3 /Oaes /Zpi	# And use these by default
+!ENDIF
+CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ $(DOS_CGFLAGS) /W4
 !IF DEFINED(DOS_VCINC)
 CFLAGS=$(CFLAGS) "/DMSVCINCLUDE=$(DOS_VCINC:\=/)" # Path of MSVC compiler include files, without quotes, and with forward slashes
 !ENDIF
@@ -1059,10 +1063,12 @@ EXENAME=$(PROGRAM).exe	# Both DOS and Windows expect this extension.
 # Change the default libraries search order for BIOS and LODOS applications
 !IF DEFINED(APPTYPE)
 !  IF "$(APPTYPE)"=="BIOS"
+CFLAGS=$(CFLAGS) /D_BIOS
 INCPATH=$(BIOSLIB);$(LODOSLIB)
 LIB=$(BIOSLIB)\$(OUTDIR);$(LODOSLIB)\$(OUTDIR)
 LIBS=bios.lib lodos.lib
 !  ELSE IF "$(APPTYPE)"=="LODOS"
+CFLAGS=$(CFLAGS) /D_LODOS
 INCPATH=$(LODOSLIB);$(BIOSLIB)
 LIB=$(LODOSLIB)\$(OUTDIR);$(BIOSLIB)\$(OUTDIR)
 LIBS=lodos.lib bios.lib

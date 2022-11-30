@@ -19,10 +19,12 @@
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
-!IF "$(T)"=="DOS"
+!IF "$(T)"=="BIOS" || "$(T)"=="LODOS" || "$(T)"=="DOS"
 SOURCES=cpuid.c
 OBJECTS=$(O)\cpuid.obj
-EXETYPE=LODOS	# Actually build a LODOS application in the DOS directory
+!IF "$(T)"=="DOS"
+APPTYPE=LODOS	# Actually build a LODOS application in the DOS directory
+!ENDIF
 !ELSE # WIN95, WIN32, WIN64
 SOURCES=cpuid.c $(O)\cpuid.rc
 OBJECTS=$(O)\cpuid.obj $(O)\cpuid.res
@@ -34,7 +36,7 @@ EXENAME=cpuid.exe
 SKIP_THIS=The DOS version of this program requires the BIOSLIB, LODOSLIB, and PMODE libraries.
 !ENDIF
 
-!IF "$(T)"!="DOS" && "$(T)"!="WIN95" && "$(T)"!="WINXP" && "$(T)"!="WIN32" && "$(T)"!="WIN64" # Ex: ARM, ARM64, IA64, etc
+!IF "$(T)"!="BIOS" && "$(T)"!="LODOS" && "$(T)"!="DOS" && "$(T)"!="WIN95" && "$(T)"!="WINXP" && "$(T)"!="WIN32" && "$(T)"!="WIN64" # Ex: ARM, ARM64, IA64, etc
 SKIP_THIS=There's no $(T) version of this program yet.
 !ENDIF
 
