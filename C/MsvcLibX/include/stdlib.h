@@ -66,6 +66,10 @@ extern int mkstempU(char *pszTemplate);		   /* UTF-8 version */
 
 /********************** End of OS-specific definitions ***********************/
 
+/* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
+int setenv(const char *pszName, const char *pszValue, int iOverwrite);
+#define unsetenv(name) setenv(name, "", 1);
+
 #ifdef __cplusplus
 }
 #endif

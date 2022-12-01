@@ -78,6 +78,7 @@ OBJECTS = \
     +readlink.obj		\
     +realpath.obj		\
     +rmdir.obj			\
+    +setenv.obj			\
     +snprintf.obj		\
     +spawn.obj			\
     +strerror.obj		\
@@ -171,7 +172,7 @@ $(I)\sys\types.h: $(I)\msvclibx.h
 
 
 ###############################################################################
-#			Source files dependancies			      #
+#			Source files dependencies			      #
 ###############################################################################
 
 access.c: $(CI)\debugm.h $(I)\errno.h $(I)\io.h $(I)\msvclibx.h $(I)\stdio.h $(I)\windows.h
@@ -269,6 +270,8 @@ readlink.c: $(CI)\debugm.h $(I)\errno.h $(I)\unistd.h $(I)\reparsept.h $(I)\stri
 realpath.c: $(CI)\debugm.h $(I)\direct.h $(I)\errno.h $(I)\stdlib.h $(I)\string.h $(I)\unistd.h $(I)\windows.h
 
 rmdir.c: $(CI)\debugm.h $(I)\errno.h $(I)\msvclibx.h $(I)\sys\stat.h $(I)\stdio.h $(I)\string.h $(I)\windows.h
+
+setenv.c: $(I)\stdlib.h $(I)\string.h
 
 snprintf.c: $(I)\msvclibx.h $(I)\stdio.h $(I)\stdlib.h $(I)\stdarg.h
 
