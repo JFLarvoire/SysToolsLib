@@ -36,6 +36,8 @@
 *		    Added a help screen, and a -V (get version) option.	      *
 *		    Fixed warnings in MS-DOS and MacOS LLVM builds.	      *
 *		    Version 2.0.					      *
+*    2022-12-01 JFL Added (but compiled-out) an experiment on how to display  *
+*		    macro values at compile time.			      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -67,8 +69,48 @@ int iVerbose = 0;
 
 #define streq(s1, s2) (!strcmp(s1,s2))
 
-#define stringize( x ) #x                /* Convert a macro name to a string */
-#define stringizex( x ) stringize( x )   /* Convert a macro value to a string */
+#ifndef CDECL
+#define CDECL /* Ignore that in Unix */
+#endif
+
+#define STRINGIZE( x ) #x		/* Convert a macro name to a string */
+#define VALUEIZE( x ) STRINGIZE( x )	/* Convert a macro value to a string */
+
+/* The above pair generates a warning when a macro is defined with no value:
+   warning C4003: not enough arguments for function-like macro invocation 'STRINGIZE'
+   I tried using the following workaround, found on the Internet, but it has the same problem.
+#define STRINGIZE(s) #s
+#define STRINGIZE1(s) STRINGIZE s
+#define VALUEIZE(s) STRINGIZE1((s))
+*/
+
+#if 0 /* vvv Experiment with displaying macro values at compile time vvv */
+#define DUMPMACRO(s) "#define " #s " " STRINGIZE(s)
+
+#undef  MYUNDEFINED
+#define MYDEFINED
+#define MYEMPTY ""
+#define MYSPACE " "
+#define MYONE 1
+
+#ifdef _MSC_VER
+#pragma warning(disable:4003)	/* Disable the [not enough arguments for function-like macro] warning */
+#endif
+
+/* Problems:
+   - The undefined macro is displayed as itself, instead as undefined or empty.
+   - The defined but empty macro causes a warning C4003 in Microsoft C. */
+#pragma message(DUMPMACRO(MYUNDEFINED))
+#pragma message(DUMPMACRO(MYDEFINED))
+#pragma message(DUMPMACRO(MYEMPTY))
+#pragma message(DUMPMACRO(MYSPACE))
+#pragma message(DUMPMACRO(MYONE))
+
+#ifdef _MSC_VER
+#pragma warning(default:4003)	/* Restore the [not enough arguments for function-like macro] warning */
+#endif
+
+#endif /* ^^^ Experiment with displaying macro values at compile time ^^^ */
 
 #if defined(__GNUC__) || defined(__clang__)
 /* It's actually clang that complains every time PRINTVAL() is invoked:
@@ -84,7 +126,7 @@ int iVerbose = 0;
       Ex: PRINTVAL(=__STDC__); */
 #define PRINTVAL( x ) do { \
   const char *pszName = #x + 1; \
-  const char *pszValue = stringize( x ) + 1; \
+  const char *pszValue = STRINGIZE( x ) + 1; \
   if (strcmp(pszName, pszValue)) { \
     printf("#define %s %s", pszName, pszValue); \
     if (iVerbose) printf(" // \"%s\"", pszValue); \
@@ -130,7 +172,7 @@ Options:\n\
 );
 }
 
-int _cdecl main(int argc, char *argv[]) {
+int CDECL main(int argc, char *argv[]) {
   int i;
 
   for (i=1; i<argc; i++) {
