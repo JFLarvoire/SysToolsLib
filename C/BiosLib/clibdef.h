@@ -160,7 +160,7 @@ extern char far * _cdecl _fmemmove(void far *, const void far *, size_t);
 extern void _fastcall exit(int);
 extern int  _fastcall rand(void);
 extern void _fastcall srand(unsigned int seed);
-extern int _fstrlen(char far *lpsz);
+extern int BIOSLIBCCC _fstrlen(char far *lpsz);
 #define fstrlen _fstrlen
 
 /* In .c files. Functions with a variable number of arguments must be _cdecl */
@@ -179,10 +179,10 @@ int atoi(const char *pszString);
 long atol(const char *pszString);
 extern int BIOSLIBCCC stcd_i(const char *, int *);      /* Used internally by the library */
 extern int BIOSLIBCCC stch_i(const char *, int *);      /* Used internally by the library */
-extern int BIOSLIBCCC stci_h(char *, int); 	       /* Used internally by the library */
+extern int BIOSLIBCCC stci_h(char *, int);		/* Used internally by the library */
 extern int BIOSLIBCCC stci_d(char *, int);              /* Used internally by the library */
 extern int BIOSLIBCCC stcli_h(char *, unsigned long);   /* Used internally by the library */
-extern int BIOSLIBCCC stcli_d(char *, long);	       /* Used internally by the library */
+extern int BIOSLIBCCC stcli_d(char *, long);		/* Used internally by the library */
 extern int BIOSLIBCCC stcu_d(char *, unsigned int);     /* Used internally by the library */
 extern int BIOSLIBCCC stclh_u(const char *string, unsigned long *pul); /* Useful too */
 extern int BIOSLIBCCC stcld_u(const char *string, unsigned long *pul); /* so is this one */
@@ -193,9 +193,12 @@ extern unsigned long BIOSLIBCCC strtoul(const char *pszString, char **ppszEnd, i
 extern int BIOSLIBCCC fputs(const char *, FILE *);      /* Standard routine, outputing a string and a new line to stdout */
 extern int BIOSLIBCCC puts(const char *);               /* Standard routine, outputing a string and a new line to stdout */
 extern int BIOSLIBCCC _cputs(const char *);             /* Microsoft-specific routine, outputing just the string to the console */
-#define putstr _cputs		/* For a long time I had a putstr routine, then I learned about cputs which did the same */
+#define putstr _cputs		/* For a long time BiosLib had a putstr routine, then I learned about cputs which did the same */
 #define cputs _cputs		/* And a non-standard-but-friendly alias */ 
-extern char * BIOSLIBCCC gets(char *);		     /* Input string from console */
+extern char * BIOSLIBCCC gets(char *);			/* Input string from console */
+#ifndef fflush						/* Also defined differently in LoDosLib */
+#define fflush(hf)					/* Standard routine. Make it a noop in BiosLib */
+#endif
 
 extern int BIOSLIBCCC strlen(const char *);
 extern char * BIOSLIBCCC strcpy(char *, const char *);

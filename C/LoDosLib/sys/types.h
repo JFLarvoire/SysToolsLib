@@ -15,10 +15,10 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef __TYPES_H__   // Prevent multiple inclusions
+#ifndef __TYPES_H__   /* Prevent multiple inclusions */
 #define __TYPES_H__
 
 #include "lodos.h"
 #include "clibdef.h"
 
-#endif // __TYPES_H__
+#endif /* __TYPES_H__ */

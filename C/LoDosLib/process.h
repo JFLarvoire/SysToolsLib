@@ -1,6 +1,6 @@
 /*****************************************************************************\
 *                                                                             *
-*   Filename:	    STDIO.H						      *
+*   Filename:	    process.h						      *
 *									      *
 *   Description:    Standard C library routines and constants definitions     *
 *                                                                             *
@@ -15,10 +15,10 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef __STDIO_H__   // Prevent multiple inclusions
-#define __STDIO_H__
+#ifndef __PROCESS_H__   /* Prevent multiple inclusions */
+#define __PROCESS_H__
 
 #include "lodos.h"
 #include "clibdef.h"
 
-#endif // __STDIO_H__
+#endif /* __PROCESS_H__ */

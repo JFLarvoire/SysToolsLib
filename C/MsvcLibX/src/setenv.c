@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   Filename	    setenv.c						      *
 *									      *
@@ -9,9 +9,11 @@
 *   History								      *
 *    2022-12-01 JFL Created this module.				      *
 *                                                                             *
-*		  © Copyright 2022 Jean-François Larvoire		      *
+*		  Â© Copyright 2022 Jean-FranÃ§ois Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
+
+#define  _CRT_SECURE_NO_WARNINGS /* Prevent "This function or variable may be unsafe" warnings */
 
 #include <stdlib.h>
 #include <string.h>

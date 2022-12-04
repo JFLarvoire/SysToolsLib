@@ -251,7 +251,7 @@ extern int _cdecl GetVmmVersion(void);
 /* getvxdep.asm */
 extern void far * _fastcall GetVxdEntryPoint(WORD wID);
 
-//ioctldr.c
+/* ioctldr.c */
 extern int _cdecl IoctlDiskRead(WORD iDrive, WORD iCyl, WORD iHead,
 			 WORD iSect, WORD n, void far *lpcBuffer);
 
@@ -329,7 +329,9 @@ extern int LODOSLIBCCC fseek(FILE *hf, long offset, int origin);
 extern long LODOSLIBCCC filelength(int hf);
 #define _filelength filelength
 /* int fflush(FILE *hf) */
+#ifndef fflush			/* Also defined differently in BiosLib */
 #define fflush(hf) _dos_commit(fileno(hf))
+#endif
 
 #define SEEK_CUR 1
 #define SEEK_END 2

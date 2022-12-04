@@ -308,8 +308,8 @@ inline uint64_t strtoull(const char *pszString, char **ppszEnd, int iBase) {
 #endif
 
 /* 7.8.2.4 The wcstoimax and wcstoumax functions */
-// #define wcstoimax _wcstolong
-// #define wcstoumax _wcstoulong
+/* #define wcstoimax _wcstolong */
+/* #define wcstoumax _wcstoulong */
 
 #endif /* _INTTYPES_H_ */
 

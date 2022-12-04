@@ -25,7 +25,7 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef __MSDOS_H__   // Prevent multiple inclusions
+#ifndef __MSDOS_H__   /* Prevent multiple inclusions */
 #define __MSDOS_H__
 
 #ifdef __cplusplus
@@ -47,7 +47,7 @@ typedef unsigned long DWORD;
 
 #pragma pack(1)   /* IMPORTANT: All DOS structures are packed! */
 
-#define SECTORSIZE 512		// Standard disk sector size
+#define SECTORSIZE 512		/* Standard disk sector size */
 
 #ifndef STRUCT_PARTITION
 #define STRUCT_PARTITION
@@ -68,7 +68,7 @@ typedef struct tagPARTITION	/* Partition table entry in the Master Boot Record *
     DWORD n_sectors;		/* Total number of sectors */
 } PARTITION;
 
-#endif // STRUCT_PARTITION
+#endif /* STRUCT_PARTITION */
 
 #ifndef STRUCT_MASTERBOOTRECORD
 #define STRUCT_MASTERBOOTRECORD
@@ -82,7 +82,7 @@ typedef struct tagMASTERBOOTRECORD	/* Master Boot Record structure */
     WORD mbrSignature;		/* AA55 marks a valid boot sector */
 } MASTERBOOTRECORD;
 
-#endif // STRUCT_MASTERBOOTRECORD
+#endif /* STRUCT_MASTERBOOTRECORD */
 
 #ifndef STRUCT_BOOTSECTOR
 #define STRUCT_BOOTSECTOR
@@ -114,7 +114,7 @@ typedef struct tagBOOTSECTOR
     }
     BOOTSECTOR;
 
-#endif // STRUCT_BOOTSECTOR
+#endif /* STRUCT_BOOTSECTOR */
 
 typedef struct tagDEVICEPARAMS
     {
@@ -238,4 +238,4 @@ typedef struct			/* MS-DOS memory arena */
 }
 #endif
 
-#endif // end if __MSDOS_H__ included
+#endif /* end if __MSDOS_H__ included */

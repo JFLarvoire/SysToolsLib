@@ -16,6 +16,7 @@
 :#   2015-12-09 JFL Added support for a config.bat file defining an %OUTDIR%. #
 :#   2017-10-26 JFL The default OUTDIR is now bin\.			      #
 :#   2018-05-02 JFL Use zap.exe instead of zap.bat.			      #
+:#   2015-10-27 JFL Added the LODOS target directory.                         #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -62,7 +63,7 @@ if not defined OUTDIR (
   set "BP=%OUTDIR%\"
 )
 
-for %%d in (ARM BIOS DOS WIN95 IA64 WINXP WIN32 WIN64) do (
+for %%d in (ARM BIOS LODOS DOS WIN95 IA64 WINXP WIN32 WIN64) do (
   set "DIR=%BP%%%d"
   if exist !DIR! (
     pushd !DIR!

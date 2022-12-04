@@ -15,10 +15,10 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef __STDIO_H__   // Prevent multiple inclusions
+#ifndef __STDIO_H__   /* Prevent multiple inclusions */
 #define __STDIO_H__
 
 #include "lodos.h"
 #include "clibdef.h"
 
-#endif // __STDIO_H__
+#endif /* __STDIO_H__ */
