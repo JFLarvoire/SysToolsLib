@@ -202,7 +202,7 @@ OP=$(O)\			#
 BP=$(B)\			#
 LP=$(L)\			#
 
-BR=$(T)$(DS)			# Idem, relative to sources
+BR=$(T)$(DS)			# Idem, relative to sources. Used by configure.bat.
 
 !IFNDEF TMP
 !IFDEF TEMP
