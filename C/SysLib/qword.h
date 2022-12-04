@@ -108,9 +108,15 @@
 #define DWORD_DEFINED
 
 #if defined(_MSDOS) || defined(_WIN32)
+#if defined(_MSC_VER)
+#pragma warning(disable:4209)	/* Ignore the benign typedef redefinition warning */
+#endif
 typedef unsigned char   BYTE;   /*  8-bits unsigned integer */
 typedef unsigned short	WORD;	/* 16-bits unsigned integer */
 typedef unsigned long	DWORD;	/* 32-bits unsigned integer */
+#if defined(_MSC_VER)
+#pragma warning(default:4209)	/* Restore the benign typedef redefinition warning */
+#endif
 #else /* Ex: defined(__unix__) */
 #include <stdint.h>
 typedef uint8_t  BYTE;
@@ -160,9 +166,10 @@ typedef DWORD FAR *	LPDWORD;
 #define BYTE_AT(p, n) (*(BYTE *)((BYTE *)(p)+(int)(n)))
 #define WORD_AT(p, n) (*(WORD *)((BYTE *)(p)+(int)(n)))
 #define DWORD_AT(p, n) (*(DWORD *)((BYTE *)(p)+(int)(n)))
-#define QWORD_AT(p, n) (*(QWORD *)((BYTE *)(p)+(int)(n)))
 
 #endif /* defined(DWORD_DEFINED) */
+
+#define QWORD_AT(p, n) (*(QWORD *)((BYTE *)(p)+(int)(n)))
 
 /*****************************************************************************\
 *           First the full-fledged implementation for C++.                    *

@@ -24,12 +24,10 @@
 
 # Object files, grouped by category, and sorted alphabetically in each group.
 
-# Common objects usable in all operating systems with a Standard C library
-COMMON_OBJECTS = \
-    +$(O)/copydate.obj		\
+# Common objects usable in all environments, including in BIOS or LODOS
+BASE_OBJECTS = \
     +$(O)/IsMBR.obj		\
     +$(O)/IsSwitch.obj		\
-    +$(O)/JoinPaths.obj		\
     +$(O)/oprintf.obj		\
     +$(O)/oprintf6.obj		\
     +$(O)/oprintf7.obj		\
@@ -37,11 +35,17 @@ COMMON_OBJECTS = \
     +$(O)/oprintf9.obj		\
     +$(O)/oprintf10.obj		\
     +$(O)/PcUuid.obj		\
-    +$(O)/pferror.obj		\
-    +$(O)/PrintUuid.obj		\
     +$(O)/qword.obj		\
+    +$(O)/PrintUuid.obj		\
     +$(O)/uuid.obj		\
     +$(O)/uuidnull.obj		\
+
+# Common objects usable in all operating systems with a Standard C library
+COMMON_OBJECTS = \
+    $(BASE_OBJECTS)		\
+    +$(O)/copydate.obj		\
+    +$(O)/JoinPaths.obj		\
+    +$(O)/pferror.obj		\
     +$(O)/WalkDirTree.obj	\
 
 # Microsoft-OS-specific objects are defined conditionally in SysLib.mak

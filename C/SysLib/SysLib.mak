@@ -21,8 +21,13 @@
 
 !INCLUDE "Files.mak"	# Include common files and files dependency definitions
 
-OBJECTS = \
-    $(COMMON_OBJECTS:/=\) \
+!IF "$(T)"=="BIOS" || "$(T)"=="LODOS"
+OBJECTS = $(BASE_OBJECTS)
+!ELSE
+OBJECTS = $(COMMON_OBJECTS)
+!ENDIF
+
+OBJECTS = $(OBJECTS:/=\)	\
     +$(O)\Block.obj		\
 !IF DEFINED(GNUEFI)
     +$(O)\Crc32.obj		\

@@ -50,6 +50,11 @@ REQS_BIOS=1
 !ELSE
 REQS_BIOS=0
 !ENDIF
+!IF DEFINED(DOS_CC) && EXIST("$(STINCLUDE)\LODOS.mak") && DEFINED(LODOSLIB)
+REQS_LODOS=1
+!ELSE
+REQS_LODOS=0
+!ENDIF
 !IF DEFINED(DOS_CC)
 REQS_DOS=1
 !ELSE
@@ -97,6 +102,9 @@ OS=
 OS=
 !IF $(REQS_BIOS)
 OS=$(OS) BIOS
+!ENDIF
+!IF $(REQS_LODOS)
+OS=$(OS) LODOS
 !ENDIF
 !IF $(REQS_DOS)
 OS=$(OS) DOS
@@ -153,6 +161,14 @@ ALL = \
      bios\debug \
 !ELSE # failed the static requirements test for BIOS builds
      explain_bios_reqs \
+!ENDIF
+!ENDIF
+!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF $(REQS_LODOS)
+     check_lodos_opts lodos \
+     lodos\debug \
+!ELSE # failed the static requirements test for LODOS builds
+     explain_lodos_reqs \
 !ENDIF
 !ENDIF
 !IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
@@ -220,6 +236,13 @@ syslib.lib: \
      explain_bios_reqs \
 !ENDIF
 !ENDIF
+!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF $(REQS_LODOS)
+     check_lodos_opts lodos \
+!ELSE # failed the static requirements test for LODOS builds
+     explain_lodos_reqs \
+!ENDIF
+!ENDIF
 !IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
 !IF $(REQS_DOS)
      check_dos_opts dos \
@@ -276,6 +299,13 @@ debug\syslib.lib: \
      check_bios_opts bios\debug \
 !ELSE # failed the static requirements test for BIOS builds
      explain_bios_reqs \
+!ENDIF
+!ENDIF
+!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF $(REQS_LODOS)
+     check_lodos_opts lodos\debug \
+!ELSE # failed the static requirements test for LODOS builds
+     explain_lodos_reqs \
 !ENDIF
 !ENDIF
 !IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
@@ -340,6 +370,11 @@ explain_bios_reqs:
     if not defined DOS_CC	$(MSG) $(CANT_FIND) Microsoft Visual C++ 1.x compiler (MSVC)
     if not defined BIOSLIB	$(MSG) $(CANT_FIND) the BIOSLIB library
 
+explain_lodos_reqs:
+    $(MSG) Skipping LODOS builds as some requirements are not met:
+    if not defined DOS_CC	$(MSG) $(CANT_FIND) Microsoft Visual C++ 1.x compiler (MSVC)
+    if not defined LODOSLIB	$(MSG) $(CANT_FIND) the LODOSLIB library
+
 explain_dos_reqs:
     $(MSG) Skipping DOS builds as some requirements are not met:
     if not defined DOS_CC	$(MSG) $(CANT_FIND) Microsoft Visual C++ 1.x compiler (MSVC)
@@ -371,6 +406,9 @@ explain_arm64_reqs:
 check_bios_opts:
     @if not defined GNUEFI $(MSG) Warning: GNUEFI undefined. Dropping crc32 and gpt modules build.
 
+check_lodos_opts:
+    @if not defined GNUEFI $(MSG) Warning: GNUEFI undefined. Dropping crc32 and gpt modules build.
+
 check_dos_opts:
     @if not defined GNUEFI $(MSG) Warning: GNUEFI undefined. Dropping crc32 and gpt modules build.
     @if not defined LMPTK $(MSG) Warning: LMPTK undefined. Dropping netbios and parts of uuid modules build.
@@ -393,6 +431,8 @@ check_arm64_opts: check_win32_opts
 # Rules for building specific versions of the SysLib library
 bios: lib\bios
 
+lodos: lib\lodos
+
 dos: lib\dos
 
 win95: lib\win95
@@ -408,6 +448,8 @@ arm: lib\arm
 arm64: lib\arm64
 
 bios\debug: lib\bios\debug
+
+lodos\debug: lib\lodos\debug
 
 dos\debug: lib\dos\debug
 
@@ -436,6 +478,15 @@ $(LIBDIR)\SysLibbt.lib: $(OD)BIOS\BIN\T\SysLib.lib $(LIBDIR)
 $(OD)BIOS\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
+
+lib\lodos: $(LIBDIR)\SysLiblt.lib
+
+$(LIBDIR)\SysLiblt.lib: $(OD)LODOS\BIN\T\SysLib.lib $(LIBDIR)
+    if exist %s echo F | xcopy /d /y %s $@
+
+$(OD)LODOS\BIN\T\SysLib.lib: NUL
+    $(HEADLINE) Building SysLib library LODOS release version
+    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dos: lib\dosT lib\dosS lib\dosL
     rem All DOS versions done
@@ -530,6 +581,15 @@ $(LIBDIR)\SysLibbtd.lib: $(OD)BIOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
 $(OD)BIOS\Debug\BIN\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
+
+lib\lodos\debug: $(LIBDIR)\SysLibltd.lib
+
+$(LIBDIR)\SysLibltd.lib: $(OD)LODOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
+    if exist %s echo F | xcopy /d /y %s $@
+
+$(OD)LODOS\Debug\BIN\T\SysLib.lib: NUL
+    $(HEADLINE) Building SysLib library LODOS debug version
+    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dos\debug: lib\dosT\debug lib\dosS\debug lib\dosL\debug
     rem All DOS versions done

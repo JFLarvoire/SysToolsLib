@@ -56,7 +56,7 @@ extern int iDebug;	/* Defined in main module. If TRUE, display debug information
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#if defined(HAS_LMPTK) && !defined(_BIOS)
+#if defined(HAS_LMPTK) && !(defined(_BIOS) || defined(_LODOS))
 #define USE_NETBIOS 1
 #else
 #define USE_NETBIOS 0

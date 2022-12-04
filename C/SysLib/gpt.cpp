@@ -202,7 +202,7 @@ open_return:
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifdef _BIOS
+#if defined(_BIOS) || defined(_LODOS)
 #pragma warning(disable:4100) /* Avoid warnings "'hGPT' : unreferenced formal parameter" */
 #endif
 
@@ -216,7 +216,7 @@ void GptClose(HGPT hGPT)
     free(hGPT);
     }
 
-#ifdef _BIOS
+#if defined(_BIOS) || defined(_LODOS)
 #pragma warning(default:4100)
 #endif
 

@@ -129,7 +129,7 @@ mult32(DWORD u, DWORD v, QWORD *result)
     result->dw1 += uuid1 * v1 + (temp >> 16);
 }
 
-#ifndef _BIOS	/* This is truely for MS-DOS */
+#if !(defined(_BIOS) || defined(_LODOS)) /* This is truely for MS-DOS */
 
 #include <sys/types.h>
 #include <time.h>
@@ -259,7 +259,7 @@ get_system_time(QWORD *uuid_time)
 #endif /* _DEBUG */
 }
 
-#else	/* defined(_BIOS) This is actually for BIOS */
+#else	/* defined(_BIOS) || defined(_LODOS) : This is actually for BIOS */
 
 #include "utildef.h"
 
@@ -353,7 +353,7 @@ get_system_time(QWORD *uuid_time)
 #endif /* _DEBUG */
 }
 
-#endif /* defined(_BIOS) */
+#endif /* defined(_BIOS) || defined(_LODOS) */
 
 /*
 ** See "The Multiple Prime Random Number Generator" by Alexander
