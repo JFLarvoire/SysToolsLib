@@ -143,6 +143,8 @@
 #    2022-11-25 JFL Allow defining an APPTYPE in the make file, to build      #
 #		    a BIOS or LODOS app instead of the default DOS app.       #
 #    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. #
+#    2022-12-03 JFL Restructured so that inference rules can be shared with   #
+#		    BIOS.mak & LODOS.mak.				      #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -160,8 +162,60 @@
 !IF !DEFINED(T)
 T=DOS				# Target OS
 !ENDIF
+
+!IF !DEFINED(T_VARS)
+T_VARS=1	# Make sure OS-type-specific variables are defined only once
+
+T_DEFS=				# Tell sources what environment they're built for
+
+# Memory model for 16-bit C compilation (T|S|C|D|L|H)
+!IF !DEFINED(MEM)
+MEM=S				# Memory model for C compilation
+MEM_ORIGIN=default
+!ELSE
+MEM_ORIGIN=specified
+!ENDIF
+
+EXE=exe				# Default program extension
+
+STARTCOM=$(MSVC)\LIB\CRTCOM.LIB # Default startup module for .com
+STARTEXE=
+
+CODEPAGE=$(DOS_CS)		# Use the user-defined code page
+
+# Tools and options
+CGFLAGS=/G3 /Oaes /Zpi		# C code generation flags
+
+LFLAGSX=			# Extra linker flags
+
+INCPATH=$(DOS_INCPATH)
+LIBPATH=$(DOS_LIBPATH)
+LIBS=$(DOS_LIBS)
+
+# Library SuffiX. For storing multiple versions of the same library in a single directory.
+LSX=d
+
+!ENDIF # !DEFINED(T_VARS)
+
+###############################################################################
+#									      #
+#		      End of OS-type-specific definitions		      #
+#									      #
+###############################################################################
+
+###############################################################################
+#									      #
+#		General definitions, based on the specific ones		      #
+#									      #
+###############################################################################
+
 !IF DEFINED(MESSAGES)
 !MESSAGE Started $(T).mak in $(MAKEDIR) # Display this file name, or the caller's name
+!ENDIF
+
+!IF DEFINED(MESSAGES) && DEFINED(MEM_ORIGIN)
+!MESSAGE Using the $(MEM_ORIGIN) memory model $(MEM).
+!UNDEF MEM_ORIGIN		# Report this only on the first entry
 !ENDIF
 
 # Command-line definitions that need carrying through to sub-make instances
@@ -192,6 +246,7 @@ NDEBUG=				# MS tools define this in release mode.
 DD=/DNDEBUG
 DS=
 !ENDIF
+DD=$(DD) $(T_DEFS)	# Tell sources what environment they're built for
 
 # If possible, load the 16-bits memory model definition from the make file for the current program.
 # Do not load the rest of the make file, as it may contain more rules depending on other variables defined further down.
@@ -200,18 +255,6 @@ TMPMAK=$(TMP)\$(T)_mem.$(PID).mak # Using the shell PID to generate a unique nam
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak") && ![findstr /R "^MEM=" "$(PROGRAM).mak" >"$(TMPMAK)" 2>NUL]
 !  MESSAGE Getting memory model definition from $(PROGRAM).mak.
 !  INCLUDE "$(TMPMAK)"
-!ENDIF
-
-# Memory model for 16-bit C compilation (T|S|C|D|L|H)
-!IF !DEFINED(MEM)
-MEM=S				# Memory model for C compilation
-!IF DEFINED(MESSAGES)
-!MESSAGE Using the default memory model $(MEM).
-!ENDIF
-!ELSE
-!IF DEFINED(MESSAGES)
-!MESSAGE Using the specified memory model $(MEM).
-!ENDIF
 !ENDIF
 
 # Convert the memory model flag into a memory model name
@@ -238,10 +281,11 @@ LCMEM=h
 !ENDIF
 
 # Define directories
+DOS_OUTPUT_DIRS=1		# But don't redefine them if the OS type is overriden in $(PROGRAM).mak
 S=.				# Where to find source files
 !IF !DEFINED(OUTDIR)
 OUTDIR=bin
-R=$(OUTDIR)\$(T)			# Root output path - In the default bin subdirectory
+R=$(OUTDIR)\$(T)		# Root output path - In the default bin subdirectory
 !ELSEIF "$(OUTDIR)"=="."
 R=$(T)				# Root output path - In the current directory
 !ELSE # It's defined and not empty
@@ -259,7 +303,7 @@ OP=$(O)\			#
 BP=$(B)\			#
 LP=$(L)\			#
 
-BR=$(T)$(DS)\BIN\$(MEM)		# Idem, relative to sources
+BR=$(T)$(DS)\BIN\$(MEM)		# Idem, relative to sources. Used by configure.bat.
 
 BB=$(BD)			# Final destination of executable files
 
@@ -272,21 +316,17 @@ TMP=.
 !ENDIF
 
 !IF !DEFINED(DISPATCH_OS)
-!IF !DEFINED(T_VARS)
-T_VARS=1	# Make sure OS-type-specific variables are defined only once
+
 # Tools and options
-AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /San /Zdim /D_MSDOS "/D_MODEL=$(MMN)"
-!IF !DEFINED(DOS_CGFLAGS)	# Allow changing the Code Generation flags for DOS
-DOS_CGFLAGS=/G3 /Oaes /Zpi	# And use these by default
-!ENDIF
-CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ $(DOS_CGFLAGS) /W4
+AFLAGS=/Cx $(DD) /I$(O) /Fl$(L)\ /Fo$(O)\ /San /Zdim /D_MSDOS "/D_MODEL=$(MMN)" $(T_DEFS)
+CFLAGS=/A$(MEM) $(DD) /Fc$(L)\ /Fd$(B)\ /Fo$(O)\ $(CGFLAGS) /W4
 !IF DEFINED(DOS_VCINC)
 CFLAGS=$(CFLAGS) "/DMSVCINCLUDE=$(DOS_VCINC:\=/)" # Path of MSVC compiler include files, without quotes, and with forward slashes
 !ENDIF
 !IF DEFINED(DOS_CRTINC)
 CFLAGS=$(CFLAGS) "/DUCRTINCLUDE=$(DOS_CRTINC:\=/)" # Path of MSVC CRT library include files, without quotes, and with forward slashes
 !ENDIF
-LFLAGS=/map /li /batch /noe /onerror:noexe
+LFLAGS=/map /li /batch /noe /onerror:noexe $(LFLAGSX)
 !IF "$(DEBUG)"=="1"
 # Note: The MSVC 1.52 linker does not support the /debug option
 LFLAGS=$(LFLAGS) /co
@@ -296,16 +336,12 @@ RFLAGS=$(DD)
 PATH=$(DOS_PATH)
 CC=$(DOS_CC)
 AS=$(DOS_AS)
-INCLUDE=$(S);$(STINCLUDE);$(DOS_INCPATH);$(USER_INCLUDE)
+INCLUDE=$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
 LK=$(DOS_LK)
-LIBS=$(DOS_LIBS) $(USER_LIBS)
-LIB=$(DOS_LIBPATH)
+LIBS=$(LIBS) $(USER_LIBS)
+LIB=$(LIBPATH)
 LB=$(DOS_LB)
 RC=$(DOS_RC)
-
-STARTCOM=$(MSVC)\LIB\CRTCOM.LIB
-STARTEXE=
-!ENDIF # !DEFINED(T_VARS)
 
 # Forward library detections by configure.bat to the C compiler and assembler
 CFLAGS=$(CFLAGS) $(HAS_SDK_FLAGS)
@@ -321,9 +357,7 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 !ENDIF
 
 # Library SuffiX. For storing multiple versions of the same library in a single directory.
-!IF !DEFINED(LSX)
-LSX=d$(LCMEM)
-!ENDIF
+LSX=$(LSX)$(LCMEM)
 !IF $(DEBUG)
 LSX=$(LSX)d
 !ENDIF
@@ -362,6 +396,8 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
 #									      #
 ###############################################################################
 
+!IF !DEFINED(DOS_INFERENCE_RULES)
+DOS_INFERENCE_RULES=1
 # Inference rules to generate the required PROGRAM variable
 
 !IF !DEFINED(PROGRAM)
@@ -917,7 +953,7 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
     $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
@@ -927,7 +963,7 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
     $(COMPACT_PATHS) & $(CC) $(CFLAGS) /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
@@ -937,7 +973,7 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" $(MAKEDEFS) # Recursive call to t
     $(MSG) Compiling $(<F) ...
     set INCLUDE=$(INCLUDE)
     set PATH=$(PATH)
-    rem $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
+    $(REMOVE_UTF8_BOM) $< $(CS)\$(<F)
     $(COMPACT_PATHS) & $(CC) $(CFLAGS) /NTRESID /c $(TC) $(CS)\$(<F) || $(REPORT_FAILURE)
     $(MSG) ... done.
 
@@ -1040,10 +1076,12 @@ $(L)\$(@B).lst
 #		 about goals defined twice.
 TMPMAK=$(TMP)\$(T)_vars.$(PID).mak # Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
 !IF DEFINED(PROGRAM) && EXIST("$(PROGRAM).mak")
+PROGRAM_MAK=$(PROGRAM).mak
 !  MESSAGE Getting specific rules from $(PROGRAM).mak.
 !  INCLUDE $(PROGRAM).mak
 !ELSE IF EXIST("Files.mak")
 !  MESSAGE Getting specific rules from Files.mak.
+PROGRAM_MAK=Files.mak
 !  INCLUDE Files.mak
 !  IF DEFINED(PROGRAM) && ![$(STINCLUDE)\GetDefs.bat Files.mak $(PROGRAM) >"$(TMPMAK)" 2>NUL]
 !    MESSAGE Getting specific definitions for $(PROGRAM) from Files.mak.
@@ -1051,51 +1089,23 @@ TMPMAK=$(TMP)\$(T)_vars.$(PID).mak # Using the shell PID to generate a unique na
 !  ENDIF
 !ELSE
 !  MESSAGE There are no specific rules.
-EXENAME=_-_-_-_.exe	# An unlikely name, to prevent the $(EXENAME) dependency rule below from firing.
+EXENAME=_-_-_-_.$(EXE)	# An unlikely name, to prevent the $(EXENAME) dependency rule below from firing.
 OBJECTS=
 LIBRARIES=
 !ENDIF
 
 !IF !DEFINED(EXENAME)
-EXENAME=$(PROGRAM).exe	# Both DOS and Windows expect this extension.
+EXENAME=$(PROGRAM).$(EXE)	# Both DOS and Windows expect this extension.
 !ENDIF
 
-# Change the default libraries search order for BIOS and LODOS applications
-!IF DEFINED(APPTYPE)
-!  IF "$(APPTYPE)"=="BIOS"
-CFLAGS=$(CFLAGS) /D_BIOS
-INCPATH=$(BIOSLIB);$(LODOSLIB)
-LIB=$(BIOSLIB)\$(OUTDIR);$(LODOSLIB)\$(OUTDIR)
-LIBS=bios.lib lodos.lib
-!  ELSE IF "$(APPTYPE)"=="LODOS"
-CFLAGS=$(CFLAGS) /D_LODOS
-INCPATH=$(LODOSLIB);$(BIOSLIB)
-LIB=$(LODOSLIB)\$(OUTDIR);$(BIOSLIB)\$(OUTDIR)
-LIBS=lodos.lib bios.lib
-!  ELSE IF "$(APPTYPE)"=="DOS"
-# Do nothing, as this is the default in DOS.mak
+# Change the general definitions if $(PROGRAM).mak changed the application type
+!IF defined(TT)
+!  IF ("$(TT)"=="BIOS") || ("$(TT)"=="LODOS") || ("$(TT)"=="DOS")
+!    MESSAGE A $(PROGRAM_MAK) rule requests changing the application type from $(T) to $(TT)
+!    UNDEF T_VARS
+!    INCLUDE "$(TT).mak" # Change the constants for that application type
 !  ELSE
-!    ERROR "Invalid APPTYPE=$(APPTYPE). Must be either BIOS or LODOS or DOS."
-!  ENDIF
-!  IF "$(APPTYPE)"!="DOS" # That is for BIOS and LODOS apps
-!    IF DEFINED(PMODELIB)
-INCPATH=$(INCPATH);$(PMODELIB)
-LIB=$(LIB);$(PMODELIB)\$(OUTDIR)
-LIBS=$(LIBS) pmode.lib
-!    ENDIF
-!    IF DEFINED(SYSLIB)
-INCPATH=$(INCPATH);$(SYSLIB)
-LIB=$(LIB);$(SYSLIB)\$(OUTDIR)\LIB
-LIBS=$(LIBS) syslib$(LSX).lib
-!    ENDIF
-!    IF DEFINED(GNUEFI)
-INCPATH=$(INCPATH);$(GNUEFI)\INC
-!    ENDIF
-INCLUDE=$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
-LIBS=$(LIBS) $(USER_LIBS)
-LFLAGS=$(LFLAGS) /nod # Make sure we don't pull anything from MS C library
-STARTCOM=$(BIOSLIB)\$(OUTDIR)\obj\startcom.obj
-STARTEXE=$(LODOSLIB)\$(OUTDIR)\obj\startexe.obj
+!    ERROR "Invalid T=$(TT). Must be either BIOS or LODOS or DOS."
 !  ENDIF
 !ENDIF
 
@@ -1249,7 +1259,7 @@ $(CONV_SCRIPT): $(MAKEFILE)	# Poor man's version of conv.exe, limited to what th
 	  outStream.Close();
 	}
 	text = ReadTextFile(args(2), "utf-8");
-	WriteTextFile(args(3), "$(DOS_CS)", text);
+	WriteTextFile(args(3), "$(CODEPAGE)", text);
 	WScript.Quit(0);
 <<KEEP
 
@@ -1318,3 +1328,6 @@ The memory model is set based on the first definition found in...
 <<NOKEEP
 
 !ENDIF # !DEFINED(DISPATCH_OS)
+
+!ENDIF # !DEFINED(DOS_INFERENCE_RULES)
+
