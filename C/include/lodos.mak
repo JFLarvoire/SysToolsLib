@@ -142,8 +142,13 @@ LIBS=$(LIBS) + pmode.lib
 !ENDIF
 !IF DEFINED(SYSLIB)
 INCPATH=$(INCPATH);$(SYSLIB)
+!IF 0 # Use the syslibXXX.lib copy of syslib.lib in $(OUTDIR)\LIB
 LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\LIB
 LIBS=$(LIBS) + syslib$(LSX).lib
+!ELSE # Use the initial $(T)-specific syslib.lib in $(OUTDIR)\$(T)$(DS)\BIN\T
+LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\$(T)$(DS)\BIN\T
+LIBS=$(LIBS) + syslib.lib
+!ENDIF
 !ENDIF
 !IF DEFINED(GNUEFI)
 INCPATH=$(INCPATH);$(GNUEFI)\INC
