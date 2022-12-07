@@ -85,6 +85,7 @@
 *		    Option -w alone calls DisplayWmiProcInfo().		      *
 *    2022-11-27 JFL Make sure lodos.h is included before BiosLib's clibdef.h. *
 *		    This way, the DOS program output can be redirected.       *
+*    2022-12-07 JFL Fix the -? option which crashed under BIOS & LODOS.       *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -92,7 +93,7 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-11-24"
+#define PROGRAM_VERSION "2022-12-07"
 
 /* Definitions */
 
@@ -543,7 +544,8 @@ err_unexpected_arg:
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
-  printf(
+  puts( /* Don't use printf(), or if you need to, split the string in halves,
+           to avoid passing the 1KB limit of the BiosLib printf() */
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: cpuid [SWITCHES] [LEAF [SUBLEAF]]\n\
@@ -598,8 +600,7 @@ Optional switches:\n\
 \n"
 #endif
 "\
-Author: Jean-Francois Larvoire - jf.larvoire@free.fr\n\
-");
+Author: Jean-Francois Larvoire - jf.larvoire@free.fr");
   exit(0);
 }
 
