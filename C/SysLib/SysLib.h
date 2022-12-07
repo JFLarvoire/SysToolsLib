@@ -29,7 +29,11 @@
 #pragma message("SysLib.h: #pragma comment(lib, \"" _SYSLIB_LIB "\")")
 #pragma comment(lib, _SYSLIB_LIB)
 
-#define SYSLIBCCC _cdecl /* The default C Calling Convention used for other versions of SysLib */
+#if defined(_BIOS) || defined(_LODOS)
+#define SYSLIBCCC _fastcall /* The default C Calling Convention used for BIOS & LODOS versions of SysLib */
+#else
+#define SYSLIBCCC _cdecl /* The default C Calling Convention used for other versions of SysLib, including DOS */
+#endif
 #ifndef CDECL
 #define CDECL _cdecl
 #endif
