@@ -17,12 +17,14 @@
 :#		    							      *
 :#  History	                                                              *
 :#   2022-11-25 JFL Created this script                                       *
+:#   2022-12-08 JFL Do not remove crtcom.lib, the .com startup module,        *
+:#		    which must be provided ahead of the list object files.    *
 :#		    							      *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2022-11-25"
+set "VERSION=2022-12-08"
 set ARG0=%0
 goto :main
 
@@ -30,7 +32,10 @@ goto :main
 set "LIST="
 for %%f in (%*) do (
   set "F=%%~f"
-  if /i not "!F:~-4!"==".lib" (
+  set "ISLIB=0"
+  if /i "!F:~-4!"==".lib" set "ISLIB=1"
+  if /i "!F:~-10!"=="crtcom.lib" set "ISLIB=0"
+  if !ISLIB!==0 ( 
     if defined LIST set "LIST=!LIST! "
     set "LIST=!LIST!%%f" & rem include %%f quotes in the list
   )
