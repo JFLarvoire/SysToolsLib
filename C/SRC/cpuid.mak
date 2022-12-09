@@ -23,7 +23,7 @@
 SOURCES=cpuid.c
 OBJECTS=$(O)\cpuid.obj
 !IF "$(T)"=="DOS"
-# TT=LODOS	# TT=True Type: Actually build a LODOS application in the DOS directory
+# T=LODOS	# Actually build a LODOS application in the DOS directory
 !ENDIF
 !ELSE # WIN95, WIN32, WIN64
 SOURCES=cpuid.c $(O)\cpuid.rc

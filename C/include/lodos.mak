@@ -103,6 +103,11 @@
 
 !IF !DEFINED(T)
 T=LODOS				# Target OS
+T0=LODOS			# Record the initial value of T, to detect changes later on.
+				# Don't just do T0=$(T) because if T changes, T0 would change also.
+T_ORIG=default
+!ELSEIF !DEFINED(T_ORIG)
+T_ORIG=user-defined
 !ENDIF
 
 !IF !DEFINED(T_VARS)
@@ -113,6 +118,9 @@ T_DEFS=/D_LODOS /DMINICOMS	# Tell sources what environment they're built for
 # Memory model for 16-bit C compilation (T|S|C|D|L|H)
 !IF !DEFINED(MEM)
 MEM=T				# Memory model for C compilation
+MEM_ORIG=default
+!ELSEIF !DEFINED(MEM_ORIG)
+MEM_ORIG=user-defined
 !ENDIF
 
 EXE=com				# Default program extension
