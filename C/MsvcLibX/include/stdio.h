@@ -64,6 +64,8 @@ extern int _cdecl asprintf(char **ppszBuf, const char *pszFormat, ...);
 extern char *dvasprintf(const char *pszFormat, va_list vl);
 extern char * _cdecl dasprintf(const char *pszFormat, ...);
 
+extern ssize_t getline(char **ppBuf, size_t *pBufSize, FILE *f);
+
 /************************ MS-DOS-specific definitions ************************/
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */

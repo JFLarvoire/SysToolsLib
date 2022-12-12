@@ -62,6 +62,7 @@ OBJECTS = \
     +fullpath.obj		\
     +fwrite.obj			\
     +getcwd.obj			\
+    +getline.obj		\
     +getopt.obj			\
     +getpagesize.obj		\
     +getppid.obj		\
@@ -218,6 +219,8 @@ fullpath.c: $(CI)\debugm.h $(I)\errno.h $(I)\limits.h $(I)\stdlib.h $(I)\limits.
 fwrite.c: $(CI)\debugm.h $(I)\errno.h $(I)\iconv.h $(I)\msvclibx.h $(I)\stdio.h $(I)\unistd.h $(I)\windows.h
 
 getcwd.c: $(CI)\debugm.h $(I)\errno.h $(I)\stdio.h $(I)\unistd.h $(I)\windows.h
+
+getline.c: $(CI)\debugm.h $(I)\limits.h $(I)\errno.h $(I)\stdio.h
 
 GetEncoding.c: $(CI)\debugm.h $(I)\errno.h $(I)\iconv.h $(I)\stdio.h $(I)\string.h
 

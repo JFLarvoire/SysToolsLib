@@ -10,6 +10,7 @@
 *    2014-06-30 JFL Created this file.					      *
 *    2018-04-24 JFL Define PATH_MAX and NAME_MAX for all OSs.		      *
 *    2021-11-07 JFL Added TS 18661-1:2014 integer types widths macros.        *
+*    2022-12-11 JFL Define SIZE_MAX & SSIZE_MAX if needed.                    *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -47,6 +48,16 @@
 #define UINT_WIDTH	16
 #define LONG_WIDTH	32
 #define ULONG_WIDTH	32
+
+#ifndef SIZE_MAX /* This is the case in MSVC 1.x for DOS */
+#  ifdef _M_I86HM	/* Huge memory model */
+#    define SIZE_MAX  ULONG_MAX
+#    define SSIZE_MAX LONG_MAX
+#  else		/* All other memory models */
+#    define SIZE_MAX  UINT_MAX
+#    define SSIZE_MAX INT_MAX
+#  endif
+#endif
 
 #endif /* defined(_MSDOS) */
 
@@ -87,6 +98,14 @@
 #define LLONG_WIDTH	64
 #define ULLONG_WIDTH	64
 
+#ifndef SSIZE_MAX /* This is the case in MSVC 1.x for DOS */
+#  ifdef _WIN64	/* Huge memory model */
+#    define SSIZE_MAX  _I64_MAX
+#  else		/* All other memory models */
+#    define SSIZE_MAX INT_MAX
+#  endif
+#endif
+
 #endif /* defined(_WIN32) */
 
 /************************* OS/2-specific definitions *************************/
@@ -101,6 +120,13 @@
 #endif /* defined(_OS2) */
 
 /********************** End of OS-specific definitions ***********************/
+
+#ifndef SIZE_MAX
+#  error "Unexpected case with SIZE_MAX undefined"
+#endif
+#ifndef SSIZE_MAX
+#  error "Unexpected case with SSIZE_MAX undefined"
+#endif
 
 #endif /* defined(_MSVCLIBX_LIMITS_H)  */
 

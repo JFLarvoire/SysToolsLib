@@ -8,6 +8,7 @@
 *                                                                             *
 *   History								      *
 *    2021-12-12 JFL Created this file.					      *
+*    2022-12-12 JFL Added a definition for EOVERFLOW.			      *
 *									      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -37,7 +38,13 @@ extern "C" {
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-#ifndef ENAMETOOLONG /* Not defined in MSVC 1.5 errno.h */
+/*
+// MS Visual C++ 1.52 for DOS is standard up to errno 34, then diverges up to errno 36.
+//  Many errnos within the list are actually unused, and for them _sys_errlist[] = "".
+//  List of apparently unused errnos: 1 3-6 10-11 14-16 19-21 23 25-27 29-32 35
+*/
+
+#ifndef ENAMETOOLONG /* Not defined in MSVC 1.5 errno.h, but defined in winsock.h */
 #define ENAMETOOLONG 38
 #endif
 
@@ -63,7 +70,7 @@ extern int Win32ErrorToErrno(); /* Converts the last WIN32 error to a Posix erro
 //   37      // Positioned between standard EDEADLK and ENAMETOOLONG
 //   43      // Positioned last, after standard ENOTEMPTY
 // The _sys_errlist[] pointer for all the above points to a single string "Unknown error".
-// MS Visual C++ 10 and later define ERRNO as 114.
+// MS Visual C++ 10 and later define ELOOP as 114.
 */
 #define ELOOP  35  /* Using the first available slot */  /* Update _sys_errlist[ELOOP] accordingly in any routine that generates ELOOP! */
 #endif /* !defined(ELOOP) */
@@ -71,6 +78,10 @@ extern int Win32ErrorToErrno(); /* Converts the last WIN32 error to a Posix erro
 #endif /* defined(_WIN32) */
 
 /********************** End of OS-specific definitions ***********************/
+
+#ifndef EOVERFLOW
+#define EOVERFLOW ERANGE /* ERANGE is "Result too large". TODO: Find a unique value & adapt strerror() */
+#endif
 
 #ifdef __cplusplus
 }
