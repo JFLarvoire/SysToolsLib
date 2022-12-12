@@ -45,6 +45,9 @@
 *    2022-10-16 JFL Removed in release mode a variable only used in debug mode.
 *		    Version 3.0.1.					      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.0.2.		      *
+*    2022-12-12 JFL Use getline() instead of fgets(). Version 3.0.3.	      *
+*		    This makes the input capable of reading any line size.    *
+*		    TODO: Remove the line size limitation on the output too.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -52,8 +55,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove Form Feeds from a text"
 #define PROGRAM_NAME    "deffeed"
-#define PROGRAM_VERSION "3.0.2"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "3.0.3"
+#define PROGRAM_DATE    "2022-12-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -170,9 +173,9 @@ int main(int argc, char *argv[]) {
   int modnp = 1;      /* Number of logical pages on a physical page */
   int fptp = 0;       /* Number of logical full pages to print (0 = Off) */
   int fptp0 = 0;      /* Same for physical pages in multicolumn operation */
-  char line[BUFSIZE]; /* Line buffer */
   int length;         /* Length of above buffer */
-  char *pline;        /* Pointer on the beginning of the line */
+  char *pline = NULL; /* Pointer on the line buffer */
+  size_t lSize = 0;   /* Line size */
   int nl = 0;         /* Current line number (0 to lpp-1) */
   int np = 0;         /* Current page number, modulo modnp */
   DEBUG_CODE(
@@ -417,7 +420,7 @@ int main(int argc, char *argv[]) {
   }
   if (fptp) modnp = fptp;     /* Else default 1 */
 
-  /* Allocate the buffer */
+  /* Allocate the output buffer */
   buffer_size = (wcols + dcols) * ncols * (lpp + extra);
   buffer = malloc(buffer_size);
   if (!buffer) {
@@ -433,8 +436,8 @@ int main(int argc, char *argv[]) {
       usage();
     }
     setmode(fileno(fdest), O_BINARY);
-    while ((i = (int)fread(line, 1, BUFSIZE, fsetup))) {
-      fwrite(line, 1, i, fdest);
+    while ((i = (int)fread(buffer, 1, buffer_size, fsetup))) {
+      fwrite(buffer, 1, i, fdest);
     }
     setmode(fileno(fdest), O_TEXT);
     fclose(fsetup);
@@ -443,7 +446,7 @@ int main(int argc, char *argv[]) {
   format = "          %s\n";		/* 10 spaces then the line then CRLF */
   format += (10 - nsp);               /* keep only the required spaces */
 
-  while ((pline = fgets(line, BUFSIZE, fsource))) {
+  while (getline(&pline, &lSize, fsource) >= 0) {
     if (nl > 0) top_without_ff = FALSE; /* It's not the top line anymore */
     
     /* Remove the trailing carrier-return(s) and linefeed */
@@ -522,8 +525,8 @@ int main(int argc, char *argv[]) {
       usage();
     }
     setmode(fileno(fdest), O_BINARY);
-    while ((i = (int)fread(line, 1, BUFSIZE, fcleanup))) {
-      fwrite(line, 1, i, fdest);
+    while ((i = (int)fread(buffer, 1, buffer_size, fcleanup))) {
+      fwrite(buffer, 1, i, fdest);
     }
     setmode(fileno(fdest), O_TEXT);
     fclose(fcleanup);
