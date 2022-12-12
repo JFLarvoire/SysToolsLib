@@ -38,13 +38,14 @@
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.5.1.		      *
 *    2022-11-27 JFL Added PATHNAME - to get the list of pathnames from stdin. *
 *                   Version 1.6.					      *
+*    2022-12-12 JFL Removed the piped input line size limit. Version 1.6.1.   *
 *		    							      *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Delete files and/or directories visibly"
 #define PROGRAM_NAME    "zap"
-#define PROGRAM_VERSION "1.6"
-#define PROGRAM_DATE    "2022-11-27"
+#define PROGRAM_VERSION "1.6.1"
+#define PROGRAM_DATE    "2022-12-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -999,16 +1000,22 @@ int zap(char *arg, zapOpts *pzo) {
   size_t l;
   DEBUG_ENTER(("zap(\"%s\", %p);\n", arg, pzo));
   if (!arg) { /* Get the list of files to erase from stdin */
-    char szLine[PATH_MAX];
+    char *pszLine = NULL;
+    size_t lSize = 0;
     int nErr = 0;
     DEBUG_PRINTF(("// Getting list of pathnames from stdin\n"));
-    while (fgets(szLine, PATH_MAX, stdin)) {
-      szLine[PATH_MAX - 1] = '\0';
-      l = strlen(szLine);
-      for (; l && ((szLine[l-1]=='\r') || (szLine[l-1]=='\n')); ) szLine[--l] = '\0'; /* Trim trailing CR/LF */
-      DEBUG_PRINTF(("szLine = \"%s\"\n", szLine));
-      if (szLine[0]) nErr += zap(szLine, pzo);
+    while (getline(&pszLine, &lSize, stdin) >= 0) {
+      pszLine[lSize - 1] = '\0';
+      l = strlen(pszLine);
+      for (; l && ((pszLine[l-1]=='\r') || (pszLine[l-1]=='\n')); ) pszLine[--l] = '\0'; /* Trim trailing CR/LF */
+      DEBUG_PRINTF(("pszLine = \"%s\"\n", pszLine));
+      if (pszLine[0]) nErr += zap(pszLine, pzo);
     }
+    if (ferror(stdin)) {
+      printError("Error reading the piped file list");
+      nErr += 1;
+    }
+    free(pszLine);
     RETURN_INT(nErr);
   }
   l = strlen(arg);
