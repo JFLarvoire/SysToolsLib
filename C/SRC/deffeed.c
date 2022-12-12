@@ -1,4 +1,4 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
 *   Filename	    deffeed.c						      *
 *									      *
@@ -49,7 +49,7 @@
 *		    This makes the input capable of reading any line size.    *
 *		    TODO: Remove the line size limitation on the output too.  *
 *		    							      *
-*         � Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
@@ -58,13 +58,14 @@
 #define PROGRAM_VERSION "3.0.3"
 #define PROGRAM_DATE    "2022-12-12"
 
-#define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #define BUFSIZE 256
 #define DEFLPP 60       /* Default number of lines per page */
@@ -491,6 +492,13 @@ int main(int argc, char *argv[]) {
       top_without_ff = TRUE;	/* Flag the fact we automatically fed a page. */
     }
   }
+  if (ferror(fsource)) {
+    if (!streq(source, "-")) {
+      fprintf(stderr, "Can't read input file %s. %s\n", source, strerror(errno));
+    } else {
+      fprintf(stderr, "Can't input. %s\n", strerror(errno));
+    }
+  }
 
   if (fptp) {
     if (np || nl) {
@@ -597,9 +605,8 @@ Options:\n\
   -=|-same         Output file = Input file\n\
   -setup {file}    Output the given setup file first. Default: None\n\
   -wcol n          Column width. Default: 80\n\
-\n"
-"Author: Jean-Francois Larvoire"
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+\n\
+Author: Jean-François Larvoire - jf.larvoire@free.fr\n"
 #ifdef _UNIX
 "\n"
 #endif
