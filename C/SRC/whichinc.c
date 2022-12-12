@@ -29,6 +29,7 @@
 *    2022-11-29 JFL Make sure all paths are displayed with \ in DOS/Windows.  *
 *		    Display less information by default, and move the rest    *
 *		    to the verbose and debug modes. Version 1.4.	      *
+*    2022-12-12 JFL Removed the line size limitation. Version 1.4.1.          *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -36,8 +37,8 @@
 
 #define PROGRAM_DESCRIPTION "Find C include files used in a source file"
 #define PROGRAM_NAME    "whichinc"
-#define PROGRAM_VERSION "1.4"
-#define PROGRAM_DATE    "2022-12-01"
+#define PROGRAM_VERSION "1.4.1"
+#define PROGRAM_DATE    "2022-12-12"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -68,8 +69,6 @@
 #endif /* __unix__ */
 
 /*********************** End of OS-specific definitions **********************/
-
-#define LINESIZE 256
 
 typedef struct tagStringList {
   char *string;
@@ -176,6 +175,11 @@ int main(int argc, char *argv[]) {
     usage(1);
   }
 
+  if ((!pszInclude) && (!iNewIncludes)) {
+    fprintf(stderr, "Error: No include path. Please define the INCLUDE variable, or use the -i option.\n");
+    return 1;
+  }
+  
   /* If we added new includes, update our copy of the environment */
 
   if (iNewIncludes) putenv(szNewIncludeList);
@@ -287,13 +291,21 @@ Options:\n\
 
 StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, char *pszSearch) {
   FILE *sf;
-  char cLine[LINESIZE];
+  char *cLine = NULL;
+  size_t bufSize = 0;
   char *pc;
   StringList *pNewSL;
   StringList *ps;
   int iNamePrinted = FALSE;
   int iVerbose = iFlags & FLAG_VERBOSE;
   int iQuiet = iFlags & FLAG_QUIET;
+
+  DEBUG_CODE_IF_ON(
+  if (!iShift) {
+    DEBUG_PRINTF(("Searching File #0 %s in %s.\n", pszName, getenv("INCLUDE")));
+    iShift += iDeltaShift;
+  }
+  )
 
   /* Prevent reopening (sometimes recursively) of a file already included */
   for (ps = psl; ps; ps = ps->next) {
@@ -318,6 +330,7 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
   /* Add a new node ahead of the linked list of file names */
   pc = malloc(sizeof(StringList) + strlen(pszName) + 1);
   if (!pc) {
+err_no_mem:
     printf("Not enough memory.\n");
     exit(2);
   }
@@ -329,13 +342,14 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
   psl = pNewSL;
 
   /* Scan the file for inclusions */
-  while (fgets(cLine, LINESIZE, sf)) {
-    char cLine2[LINESIZE];
+  while (getline(&cLine, &bufSize, sf) >= 0) {
+    char *cLine2;
     char *pszToken;
     static char *pszBlanks = " \t\n\r";
     size_t l;
 
-    memcpy(cLine2, cLine, LINESIZE);    /* Save the line read */
+    cLine2 = strdup(cLine);    /* Save the line read */
+    if (!cLine2) goto err_no_mem;
     l = strlen(cLine2);
     if ((l > 0) && (cLine2[l-1] == '\n'))
 	cLine2[--l] = '\0'; /* Remove the trailing new line */
@@ -353,7 +367,7 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
 
       pszToken = strtok(NULL, pszBlanks);
       pszIncName = strtok(pszToken, "\"<>");
-      DEBUG_PRINTF(("\tSearching %s in %s.\n", pszIncName, getenv("INCLUDE")));
+      DEBUG_PRINTF(("%*sSearching File #%d %s in %s.\n", iShift, "", iShift/iDeltaShift, pszIncName, getenv("INCLUDE")));
 
       /* Detect MsvcLibX include_next macros */
       if (   !strncmp(pszIncName, "MSVC_INCLUDE_FILE(", 18)
@@ -367,6 +381,7 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
 	  *pc = '\0';
 	} else {
 	  if (!pszSearch && !iQuiet) printf("%*s%s (Invalid macro)\n", iShift+iDeltaShift, "", pszIncName);
+	  free(cLine2);
 	  continue;
 	}
       }
@@ -399,7 +414,7 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
 	if (!pszSearch && !iQuiet) printf("%*s%s (Not found, Ignored.)\n", iShift+iDeltaShift, "", pszIncName);
       }
     }
-    memcpy(cLine, cLine2, LINESIZE);    /* Restore the line read */
+    strcpy(cLine, cLine2);    /* Restore the line read */
     if (   pszSearch
 	&& ((pszToken = strtok(cLine, pszBlanks)) != NULL)
 	&& (    streq(pszToken, "#define")
@@ -418,9 +433,11 @@ StringList *WhichInc(char *pszName, int iFlags, int iShift, StringList *psl, cha
 	printf("%*s%s\n", iShift+iDeltaShift, "", cLine2);
       }
     }
+    free(cLine2);
   }
 
   fclose(sf);
+  free(cLine);
 
   return psl;
 }
