@@ -52,6 +52,7 @@
 *    2022-10-16 JFL Removed an unused variable.                               *
 *		    Version 2.1.2.					      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.1.3.		      *
+*    2022-12-12 JFL Removed the line size limitation. Version 2.1.4.	      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -59,8 +60,8 @@
 
 #define PROGRAM_DESCRIPTION "Remove blanks at the end of lines"
 #define PROGRAM_NAME    "trim"
-#define PROGRAM_VERSION "2.1.3"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "2.1.4"
+#define PROGRAM_DATE    "2022-12-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -82,8 +83,6 @@
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
-
-#define LINESIZE 16384	/* Can't allocate more than 64K for stack in some OS. */
 
 /************************ Win32-specific definitions *************************/
 
@@ -194,7 +193,8 @@ int main(int argc, char *argv[]) {
   FILE *df = NULL;		/* Destination file pointer */
   char *pszTmpName = NULL;	/* Temporary file name */
   long lnChanges = 0;		/* Number of lines changed */
-  char line[LINESIZE];
+  char *line = NULL;		/* The line buffer */
+  size_t lSize = 0;		/* The line buffer size */
   char szBakName[FILENAME_MAX+1];
   int iBackup = FALSE;
   int iSameFile = FALSE;	/* Backup the input file, and modify it in place. */
@@ -352,7 +352,7 @@ open_df_failed:
     }
   }
 
-  while(fgets(line, LINESIZE, sf)) {
+  while (getline(&line, &lSize, sf) >= 0) {
     int l;
     int hasCR, hasLF;
     i = l = (int)strlen(line);
@@ -383,6 +383,7 @@ open_df_failed:
 
     fputs(line, df);
   }
+  if (ferror(sf)) fail("Failed to read %s. %s", strerror(errno));
 
   if (sf != stdin) fclose(sf);
   if (df != stdout) fclose(df);
