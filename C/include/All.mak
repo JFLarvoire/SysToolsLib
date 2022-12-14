@@ -150,6 +150,8 @@
 #    2022-10-20 JFL Allow cleaning just one OS. Ex: `make "OS=DOS" clean`     #
 #		    Also `make clean` does not delete Unix builds anymore.    #
 #    2022-11-25 JFL Added support for the LODOS build type.                   #
+#    2022-12-14 JFL Bug fix: `make "OS=WIN32" clean` deleted $(OUTDIR) even   #
+#		    if it was not empty.				      #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -718,7 +720,10 @@ clean mostlyclean distclean: NUL
     -if "$@"=="distclean" rd /S /Q $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR, including Unix builds there
     -if exist $(OUTDIR)\Lib rd $(OUTDIR)\Lib >NUL 2>&1		&:# Delete OUTDIR\Lib if it's empty
     -if exist $(OUTDIR)\*.log del $(OUTDIR)\*.log >NUL 2>&1	&:# Delete OUTDIR\*.log
-    -if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1			&:# Delete OUTDIR if it's empty
+    -rem if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR if it's empty
+    -rem # The problem is that $(OUTDIR) is a junction, and `rd $(OUTDIR)` deletes it even if the target directory is not empty.
+    -rem # Workaround: Use a for /d loop to detect subdirectories, and remove the junction only if there are none.
+    -if exist $(OUTDIR) ((for /d %d in ($(OUTDIR)\*) do @(call)) && rd $(OUTDIR) >NUL 2>&1) &:# Delete OUTDIR if it's empty
 !ENDIF
     -del /Q *.bak	>NUL 2>&1
     -del /Q *~		>NUL 2>&1
