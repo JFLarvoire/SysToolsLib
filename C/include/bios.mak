@@ -128,11 +128,6 @@
 
 !IF !DEFINED(T)
 T=BIOS				# Target OS
-T0=BIOS				# Record the initial value of T, to detect changes later on.
-				# Don't just do T0=$(T) because if T changes, T0 would change also.
-T_ORIG=default
-!ELSEIF !DEFINED(T_ORIG)
-T_ORIG=user-defined
 !ENDIF
 
 !IF !DEFINED(T_VARS)
