@@ -158,6 +158,10 @@
 #		    Make sure user-defined MEM model always takes precedence. #
 #		    Simplified the 2022-11-25 change, by just redefining T.   #
 #    2022-12-13 JFL Ported the latest changes between DOS.mak and WIN32.mak.  #
+#    2022-12-18 JFL Display each build using a phony EXT.hl target, instead   #
+#		    of a $(HEADLINE) command in every inference rule.	      #
+#		    Store converted sources in SRC\$(CODEPAGE) to share them  #
+#		    between all builds using the same code page.	      #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -300,10 +304,11 @@ OUTDIR=bin
 !ENDIF
 !IF "$(OUTDIR)"=="."
 R=$(T)				# Root output path - In the current directory
+S2=SRC\$(CODEPAGE)		# Copy of the C sources, converted from UTF-8 to DOS CP
 !ELSE
 R=$(OUTDIR)\$(T)		# Root output path - In the specified directory
+S2=$(OUTDIR)\SRC\$(CODEPAGE)	# Copy of the C sources, converted from UTF-8 to DOS CP
 !ENDIF
-S2=$(R)\SRC			# Where to store C sources, converted from UTF-8 to DOS CP
 BD=$(R)$(DS)
 B=$(BD)\BIN\$(MEM)		# Where to store binary executable files
 O=$(BD)\OBJ\$(MEM)		# Where to store object files
@@ -355,7 +360,7 @@ LFLAGS=$(LFLAGS) /co
 RFLAGS=$(DD)
 
 PATH=$(DOS_PATH)
-INCLUDE=$(S);$(S2);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
+INCLUDE=$(S2);$(S);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
 LIBS=$(LIBS) $(USER_LIBS)
 LIB=$(LIBPATH)
 

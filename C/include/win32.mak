@@ -137,6 +137,10 @@
 #    2019-11-13 JFL Added CXXFlags for C++ compilation: Fixes builds w. Boost.#
 #    2022-12-09 JFL Fixed macros redefinitions when recursively calling nmake.#
 #    2022-12-13 JFL Ported the latest changes between DOS.mak and WIN32.mak.  #
+#    2022-12-18 JFL Display each build using a phony EXT.hl target, instead   #
+#		    of a $(HEADLINE) command in every inference rule.	      #
+#		    Store converted sources in SRC\$(CODEPAGE) to share them  #
+#		    between all builds using the same code page.	      #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -225,10 +229,11 @@ OUTDIR=bin
 !ENDIF
 !IF "$(OUTDIR)"=="."
 R=$(T)				# Root output path - In the current directory
+S2=SRC\utf8			# Copy of the C sources, with the UTF-8 BOM removed
 !ELSE
 R=$(OUTDIR)\$(T)		# Root output path - In the specified directory
+S2=$(OUTDIR)\SRC\utf8		# Copy of the C sources, with the UTF-8 BOM removed
 !ENDIF
-S2=$(R)\SRC			# Copy of the C sources, with the UTF-8 BOM removed
 B=$(R)$(DS)			# Where to store binary executable files
 O=$(B)\OBJ			# Where to store object files
 L=$(B)\LIST			# Where to store listing files
@@ -334,7 +339,7 @@ SUBSYSTEM=CONSOLE
 !ENDIF
 !ENDIF
 
-INCLUDE=$(S);$(S2);$(O);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
+INCLUDE=$(S2);$(S);$(O);$(STINCLUDE);$(INCPATH);$(USER_INCLUDE)
 LIBS=$(LIBS) $(USER_LIBS)
 
 # Forward library detections by configure.bat to the C compiler and assembler
