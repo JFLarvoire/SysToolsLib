@@ -143,7 +143,7 @@
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.
-.SUFFIXES: .exe .obj .asm .c .r .cpp .res .rc .def .manifest .mak .bsc .sbr
+.SUFFIXES: .exe .obj .asm .c .r .cpp .res .rc .def .manifest .mak .bsc .sbr .hl
 
 ###############################################################################
 #									      #
@@ -417,176 +417,165 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" # Recursive call to this make fil
 ###############################################################################
 
 # Inference rules to generate the required PROGRAM variable
+
+# There are two levels of inference rules, that call each other recursively:
+# - Level 1 (top) generate the PROGRAM base name, and the list of files to build
+# - Level 2 (low) load $(PROGRAM).mak, and does the build
+
 !IF !DEFINED(PROGRAM)
 
+# Top level inference rules, specifying a phony target in the current directory.
+# The debug mode must be specified by the user in the DEBUG macro. Default: DEBUG=0
+# Each rule defines the actual targets to build in OS-specific subdirectories.
+
 !IF !DEFINED(DISPATCH_OS)
-# Inference rules generating the output path, using the predefined debug mode.
+
 .cpp.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .cpp.obj:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .c.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .c.obj:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .asm.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .asm.obj:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .rc.res:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .rc.res:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) res.hl dirs $(O)\$(@F)
 
 .cpp.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .cpp.exe:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
 .c.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .c.exe:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
 .asm.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .asm.exe:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(*F).exe
 
 .mak.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .mak.exe:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(B)\$(*F).exe
 
 .mak.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .mak.lib:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS)  dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS)  lib.hl dirs $(O)\$(@F)
 
 .mak.dll:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .mak.dll:
-    $(HEADLINE) Building $(@F) $(T) $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS)  dirs $(O)\$(@F)
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS)  dll.hl dirs $(O)\$(@F)
 !ENDIF # !DEFINED(DISPATCH_OS)
+
+# Top level inference rules, specifying actual targets in subdirectories.
+# The subdirectory name defines the debug mode.
+# Each rule defines the actual targets to build in OS-specific subdirectories.
 
 # Inference rules to compile a C++ program, inferring the debug mode from the output path specified.
 # (Define C++ inferences rules before C inferences rules, so that if both a .c and .cpp file are present, the .cpp is used preferably.)
 {$(S)\}.cpp{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\OBJ\}.obj:
-    $(MSG) Compiling the $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 {$(S)\}.cpp{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\OBJ\}.obj:
-    $(MSG) Compiling the $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 # Inference rules to compile a C program, inferring the debug mode from the output path specified.
 {$(S)\}.c{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\OBJ\}.obj:
-    $(MSG) Compiling the $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 {$(S)\}.c{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\OBJ\}.obj:
-    $(MSG) Compiling the $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 # Inference rules to assemble an assembler program, inferring the debug mode from the output path specified.
 {$(S)\}.asm{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\OBJ\}.obj:
-    $(MSG) Assembling the $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 {$(S)\}.asm{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\OBJ\}.obj:
-    $(MSG) Assembling the $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $@
 
 # Inference rules to compile a Windows resource file, inferring the debug mode from the output path specified.
 {$(S)\}.rc{$(R)\OBJ\}.res:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\OBJ\}.res:
-    $(MSG) Compiling the $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) res.hl dirs $@
 
 {$(S)\}.rc{$(R)\Debug\OBJ\}.res:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.rc{$$(R)\Debug\OBJ\}.res:
-    $(MSG) Compiling the $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) res.hl dirs $@
 
 # Inference rules to build a C++ program, inferring the debug mode from the output path specified.
 # (Define C++ inferences rules before C inferences rules, so that if both a .c and .cpp file are present, the .cpp is used preferably.)
 {$(S)\}.cpp{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(*F).obj $@
 
 {$(S)\}.cpp{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\DEBUG\OBJ\$(*F).obj $@
 
 # Inference rules to build a C program, inferring the debug mode from the output path specified.
 {$(S)\}.c{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(*F).obj $@
 
 {$(S)\}.c{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\DEBUG\OBJ\$(*F).obj $@
 
 # Inference rules to build an assembler program, inferring the debug mode from the output path specified.
 {$(S)\}.asm{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\OBJ\$(*F).obj $(R)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(*F).obj $@
 
 {$(S)\}.asm{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $(R)\DEBUG\OBJ\$(*F).obj $(R)\DEBUG\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(R)\DEBUG\OBJ\$(*F).obj $@
 
 # Inference rules to build a makefile-defined program, inferring the debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $@
 
 {$(S)\}.mak{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $@
 
 # Inference rules to build a library, inferring the debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\}.lib:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) lib.hl dirs $@
 
 {$(S)\}.mak{$(R)\Debug\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\}.lib:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) lib.hl dirs $@
 
 # Inference rules to build a DLL, inferring the debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.dll:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\}.dll:
-    $(HEADLINE) Building $(@F) $(T) release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" $(MAKEDEFS) dll.hl dirs $@
 
 {$(S)\}.mak{$(R)\Debug\}.dll:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\}.dll:
-    $(HEADLINE) Building $(@F) $(T) debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dirs $@
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) dll.hl dirs $@
 
 !ELSE # if DEFINED(PROGRAM)
 
 MAKEDEFS="PROGRAM=$(PROGRAM)" $(MAKEDEFS)
+
+# Phony targets for displaying headlines for the given extension
+exe.hl lib.hl dll.hl obj.hl res.hl:
+    $(HEADLINE) Building $(PROGRAM).$* $(T) $(DM) version
+
+# Low level inference rules, with final paths, and all option macros set.
 
 # Inference rule for C++ compilation
 {$(S)\}.cpp{$(O)\}.obj:

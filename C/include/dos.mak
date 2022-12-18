@@ -164,7 +164,7 @@
 ###############################################################################
 
 .SUFFIXES: # Clear the predefined suffixes list.
-.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .cc .cxx .mak .rc
+.SUFFIXES: .com .exe .sys .obj .asm .c .r .cpp .cc .cxx .mak .rc .hl
 
 ###############################################################################
 #									      #
@@ -441,12 +441,24 @@ SUBMAKE=$(MAKE) $(MAKEFLAGS_) /F "$(MAKEFILE)" # Recursive call to this make fil
 DOS_INFERENCE_RULES=1
 # Inference rules to generate the required PROGRAM variable
 
+# There are three levels of inference rules, that call each other recursively:
+# - Level 1 (top) generate the PROGRAM base name
+# - Level 2 (middle) load $(PROGRAM).mak, and generate the list of files to build
+# - Level 3 (low) load $(PROGRAM).mak, and does the build
+
 !IF !DEFINED(PROGRAM)
 
+# Top level inference rules, specifying a phony target in the current directory.
+# The debug mode must be specified by the user in the DEBUG macro. Default: DEBUG=0
+# Each rule defines intermediate targets to build in OS-specific subdirectories.
+# (We can't yet define the final targets, because these will depend on the memory
+#  model, which itself can be changed in a $(PROGRAM).mak definition.)
+
+# Exception: When targeting a .com, it's possible to directly generate the list
+# of files to build. (Since the memory mode has to be MEM=T.)
+
 !IF !DEFINED(DISPATCH_OS)
-# Inference rules generating the output path, using the predefined debug mode.
-# We can't guess the memory model, except for .com targets.
-# But we can generate the PROGRAM variable, and let the next make instance figure out from PROGRAM.mak what the memory model is.
+
 .cpp.obj:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .cpp.obj:
     $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) $@
@@ -492,35 +504,28 @@ DOS_INFERENCE_RULES=1
 .cpp.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .cpp.com:
 !IF "$(MEM)"=="T" # The normal case
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) $@
 !ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "MEM=T" $(MAKEDEFS) $@
 !ELSE # The user made an incoherent choice. Warn him about that, and override that in the child instance.
     $(WARN) $(@F) must be built using "MEM=T"
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "MEM=T" "MEM_ORIG=forced" $(MAKEDEFS) $@
 !ENDIF
 
 .c.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .c.com:
 !IF "$(MEM)"=="T" # The normal case
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) $@
 !ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "MEM=T" $(MAKEDEFS) $@
 !ELSE # The user made an incoherent choice. Warn him about that, and override that in the child instance.
     $(WARN) $(@F) must be built using "MEM=T"
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
     $(SUBMAKE) "MEM=T" "MEM_ORIG=forced" $(MAKEDEFS) $@
 !ENDIF
 
 .asm.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .asm.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE) "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    $(SUBMAKE) "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
 
 .mak.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) .mak.lib:
@@ -530,6 +535,10 @@ DOS_INFERENCE_RULES=1
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {.\}.mak{Debug\}.lib:
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) $@
 !ENDIF # !DEFINED(DISPATCH_OS)
+
+# Top level inference rules, specifying actual targets in subdirectories.
+# The subdirectory name defines the debug mode.
+# Each rule defines the actual targets to build in OS-specific subdirectories.
 
 # Inference rules to compile a C++ program, inferring the memory model and debug mode from the output path specified.
 # (Define C++ inferences rules before C inferences rules, so that if both a .c and .cpp file are present, the .cpp is used preferably.)
@@ -666,8 +675,7 @@ DOS_INFERENCE_RULES=1
 #   First rules for a target with no memory model defined. Output directly into the $(R)[\Debug] directory.
 {$(S)\}.cpp{$(R)\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.cpp{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\}.exe:
@@ -675,51 +683,58 @@ DOS_INFERENCE_RULES=1
 
 {$(S)\}.cpp{$(R)\Debug\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!IF "$(MEM)"=="T" # The normal case
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
+    $(SUBMAKE) "MEM=T" $(MAKEDEFS) $@
+!ELSE # The user made an incoherent choice. Warn him about that, and override that in the child instance.
+    $(WARN) $(@F) must be built using "MEM=T"
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" "MEM_ORIG=forced" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!ENDIF
 
 {$(S)\}.cpp{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\}.exe:
+!IF "$(MEM)"!="T" # The normal case
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) $@
+!ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) $@
+!ELSE # The user made a non-optimal choice. Warn him about that, but do as he wishes.
+    @$(WARN) $(@F) should be built using "MEM=S"
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) $@
+!ENDIF
 
 #   Rules for the tiny memory model. Output into the $(R)[\Debug][\OBJ\T] directory.
 {$(S)\}.cpp{$(R)\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\BIN\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.cpp{$(R)\Debug\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
 
 #   Rules for the small memory model. Output into the $(R)[\Debug][\OBJ\S] directory.
 {$(S)\}.cpp{$(R)\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
 
 {$(S)\}.cpp{$(R)\Debug\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
 
 #   Rules for the large memory model. Output into the $(R)[\Debug][\OBJ\L] directory.
 {$(S)\}.cpp{$(R)\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
 
 {$(S)\}.cpp{$(R)\Debug\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.cpp{$$(R)\Debug\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
 
 # Inference rules to build a C program, inferring the memory model and debug mode from the output path specified.
 #   First rules for a target with no memory model defined. Output directly into the $(R)[\Debug] directory.
 {$(S)\}.c{$(R)\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\}.com:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.c{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\}.exe:
@@ -727,50 +742,58 @@ DOS_INFERENCE_RULES=1
 
 {$(S)\}.c{$(R)\Debug\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\}.com:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!IF "$(MEM)"=="T" # The normal case
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
+    $(SUBMAKE) "MEM=T" $(MAKEDEFS) $@
+!ELSE # The user made an incoherent choice. Warn him about that, and override that in the child instance.
+    $(WARN) $(@F) must be built using "MEM=T"
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" "MEM_ORIG=forced" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+!ENDIF
 
 {$(S)\}.c{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\}.exe:
+!IF "$(MEM)"!="T" # The normal case
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) $@
+!ELSEIF "$(MEM_ORIG)"=="default" # The default was ill-chosen. Change that in the child instance.
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) $@
+!ELSE # The user made a non-optimal choice. Warn him about that, but do as he wishes.
+    @$(WARN) $(@F) should be built using "MEM=S"
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" $(MAKEDEFS) $@
+!ENDIF
 
 #   Rules for the tiny memory model. Output into the $(R)[\Debug][\OBJ\T] directory.
 {$(S)\}.c{$(R)\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\BIN\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.c{$(R)\Debug\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\BIN\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
 
 #   Rules for the small memory model. Output into the $(R)[\Debug][\OBJ\S] directory.
 {$(S)\}.c{$(R)\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
 
 {$(S)\}.c{$(R)\Debug\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
 
 #   Rules for the large memory model. Output into the $(R)[\Debug][\OBJ\L] directory.
 {$(S)\}.c{$(R)\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
 
 {$(S)\}.c{$(R)\Debug\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.c{$$(R)\Debug\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
 
 # Inference rules to build an ASM program, inferring the memory model and debug mode from the output path specified.
 #   First rules for a target with no memory model defined. Output directly into the $(R)[\Debug] directory.
 {$(S)\}.asm{$(R)\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\}.com:
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.asm{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\}.exe:
@@ -778,7 +801,7 @@ DOS_INFERENCE_RULES=1
 
 {$(S)\}.asm{$(R)\Debug\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\}.com:
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
 
 {$(S)\}.asm{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\}.exe:
@@ -787,35 +810,29 @@ DOS_INFERENCE_RULES=1
 #   Rules for the tiny memory model. Output into the $(R)[\Debug][\OBJ\T] directory.
 {$(S)\}.asm{$(R)\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\BIN\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\OBJ\T\$(*F).obj $(R)\BIN\T\$(*F).com
 
 {$(S)\}.asm{$(R)\Debug\BIN\T\}.com:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\T\}.com:
-    $(HEADLINE) Building $(@F) $(T) tiny debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)\Debug\OBJ\T\$(*F).obj $(R)\Debug\BIN\T\$(*F).com
 
 #   Rules for the small memory model. Output into the $(R)[\Debug][\OBJ\S] directory.
 {$(S)\}.asm{$(R)\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\S\$(*F).obj $(R)\BIN\S\$(*F).exe
 
 {$(S)\}.asm{$(R)\Debug\BIN\S\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\S\}.exe:
-    $(HEADLINE) Building $(@F) $(T) small debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\S\$(*F).obj $(R)\Debug\BIN\S\$(*F).exe
 
 #   Rules for the large memory model. Output into the $(R)[\Debug][\OBJ\L] directory.
 {$(S)\}.asm{$(R)\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large release version
-    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) $(MAKEDEFS) dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) $(MAKEDEFS) exe.hl dirs $(R)\OBJ\L\$(*F).obj $(R)\BIN\L\$(*F).exe
 
 {$(S)\}.asm{$(R)\Debug\BIN\L\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.asm{$$(R)\Debug\BIN\L\}.exe:
-    $(HEADLINE) Building $(@F) $(T) large debug version
-    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\L\$(*F).obj $(R)\Debug\BIN\L\$(*F).exe
 
 # Inference rules to build a library, inferring the memory model and debug mode from the output path specified.
 {$(S)\}.mak{$(R)\}.lib:
@@ -828,200 +845,186 @@ DOS_INFERENCE_RULES=1
 
 {$(S)\}.mak{$(R)\BIN\T\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\BIN\T\}.lib:
-    $(HEADLINE) Building $(@F) $(T) tiny release version
     $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) $@
 
 {$(S)\}.mak{$(R)\Debug\BIN\T\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\BIN\T\}.lib:
-    $(HEADLINE) Building $(@F) $(T) tiny debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) $@
 
 {$(S)\}.mak{$(R)\BIN\S\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\BIN\S\}.lib:
-    $(HEADLINE) Building $(@F) $(T) small release version
     $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) $@
 
 {$(S)\}.mak{$(R)\Debug\BIN\S\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\BIN\S\}.lib:
-    $(HEADLINE) Building $(@F) $(T) small debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=S" $(MAKEDEFS) $@
 
 {$(S)\}.mak{$(R)\BIN\L\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\BIN\L\}.lib:
-    $(HEADLINE) Building $(@F) $(T) large release version
     $(SUBMAKE) "DEBUG=0" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) $@
 
 {$(S)\}.mak{$(R)\Debug\BIN\L\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM undefined) {$$(S)\}.mak{$$(R)\Debug\BIN\L\}.lib:
-    $(HEADLINE) Building $(@F) $(T) large debug version
     $(SUBMAKE) "DEBUG=1" "PROGRAM=$(*F)" "MEM=L" $(MAKEDEFS) $@
 
 !ELSE # if DEFINED(PROGRAM)
 
 MAKEDEFS="PROGRAM=$(PROGRAM)" $(MAKEDEFS)
 
-TT=$(T) $(MMN)
+# Phony targets for displaying headlines for the given extension
+com.hl exe.hl lib.hl dll.hl obj.hl res.hl:
+    $(HEADLINE) Building $(PROGRAM).$* $(T) $(MMN) $(DM) version
 
-# Inference rules generating the output path, using the predefined debug mode.
+# Intermediate inference rules, specifying a phony target in the current directory.
+# The debug mode must be specified by the user in the DEBUG macro. Default: DEBUG=0
+# Each rule defines the actual targets to build in OS and MEM-specific subdirectories.
+# (based on the predefined debug mode, and the optional changes from $(PROGRAM).mak.)
+
 .cpp.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .cpp.obj:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .c.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .c.obj:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .asm.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .asm.obj:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) obj.hl dirs $(O)\$(@F)
 
 .rc.res:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .rc.res:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).res
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) res.hl dirs $(O)\$(@F)
 
 .cpp.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .cpp.exe:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(@F)
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .c.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .c.exe:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(@F)
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .asm.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .asm.exe:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(O)\$(*F).obj $(B)\$(*F).exe
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) exe.hl dirs $(O)\$(*F).obj $(B)\$(@F)
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .cpp.com:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .cpp.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE)  "MEM=T" $(MAKEDEFS) dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    $(SUBMAKE) "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .c.com:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .c.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE)  "MEM=T" $(MAKEDEFS) dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    $(SUBMAKE) "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .asm.com:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .asm.com:
-    $(HEADLINE) Building $(@F) $(T) tiny $(DM) version
-    $(SUBMAKE)  "MEM=T" $(MAKEDEFS) dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    $(SUBMAKE) "PROGRAM=$(*F)" "MEM=T" $(MAKEDEFS) com.hl dirs $(R)$(DS)\OBJ\T\$(*F).obj $(R)$(DS)\BIN\T\$(*F).com
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 .mak.lib:
     @echo Applying $(T).mak inference rule (PROGRAM defined) .mak.lib:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE) $(MAKEDEFS) dirs $(B)\$(*F).lib
+    $(SUBMAKE) "PROGRAM=$(*F)" $(MAKEDEFS) lib.hl dirs $(B)\$(@F)
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $(R)$(DS)
 
 {$(S)\}.cpp{$(R)\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.cpp{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.cpp{$(R)\Debug\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.cpp{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.c{$(R)\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.c{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.c{$(R)\Debug\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.c{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.asm{$(R)\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.asm{$(R)\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) obj.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.asm{$(R)\Debug\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.asm{$(R)\Debug\OBJ\}.obj:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\Debug\}.obj:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) obj.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj
 
 {$(S)\}.cpp{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.cpp{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.cpp{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.c{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.c{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.c{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.asm{$(R)\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) release version
-    $(SUBMAKE) "DEBUG=0"  $(MAKEDEFS) dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=0" $(MAKEDEFS) exe.hl dirs $(R)\OBJ\$(MEM)\$(*F).obj $(R)\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.asm{$(R)\Debug\}.exe:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.asm{$$(R)\Debug\}.exe:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) exe.hl dirs $(R)\Debug\OBJ\$(MEM)\$(*F).obj $(R)\Debug\BIN\$(MEM)\$(*F).exe
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.mak{Debug\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.mak{Debug\}.lib:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\BIN\$(MEM)\$(*F).lib
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) lib.hl dirs $(R)\Debug\BIN\$(MEM)\$(*F).lib
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.mak{$(R)\}.lib:
     @echo Applying $(T).mak inference rule {$$(S)\}.mak{$$(R)\}.lib:
-    $(HEADLINE) Building $(@F) $(TT) $(DM) version
-    $(SUBMAKE)  $(MAKEDEFS) dirs $(B)\$(*F).lib
+    $(SUBMAKE) $(MAKEDEFS) lib.hl dirs $(B)\$(*F).lib
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
 
 {$(S)\}.mak{$(R)\Debug\}.lib:
     @echo Applying $(T).mak inference rule (PROGRAM defined) {$$(S)\}.mak{$$(R)\Debug\}.lib:
-    $(HEADLINE) Building $(@F) $(TT) debug version
-    $(SUBMAKE) "DEBUG=1"  $(MAKEDEFS) dirs $(R)\Debug\BIN\$(MEM)\$(*F).lib
+    $(SUBMAKE) "DEBUG=1" $(MAKEDEFS) lib.hl dirs $(R)\Debug\BIN\$(MEM)\$(*F).lib
+    if exist $(B)\$(@F) copy /y $(B)\$(@F) $@
+
+# Low level inference rules, with final paths, and all option macros set.
 
 # Inference rule for C++ compilation
 {$(S)\}.cpp{$(O)\}.obj:
@@ -1089,7 +1092,6 @@ $(LFLAGS) /tiny
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
     $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
-    if exist $@ copy $@ $(B2)
     cd $(L)
     -$(MAPSYM) $(*F).map
     cd $(MAKEDIR)
@@ -1113,7 +1115,6 @@ $(LFLAGS) /knoweas /stack:32768
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
     $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
-    if exist $@ copy $@ $(B2)
     cd $(L)
     -$(MAPSYM) $(*F).map
     cd $(MAKEDIR)
@@ -1131,7 +1132,6 @@ $(OBJECTS:/=\)
 $(L)\$(@B).lst
 ;
 <<NOKEEP
-    if exist $@ copy $@ $(B2)
     $(MSG) ... done.
 
 ###############################################################################
@@ -1199,7 +1199,7 @@ T=$(T0) # But Restore the initial type, to build in the initial output directory
 OBJECTS=$(O)\$(PROGRAM).obj
 !ENDIF
 
-# Generate LIBRARIES based on LIB & LIBS
+# Generate LIBRARIES with full library pathnames, based on LIB & LIBS
 !IF DEFINED(LIBS) && !DEFINED(LIBRARIES)
 !  INCLUDE lib2libs.mak # Generate LIBRARIES based on LIB & LIBS
 !ENDIF
@@ -1221,7 +1221,6 @@ $(LFLAGS) /knoweas /stack:32768
     @echo "	type $(L)\$(*B).LNK"
     @$(COMSPEC) /c "type $(L)\$(*B).LNK"
     $(LK) @$(L)\$(*B).LNK || $(REPORT_FAILURE)
-    if exist $@ copy $@ $(B2)
     cd $(L)
     -$(MAPSYM) $(*F).map
     cd $(MAKEDIR)
@@ -1239,7 +1238,6 @@ $(OBJECTS:/=\)
 $(L)\$(PROGRAM).lst
 ;
 <<KEEP
-    if exist $@ copy $@ $(B2)
     $(MSG) ... done.
 
 !ELSE # DEFINED(SKIP_THIS)
