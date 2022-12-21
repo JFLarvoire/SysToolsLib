@@ -27,6 +27,7 @@
 #    2017-02-24 JFL Renamed the special "goal_name" as "module_name".	      #
 #    2019-02-08 JFL Added support for ARM and ARM64.			      #
 #    2020-03-11 JFL Don't attempt to build for IA64 or ARM by default.        #
+#    2022-12-21 JFL Changed the output subdirectories for DOS builds.         #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -472,19 +473,19 @@ $(LIBDIR):
 
 lib\bios: $(LIBDIR)\SysLibbt.lib
 
-$(LIBDIR)\SysLibbt.lib: $(OD)BIOS\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibbt.lib: $(OD)BIOS\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)BIOS\BIN\T\SysLib.lib: NUL
+$(OD)BIOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\lodos: $(LIBDIR)\SysLiblt.lib
 
-$(LIBDIR)\SysLiblt.lib: $(OD)LODOS\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLiblt.lib: $(OD)LODOS\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)LODOS\BIN\T\SysLib.lib: NUL
+$(OD)LODOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library LODOS release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
@@ -493,28 +494,28 @@ lib\dos: lib\dosT lib\dosS lib\dosL
 
 lib\dosT: $(LIBDIR)\SysLibdt.lib
 
-$(LIBDIR)\SysLibdt.lib: $(OD)DOS\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibdt.lib: $(OD)DOS\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\BIN\T\SysLib.lib: NUL
+$(OD)DOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dosS: $(LIBDIR)\SysLibds.lib
 
-$(LIBDIR)\SysLibds.lib: $(OD)DOS\BIN\S\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibds.lib: $(OD)DOS\S\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\BIN\S\SysLib.lib: NUL
+$(OD)DOS\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=S" dirs $@
 
 lib\dosL: $(LIBDIR)\SysLibdl.lib
 
-$(LIBDIR)\SysLibdl.lib: $(OD)DOS\BIN\L\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibdl.lib: $(OD)DOS\L\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\BIN\L\SysLib.lib: NUL
+$(OD)DOS\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large release version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=0" "PROGRAM=SysLib" "MEM=L" dirs $@
 
@@ -575,19 +576,19 @@ $(OD)ARM64\SysLib.lib: NUL
 
 lib\bios\debug: $(LIBDIR)\SysLibbtd.lib
 
-$(LIBDIR)\SysLibbtd.lib: $(OD)BIOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibbtd.lib: $(OD)BIOS\Debug\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)BIOS\Debug\BIN\T\SysLib.lib: NUL
+$(OD)BIOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\lodos\debug: $(LIBDIR)\SysLibltd.lib
 
-$(LIBDIR)\SysLibltd.lib: $(OD)LODOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibltd.lib: $(OD)LODOS\Debug\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)LODOS\Debug\BIN\T\SysLib.lib: NUL
+$(OD)LODOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library LODOS debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
@@ -596,28 +597,28 @@ lib\dos\debug: lib\dosT\debug lib\dosS\debug lib\dosL\debug
 
 lib\dosT\debug: $(LIBDIR)\SysLibdtd.lib
 
-$(LIBDIR)\SysLibdtd.lib: $(OD)DOS\Debug\BIN\T\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibdtd.lib: $(OD)DOS\Debug\T\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\Debug\BIN\T\SysLib.lib: NUL
+$(OD)DOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=T" dirs $@
 
 lib\dosS\debug: $(LIBDIR)\SysLibdsd.lib
 
-$(LIBDIR)\SysLibdsd.lib: $(OD)DOS\Debug\BIN\S\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibdsd.lib: $(OD)DOS\Debug\S\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\Debug\BIN\S\SysLib.lib: NUL
+$(OD)DOS\Debug\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=S" dirs $@
 
 lib\dosL\debug: $(LIBDIR)\SysLibdld.lib
 
-$(LIBDIR)\SysLibdld.lib: $(OD)DOS\Debug\BIN\L\SysLib.lib $(LIBDIR)
+$(LIBDIR)\SysLibdld.lib: $(OD)DOS\Debug\L\SysLib.lib $(LIBDIR)
     if exist %s echo F | xcopy /d /y %s $@
 
-$(OD)DOS\Debug\BIN\L\SysLib.lib: NUL
+$(OD)DOS\Debug\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large debug version
     $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak $(MAKEDEFS) "DEBUG=1" "PROGRAM=SysLib" "MEM=L" dirs $@
 
