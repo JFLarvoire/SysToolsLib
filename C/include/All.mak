@@ -152,6 +152,7 @@
 #    2022-11-25 JFL Added support for the LODOS build type.                   #
 #    2022-12-14 JFL Bug fix: `make "OS=WIN32" clean` deleted $(OUTDIR) even   #
 #		    if it was not empty.				      #
+#    2022-12-22 JFL `make clean` now deletes the $(OUTDIR)\SRC directory.     #
 #		    							      #
 #       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -226,6 +227,8 @@ OS=$(OS) WIN64
 OS=$(OS:/ =)	# Remove the initial / and the first following space
 OS=$(OS:/=)	# Again, in the unlikely case that none of the default OSs matched
 !ENDIF
+
+ALL_OS_TYPES=BIOS LODOS DOS WIN95 WIN32 IA64 WIN64 ARM ARM64 # All managed types
 
 !IF "$(OS)"=="all"
 OS=
@@ -716,13 +719,18 @@ clean mostlyclean distclean: NUL
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) clean
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) clean
     $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) clean
+    rem # if 1==1 avoids beginning with a set command, which would prevent executing the following commands
+    -if 1==1 set "RD_SRC=1" \
+     & (for %t in ($(ALL_OS_TYPES)) do if exist $(OUTDIR)\%t echo $(OUTDIR)\%t still exists & set "RD_SRC=") \
+     & if defined RD_SRC (echo Deleting $(OUTDIR)\SRC & rd /S /Q $(OUTDIR)\SRC)
+    -set "RD_SRC=1" & (for %t in ($(ALL_OS_TYPES)) do if exist $(OUTDIR)\%t set "RD_SRC=") & if defined RD_SRC rd /S /Q $(OUTDIR)\SRC >NUL 2>&1	
 !IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
     -if "$@"=="distclean" rd /S /Q $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR, including Unix builds there
     -if exist $(OUTDIR)\Lib rd $(OUTDIR)\Lib >NUL 2>&1		&:# Delete OUTDIR\Lib if it's empty
     -if exist $(OUTDIR)\*.log del $(OUTDIR)\*.log >NUL 2>&1	&:# Delete OUTDIR\*.log
-    -rem if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR if it's empty
-    -rem # The problem is that $(OUTDIR) is a junction, and `rd $(OUTDIR)` deletes it even if the target directory is not empty.
-    -rem # Workaround: Use a for /d loop to detect subdirectories, and remove the junction only if there are none.
+    rem # if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR if it's empty
+    rem # Known problem: $(OUTDIR) may be a junction, and `rd $(OUTDIR)` deletes it even if the target directory is not empty.
+    rem # Workaround: Use a for /d loop to detect subdirectories, and remove the junction only if there are none.
     -if exist $(OUTDIR) ((for /d %d in ($(OUTDIR)\*) do @(call)) && rd $(OUTDIR) >NUL 2>&1) &:# Delete OUTDIR if it's empty
 !ENDIF
     -del /Q *.bak	>NUL 2>&1

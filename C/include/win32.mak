@@ -141,6 +141,7 @@
 #		    of a $(HEADLINE) command in every inference rule.	      #
 #		    Store converted sources in SRC\$(CODEPAGE) to share them  #
 #		    between all builds using the same code page.	      #
+#    2022-12-22 JFL `make clean` now deletes libraries in $(LIBDIR).          #
 #		    							      #
 #      © Copyright 2016-2018 Hewlett Packard Enterprise Development LP        #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -372,6 +373,8 @@ CONV=$(COMSPEC) /c $(CONV_SCRIPT)
 !ENDIF
 
 # Library SuffiX. For storing multiple versions of the same library in a single directory.
+VALUEIZE=LSX0=$(LSX)
+!INCLUDE valueize.mak
 !IF $(DEBUG)
 LSX=$(LSX)d
 !ENDIF
@@ -991,6 +994,10 @@ clean: NUL
     -del /Q *.suo	>NUL 2>&1
     -del /Q *.bak	>NUL 2>&1
     -del /Q *~		>NUL 2>&1
+!IF DEFINED(PROGRAM) && DEFINED(LIBDIR) && EXIST("$(LIBDIR)")
+    -del "$(LIBDIR)\$(PROGRAM)$(LSX0).lib" "$(LIBDIR)\$(PROGRAM)$(LSX0)d.lib" >NUL 2>&1
+    -rd $(LIBDIR)	>NUL 2>&1 &:# Remove the lib directory if it's empty
+!ENDIF
 
 # Help message describing the targets
 help: NUL
