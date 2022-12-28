@@ -18,18 +18,90 @@
 :#                  Added option -r to remove all my personal paths.          #
 :#   2020-02-24 JFL Use the new paths.bat, instead of the old addpath.bat.    #
 :#   2020-05-07 JFL Added option -S to _not_ set persistent system variables. #
+:#   2022-12-28 JFL Fixed the operation when installed in C:\Program Files.   #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-05-07"
+set "VERSION=2022-12-28"
 set "SCRIPT=%~nx0"
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"
 set "SDRV=%~d0"
 set "ARG0=%~f0"
 goto Main
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        condquote                                                 #
+:#                                                                            #
+:#  Description     Add quotes around the content of a pathname if needed     #
+:#                                                                            #
+:#  Arguments       %1	    Source variable name                              #
+:#                  %2	    Destination variable name (optional)              #
+:#                                                                            #
+:#  Notes 	    Quotes are necessary if the pathname contains special     #
+:#                  characters, like spaces, &, |, etc.                       #
+:#                                                                            #
+:#                  See "cmd /?" for information about characters needing to  #
+:#                  be quoted.                                                #
+:#                  I've added "@" that needs quoting if first char in cmd.   #
+:#                                                                            #
+:#                  Although this is not the objective of this function,      #
+:#                  some effort is made to also produce a usable string if    #
+:#                  the input contains characters that are invalid in file    #
+:#                  names. Inner '"' are removed. "|&<>" are quoted.	      #
+:#                                                                            #
+:#  History                                                                   #
+:#   2010-12-19 JFL Created this routine                                      #
+:#   2011-12-12 JFL Rewrote using findstr. (Executes much faster.)	      #
+:#		    Added support for empty pathnames.                        #
+:#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
+:#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#   2018-11-19 JFL Improved routine condquote2.                              #
+:#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
+:#   2021-03-04 JFL Use the non-instrumented condquote2 as the default version.
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Quote file pathnames that require it.
+:condquote	 %1=Input variable. %2=Opt. output variable.
+setlocal EnableExtensions Disabledelayedexpansion
+set "RETVAR=%~2"
+if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
+call set "P=%%%~1%%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs quoting
+:# Added "@" that needs quoting ahead of commands.
+:# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="%P%"
+:condquote_ret
+:# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
+:# because this interferes with the quoting already added above. This would
+:# fail if the quoted string contained an & character.
+:# But because of this, do not leave any space around & separators.
+endlocal&set %RETVAR%=%P%&exit /b 0
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        Main                                                      #
+:#                                                                            #
+:#  Description     Process command line arguments                            #
+:#                                                                            #
+:#  Arguments       %*	    Command line arguments                            #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
 
 :Help
 echo.
@@ -78,6 +150,7 @@ if not exist "%ADDPATH%" for %%I in (paths.bat) do set "ADDPATH=%%~$PATH:I"
 if not defined ADDPATH >&2 echo Error: Can't find paths.bat & exit /b 1
 :# Note: Even if paths.bat is in the PATH, do not use its unqualified name,
 :# because this would break during paths removal.
+call :condquote ADDPATH
 goto :eof
 
 :Add1Path
