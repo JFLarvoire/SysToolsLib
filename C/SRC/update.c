@@ -182,6 +182,7 @@
 *    2022-02-08 JFL Fixed option -- to force ending switches. Version 3.13.1. *
 *    2022-08-08 JFL Fixed routine is_effective_dir(). Version 3.13.2.         *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.13.3.		      *
+*    2022-12-26 JFL Skip Thumbs.db files in Windows. Version 3.14.	      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -189,8 +190,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.13.3"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "3.14"
+#define PROGRAM_DATE    "2022-12-26"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -420,7 +421,7 @@ typedef struct zapOpts {
 #define FLAG_RECURSE	0x0004		/* Recursive operation */
 #define FLAG_NOCASE	0x0008		/* Ignore case */
 #define FLAG_FORCE	0x0010		/* Force operation on read-only files */
-#define FLAG_COMMAND	0x0020		/* Force operation on read-only files */
+#define FLAG_COMMAND	0x0020		/* Display the equivalent shell commands */
 int zapFile(const char *path, zapOpts *pzo); /* Delete a file */
 int zapFileM(const char *path, int iMode, zapOpts *pzo); /* Faster */
 int zapDir(const char *path, zapOpts *pzo);  /* Delete a directory */
@@ -1008,6 +1009,16 @@ int updateall(char *p1,             /* Wildcard * and ? are interpreted */
 	}
 	if (*ppPattern) continue; /* There was a match, so skip this backup file */
       }
+#if defined(_WIN32)
+      { /* Process an ignore list. TODO: Make this an extensible list. */
+	static char *patterns[] = {"Thumbs.db", NULL};
+	char **ppPattern;
+	for (ppPattern = patterns; *ppPattern; ppPattern++) {
+	  if (fnmatch(*ppPattern, pDE->d_name, iFnmFlag) == 0) break; /* Match */
+	}
+	if (*ppPattern) continue; /* There was a match, so skip this backup file */
+      }
+#endif
       strmfp(path1, path0, pDE->d_name);  /* Compute source path */
       DEBUG_PRINTF(("// Found %s\n", path1));
       strmfp(path2, ppath, pname?pname:pDE->d_name); /* Append it to directory p2 too */
