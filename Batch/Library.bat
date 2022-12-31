@@ -1759,9 +1759,9 @@ for /l %%. in () do (
 :# Usage:
 :# call :SaveErrorLevel.init
 :# ( first_command & %SAVE_ERRORLEVEL% NAME1 ) | ( second_command & %SAVE_ERRORLEVEL% NAME2 )
-:# call :RetrieveDoskeyVar NAME1
+:# %RETRIEVE_ERRORLEVEL% NAME1
 :# echo NAME1=%NAME1%
-:# call :RetrieveDoskeyVar NAME2
+:# %RETRIEVE_ERRORLEVEL% NAME2
 :# echo NAME2=%NAME2%
 :SetDoskeyVar  %1=Doskey VARNAME  %2=VALUE
 doskey /exename=vars %~1=%~2
