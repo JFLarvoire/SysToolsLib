@@ -9,13 +9,14 @@
 #                                                                             #
 #   History:								      #
 #    2016-10-17 JFL Created this script.                                      #
+#    2022-04-04 JFL Added support for Python.                                 #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Set defaults
-set version "2016-10-18"
+set version "2022-04-04"
 set script [file tail $argv0]
 
 #=============================================================================#
@@ -134,6 +135,12 @@ proc RemoveComment.Makefile {text} { # Remove comment lines from makefiles
 proc RemoveComment.PowerShell {text} { # Remove comments from PowerShell scripts
   regsub -all -line {^\s*#.*} $text {} text		;# Line comments
   regsub -all {<#.*?#>} $text {} text			;# Block comments
+  return $text
+}
+
+proc RemoveComment.Python {text} { # Remove comment lines from Python scripts
+  regsub -all -line {^\s*#.*} $text {} text
+  # Not handled: File-scope """multi-line strings"""
   return $text
 }
 
@@ -287,6 +294,9 @@ proc ScanFiles {retVar {baseDir .} {patterns *} {opts ""}} {
 	".ps1" -
 	".psm1" {
 	  set type PowerShell
+	}
+	".py" {
+	  set type Python
 	}
 	".xml" -
 	".manifest" {
