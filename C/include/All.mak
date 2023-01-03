@@ -685,6 +685,9 @@ $(ZIPFILE): $(ZIPSOURCES)
 
 dist zip: $(ZIPFILE)
 
+# The following targets are special-cased in make.bat, and their output in _not_ redirected to a log file.
+# => Make sure to redirect to NUL anything you don't want to normally see.
+
 # List PROGRAMS defined in Files.mak
 list_programs: NUL
     cmd /c <<"$(TMP)\list_programs.$(PID).bat" || exit /b &:# Using the shell PID to generate a unique name, to avoid conflicts in case of // builds.
@@ -710,6 +713,7 @@ clean mostlyclean distclean: NUL
 !IF DEFINED(DIRS)
     for %%d in ($(DIRS)) do @$(BMAKE) -C %%d $@ 
 !ENDIF
+    rem # Delete files built for supported OS types
     $(IFBIOS)  $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\BIOS.mak"  $(MAKEDEFS) clean
     $(IFLODOS) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\LODOS.mak" $(MAKEDEFS) clean
     $(IFDOS)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\DOS.mak"   $(MAKEDEFS) clean
@@ -719,18 +723,24 @@ clean mostlyclean distclean: NUL
     $(IFWIN64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\WIN64.mak" $(MAKEDEFS) clean
     $(IFARM)   $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM.mak"   $(MAKEDEFS) clean
     $(IFARM64) $(MAKE) $(MAKEFLAGS_) /f "$(MAKEPATH)\ARM64.mak" $(MAKEDEFS) clean
-    rem # if 1==1 avoids beginning with a set command, which would prevent executing the following commands
-    -if 1==1 set "RD_SRC=1" \
-     & (for %t in ($(ALL_OS_TYPES)) do if exist $(OUTDIR)\%t echo $(OUTDIR)\%t still exists & set "RD_SRC=") \
-     & if defined RD_SRC (echo Deleting $(OUTDIR)\SRC & rd /S /Q $(OUTDIR)\SRC)
-    -set "RD_SRC=1" & (for %t in ($(ALL_OS_TYPES)) do if exist $(OUTDIR)\%t set "RD_SRC=") & if defined RD_SRC rd /S /Q $(OUTDIR)\SRC >NUL 2>&1	
+    rem # Delete the output directories
 !IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
     -if "$@"=="distclean" rd /S /Q $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR, including Unix builds there
+!ENDIF
+!IF DEFINED(OUTDIR) && "$(OUTDIR)" != ""
     -if exist $(OUTDIR)\Lib rd $(OUTDIR)\Lib >NUL 2>&1		&:# Delete OUTDIR\Lib if it's empty
     -if exist $(OUTDIR)\*.log del $(OUTDIR)\*.log >NUL 2>&1	&:# Delete OUTDIR\*.log
-    rem # if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR if it's empty
-    rem # Known problem: $(OUTDIR) may be a junction, and `rd $(OUTDIR)` deletes it even if the target directory is not empty.
-    rem # Workaround: Use a for /d loop to detect subdirectories, and remove the junction only if there are none.
+    rem # Delete localized sources in the output directory, if they're not in use anymore.
+# This must be done after deleting $(OUTDIR) in the distclean case, to avoid getting the warning messages about remaining directories.
+    -if exist $(OUTDIR)\SRC set "RD_SRC=1" \
+      & (for %t in ($(ALL_OS_TYPES)) do @if exist $(OUTDIR)\%t (%IF_VERBOSE% echo :# Found $(MAKERELDIR)\$(OUTDIR)\%t) & set "RD_SRC=") \
+      & if defined RD_SRC ((%IF_VERBOSE% echo rd /S /Q $(OUTDIR)\SRC) & rd /S /Q $(OUTDIR)\SRC) else (%IF_VERBOSE% echo :# =^> Keep $(MAKERELDIR)\$(OUTDIR)\SRC)
+!ENDIF
+!IF DEFINED(OUTDIR) && "$(OUTDIR)" != "" && "$(OUTDIR)" != "." && "$(OUTDIR)" != ".."
+    rem # Delete OUTDIR if it's empty, be it a directory or a junction
+#   -if exist $(OUTDIR) rd $(OUTDIR) >NUL 2>&1		&:# Delete OUTDIR if it's empty
+# Known problem: $(OUTDIR) may be a junction, and `rd $(OUTDIR)` deletes it even if the target directory is not empty.
+# Workaround: Use a for /d loop to detect subdirectories, and remove the junction only if there are none.
     -if exist $(OUTDIR) ((for /d %d in ($(OUTDIR)\*) do @(call)) && rd $(OUTDIR) >NUL 2>&1) &:# Delete OUTDIR if it's empty
 !ENDIF
     -del /Q *.bak	>NUL 2>&1
