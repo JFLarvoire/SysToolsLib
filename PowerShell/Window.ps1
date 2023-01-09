@@ -45,6 +45,8 @@
 #                   Fixed the -Ontop operation.                               #
 #                   Added a -Popups option to list popups.                    #
 #    2021-10-11 JFL Added the thread start time.                              #
+#    2023-01-04 JFL Fixed Set-ForegroundWindow(), which failed to move some   #
+#                   Explorer windows to the foreground.                       #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -67,13 +69,13 @@
   .PARAMETER MoveTo
   Command argument, optional.
   A pair of integers defining a screen coordinate: $left, $top
-  Move the window top-left corner to that location. 
+  Move the window top-left corner to that location.
   Alias: -MT
 
   .PARAMETER Resize
   Command argument, optional.
   A pair of integers defining a size in pixels: $width, $height
-  Set the window size. 
+  Set the window size.
   Alias: -R
 
   .PARAMETER OnTop
@@ -83,7 +85,7 @@
   .PARAMETER Step
   Command argument, optional.
   A pair of integers: $horizonal, $vertical
-  How much to shift each window top-left corner when moving several windows. 
+  How much to shift each window top-left corner when moving several windows.
   Alias: -S
 
   .PARAMETER Capture
@@ -323,6 +325,21 @@ Add-Type @"
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 
+    public static readonly int SW_HIDE = 0;
+    public static readonly int SW_SHOWNORMAL = 1;
+    public static readonly int SW_NORMAL = 1;
+    public static readonly int SW_SHOWMINIMIZED = 2;
+    public static readonly int SW_SHOWMAXIMIZED = 3;
+    public static readonly int SW_MAXIMIZE = 3;
+    public static readonly int SW_SHOWNOACTIVATE = 4;
+    public static readonly int SW_SHOW = 5;
+    public static readonly int SW_MINIMIZE = 6;
+    public static readonly int SW_SHOWMINNOACTIVE = 7;
+    public static readonly int SW_SHOWNA = 8;
+    public static readonly int SW_RESTORE = 9;
+    public static readonly int SW_SHOWDEFAULT = 10;
+    public static readonly int SW_MAX = 10;
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumChildWindows(IntPtr window, EnumWindowProc callback, IntPtr i);
@@ -357,6 +374,52 @@ Add-Type @"
     [DllImport("user32.dll")]
     public static extern IntPtr GetWindow(IntPtr hWnd, uint wCmd);	// 0=First  1=Last  2=Below  3=Above  4=Owner  5=Child  6=Popup
 
+    [DllImport("user32.dll", SetLastError=true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+    public static readonly IntPtr HWND_TOP = new IntPtr(0);
+    public static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+
+    public static readonly int SWP_NOSIZE       = 0x0001;
+    public static readonly int SWP_NOMOVE       = 0x0002;
+    public static readonly int SWP_NOZORDER     = 0x0004;
+    public static readonly int SWP_NOREDRAW     = 0x0008;
+    public static readonly int SWP_NOACTIVATE   = 0x0010;
+    public static readonly int SWP_FRAMECHANGED = 0x0020;
+    public static readonly int SWP_SHOWWINDOW   = 0x0040;
+    public static readonly int SWP_HIDEWINDOW   = 0x0080;
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern bool AttachThreadInput(IntPtr idAttach, IntPtr idAttachTo, bool fAttach);
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern bool RedrawWindow(IntPtr hWnd, IntPtr lpRect, IntPtr hrgnUpdate, uint flags);
+
+    public static readonly int RDW_INVALIDATE      = 0x0001;
+    public static readonly int RDW_INTERNALPAINT   = 0x0002;
+    public static readonly int RDW_ERASE           = 0x0004;
+    public static readonly int RDW_VALIDATE        = 0x0008;
+    public static readonly int RDW_NOINTERNALPAINT = 0x0010;
+    public static readonly int RDW_NOERASE         = 0x0020;
+    public static readonly int RDW_NOCHILDREN      = 0x0040;
+    public static readonly int RDW_ALLCHILDREN     = 0x0080;
+    public static readonly int RDW_UPDATENOW       = 0x0100;
+    public static readonly int RDW_ERASENOW        = 0x0200;
+    public static readonly int RDW_FRAME           = 0x0400;
+    public static readonly int RDW_NOFRAME         = 0x0800;
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern IntPtr SetActiveWindow(IntPtr hWnd);
+
+    [DllImport("Kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
     public delegate bool EnumWindowProc(IntPtr hWnd, IntPtr parameter);
 
     private static bool EnumAllWindows(IntPtr handle, IntPtr pointer) {
@@ -390,26 +453,26 @@ Add-Type @"
       if (GetClassName(hWnd, sb, sb.Capacity) > 0) FirstClass = sb.ToString();
       IntPtr FirstParent = GetParent(hWnd);
       while ((hWnd = GetWindow(hWnd, 2)) != IntPtr.Zero) {
-        String ThisClass = "";
-        sb.Clear();
-        if (GetClassName(hWnd, sb, sb.Capacity) > 0) ThisClass = sb.ToString();
-        IntPtr ThisParent = GetParent(hWnd);
-        if ((ThisClass == FirstClass) && (ThisParent == FirstParent)) {
-          result.Add(hWnd);
-        }
+	String ThisClass = "";
+	sb.Clear();
+	if (GetClassName(hWnd, sb, sb.Capacity) > 0) ThisClass = sb.ToString();
+	IntPtr ThisParent = GetParent(hWnd);
+	if ((ThisClass == FirstClass) && (ThisParent == FirstParent)) {
+	  result.Add(hWnd);
+	}
       }
       return result;
     }
   }
 
-  public struct RECT
-  {
+  public struct RECT {
     public int Left;        // x position of upper-left corner
     public int Top;         // y position of upper-left corner
     public int Right;       // x position of lower-right corner
     public int Bottom;      // y position of lower-right corner
   }
 "@
+$win32 = [Win32WindowProcs]
 
 #-----------------------------------------------------------------------------#
 #                                                                             #
@@ -425,10 +488,10 @@ Add-Type @"
 #-----------------------------------------------------------------------------#
 
 Function Get-WindowTitle($hWnd) {
-  $length = [Win32WindowProcs]::GetWindowTextLength($hWnd)
+  $length = $win32::GetWindowTextLength($hWnd)
   if ($length -gt 0) {
     $sb = New-Object text.stringbuilder -ArgumentList ($length + 1)
-    $length = [Win32WindowProcs]::GetWindowText($hWnd, $sb, $sb.Capacity)
+    $length = $win32::GetWindowText($hWnd, $sb, $sb.Capacity)
     $sb.toString()
   }
 }
@@ -450,7 +513,7 @@ Function Get-WindowTitle($hWnd) {
 Function Get-WindowModule($hWnd) {
   $length = 65535
   $sb = New-Object text.stringbuilder -ArgumentList ($length + 1)
-  $length = [Win32WindowProcs]::GetWindowModuleFileName($hWnd, $sb, $sb.Capacity)
+  $length = $win32::GetWindowModuleFileName($hWnd, $sb, $sb.Capacity)
   $sb.toString()
 }
 
@@ -470,7 +533,7 @@ Function Get-WindowModule($hWnd) {
 Function Get-WindowClass($hWnd) {
   $length = 1024
   $sb = New-Object text.stringbuilder -ArgumentList ($length + 1)
-  $length = [Win32WindowProcs]::GetClassName($hWnd, $sb, $sb.Capacity)
+  $length = $win32::GetClassName($hWnd, $sb, $sb.Capacity)
   $sb.toString()
 }
 
@@ -490,7 +553,7 @@ Function Get-WindowClass($hWnd) {
 Function Get-RealWindowClass($hWnd) {
   $length = 1024
   $sb = New-Object text.stringbuilder -ArgumentList ($length + 1)
-  $length = [Win32WindowProcs]::RealGetWindowClass($hWnd, $sb, $sb.Capacity)
+  $length = $win32::RealGetWindowClass($hWnd, $sb, $sb.Capacity)
   $sb.toString()
 }
 
@@ -507,20 +570,84 @@ Function Get-RealWindowClass($hWnd) {
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
+Function Get-LastError {
+  Param(
+    [String]$Message = $null
+  )
+  $lastError = New-Object ComponentModel.Win32Exception
+  if ($message) {
+    $Message = "$Message. $($lastError.Message)"
+  } else {
+    $message = $lastError.Message
+  }
+  return $Message
+}
+  
 Function Set-ForegroundWindow($hWnd) {
-  # $Done = [Win32WindowProcs]::BringWindowToTop($hWnd) # This returns success, but does not work
+  Write-Debug "Set-ForegroundWindow($hWnd, $X, $Y, $W, $H)"
+  # $Done = $win32::BringWindowToTop($hWnd) # This returns success, but does not work
 
-  # $Done = [Win32WindowProcs]::LockSetForegroundWindow(2) # Unlock that capability
-  # $Done = [Win32WindowProcs]::SetForegroundWindow($hWnd) # This always throws an error
+  # $Done = $win32::LockSetForegroundWindow(2) # Unlock that capability
+  # $Done = $win32::SetForegroundWindow($hWnd) # This always throws an error
 
   # if (!$Done) {
-  #   throw "Failed to bring $($window.Program) window `"$($window.hWnd)`" on top of others. $lastError"
+  #   throw "Failed to bring $($window.Program) window `"$($window.hWnd)`" on top of others"
   # }
 
-  # $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 8) # Show No Activate
-  $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 2) # Minimize the window
-  $WasVisible = [Win32WindowProcs]::ShowWindowAsync($hwnd, 4) # Restore the window
-  Start-Sleep -Milliseconds 100 # Give time to each window to redisplay itself
+  # $WasVisible = $win32::ShowWindowAsync($hwnd, 8) # Show No Activate
+
+  # This fails to bring some of the Explorer windows on top
+  # $WasVisible = $win32::ShowWindowAsync($hwnd, 2) # Minimize the window
+  # $WasVisible = $win32::ShowWindowAsync($hwnd, 4) # Restore the window
+  # Start-Sleep -Milliseconds 500 # Give time to each window to redisplay itself
+
+  # This sometimes hangs
+  # $WasVisible = $win32::ShowWindowAsync($hwnd, 2) # Minimize the window
+  # Start-Sleep -Milliseconds 100 # Give time to each window to redisplay itself
+  # while ($win32::GetForegroundWindow() -ne $hWnd) {
+  #   $WasVisible = $win32::ShowWindowAsync($hwnd, 4) # Restore the window
+  #   Start-Sleep -Milliseconds 100 # Give time to each window to redisplay itself
+  # }
+
+  # Based on https://stackoverflow.com/a/34414846/2215591
+  $hfgWnd = $win32::GetForegroundWindow()
+  $fgwPID = 0
+  $fgwTID = $win32::GetWindowThreadProcessId($hfgWnd, [ref]$fgwPID)
+  $myTID = $win32::GetCurrentThreadId()
+  $Done = $win32::AttachThreadInput($fgwTID, $myTID, $TRUE)
+  if (!$Done) {
+    throw (Get-LastError "AttachThreadInput($fgwTID, $myTID, $TRUE) failed")
+  }
+  $WasVisible = $win32::ShowWindowAsync($hwnd, 2) # Minimize the window
+  $WasVisible = $win32::ShowWindowAsync($hwnd, 4) # Restore the window
+  $Done = $win32::SetWindowPos($hWnd, $win32::HWND_TOPMOST, 0, 0, 0, 0, $win32::SWP_NOSIZE -bor $win32::SWP_NOMOVE)
+  if (!$Done) {
+    throw (Get-LastError "SetWindowPos($hWnd, $($win32::HWND_TOPMOST), $X, $Y, $W, $H, $($win32::SWP_NOSIZE -bor $win32::SWP_NOMOVE)) failed")
+  }
+  $Done = $win32::SetWindowPos($hWnd, $win32::HWND_NOTOPMOST, 0, 0, 0, 0, $win32::SWP_SHOWWINDOW -bor $win32::SWP_NOSIZE -bor $win32::SWP_NOMOVE)
+  if (!$Done) {
+    throw (Get-LastError "SetWindowPos($hWnd, $($win32::HWND_TOPMOST), $X, $Y, $W, $H, $($win32::SWP_SHOWWINDOW -bor $win32::SWP_NOSIZE -bor $win32::SWP_NOMOVE)) failed")
+  }
+  $Done = $win32::SetForegroundWindow($hWnd)
+  if (!$Done) {
+    throw (Get-LastError "SetForegroundWindow($hWnd) failed")
+  }
+  $hLastFocus = $win32::SetFocus($hWnd)
+  if (!$hLastFocus) {
+    throw (Get-LastError "SetFocus($hWnd) failed")
+  }
+  $hLastActive = $win32::SetActiveWindow($hWnd)
+  if (!$hLastActive) {
+    throw (Get-LastError "SetActiveWindow($hWnd) failed")
+  }
+  # $Done = $win32::RedrawWindow($hWnd, 0, 0, $win32::RDW_FRAME -bor $win32::RDW_INVALIDATE -bor $win32::RDW_ALLCHILDREN);
+  # if (!$Done) {
+  #   throw (Get-LastError "SetForegroundWindow($hWnd)RedrawWindow(hWnd, NULL, 0, $($win32::RDW_FRAME -bor $win32::RDW_INVALIDATE -bor $win32::RDW_ALLCHILDREN)) failed")
+  # }
+  $Done = $win32::AttachThreadInput($fgwTID, $myTID, $FALSE)
+  if (!$hLastFocus) {
+    throw (Get-LastError "AttachThreadInput($fgwTID, $myTID, $FALSE) failed")
+  }
 }
 
 #-----------------------------------------------------------------------------#
@@ -543,13 +670,13 @@ Function Get-Window {
   )
 
   $rect = New-Object RECT
-  
+
   if ($hWnd -eq [IntPtr]::zero) {
-    $hWnd = [Win32WindowProcs]::GetDesktopWindow()
+    $hWnd = $win32::GetDesktopWindow()
     Write-Debug "The desktop windows is Window $hWnd"
   }
 
-  $done = [Win32WindowProcs]::GetWindowRect($hWnd, [ref]$rect)
+  $done = $win32::GetWindowRect($hWnd, [ref]$rect)
   if (!$done) { # No such window
     return
   }
@@ -558,7 +685,7 @@ Function Get-Window {
 
   # Now find the process owning the window, which in turn will give us the program name
   $processID = [uint32]0
-  $threadID = [Win32WindowProcs]::GetWindowThreadProcessId($hWnd, [ref]$processID)
+  $threadID = $win32::GetWindowThreadProcessId($hWnd, [ref]$processID)
   $process = Get-Process -id $processID
   $pathname = $process.Path
   $Program = if ($pathname) {(Get-Item $pathname).Name} else {$null} # Modern apps (?) sometimes don't report a path
@@ -572,7 +699,7 @@ Function Get-Window {
 
   $window = New-Object PSObject -Property @{
     hWnd = [int] $hWnd
-    Visible = [Win32WindowProcs]::IsWindowVisible($hWnd)
+    Visible = $win32::IsWindowVisible($hWnd)
     Class = Get-WindowClass($hWnd)
     RealClass = Get-RealWindowClass($hWnd) # Rarely different from Class
 
@@ -589,11 +716,11 @@ Function Get-Window {
     StartTime = $StartTime
     # Module = Get-WindowModule($hWnd) # Randomly returns either Powershell.exe or nothing
 
-    hParentWnd = [int] [Win32WindowProcs]::GetParent($hWnd) # == GetAncestor($hWnd, 1)
-    hRootWnd = [int] [Win32WindowProcs]::GetAncestor($hWnd, 2)
-    hOwnerWnd = [int] [Win32WindowProcs]::GetAncestor($hWnd, 3)
-    hTopWnd = [int] [Win32WindowProcs]::GetTopWindow($hWnd)
-    # hNextWnd = [Win32WindowProcs]::GetWindow($hWnd, 3)
+    hParentWnd = [int] $win32::GetParent($hWnd) # == GetAncestor($hWnd, 1)
+    hRootWnd = [int] $win32::GetAncestor($hWnd, 2)
+    hOwnerWnd = [int] $win32::GetAncestor($hWnd, 3)
+    hTopWnd = [int] $win32::GetTopWindow($hWnd)
+    # hNextWnd = $win32::GetWindow($hWnd, 3)
   }
   # Add a .PSStandardMembers.DefaultDisplayPropertySet to control the fields displayed by default, and their order
   $window | Add-Member MemberSet PSStandardMembers $PSStandardMembers -Force
@@ -623,7 +750,7 @@ Function Get-Windows {
 
   if ($All) {	# Enumerate all top level windows. This lists many minor apps, like tray icons.
     Write-Debug "Enumerating all top level windows"
-    foreach ($hWnd in ([Win32WindowProcs]::GetChildWindows(0))) {
+    foreach ($hWnd in ($win32::GetChildWindows(0))) {
       $window = Get-Window $hWnd
       if (Want-Window $Window) {
         $windows[$hWnd] = $window
@@ -635,7 +762,7 @@ Function Get-Windows {
       $hWnd = $_.MainWindowHandle # $hWnd type is System.IntPtr
       # Get-Process returns only the top-most window for the process.
       # Enumerate all the top-level windows for that process.
-      $hWnds = @([Win32WindowProcs]::GetSiblingWindows($hWnd))
+      $hWnds = @($win32::GetSiblingWindows($hWnd))
       $nWindows = $hWnds.Count
       Write-Debug "GetSiblingWindows($hWnd) returned $nWindows $Program windows"
       foreach ($hWnd in $hWnds) {
@@ -667,7 +794,7 @@ Function Get-WindowsFamily {
     # Enumerate its popup windows
     if ($Popups) {
       Write-Debug "Enumerating popup windows of $($window.hWnd)"
-      $hPopup = [Win32WindowProcs]::GetWindow($window.hWnd, 6)
+      $hPopup = $win32::GetWindow($window.hWnd, 6)
       if ($hPopup -ne 0) {
 	$popup = Get-Window $hPopup
 	# Don't use Want-Window: We want all popups, even without a title
@@ -678,7 +805,7 @@ Function Get-WindowsFamily {
     # Enumerate its child windows
     if ($Children) {
       Write-Debug "Enumerating child windows of all the above"
-      foreach ($hChild in @([Win32WindowProcs]::GetChildWindows($window.hWnd))) {
+      foreach ($hChild in @($win32::GetChildWindows($window.hWnd))) {
 	$child = Get-Window $hChild
 	# Don't use Want-Window: We want all children, even without a title
 	$child
@@ -716,6 +843,7 @@ Function Move-Window {
     [Parameter(Mandatory=$false)]
     [Switch]$PassWhereArrived		# Pass the final location back to the caller
   )
+  Write-Debug "Move-Window Windows=($Windows) MoveTo=($MoveTo) Resize=($Resize) Step=($Step) OnTop=$OnTop"
   foreach ($window in $windows) {
     $hWnd = $window.hWnd
     $Left = $window.Left
@@ -728,7 +856,7 @@ Function Move-Window {
       $Left = $MoveTo[0]
       $Top = $MoveTo[1]
       if ($Top -eq $null) { $Top = 0 }
-      $MoveTo = @(($Left + $Step[0]), ($Top + $Step[1])) 
+      $MoveTo = @(($Left + $Step[0]), ($Top + $Step[1]))
     }
     if ($Resize.Count -gt 0) {
       $NeedMove = $true
@@ -736,12 +864,13 @@ Function Move-Window {
       $Height = $Resize[1]
       if ($Height -eq $null) { $Height = $window.Height }
     }
+    Write-Debug "Left=$Left Top=$Top Width=$Width Height=$Height"
     $verb = "leave"
     $adverb = "at"
     $msg = "$($window.Program) window $($window.hWnd)"
     if ($NeedMove) {
       if (!$NoExec) {
-	$Done = [Win32WindowProcs]::MoveWindow($hWnd, $Left, $Top, $Width, $Height, $true)
+	$Done = $win32::MoveWindow($hWnd, $Left, $Top, $Width, $Height, $true)
 	if (!$Done) {
 	  throw "Failed to move $($window.Program) window `"$($window.hWnd)`"."
 	}
@@ -895,11 +1024,11 @@ End {
   Write-Debug "Window.End() # `$nInputObjects = $nInputObjects   `$nWindows = $($allWindows.Count)   `$Get = $Get"
   if ($nInputObjects -eq 0) { # If no object or object specifier was passed in
     if (!$allWindows) { $allWindows = Get-Windows }
-    
+
     if ($Get) {
       Get-WindowsFamily $allWindows	# By default, list all windows
     }
-    
+
     # All other actions should do nothing, as the input pipe filtering left no window object to work on.
   }
 }
