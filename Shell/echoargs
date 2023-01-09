@@ -1,0 +1,22 @@
+#!/bin/sh
+###############################################################################
+#                                                                             #
+#   Filename        echoargs                                                  #
+#                                                                             #
+#   Description     Echo all command line arguments		              #
+#                                                                             #
+#   Notes           TODO: Output something more user-friendly than what       #
+#                         `printf '%q'` does.                                 #
+#                                                                             #
+#   History                                                                   #
+#    2023-01-08 JFL Created this script.				      #
+#                                                                             #
+#                   © Copyright 2023 Jean-François Larvoire                   #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+n=0
+for a in "$@" ; do
+  n=`expr $n + 1`
+  env printf "ARG$n = %q\n" "$a" # The built-in printf does not support %q
+done

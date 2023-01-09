@@ -68,6 +68,7 @@ Python\PySetup.bat
 Python\python.bat
 Python\pip.bat
 Shell\distrib
+Shell\echoargs
 Shell\paths
 Shell\subsh
 Shell\truename

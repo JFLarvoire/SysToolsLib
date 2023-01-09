@@ -150,8 +150,9 @@ Name            | OS  | Description                                            
 chars.exe       | DWL | Display a table of ASCII and all 8-bit characters.                                    |
 CheckEOL.bat    | -W- | Check the line ending type for a set of files.                                        | `CheckEOL *.c`
 codepage.exe    | -W- | Get information about the current code pages, or the characters in other ones.        | `codepage 1253` &:# Show characters in code page #1253
-echoargs.bat    | DW- | Display echoargs arguments. Useful to diagnose command-line processing issues.        | `echoargs.bat how" many args "here?`
-EchoArgs.ps1    | -W- | Display echoargs arguments. Useful to diagnose command-line processing issues.        |
+echoargs        | --L | Display echoargs arguments. Useful to diagnose command-line processing issues.        | `echoargs how" many args "here?`
+echoargs.bat    | DW- | Display echoargs arguments. Useful to diagnose command-line processing issues.        | `echoargs how" many args "here?`
+EchoArgs.ps1    | -W- | Display echoargs arguments. Useful to diagnose command-line processing issues.        | `echoargs how" many args "here?`
 errorlev.bat    | D-- | Display last command's errorlevel. (There's no %ERRORLEVEL% variable in DOS.)         |
 inicomp.exe     | DWL | Compare .ini or .reg files. Useful to detect changes in the Windows registry.         | `inicomp server1.reg server2.reg`
 MakeZip.bat     | -W- | Create a zip file, based on a list of files in an input file. Uses 7-zip.             | `makezip tools.lst` &:# Builds tools.zip.
