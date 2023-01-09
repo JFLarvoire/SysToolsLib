@@ -98,6 +98,18 @@ int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
 
 #endif // defined(__MACH__) && defined(__APPLE__)
 
+/*********************** FreeBSD-specific definitions ************************/
+
+#if defined(__FreeBSD__)
+#define _BSD	    // Define an identification constant similar to the ones for DOS and Windows.
+
+#define CDECL
+
+#define SNPRINTF_DEFINED 0	// We have to define _snprintf() ourselves.
+int _snprintf(char *pszBuffer, size_t nBufSize, const char *pszFormat, ... );
+
+#endif // defined(__FreeBSD__)
+
 /************************** Unknown OS definitions ***************************/
 
 #if !defined(CDECL)
