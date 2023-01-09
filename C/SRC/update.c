@@ -183,6 +183,7 @@
 *    2022-08-08 JFL Fixed routine is_effective_dir(). Version 3.13.2.         *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.13.3.		      *
 *    2022-12-26 JFL Skip Thumbs.db files in Windows. Version 3.14.	      *
+*    2023-01-09 JFL Fixed debug builds in MacOS. No change in any other OS.   *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -191,7 +192,7 @@
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
 #define PROGRAM_VERSION "3.14"
-#define PROGRAM_DATE    "2022-12-26"
+#define PROGRAM_DATE    "2023-01-09"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -664,7 +665,7 @@ int main(int argc, char *argv[]) {
   DEBUG_PRINTF(("Size of size_t = %d bits\n", (int)(8*sizeof(size_t))));
   DEBUG_PRINTF(("Size of off_t = %d bits\n", (int)(8*sizeof(off_t))));
   DEBUG_PRINTF(("Size of dirent = %d bytes\n", (int)(sizeof(struct dirent))));
-#if  defined(_UNIX) && defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2)
+#if defined(_UNIX) && defined(_LARGEFILE64_SOURCE) && defined(__GNUC__) && (__GNUC__ > 2) && !defined(__MACH__)
   DEBUG_PRINTF(("Size of dirent64 = %d bytes\n", (int)(sizeof(struct dirent64))));
 #endif
 #if defined(_MSC_VER)
