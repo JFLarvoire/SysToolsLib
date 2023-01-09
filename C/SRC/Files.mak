@@ -51,6 +51,7 @@ PROGRAMS = \
   uuid.exe	  \
   which.exe       \
   whichinc.exe    \
+  with.exe        \
   zap.exe         \
 
 # All programs above depend on MsvcLibX.
@@ -155,6 +156,7 @@ ZIPSOURCES =		 \
   uuid.c		 \
   Which.c                \
   whichinc.c             \
+  with.c                 \
   zap.c                  \
 
 #-----------------------------------------------------------------------------#
@@ -218,6 +220,8 @@ $(S)/truename.c: $(SL)/mainutil.h
 $(S)/update.c: $(SL)/mainutil.h
 
 $(S)/Which.c: $(SL)/mainutil.h
+
+$(S)/with.c: $(SL)/mainutil.h
 
 $(S)/zap.c: $(SL)/mainutil.h
 

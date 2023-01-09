@@ -171,6 +171,7 @@ unixtime.tcl    | -WL | Convert a Unix Epoch time (# of seconds since Jan 1970) 
 umountw.bat     | -W- | Unmount a .wim Windows disk Image using a Unix-like command.                          | `umountw` &:# Unmounts the image at the default C:\mnt\wim
 vcvars.bat      | -W- | Run vcvarsall.bat for the latest Visual C++ installed.                                | `subcmd`   `vcvars`
 whichinc.exe    | DW- | Enumerate all include files that a C/C++ source potentially includes.                 | `set INCLUDE=... & whichinc myprog.c`
+with.exe        | DW- | Run a command with specific environment variables.                                    | `with DEBUG=1 build` &:# Build the debug version of your application
 wm.bat          | -W- | Invoke WinMerge, even if it's not in the PATH.                                        | `wm old_version new_version`
 
 ## Harware and BIOS management
