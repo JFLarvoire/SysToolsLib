@@ -178,6 +178,17 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
 Procedure for generating a new release
 --------------------------------------
 
-    cd %WORKDIR%\C
-    make
-    make release
+* Edit C/Include/stversion, and update the release date.
+* Edit NEWS.md, and add comments about the release.
+* Then run:
+  
+      cd %WORKDIR%\C
+      make distclean
+      configure
+      make "OS=all"
+      make release
+
+* Test it in various Windows systems.
+* Also test building it and installing it in various Linux, MacOS, etc, Unix systems.
+* If everything is satisfactory, push the C/Include/stversion and NEWS.md files;
+* Then create the release on GitHub.
