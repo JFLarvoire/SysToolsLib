@@ -33,6 +33,7 @@ PROGRAMS = \
   encoding.exe    \
   font.exe        \
   gpt.exe         \
+  in.exe          \
   inicomp.exe     \
   junction.exe    \
   md.exe          \
@@ -65,6 +66,7 @@ UNIX_PROGRAMS = \
   dirc            \
   dirsize         \
   dump            \
+  In              \
   inicomp         \
   md              \
   rd              \
@@ -116,6 +118,7 @@ ZIPSOURCES =		 \
   font.mak		 \
   gpt.cpp		 \
   gpt.mak		 \
+  In.c                   \
   inicomp.c              \
   inicomp.mak            \
   junction.c             \
@@ -191,6 +194,8 @@ $(S)/dump.c: $(SL)/mainutil.h
 $(S)/encoding.c: $(SL)/mainutil.h
 
 $(S)/font.c: $(SL)/mainutil.h
+
+$(S)/In.c: $(SL)/mainutil.h
 
 $(S)/inicomp.c: $(SL)/mainutil.h
 
