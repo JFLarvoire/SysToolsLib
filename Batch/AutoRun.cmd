@@ -55,13 +55,14 @@
 :#		    listed in default.lst.                                    #
 :#		    Added options -d and -q.                                  #
 :#   2020-01-14 JFL Updated messages.                                         #
+:#   2023-01-10 JFL Fixed the installation from a SysToolsLib.zip distribution.
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-01-14"
+set "VERSION=2023-01-10"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SNAME=%~n0"				&:# Script name, without its extension
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
@@ -195,8 +196,8 @@ for %%h in (HKLM HKCU) do (
 set "CMD.D=%SPATH%\AutoRun.cmd.d" &:# Where to copy the extensions from
 if exist "%CMD.D%\default.lst" ( :# If we have a list of extensions to install by default
   echo.
-  %COMMENT% !INSTALLING! extension scripts for !USER[%HIVE%]! into !DESTDIR!
-  for %%p in ("%CMD.D%\default.lst") do for /f "tokens=1" %%f in (%%~sp) do (
+  %COMMENT% !INSTALLING! extension scripts for !USER[%HIVE%]! into !DESTDIR!\
+  for /f "usebackq tokens=1" %%f in ("%CMD.D%\default.lst") do (
     set "TOCOPY=%CMD.D%\%%~nxf"
     if exist "!TOCOPY!" (
       call :is_newer "!TOCOPY!" "!DESTDIR!\%%~nxf" &:# Returns ERRORLEVEL 0 if newer
