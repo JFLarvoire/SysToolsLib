@@ -73,11 +73,8 @@ Switches:\n\
 "\
   -V       Display the program version and exit\n\
   -X       Display the equivalent commands, but don't run them\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@free.fr"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 ;
 
 int main(int argc, char *argv[]) {
@@ -100,7 +97,7 @@ int main(int argc, char *argv[]) {
     if ((!iGotDO) && IsSwitch(arg)) { /* It's a switch */
       char *opt = arg+1;
       if (streq(opt, "?") || streq(opt, "h")) {
-	puts(pszUsage);
+	fputs(pszUsage, stdout);
 	return 0;
       }
       DEBUG_CODE(

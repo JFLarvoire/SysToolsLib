@@ -425,9 +425,9 @@ Switches:\n\
   -v    Display verbose information.\n\
   -V    Display this program version and exit.\n\
   -x    Use base 16 for input and output. (default)\n\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
   exit(0);
 }
 

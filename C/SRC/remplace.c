@@ -964,11 +964,8 @@ The new string may contain the following special sequences\n\
   \\\\0   Replaced by the current matching input\n\
 \n\
 Return code: 0=Success; 1=No change done; 2=Error.\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 
   exit(err);

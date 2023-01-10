@@ -578,9 +578,9 @@ Switches:\n\
 Command line:     Any valid command and arguments.\n\
                   The special sequence \"{}\" is replaced by the current\n\
                   directory name, relative to the initial directory.\n\
-\n"
+"
 #ifdef _WIN32
-"\
+"\n\
 Known issue with long pathnames > 260 bytes: Windows versions up to 8 cannot\n\
 change the current directory to such long pathnames. Windows 10 can, but only\n\
 if it's been enabled in the registry.\n\
@@ -591,17 +591,9 @@ If there's a chance that you might have paths longer than 260 bytes in the tree\
 below your current directory, do not rely on the current directory set by redo,\n\
 but use the {} sequence to generate commands with absolute paths arguments.\n\
 And of course, use a command that is compatible with paths > 260 bytes.\n\
-\n"
+"
 #endif
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+#include "footnote.h"
 );
   exit(iErr);
 }

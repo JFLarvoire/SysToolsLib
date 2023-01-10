@@ -315,8 +315,8 @@ UTF-8 for output to a file on Windows 10 2019 H1 or later; Windows system code\n
 page for output to a file on all older versions of Windows.\n\
 2) If one of the symbolic character sets above is specified, also decodes the\n\
 mime encoded strings in the input stream. Not done if using numeric CP numbers.\n\
-\n"
-"Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+"
+#include "footnote.h"
 ;
 
 void usage(int iRet) {

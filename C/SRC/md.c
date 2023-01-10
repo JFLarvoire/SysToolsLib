@@ -226,11 +226,8 @@ Switches:\n\
   -t          Test mode: Just call the raw mkdir() function\n\
   -v          Output verbose information\n\
   -V          Display this program version and exit\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 , 
 #ifdef _UNIX
   "md"

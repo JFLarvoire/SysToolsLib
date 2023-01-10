@@ -208,16 +208,8 @@ Options:\n\
   -V        Display the program version\n\
 \n\
 Note: The buffer size can also be set by environment variable TEE_BUFSIZE.\n\
-\n"
-#if defined(_MSDOS)
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 , (unsigned long)GetDefaultBufSize());
   return;
 }

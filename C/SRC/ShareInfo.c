@@ -283,9 +283,9 @@ Optional switches:\n\
 Server:   Server name, or . for the local machine\n\
 Share:    Share name\n\
 Property: Any valid share property name. Default: Display common properties\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
   exit(0);
 }
 

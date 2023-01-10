@@ -273,11 +273,8 @@ Switches:\n\
 #endif
 "\
   -V          Display this program version and exit.\n\
-\n"
-"Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 
   exit(0);

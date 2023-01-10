@@ -27,7 +27,7 @@
 *		    Instead use the strncpyz() macro, which is safer.         *
 *		    							      *
 *   History:								      *
-*    1990-03-21 JFL Initial version 1.0 created by jf.larvoire@hp.com.	      *
+*    1990-03-21 JFL jf.larvoire@hp.com created this program.		      *
 *    1990-06-22 JFL Added argument -b, -d and -bd to list only common         *
 *		     or different files. Version 1.1.			      *
 *    1992-02-28 JFL Adapted to OS/2.					      *
@@ -1084,16 +1084,8 @@ Switches:\n\
   -z          Don't list a directory if no file is to appear in it.\n\
   -from Y/M/D List only files starting from that date. Also -from -D days.\n\
   -to Y/M/D   List only files up to that date. Also -to -D days.\n\
-\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 
   finis(0);

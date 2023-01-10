@@ -494,8 +494,6 @@ echo.
 echo Mountpoint: The image mount point. Default: The first image mount point
 echo.
 echo Requires Windows AIK's dism.exe. Install the Windows AIK if it's missing.
-echo.
-echo Author: jf.larvoire@hpe.com
 goto :eof
 
 :main

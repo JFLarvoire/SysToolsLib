@@ -75,7 +75,7 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pJcbRef);
 \*---------------------------------------------------------------------------*/
 
 void usage() {
-  puts(PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
+  fputs(PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 \n\
@@ -124,7 +124,9 @@ Heuristics for managing junctions on network shares:\n\
 This program detects link loops, and silently avoids getting caught.\n\
 Use option -v to display warnings about loops detected.\n\
 Likewise, the -v option informs about duplicate paths that were skipped.\n\
-");
+"
+#include "footnote.h"
+, stdout);
 }
 
 typedef enum {	/* Action to do */

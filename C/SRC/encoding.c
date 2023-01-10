@@ -218,10 +218,9 @@ MsvcLibX options:\n\
 \n\
 COM API options: See IMultiLanguage2::DetectInputCodepage doc on the Web\n\
   flags: Hexadecimal value passed in dwFlag. Default: 0\n\
-  cp: Preferred code page. Default: 0=Let Windows choose\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+  cp: Preferred code page. Default: 0=Let Windows choose\n"
+#include "footnote.h"
+);
 
   exit(iRet);
 }

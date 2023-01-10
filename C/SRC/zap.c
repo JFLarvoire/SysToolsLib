@@ -334,11 +334,8 @@ Notes:\n\
 * If pathname is . then all . contents will be deleted, but not . itself.\n\
 * Deleting a non-empty directory (including .) requires using option -r or -f.\n\
 * For your own safety, the program will refuse to delete root directories.\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 , progcmd, progcmd);
   exit(0);
 }

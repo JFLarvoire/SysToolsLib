@@ -324,10 +324,8 @@ Options:\n\
   -V      Display the program version\n\
   -Z      Append a Ctrl-Z (aka. SUB or EOF) to the output\n\
 \n\
-Default output encoding: The current console code page (Code page %u)\n\
-\n"
-"Author: Jean-François Larvoire"
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+Default output encoding: The current console code page (Code page %u)\n"
+#include "footnote.h"
 , cpANSI, cpOEM, consoleCodePage // cpCurrent
 );
 

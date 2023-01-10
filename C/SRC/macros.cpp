@@ -166,9 +166,7 @@ Options:\n\
   -v          Verbose mode. List macros evaluated and found undefined.\n\
   -V          Display this program version and exit.\n\
 "
-#if !(defined(_MSDOS) || defined(_WIN32)) /* Unix, MacOS, etc */
-"\n"
-#endif
+#include "footnote.h"
 );
 }
 

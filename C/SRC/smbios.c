@@ -1017,10 +1017,7 @@ Note: All UUIDs and serial numbers are cleared in the copy of the tables\n\
       this program to get them if needed.\n\
 "
 #endif /* defined(_WIN32) */
-"\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-"
+#include "footnote.h"
 );
 
   exit(retcode);

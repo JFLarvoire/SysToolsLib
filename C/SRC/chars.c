@@ -360,16 +360,8 @@ Switches:\n\
 "\
   -v|--verbose        Display verbose information\n\
   -V|--version        Display this program version and exit\n\
-\n"
-#if SUPPORTS_UTF8 && !_WIN32
-"Author: Jean-François Larvoire"
-#else
-"Author: Jean-Francois Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 
 #if SUPPORTS_UTF8 && _WIN32

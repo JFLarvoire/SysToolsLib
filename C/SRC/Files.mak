@@ -167,61 +167,79 @@ SI=$(STINCLUDE)
 SL=$(SYSLIB)
 SX=$(MSVCLIBX)/include
 
-$(S)/1clip.c: $(SL)/mainutil.h
+$(S)/1clip.c: footnote.h $(SL)/mainutil.h
 
-$(S)/2clip.c: $(SL)/mainutil.h
+$(S)/2clip.c: footnote.h $(SL)/mainutil.h
 
-$(S)/2note.c: $(SL)/mainutil.h
+$(S)/2note.c: footnote.h $(SL)/mainutil.h
 
-$(S)/backnum.c: $(SL)/mainutil.h
+$(S)/backnum.c: footnote.h $(SL)/mainutil.h
 
-$(S)/chars.c: $(SL)/mainutil.h
+$(S)/chars.c: footnote.h $(SL)/mainutil.h
 
-$(S)/codepage.c: $(SL)/mainutil.h
+$(S)/codepage.c: footnote.h $(SL)/mainutil.h
 
-$(S)/conv.c: $(SL)/mainutil.h
+$(S)/conv.c: footnote.h $(SL)/mainutil.h
 
-$(S)/deffeed.c: $(SL)/mainutil.h
+$(S)/cpuid.c: footnote.h $(SL)/mainutil.h
 
-$(S)/detab.c: $(SL)/mainutil.h
+$(S)/deffeed.c: footnote.h $(SL)/mainutil.h
 
-$(S)/dirc.c: $(SL)/mainutil.h
+$(S)/detab.c: footnote.h $(SL)/mainutil.h
 
-$(S)/dirsize.c: $(SL)/mainutil.h
+$(S)/dirc.c: footnote.h $(SL)/mainutil.h
 
-$(S)/driver.c: $(SL)/mainutil.h
+$(S)/dirsize.c: footnote.h $(SL)/mainutil.h
 
-$(S)/dump.c: $(SL)/mainutil.h
+$(S)/driver.c: footnote.h $(SL)/mainutil.h
 
-$(S)/encoding.c: $(SL)/mainutil.h
+$(S)/dump.c: footnote.h $(SL)/mainutil.h
 
-$(S)/font.c: $(SL)/mainutil.h
+$(S)/encoding.c: footnote.h $(SL)/mainutil.h
 
-$(S)/In.c: $(SL)/mainutil.h
+$(S)/font.c: footnote.h $(SL)/mainutil.h
 
-$(S)/inicomp.c: $(SL)/mainutil.h
+$(S)/gpt.cpp: footnote.h
 
-$(S)/junction.c: $(SL)/mainutil.h
+$(S)/In.c: footnote.h $(SL)/mainutil.h
 
-$(S)/md.c: $(SL)/mainutil.h
+$(S)/inicomp.c: footnote.h $(SL)/mainutil.h
 
-$(S)/msgbox.c: $(SL)/mainutil.h
+$(S)/junction.c: footnote.h $(SL)/mainutil.h
 
-$(S)/rd.c: $(SL)/mainutil.h
+$(S)/macros.cpp: footnote.h
 
-$(S)/remplace.c: $(SL)/mainutil.h
+$(S)/md.c: footnote.h $(SL)/mainutil.h
 
-$(S)/smbios.c: $(SL)/mainutil.h
+$(S)/msgbox.c: footnote.h $(SL)/mainutil.h
 
-$(S)/trim.c: $(SL)/mainutil.h
+$(S)/rd.c: footnote.h $(SL)/mainutil.h
 
-$(S)/truename.c: $(SL)/mainutil.h
+$(S)/redo.c: footnote.h
 
-$(S)/update.c: $(SL)/mainutil.h
+$(S)/remplace.c: footnote.h $(SL)/mainutil.h
 
-$(S)/Which.c: $(SL)/mainutil.h
+$(S)/sector.cpp: footnote.h
 
-$(S)/with.c: $(SL)/mainutil.h
+$(S)/ShareInfo.c: footnote.h
 
-$(S)/zap.c: $(SL)/mainutil.h
+$(S)/smbios.c: footnote.h $(SL)/mainutil.h
+
+$(S)/tee.c: footnote.h $(SL)/mainutil.h
+
+$(S)/trim.c: footnote.h $(SL)/mainutil.h
+
+$(S)/truename.c: footnote.h $(SL)/mainutil.h
+
+$(S)/update.c: footnote.h $(SL)/mainutil.h
+
+$(S)/uuid.c: footnote.h
+
+$(S)/Which.c: footnote.h $(SL)/mainutil.h
+
+$(S)/whichinc.c: footnote.h $(SL)/mainutil.h
+
+$(S)/with.c: footnote.h $(SL)/mainutil.h
+
+$(S)/zap.c: footnote.h $(SL)/mainutil.h
 

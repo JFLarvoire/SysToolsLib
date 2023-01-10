@@ -453,16 +453,8 @@ Switches:\n\
   -q      Be quiet\n\
   -v      Display verbose information\n\
   -X      Display the backup file name, but don't create it.\n\
-\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 }
 

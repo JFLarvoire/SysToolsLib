@@ -506,9 +506,9 @@ Switches:\n\
   -v		    Display verbose information.\n\
   -V		    Display this program version.\n\
   -w		    Wait before exiting.\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
 
     exit(retcode);
     }

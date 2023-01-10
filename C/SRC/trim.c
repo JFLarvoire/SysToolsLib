@@ -487,11 +487,8 @@ Switches:\n\
 Arguments:\n\
   INFILE   Input file pathname. Default or \"-\": stdin\n\
   OUTFILE  Output file pathname. Default or \"-\": stdout\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
   exit(0);
 }

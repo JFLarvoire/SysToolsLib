@@ -119,7 +119,7 @@ options:\n"
 "\
   -n      Create a new UUID (Default)\n\
   -s      Get the SMBIOS system UUID\n\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
 }

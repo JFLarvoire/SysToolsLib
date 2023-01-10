@@ -1287,9 +1287,9 @@ All are in decimal. All are optional. Default is 0. All 0 = Erase PT entry.\n\
  EndCyl EndHead EndSect   Last sector coords. If 0 0 0, computed from {Length}.\n\
  First  32-bits index of 1st sector. If 0, computed from BegCyl/BegHead/BegSect\n\
  Length 32-bits number of sectors. If 0, computed from EndCyl/EndHead/EndSect.\n\
-\n\
-Author: Jean-Francois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
   exit(0);
 }
 

@@ -363,16 +363,8 @@ Switches:\n\
   -?|-h   Display this help screen\n\
   -p	  Pause for each screen-full of information.\n\
   -z      Stop input on a Ctrl-Z (aka. SUB or EOF) character\n\
-\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
     exit(1);
     }

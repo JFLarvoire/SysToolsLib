@@ -7,7 +7,7 @@ Project Description
 ### System Tools
 
 This Library contains many command-line tools for managing Windows and Unix (Ex: Linux, MacOS) systems.
-I've built them over 30 years, both for work and for home projects.
+I've built them over 30 years, both for work at HP then HPE, and for home projects.
 Some of these tools have unique capabilities, that I hope Windows and Unix power users will find useful.
 
 Major highlights:
@@ -51,8 +51,8 @@ Old tools were mostly written in C/C++. Then I started using scripting languages
 Batch and PowerShell for Windows-only tools; Python and Tcl for cross-OS tools; Shell for Unix-only tools.
 
 Jean-François Larvoire
-jf.larvoire@hpe.com
-2020-04-20
+jf.larvoire@free.fr
+2023-01-10
 
 
 Installation

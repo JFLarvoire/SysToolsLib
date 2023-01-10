@@ -544,7 +544,7 @@ err_unexpected_arg:
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
-  puts( /* Don't use printf(), or if you need to, split the string in halves,
+  fputs( /* Don't use printf(), or if you need to, split the string in halves,
            to avoid passing the 1KB limit of the BiosLib printf() */
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
@@ -589,18 +589,16 @@ Optional switches:\n\
     Or FEAT = A feature set name, based on the processor alias names and\n\
     corresponding instruction sets in the GCC documentation page:\n\
     https://gcc.gnu.org/onlinedocs/gcc/gcc-command-options/machine-dependent-options/x86-options.html\n\
-    Use option -ls to list the supported feature sets\n\
-\n"
+    Use option -ls to list the supported feature sets\n"
 #if defined(_WIN32)
-"\
+"\n\
 (2) WMI Win32_Processor properties can be listed by running in a cmd shell:\n\
     wmic cpu get * /format:list\n\
     or in PowerShell:\n\
-    Get-WmiObject Win32_Processor | fl *\n\
-\n"
+    Get-WmiObject Win32_Processor | fl *\n"
 #endif
-"\
-Author: Jean-Francois Larvoire - jf.larvoire@free.fr");
+#include "footnote.h"
+, stdout);
   exit(0);
 }
 

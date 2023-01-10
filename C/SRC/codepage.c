@@ -573,8 +573,9 @@ Sample code page numbers:\n\
 Note that code pages other than 437 require cmd.exe using a TrueType font.\n\
 The cmd.exe raster font only supports code page 437.\n\
 \n\
-Author: Jean-Fran%sois Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-", szCCedilla);
+Author: Jean-Fran%sois Larvoire - jf.larvoire@free.fr\n\
+Sources and updates: https://github.com/JFLarvoire/SysToolsLib\n"
+, szCCedilla);
 
   exit(0);
 }

@@ -605,11 +605,8 @@ Options:\n\
   -=|-same         Output file = Input file\n\
   -setup {file}    Output the given setup file first. Default: None\n\
   -wcol n          Column width. Default: 80\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
   exit(1);
 }

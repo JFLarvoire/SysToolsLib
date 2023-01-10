@@ -256,16 +256,8 @@ Options:\n\
   -q            Quiet mode: Do not report minor issues.\n\
   -s {name}     Search where name is #defined, and display the definition.\n\
   -v            Display verbose information during search.\n\
-\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
 
   exit(iRetCode);

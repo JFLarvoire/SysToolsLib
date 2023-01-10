@@ -841,18 +841,7 @@ Note: Relative junction targets can be read and set reliably on local drives,\n\
       Once found, store that path into \\\\SERVER\\SHARE\\_Base_Path.txt,\n\
       so that it can then be read by rule #2.\n"
 #endif
-"\
-\n\
-"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+#include "footnote.h"
 );
 
     do_exit(0);

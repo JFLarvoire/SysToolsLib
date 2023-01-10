@@ -240,9 +240,9 @@ Notes:\n\
     Small sizes should be good, but large sizes are more likely to be wrong.\n\
 (2) The Weight value is not reliable in some versions of Windows.\n\
     Normally: 400=normal weight, 700=bold\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n\
-");
+"
+#include "footnote.h"
+);
   exit(0);
 }
 

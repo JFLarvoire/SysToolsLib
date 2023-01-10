@@ -619,9 +619,9 @@ Options:\n\
 							")\n\
   -v      Verbose mode. Like -l, plus comments about non-eligible programs.\n\
   -V      Display this program version and exit.\n\
-\n"
+"
 #if defined(_WIN32)
-"\
+"\n\
 (1) In cmd.exe, this requires defining a doskey macro for which itself:\n\
     doskey /macros which=^(help ^& doskey /macros^) ^| which.exe -i $*\n\
     Use an AutoRun script to automate that definition everytime cmd.exe starts.\n\
@@ -643,17 +643,9 @@ Notes:\n\
   Option -s uses a child shell to seach for internal commands. It is\n\
   recommended to use option -i instead, as -i runs much faster, and it\n\
   returns functions and aliases for the current shell, not the child's.\n\
-\n"
+"
 #endif
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+#include "footnote.h"
 );
 
   exit(0);

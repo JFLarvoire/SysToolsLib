@@ -275,11 +275,8 @@ Switches:\n\
   -v          Output verbose information\n\
   -V          Display this program version and exit\n\
   -X          NoExec mode: Display what would be deleted, but don't do it\n\
-\n\
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 ,
 #ifdef _UNIX
   progcmd

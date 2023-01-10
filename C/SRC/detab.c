@@ -171,7 +171,8 @@ Arguments:\n\
   OUTFILE  Output file pathname. Default or \"-\": stdout\n\
   N        Number of columns between tab stops. Default: 8\n\
 \n\
-Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n"
+Authors: Michael Burton, Jack Wright, Jean-François Larvoire\n\
+Sources and updates: https://github.com/JFLarvoire/SysToolsLib\n"
 #ifdef _UNIX
 "\n"
 #endif

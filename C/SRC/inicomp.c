@@ -1050,16 +1050,8 @@ Switches:\n\
   -V    Display this program version and exit\n\
 \n\
 Note: Also usable for .reg files, used by Windows' regedit.exe\n\
-\n"
-#ifdef _MSDOS
-"Author: Jean-Francois Larvoire"
-#else
-"Author: Jean-François Larvoire"
-#endif
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
-#ifdef _UNIX
-"\n"
-#endif
+"
+#include "footnote.h"
 );
     exit(0);
     }

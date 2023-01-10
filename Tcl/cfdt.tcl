@@ -371,7 +371,8 @@ Default date: today
 Default time: 00:00:00
 The time can also be formatted as 01h02m03s
 
-Author: Jean-François Larvoire - jf.larvoire@hpe.com or jf.larvoire@free.fr
+Author: Jean-François Larvoire - jf.larvoire@free.fr
+Sources and updates: https://github.com/JFLarvoire/SysToolsLib
 }]
 
 # Process arguments

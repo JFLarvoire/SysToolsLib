@@ -285,9 +285,8 @@ Switches:\n\
 Default input encoding: UTF-8 or UTF-16 if valid; Else for data coming through\n\
 a pipe the current console code page (Code page %u); Else for files the Windows\n\
 System Code Page (Code page %u).\n\
-\n"
-"Author: Jean-François Larvoire"
-" - jf.larvoire@hpe.com or jf.larvoire@free.fr\n"
+"
+#include "footnote.h"
 , cpANSI, cpOEM, cpCurrent, cpANSI);
 
   return;
