@@ -102,6 +102,7 @@
 *		    targets aren't always executable directly. Version 1.16.1.*
 *    2021-11-29 JFL Renamed MsvcLibX's GetReparseTag() as MlxGetReparseTag(). *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.16.2.		      *
+*    2023-01-10 JFL Corrected the help message for Unix. Version 1.16.3.      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -109,8 +110,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
-#define PROGRAM_VERSION "1.16.2"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.16.3"
+#define PROGRAM_DATE    "2023-01-10"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -602,8 +603,20 @@ Options:\n\
 #endif
 "\
   -l      Long mode. Also display programs time, and links target.\n\
-  -s      Search for the shell internal commands first. (Deprecated, prefer -i)\n\
-  -S      Do not search for the shell internal commands. (Faster, default)\n\
+  -s      Search for the shell internal commands first. ("
+#if defined(_MSDOS) || defined(_WIN32)
+							"Deprecated, prefer -i"
+#elif defined(_UNIX)
+							"Default"
+#endif
+							")\n\
+  -S      Do not search for the shell internal commands. ("
+#if defined(_MSDOS) || defined(_WIN32)
+							"Faster, default"
+#elif defined(_UNIX)
+							"Faster"
+#endif
+							")\n\
   -v      Verbose mode. Like -l, plus comments about non-eligible programs.\n\
   -V      Display this program version and exit.\n\
 \n"
