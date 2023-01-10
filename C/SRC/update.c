@@ -184,6 +184,8 @@
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.13.3.		      *
 *    2022-12-26 JFL Skip Thumbs.db files in Windows. Version 3.14.	      *
 *    2023-01-09 JFL Fixed debug builds in MacOS. No change in any other OS.   *
+*    2023-01-10 JFL Changed -R to always display the modification done.       *
+*                   Version 3.14.1.					      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -191,8 +193,8 @@
 
 #define PROGRAM_DESCRIPTION "Update files based on their time stamps"
 #define PROGRAM_NAME    "update"
-#define PROGRAM_VERSION "3.14"
-#define PROGRAM_DATE    "2023-01-09"
+#define PROGRAM_VERSION "3.14.1"
+#define PROGRAM_DATE    "2023-01-10"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1252,7 +1254,7 @@ int update(char *p1,	/* Both names must be complete, without wildcards */
 	  jour = pTime->tm_mday;
 	  mois = pTime->tm_mon + 1;
 	  an = pTime->tm_year + 1900;
-	  if (iVerbose) {
+	  if (show != SHOW_NONE) {
 	    if (show == SHOW_COMMAND) printf("cfdt ");
 	    printf("%04d-%02d-%02d %02d:%02d:%02d", an, mois, jour, heure, minute, seconde);
 	    printf(show == SHOW_COMMAND ? " \"" : " -> ");
