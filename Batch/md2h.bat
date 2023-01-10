@@ -24,13 +24,14 @@
 :#   2020-07-03 JFL Added options -c & -t to select the github server to use. #
 :#		    Added option -t to use an authentication token.           #
 :#		    Added option -s to use a given github server API URL.     #
+:#   2023-01-10 JFL Fixed a potential issue with a `for /f` command.          #
 :#		                                                              #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2020-07-03"
+set "VERSION=2023-01-10"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -180,7 +181,7 @@ echo # Converting %NXMD% using %SERVER%
 :# Load the authentication token from "%USERPROFILE%\.config\md2h\%SERVER%.txt" if present
 if not defined TOKEN (
   for %%f in ("%USERPROFILE%\.config\md2h\%SERVER%.txt") do if exist %%f (
-    for /f "delims=" %%t in (%%~sf) do set "TOKEN=%%~t"
+    for /f "usebackq delims=" %%t in ("%%~f") do set "TOKEN=%%~t"
   )
 )
 
