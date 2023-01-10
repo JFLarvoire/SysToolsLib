@@ -8,8 +8,10 @@ Batch\82w.bat
 Batch\a2u.bat
 Batch\AddPaths.bat
 Batch\AutoRun.cmd
+Batch\AutoRun.cmd.d\default.lst
 Batch\AutoRun.cmd.d\history.bat
 Batch\AutoRun.cmd.d\pid.bat
+Batch\AutoRun.cmd.d\README.md
 Batch\AutoRun.cmd.d\which.cmd
 Batch\CheckEOL.bat
 Batch\DIRCC.BAT
