@@ -22,8 +22,8 @@
 #define	_STVERSION_H	1
 
 
-#define SYSTOOLSLIB_VERSION         2022,2,25,0
-#define SYSTOOLSLIB_VERSION_STR     "2022-02-25"
+#define SYSTOOLSLIB_VERSION         2023,1,10,0
+#define SYSTOOLSLIB_VERSION_STR     "2023-01-10"
 #define SYSTOOLSLIB_NAME            "System Tools Library"
 
 
