@@ -4,6 +4,61 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.22] 2023-01-10
+### New
+- in.exe version 1.0: New `in` program, to execute a command in a given directory, then come back.
+- with.exe version 1.0: New `with` program, to execute a command with specific environment variables.
+- echoargs: Unix script, equivalent to Windows' echoargs.bat and echoargs.ps1, to display a list of arguments.
+
+### Fixed
+- Window.ps1: Fixed the -OnTop operation, which failed to move some Explorer windows to the foreground.
+- update.exe: Make sure the -R option displays the timestamp changes done.
+- Which.exe: Corrected the help message in the Unix version.
+- C/SysLib/oprintf.h: Fixed oprintf compilation in FreeBSD.
+- *.exe, cfdt.tcl, umountw.bat: Removed my old HPE email address in all help messages, and factored-out the info.
+- autorun.cmd: Fixed the installation with option -i from a SysToolsLib.zip distribution.
+- md2h.bat: Fixed the same issue as in autorun.cmd with a `for /f` command.
+
+## [Unreleased] 2022-12-31
+### Changed
+- update.exe version 3.14: Skip Thumbs.db files in Windows.
+- cfdt.tcl: Changed the default --m2n name prefix separator from "_" to " ".
+
+### Fixed
+- AddPaths.bat: Fixed the operation when installed in C:\Program Files.
+
+## [Unreleased] 2022-12-12
+### New
+- C/MsvcLibX: Added routine getline().
+- C/include/valueize.mak: Convert a macro to its current value, working around the absence of NAME:=VALUE
+  simply expanded macro definitions in nmake.
+
+### Changed
+- trim.exe version 2.1.4: Removed the line size limitation.
+- whichinc.exe version 1.4.1: Removed the line size limitation.
+- zap.exe version 1.6.1: Removed the piped input line size limit.
+- deffeed.exe version 3.0.3: Removed the input line size limitation. But the output line sie is still limited to 256 characters.
+
+### Fixed
+- C/MsvcLibX/include/limits.h: Make sure SIZE_MAX & SSIZE_MAX are always defined.
+- C/include/dos.mak, lodos.mak, bios.mak: Fixed lots of issues with the DOS, LODOS, and BIOS builds.
+
+## [Unreleased] 2022-12-01
+### New
+- C/MsvcLibX: Added routines setenv.c() & unsetenv().
+
+### Changed
+- whichinc.exe version 1.4:  
+  Search the next include file when finding an MsvcLibX MSVC_INCLUDE_FILE() or UCRT_INCLUDE_FILE() macro.  
+  Added option -q to avoid displaying minor errors, etc.  
+  Display less information by default, and move the rest to the verbose and debug modes.
+  Make sure all paths are displayed with \ in DOS/Windows.
+- macros.cpp: Added (but left compiled-out) an experiment on how to display macro values at compile time.
+
+## [Unreleased] 2022-11-30
+### Changed
+- C/*: Numerous tweaks and fixes for BIOS/LODOS/DOS builds compatibility.
+
 ## [Unreleased] 2022-11-27
 ### Changed
 - zap.exe: Added the ability to get the list of pathnames to delete from stdin.
@@ -13,7 +68,10 @@ For more details about changes in a particular area, see the README.txt and/or N
   libraries. The advantage compared to pure BiosLib-based program (ie. MINICOM programs) is that the standard output
   can be redirected.
 - C/include, C/BiosLib, C/LoDosLib: Many changes and additions to support generating BIOS, LODOS, and DOS versions of
-  the same program without conditional compilations in its source.
+  the same program without conditional compilations in its source.  
+  Low Dos builds (previously called minicoms) also are builds for MS-DOS, but only using the LoDosLib & BiosLib libraries.  
+  This allows building smaller executables for DOS, when size is critical, for example on floppy disks.  
+  This also allows building DOS device drivers and TSRs, which are incompatible with the MS C library for DOS.
 
 ### Fixed
 - cpuid.exe: Fixed the DOS version output which could not be redirected, by making sure it actually builds as a LODOS app.
@@ -76,6 +134,11 @@ For more details about changes in a particular area, see the README.txt and/or N
   Added option -s to get the clipboard data size.  
   Added option -L to get the clipboard text locale.  
   Added a workaround for an Excel bug, where putting more than 16 KB (8K WCHARs) into the clipboard returned only 8K Unicode chars.
+
+### Fixed
+- 2note2.bat: Fix hangs with clipboard contents > 4KB.
+  Added option -p to revert to using a pipe if desired.
+  Added option -d to enable debugging on the command line.
 
 ## [Unreleased] 2022-06-27
 ### Changed
