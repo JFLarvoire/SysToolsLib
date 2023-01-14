@@ -149,7 +149,7 @@ INCPATH=$(INCPATH);$(SYSLIB)
 LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\LIB
 LIBS=$(LIBS) + syslib$(LSX).lib
 !ELSE # Use the initial $(T)-specific syslib.lib in $(OUTDIR)\$(T)$(DS)\BIN\T
-LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\$(T)$(DS)\BIN\T
+LIBPATH=$(LIBPATH);$(SYSLIB)\$(OUTDIR)\$(T)$(DS)\T
 LIBS=$(LIBS) + syslib.lib
 !ENDIF
 !ENDIF

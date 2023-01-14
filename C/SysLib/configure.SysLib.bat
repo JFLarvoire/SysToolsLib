@@ -22,6 +22,7 @@
 :#   2016-11-16 JFL Allow using a predefined alias for this lib base path.    *
 :#   2016-12-16 JFL Only use setx if requested by user, with PERSISTENT_VARS. *
 :#   2017-03-12 JFL Don't automatically set the SYSLIB variable.              *
+:#   2023-01-14 JFL Added library dependencies for BIOS & LODOS builds.       *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -33,7 +34,9 @@ if not defined SYSLIB set "SYSLIB=%CD%" &:# Default: Use the current directory
 
 :# Declare the SDKs and libraries we need
 %BEGIN_SDK_DEFS%
-%USE_SDK% MSVCLIBX
+%USE_SDK% BIOSLIB &:# Used for building OS=BIOS
+%USE_SDK% LODOSLIB &:# Used for building OS=LODOS
+%USE_SDK% MSVCLIBX &:# Used for building OS=DOS, and all Windows flavors
 %USE_SDK% GNUEFI
 if defined VC95.CC %USE_SDK% 98DDK &:# We only need it for building for Windows95
 if defined VC16.CC %USE_SDK% LMPTK &:# We only need it for building for DOS
