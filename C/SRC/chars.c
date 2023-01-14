@@ -25,6 +25,7 @@
 *    2020-04-19 JFL Added support for MacOS. Version 1.5.                     *
 *    2022-02-01 JFL Prevent a misalignment in Windows Terminal. Version 1.6.  *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.6.1.		      *
+*    2023-01-14 JFL Allow building BIOS & LODOS versions. Version 1.6.2.      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,15 +33,14 @@
 
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.6.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.6.2"
+#define PROGRAM_DATE    "2023-01-14"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 /************************ Win32-specific definitions *************************/
 
@@ -49,7 +49,8 @@
 #include <windows.h>
 
 #include <io.h>		/* For _setmode() */
-#include <fcntl.h>  
+#include <fcntl.h>	/* For _O_BINARY */
+#include <unistd.h>	/* For getpid() */
 
 #define EOL "\r\n"
 
@@ -62,7 +63,9 @@
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
 #include <io.h>		/* For _setmode() */
-#include <fcntl.h>  
+#if !(defined(_BIOS) || defined(_LODOS))
+#include <fcntl.h>	/* For _O_BINARY */
+#endif
 
 #define EOL "\r\n"
 
@@ -94,6 +97,14 @@
 
 /********************** End of OS-specific definitions ***********************/
 
+#ifndef CDECL
+#ifdef _MSC_VER
+#define CDECL _cdecl /* LODOS builds generate a warning if main() does not specify this */
+#else
+#define CDECL
+#endif
+#endif
+
 /* SysToolsLib include files */
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -109,7 +120,7 @@ int ToUtf8(unsigned int c, char *b);
 int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname);
 #endif
 
-int main(int argc, char *argv[]) {
+int CDECL main(int argc, char *argv[]) {
   int i, j;
 #ifdef _WIN32
   unsigned uCP = 0;
@@ -223,7 +234,7 @@ int main(int argc, char *argv[]) {
   } else if (iVerbose) printf("Active code page: %d\n", uCP0);
 #endif /* defined(_WIN32) */
 
-#if defined(_MSDOS) || defined(_WIN32)
+#if defined(_WIN32) || (defined(_MSDOS) && !(defined(_BIOS) || defined(_LODOS)))
   fflush(stdout); /* Make sure any previous output is done in text mode */
   _setmode( _fileno( stdout ), _O_BINARY );
 #endif
@@ -311,7 +322,11 @@ int main(int argc, char *argv[]) {
 #endif /* SUPPORTS_UTF8 */
 	{
 	  printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
-	  fwrite(&l, 1, 1, stdout);
+#ifndef _BIOS
+	  fwrite(&l, 1, 1, stdout); /* Hopefully fwrite() does not do any text conversion */
+#else
+	  putchar((char)l); /* BIOSLIB's putchar() uses the BIOS int 10H */
+#endif
 	}
       }
       printf(EOL);
