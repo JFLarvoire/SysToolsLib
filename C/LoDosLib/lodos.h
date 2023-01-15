@@ -59,9 +59,43 @@ extern "C" {
 
 #pragma warning(disable:4209)	/* Ignore the benign typedef redefinition warning */
 typedef unsigned char	BYTE;	/* 8 bits unsigned character */
-typedef unsigned short  WORD;   /* 16-bit unsigne dvalue */
+typedef unsigned short  WORD;   /* 16-bit unsigned integer */
 typedef unsigned long   DWORD;  /* 32-bit unsigned integer */
 #pragma warning(default:4209)	/* Restore the benign typedef redefinition warning */
+
+#ifndef _REGS_DEFINED
+#define _REGS_DEFINED
+
+struct WORDREGS {
+  WORD ax;
+  WORD bx;
+  WORD cx;
+  WORD dx;
+  WORD si;
+  WORD di;
+  WORD cflag;
+};
+
+struct BYTEREGS {
+  BYTE al, ah;
+  BYTE bl, bh;
+  BYTE cl, ch;
+  BYTE dl, dh;
+};
+
+union REGS {
+  struct WORDREGS x;
+  struct BYTEREGS h;
+};
+
+struct SREGS {
+  WORD es;
+  WORD cs;
+  WORD ss;
+  WORD ds;
+};
+
+#endif 
 
 /*****************************************************************************/
 /*									     */
@@ -91,6 +125,7 @@ extern int _cdecl AbsDiskWrite(int iDrive, DWORD dwFirstSeg, WORD wNumSeg,
 /* bdos.asm */
 #if USE_LODOS_CLIB
 extern int _fastcall _bdos(int iFunc, WORD wDX, BYTE bAL);
+extern int _cdecl _intdos(union REGS *inregs, union REGS *outregs);
 #endif
 #define _dos_resetdrives() _bdos(0x0D, 0, 0)
 

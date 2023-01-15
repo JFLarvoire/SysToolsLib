@@ -232,6 +232,7 @@ SOURCES = \
     getvmid.asm		\
     getvmmv.asm		\
     getvxdep.asm	\
+    intdos.asm		\
     ioctldr.c		\
     lockvol.c		\
     lseek.asm		\
@@ -361,6 +362,8 @@ $(S)\getvmid.asm:
 $(S)\getvmmv.asm:
 
 $(S)\getvxdep.asm:  $(N)\adefine.inc
+
+$(S)\intdos.asm:    dos.inc $(N)\adefine.inc
 
 $(S)\ioctldr.c:     msdos.h lodos.h
 
