@@ -290,6 +290,11 @@ extern void far * _fastcall GetVxdEntryPoint(WORD wID);
 extern int _cdecl IoctlDiskRead(WORD iDrive, WORD iCyl, WORD iHead,
 			 WORD iSect, WORD n, void far *lpcBuffer);
 
+/* isatty.c */
+#if USE_LODOS_CLIB
+extern int _fastcall isatty(int iFile);
+#endif
+
 /* lockvol.c */
 extern int LODOSLIBCCC LockLogicalVolume(int iDrive, WORD wLockLevel, WORD wPermissions);
 extern int LODOSLIBCCC UnlockLogicalVolume(int iDrive);

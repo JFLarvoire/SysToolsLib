@@ -234,6 +234,7 @@ SOURCES = \
     getvxdep.asm	\
     intdos.asm		\
     ioctldr.c		\
+    isatty.asm		\
     lockvol.c		\
     lseek.asm		\
     nchkstk.asm		\
@@ -366,6 +367,8 @@ $(S)\getvxdep.asm:  $(N)\adefine.inc
 $(S)\intdos.asm:    dos.inc $(N)\adefine.inc
 
 $(S)\ioctldr.c:     msdos.h lodos.h
+
+$(S)\isatty.asm:    dos.inc $(N)\adefine.inc
 
 $(S)\lockvol.c:     lodos.h
 
