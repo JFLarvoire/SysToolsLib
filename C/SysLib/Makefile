@@ -1,4 +1,4 @@
-###############################################################################
+############################## :encoding=UTF-8: ###############################
 #                                                                             #
 #  File name        Makefile                                                  #
 #                                                                             #
@@ -24,8 +24,11 @@
 #    2020-11-18 JFL Disable diagnostics carets for gcc and clang that have it.#
 #    2020-11-21 JFL Avoid displaying entering/leaving directory for same dir. #
 #    2021-11-08 JFL Define C macro HAS_SYSLIB.				      #
+#    2023-01-18 JFL Added a configuration step generating a config.h file.    #
+#                   Fixed a bug which cause partial builds to _not_ replace   #
+#                   the modified objects in the library.                      #
 #                                                                             #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
@@ -104,7 +107,7 @@ ifdef OUTDIR
   ifneq "$(OUTDIR)" "."
     OD := $(OUTDIR)/
   else
-    OD := 
+    OD :=
   endif
 else
   OD := bin/
@@ -124,6 +127,7 @@ OSP := $(OSPN)
 endif
 # Sources path
 SP = .
+IP = $(OSPN)/INC
 # Objects path
 OP = $(OSP)/OBJ
 OPN = $(OSPN)/OBJ
@@ -143,7 +147,7 @@ B = $(XP)
 # Define compiler and linker flags
 CFLAGS = -std=c99 -pthread -Wall
 CXXFLAGS =        -pthread -Wall
-LFLAGS = 
+LFLAGS =
 LDLIBS = -ltermcap
 CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
 
@@ -166,7 +170,7 @@ ifndef CC_NOCARET_OPT
       CC_NOCARET_OPT := -fno-diagnostics-show-caret # -ftrack-macro-expansion=0
     else
       # $(info gcc is older than $(GCC_MIN_VER))
-      CC_NOCARET_OPT := 
+      CC_NOCARET_OPT :=
     endif
   else ifeq "$(CC_NAME)" "clang"
     CLANG_MIN_VER := 40000 # 4.0.0 (Actually it may have been there in earlier versions)
@@ -174,7 +178,7 @@ ifndef CC_NOCARET_OPT
     CC_NOCARET_OPT := -fno-caret-diagnostics # -Wno-\#pragma-messages
   else
     $(warning Unidentified compiler: "$(CC_NAME)")
-    CC_NOCARET_OPT := 
+    CC_NOCARET_OPT :=
   endif
 endif
 export CC_NOCARET_OPT
@@ -182,6 +186,10 @@ ifneq "$(CC_NOCARET_OPT)" ""
   CFLAGS   += $(CC_NOCARET_OPT)
   CXXFLAGS += $(CC_NOCARET_OPT)
 endif
+
+# Add the path to the system-specific config.h
+CFLAGS := $(CFLAGS) -I $(IP)
+CXXFLAGS := $(CXXFLAGS) -I $(IP)
 
 # Add the path to SysToolsLib global include files
 ifdef STINCLUDE
@@ -299,7 +307,7 @@ testmak:
 	echo "exec_prefix = $(exec_prefix)"
 	echo "bindir = $(bindir)"
 
-# Load $(PROGRAM).mak or Files.mak if possible 
+# Load $(PROGRAM).mak or Files.mak if possible
 ifdef PROGRAM
   program_mak := $(shell find . -maxdepth 1 -type f -iname $(PROGRAM).mak)
   ifneq "$(program_mak)" ""
@@ -307,7 +315,7 @@ ifdef PROGRAM
     # Source files and dependancies for this program. Defines macros SOURCES and PROGRAM.
     # include $(program_mak) # Do not include for now, due to make/nmake incompatibibities
   else
-    # $(info No $(PROGRAM).mak available) 
+    # $(info No $(PROGRAM).mak available)
   endif
 else
   files_mak := $(shell find . -maxdepth 1 -type f -iname files.mak)
@@ -326,19 +334,34 @@ else
       OBJECTS := $(subst +,,$(OBJECTS))
     endif
   else
-    # $(info No files.mak available) 
+    # $(info No files.mak available)
   endif
 endif
 
 # Create output directories
-.PHONY: dirs ddirs
-dirs: $(XPN) $(OPN) $(LPN)
+.PHONY: dirs ddirs files
+dirs: $(XPN) $(OPN) $(LPN) $(IP) files
 
-ddirs: $(XPD) $(OPD) $(LPD)
+ddirs: $(XPD) $(OPD) $(LPD) $(IP) files
 
-$(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
+$(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD) $(IP):
 	$(info Creating directory $@)
 	mkdir -p $@
+
+files: $(IP)/config.h
+
+$(IP)/config.h: Makefile configure
+	echo "Configuring ..."
+	$(MAKE) -$(QMAKEFLAGS) mostlyclean # Force rebuilding everything thereafter
+	chmod +x configure # Sources are installed without execution rights
+	./configure -q
+	echo " ... done"
+
+# Manage the dialog with the ./configure script
+.PHONY: config_dir
+config_dir: # Tell it where to store config.h
+	mkdir -p $(IP) # Silently create it if not done already
+	echo $(IP)
 
 # Place holder for build results self test
 .PHONY: check
@@ -356,7 +379,7 @@ checkenv:
 # How to rebuild all targets
 .PHONY: lib libSysLib SysLib libsyslib syslib
 _DEBUG :=
-lib libSysLib libsyslib SysLib syslib: checkenv
+lib libSysLib libsyslib SysLib syslib: checkenv $(IP)/config.h
 	$(MAKE) -$(QMAKEFLAGS)            $(OSPN)/libSysLib.a
 	$(MAKE) -$(QMAKEFLAGS) "_DEBUG=1" $(OSPD)/libSysLib.a
 	echo "All SysLib library versions built."
@@ -364,7 +387,7 @@ lib libSysLib libsyslib SysLib syslib: checkenv
 $(OSP)/libSysLib.a: $(OBJECTS)
 	$(MAKE) -$(QMAKEFLAGS) dirs
 	echo "Building $@ ..."
-	$(AR) -cvq $@ $? || $(REPORT_FAILURE)
+	$(AR) -cvr $@ $? || $(REPORT_FAILURE)
 	echo " ... $@ done"
 
 # How to install all programs built above
@@ -376,22 +399,24 @@ install:
 	  $(DO) cp -p $$PWD/$(XP)/$$exe $(bindir)/$$dest ; \
 	done
 
-
 # Cleanup all
-.PHONY: clean
-clean:
+.PHONY: clean mostlyclean
+mostlyclean:
 	-$(RM) $(OPD)/* >/dev/null 2>&1
-	-rmdir $(OPD)   >/dev/null 2>&1
 	-$(RM) $(LPD)/* >/dev/null 2>&1
-	-rmdir $(LPD)   >/dev/null 2>&1
 	-$(RM) $(XPD)/* >/dev/null 2>&1
-	-rmdir $(XPD)   >/dev/null 2>&1
 	-$(RM) $(OPN)/* >/dev/null 2>&1
-	-rmdir $(OPN)   >/dev/null 2>&1
 	-$(RM) $(LPN)/* >/dev/null 2>&1
-	-rmdir $(LPN)   >/dev/null 2>&1
 	-$(RM) $(XPN)/* >/dev/null 2>&1
+
+clean: mostlyclean
+	-rmdir $(OPD)   >/dev/null 2>&1
+	-rmdir $(LPD)   >/dev/null 2>&1
+	-rmdir $(XPD)   >/dev/null 2>&1
+	-rmdir $(OPN)   >/dev/null 2>&1
+	-rmdir $(LPN)   >/dev/null 2>&1
 	-rmdir $(XPN)   >/dev/null 2>&1
+	-$(RM) *.log    >/dev/null 2>&1
 	-$(RM) *.log    >/dev/null 2>&1
 
 define HELP

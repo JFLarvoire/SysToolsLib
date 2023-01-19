@@ -40,7 +40,8 @@ if not defined SYSLIB set "SYSLIB=%CD%" &:# Default: Use the current directory
 %USE_SDK% GNUEFI
 if defined VC95.CC %USE_SDK% 98DDK &:# We only need it for building for Windows95
 if defined VC16.CC %USE_SDK% LMPTK &:# We only need it for building for DOS
-%USE_SDK% SYSLIB &:# Triggers the emission of a %CONFIG% record for SYSLIB itself
+:# %USE_SDK% SYSLIB &:# Triggers the emission of a %CONFIG% record for SYSLIB itself
+%THIS_SDK% SYSLIB &:# We want the HAS_SYSLIB definition, but not yet another path in the INCLUDE variable 
 %END_SDK_DEFS%
 
 :# Set the local environment variable just before make exits, so that future commands in this CMD window have it.

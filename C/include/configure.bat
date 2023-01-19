@@ -63,6 +63,15 @@
 :#                  %USE_SDK% LODOSLIB                                        *
 :#                  %END_SDK_DEFS%                                            *
 :#                                                                            *
+:#                  When building an SDK that may have references to itself,  *
+:#                  the use the %THIS_SDK% macro once. Ex:                    *
+:#                                                                            *
+:#                  %BEGIN_SDK_DEFS%                                          *
+:#                  %THIS_SDK% SYSLIB                                         *
+:#                  %USE_SDK% MSVCLIBX                                        *
+:#                  ...                                                       *
+:#                  %END_SDK_DEFS%                                            *
+:#                                                                            *
 :#                  It's possible to override the default location for these  *
 :#                  SDKs by defining your own path in a configure.USER.bat.   *
 :#                  Example:                                                  *
@@ -196,13 +205,14 @@
 :#   2020-06-30 JFL Added the 7-Zip LZMA SDK to the list of known SDKs.       *
 :#   2021-11-16 JFL Added support for Visual Studio 17/2022.                  *
 :#   2022-06-21 JFL Changed the STINCLUDE detect file from debugm.h to all.mak.
+:#   2023-01-16 JFL Added %THIS_SDK% and THIS_SDK_LIST to put in config.h.    *
 :#                                                                            *
 :#      © Copyright 2016-2020 Hewlett Packard Enterprise Development LP       *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2022-06-21"
+set "VERSION=2023-01-16"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set  "ARG0=%~f0"				&:# Script full pathname
@@ -2226,6 +2236,11 @@ set USE_SDK=%MACRO% ( %\n%
 ) %/MACRO%
 %IF_DEBUG% set USE_SDK &:# Display the macro, for debugging changes
 
+:# Define the name of the current SDK being built here
+set "THIS_SDK_LIST="
+set "THIS_SDK=set THIS_SDK_LIST="`
+%IF_DEBUG% set THIS_SDK &:# Display the macro, for debugging changes
+
 :# Define a series of commands, separated by &, to run further down before generating the main sections of config.h
 set "¡¡=¡¡¡¡" &:# Use %¡¡% (Two inverted exclamation marks - Required for DBCS languages) instead of ! for declaring delayed expansion variables
 set "POST_CONFIG_ACTIONS="
@@ -2347,6 +2362,7 @@ for %%d in ("%windir%" "%HOME%" ".") do (
 :# Search for the requested SDKs in the specified dir, then the default install dir, then in other likely places
 %CONFIG%.
 set "HAS_SDK_FLAGS="
+set "HAS_SDK_LIST="
 if defined SDK_LIST for %%v in (%SDK_LIST%) do (
   set "DIR=%%v"
   if defined SDK.%%v.DIR set "DIR=!SDK.%%v.DIR!"
@@ -2389,6 +2405,7 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
   )
   if defined HAS_%%v (
     set "HAS_SDK_FLAGS=!HAS_SDK_FLAGS! /DHAS_%%v=1"
+    set "HAS_SDK_LIST=!HAS_SDK_LIST! HAS_%%v"
     %CONFIG% set "HAS_%%v=1" ^&:# Found the !SDK.%%v.NAME!
     %CONFIG% set "%%v=!%%v!" ^&:# !SDK.%%v.NAME!
   ) else (
@@ -2396,8 +2413,14 @@ if defined SDK_LIST for %%v in (%SDK_LIST%) do (
     %CONFIG% set "%%v="
   )
 )
+if defined THIS_SDK_LIST for %%v in (%THIS_SDK_LIST%) do (
+  set "HAS_SDK_FLAGS=!HAS_SDK_FLAGS! /DHAS_%%v=1"
+  set "HAS_SDK_LIST=!HAS_SDK_LIST! HAS_%%v"
+)
 if defined HAS_SDK_FLAGS set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS:~1%"
+if defined HAS_SDK_LIST set "HAS_SDK_LIST=%HAS_SDK_LIST:~1%"
 %CONFIG% set "HAS_SDK_FLAGS=%HAS_SDK_FLAGS%" ^&:# SDK detection flags for the C compiler
+%CONFIG% set "HAS_SDK_LIST=%HAS_SDK_LIST%" ^&:# SDK detection list for the C compiler
 
 :# Libraries we build may optionally be output in a subdirectory
 if not defined OUTDIR (

@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+#***************************** :encoding=UTF-8: ******************************#
+#                                                                             #
+#  Filename:	    configure						      #
+#                                                                             #
+#  Description:     Prepare the environment for making the SysLib library     #
+#                                                                             #
+#  Notes:	    Creates config.h with development OS information.         #
+#                                                                             #
+#  History:                                                                   #
+#    2023-01-18 JFL Created this script.                                      #
+#                                                                             #
+#                   © Copyright 2023 Jean-François Larvoire                   #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+#*****************************************************************************#
+
+# Global variables
+VERSION="2023-01-18"
+
+VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+
+# Helper routines to test verbosity levels
+Normal() {
+  [[ $VERBOSITY > 0 ]]
+}
+Verbose() {
+  [[ $VERBOSITY > 1 ]]
+}
+Debug() {
+  [[ $VERBOSITY > 2 ]]
+}
+
+# Display a string in normal mode
+EchoN() { # $*=echo arguments
+  if Normal ; then
+    echo "$@"
+  fi
+}
+
+# Display a string in verbose mode
+EchoV() { # $*=echo arguments
+  if Verbose ; then
+    echo "$@"
+  fi
+}
+
+# Command line analysis
+case "$1" in
+  -d|--debug)
+    VERBOSITY=$(expr $VERBOSITY + 2)
+  ;;
+  -h | --help | "-?")
+    echo "Prepare the environment for making the SysLib library"
+    echo "Usage: ./configure [-v]"
+    exit 0
+  ;;
+  -q | --quiet)
+    VERBOSITY=0
+  ;;
+  -v | --verbose)
+    VERBOSITY=$(expr $VERBOSITY + 1)
+  ;;
+  -V | --version)
+    echo $VERSION
+    exit 0
+  ;;
+esac
+
+# Send cc output to /dev/null, except in debug mode
+if Debug ; then
+  exec 6>&1
+else
+  exec 6>/dev/null
+fi
+
+# Make sure that MsvcLibX/include is NOT accessible
+EchoV "Making sure that MsvcLibX/include is NOT accessible"
+cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include <stdio.h> /* This will include MsvcLibX' stdio.h if it's in the same dir as debugm.h, and it'll fail to compile in Linux */
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -ne 0 ] ; then
+  echo>&2 Error: You must not put MsvcLibX/include in your C_INCLUDE_PATH. Copy debugm.h alone to another directory and export that one.
+  exit 1
+fi
+EchoV "OK"
+
+# Make sure that the SysToolsLib global include directory is accessible
+EchoV "Making sure that the SysToolsLib global include directory is accessible"
+CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include "debugm.h"
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -ne 0 ] ; then # It's not accessible
+  if [ -r ../include/debugm.h ] ; then
+    STINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
+  else
+    >&2 echo "Error: Please set STINCLUDE with the pathname of SysToolsLib's global include directory"
+    exit 1
+  fi
+fi
+EchoV "OK      STINCLUDE=$STINCLUDE"
+
+# Recreate the config.h file
+MAKE=$(which gmake || which make)
+EchoV "MAKE = $MAKE"
+CONFIG_H=$($MAKE config_dir)/config.h
+EchoV "config.h = $CONFIG_H"
+rm $CONFIG_H 2>/dev/null
+
+# Check if the termcap development library is available
+# Termcap is part of the libncurses5-dev package. Ex: install with:
+#  sudo apt-get install libncurses5-dev
+CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include <termios.h>
+#include <termcap.h>
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -eq 0 ] ; then # It is installed
+  HAS_TERMCAP=1
+else # It's not installed
+  HAS_TERMCAP=0
+  cat <<EOF
+Warning: the termcap development library is not available.
+Without it, some programs will be less efficient and slower.
+It is recommended to install it, and run ./configure again.
+Termcap is part of the libncurses5-dev package.
+Example: (Replace apt-get with you package manager name if needed.)
+sudo apt-get install libncurses5-dev
+EOF
+fi
+echo "#define HAS_TERMCAP $HAS_TERMCAP" >$CONFIG_H
+EchoV "HAS_TERMCAP = $HAS_TERMCAP"
+
+EchoN Configuration done successfully.
