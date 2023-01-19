@@ -26,6 +26,9 @@
 *    2022-02-01 JFL Prevent a misalignment in Windows Terminal. Version 1.6.  *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.6.1.		      *
 *    2023-01-14 JFL Allow building BIOS & LODOS versions. Version 1.6.2.      *
+*    2023-01-16 JFL Make sure the output columns are always aligned, even     *
+*		    when outputing undefined or 0-width characters.           *
+*    2023-01-18 JFL Moved GetCursorPosition() to SysLib. Version 1.7.         *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -33,14 +36,17 @@
 
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "1.6.2"
-#define PROGRAM_DATE    "2023-01-14"
+#define PROGRAM_VERSION "1.7"
+#define PROGRAM_DATE    "2023-01-18"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _BIOS
+#include <unistd.h>	/* For getpid(), isatty(), read(), write() */
+#endif
 
 /************************ Win32-specific definitions *************************/
 
@@ -50,7 +56,6 @@
 
 #include <io.h>		/* For _setmode() */
 #include <fcntl.h>	/* For _O_BINARY */
-#include <unistd.h>	/* For getpid() */
 
 #define EOL "\r\n"
 
@@ -106,6 +111,7 @@
 #endif
 
 /* SysToolsLib include files */
+#include "console.h"	/* SysLib console management. Ex: GetCursorPosition */
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
@@ -119,6 +125,22 @@ int ToUtf8(unsigned int c, char *b);
 #ifdef _WIN32
 int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname);
 #endif
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    main						      |
+|									      |
+|   Description     Program main initialization routine			      |
+|									      |
+|   Parameters      int argc		    Number of arguments 	      |
+|		    char *argv[]	    List of arguments		      |
+|									      |
+|   Returns	    The return code to pass to the OS			      |
+|									      |
+|   History								      |
+|    1995-11-03 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
 int CDECL main(int argc, char *argv[]) {
   int i, j;
@@ -143,6 +165,11 @@ int CDECL main(int argc, char *argv[]) {
   char szNameBuf[32];
   pid_t pid = GetAncestorProcessName(0, 2, szNameBuf, sizeof(szNameBuf));
   int isWindowsTerminal = (pid && streq(szNameBuf, "WindowsTerminal.exe"));
+#endif
+#ifndef _BIOS
+  int isTTY = isatty(1);
+#else
+  int isTTY = TRUE; /* The BIOS version can only write to the console */
 #endif
 
 #if SUPPORTS_UTF8
@@ -236,7 +263,7 @@ int CDECL main(int argc, char *argv[]) {
 
 #if defined(_WIN32) || (defined(_MSDOS) && !(defined(_BIOS) || defined(_LODOS)))
   fflush(stdout); /* Make sure any previous output is done in text mode */
-  _setmode( _fileno( stdout ), _O_BINARY );
+  _setmode(1, _O_BINARY ); /* fileno(stdout) = 1 */
 #endif
 
 #if SUPPORTS_UTF8
@@ -268,6 +295,7 @@ int CDECL main(int argc, char *argv[]) {
     for (j=0; j<16; j++) {
       for (i=0; i<8; i++) {
 	int k, l;
+	int iRow0, iCol0, iRow1, iCol1;
 
 	if (!(i&3)) printf("  ");
 
@@ -312,21 +340,32 @@ int CDECL main(int argc, char *argv[]) {
 	    break;
 	}
 
+	printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
+        iRow0 = iCol0 = 0; /* Prevent an (incorrect) uninitialized variable warning later on */
+	if (isTTY && ((l < ' ') || (l >= '\x7F'))) {
+	  fflush(stdout);
+	  GetCursorPosition(&iCol0, &iRow0);
+	}
 #if SUPPORTS_UTF8
 	if ((k > 0x7F) && isUTF8) {
 	  char buf[5];
 	  int n = ToUtf8(k, buf);
 	  buf[n] = '\0';
-	  printf("  %02X %s", k, buf);
+	  printf("%s", buf);
 	} else
 #endif /* SUPPORTS_UTF8 */
 	{
-	  printf("  %02X ", k); /* Do not use %c for the char, else the NUL char is not written */
 #ifndef _BIOS
-	  fwrite(&l, 1, 1, stdout); /* Hopefully fwrite() does not do any text conversion */
+	  fwrite(&l, 1, 1, stdout); /* Do not use printf %c for the char, else the NUL char is not written */
 #else
 	  putchar((char)l); /* BIOSLIB's putchar() uses the BIOS int 10H */
 #endif
+	}
+	if (isTTY && ((l < ' ') || (l >= '\x7F'))) { /* The cursor may not move for undefined or 0-width characters */
+	  fflush(stdout);
+	  GetCursorPosition(&iCol1, &iRow1);
+	  /* If it did not move, then add a space to keep the alignment of subsequent columns */
+	  if (iCol1 == iCol0 && iRow1 == iRow0) putchar(' ');
 	}
       }
       printf(EOL);
