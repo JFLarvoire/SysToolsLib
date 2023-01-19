@@ -26,6 +26,7 @@
 
 # Common objects usable in all environments, including in BIOS or LODOS
 BASE_OBJECTS = \
+    +$(O)/GetCurPos.obj		\
     +$(O)/IsMBR.obj		\
     +$(O)/IsSwitch.obj		\
     +$(O)/oprintf.obj		\
@@ -74,6 +75,8 @@ $(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/
 
 $(S)/Block.h: $(S)/SysLib.h $(S)/qword.h
 
+$(S)/console.h: $(S)/SysLib.h
+
 $(S)/copydate.c: $(S)/SysLib.h $(S)/copyfile.h
 
 $(S)/crc32.cpp: $(S)/crc32.h \
@@ -94,6 +97,8 @@ $(S)/FDiskW32.cpp: $(S)/FloppyDisk.h
 $(S)/File.cpp: $(S)/File.h $(S)/FileLibc.cpp $(S)/FileW32.cpp
 
 $(S)/File.h: $(S)/SysLib.h
+
+$(S)/GetCurPos.c: $(S)/console.h
 
 $(S)/gpt.cpp: $(S)/gpt.h $(S)/qword.h $(S)/harddisk.h $(S)/uuid.h
 
