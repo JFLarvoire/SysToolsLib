@@ -4,6 +4,21 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2023-01-18
+### New
+- Added a config.h file, automatically generated for each target OS.
+  * This fixes a bug for DOS builds: DOS.mak now stores the HAS_SDK_* definitions in that new config.h, instead of passing them on the CC command line. Then DOS.mak prepends a #include <config.h> at the beginning of all C/C++ sources that don't have one, before compiling them. This fixes the MSVC 1.52c "Out of memory" errors we got when the command line PLUS the PATH and INCLUDE variables were too long. (~512 bytes total?)
+  * This also allows to automatically configure variables in Unix builds, reporting the presence or absence of optional features and libraries.
+- Added a GetCursorPosition() routine in SysLib, with versions for DOS, Windows, and Linux.
+
+### Fixed
+- chars.exe version 1.7: Output columns are now correctly aligned when outputing to the console, even after characters that do not move the cursor.
+  (Uses the new GetCursorPosition() to detect when the cursor did not move, and outputs an extra space in that case.)
+
+## [Unreleased] 2023-01-16
+### Changed
+- LODOSLIB: Added C library routines intdos() and isatty().
+
 ## [1.22] 2023-01-10
 ### New
 - in.exe version 1.0: New `in` program, to execute a command in a given directory, then come back.
