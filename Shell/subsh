@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 #                                                                             #
 #   Filename        subsh                                                     #
@@ -11,18 +11,136 @@
 #                                                                             #
 #   History                                                                   #
 #    2022-02-05 JFL Created this script.                                      #
+#    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
+#    2023-01-23 JFL Added debugging routines, and fixed compat. with MacOS.   #
 #                                                                             #
 #         © Copyright 2022 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2022-02-05"
+VERSION="2023-01-23"
+
+# Check if the script is sourced
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+# If so, we must return from it, not exit
+[[ $sourced = 1 ]] && exit=return || exit=exit
+
+# Get the script name
+if [ $sourced = 1 ] ; then
+  if [ -n "$BASH_VERSION" ] ; then
+    ARGV0="${BASH_SOURCE[${#BASH_SOURCE[@]} - 1]}"
+  else
+    ARGV0="sourced" # There's no general way to find sourced scripts names
+  fi
+else
+  ARGV0="$0"                    # Full script pathname
+fi
+SCRIPT="`basename -- "$ARGV0"`" # Extract the script base name...
+
+###############################################################################
+#                              Debugging Library                              #
+###############################################################################
+
+VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+
+# Helper routines to test verbosity levels
+Quiet() {
+  [ $VERBOSITY = 0 ]
+}
+Normal() {
+  [ $VERBOSITY -gt 0 ]
+}
+Verbose() {
+  [ $VERBOSITY -gt 1 ]
+}
+Debug() {
+  [ $VERBOSITY -gt 2 ]
+}
+
+# Display a message and log it in the log file
+Echo() { # $*=strings to display and log
+  echo "$*"
+}
+
+# Display a string in verbose mode
+EchoV() { # $*=strings to display and log
+  Log "$@"
+  if Verbose ; then
+    echo "$*"
+  fi
+}
+
+# Display a string in debug mode
+EchoD() { # $*=strings to display and log
+  if Debug ; then
+    >&2 echo "$*" # Don't output to stdin, else the output of traced routines can't be used by other routines
+  fi
+}
+
+# Check if a variable exists
+VarExists() {
+  eval "[ \"\${${1}+true}\" = \"true\" ]"
+}
+
+# Get the value of a variable
+VarValue() {
+  eval "echo \"\${${1}}\""
+}
+
+# Debug routines. Display the values of a series of global variables.
+VarsValue() { # $*=Variables names. Display always.
+  for var in "$@" ; do
+    if VarExists "$var" ; then
+      echo "$var='`VarValue "$var"`'"
+    else
+      echo "unset $var"
+    fi
+  done
+}
+EchoVars() { # $*=Variables names. Display and log always.
+  echo "`VarsValue "$@"`"
+}
+EchoDVars() { # $*=Variables names. Display in debug mode only and log always.
+  EchoD "`VarsValue "$@"`"
+}
+
+#-----------------------------------------------------------------------------#
+#                      Functions for testing this script                      #
+#-----------------------------------------------------------------------------#
+
+if [ -n "$SUBSH_VERBOSITY" ] ; then
+  VERBOSITY=$SUBSH_VERBOSITY
+  unset SUBSH_VERBOSITY
+fi
+
+# Debug test code. Must be . sourced for this to work: . subsh -T
+if [ "$1" = "-T" ] ; then
+  ARGV0=$0
+  PROG="${SHELL##*/}"
+  PROMPT=$(SUBSH_QUERY=1 SUBSH_VERBOSITY=$VERBOSITY /usr/bin/env bash --rcfile "$0")
+  EchoVars ARGV0 SHELL PROG PROMPT PS1
+  # NEW=$(echo "$PS1" | sed 's/\( \?#[0-9][0-9]* \?\)\?\(\\\?\$[[:space:]]\?\)$/'" NEW "'\2/')
+  # NEW=$(echo "$PS1" | sed 's/\(.\$[[:space:]]\?\)$/'" NEW "'\1/')
+  NEW=$(echo "$PROMPT" | sed -E 's/(.\$[[:space:]]?)$/'" NEW "'\1/')
+  EchoVars NEW
+  $exit 0
+fi
+# Sub-instance invoked by the test code
+if [ -n "$SUBSH_QUERY" ] ; then
+  echo "$PS1"
+  exit 0
+fi
+
+###############################################################################
+#                                Core features                                #
+###############################################################################
 
 # If self-invoked as a Bash RC file
 if [ -n "$SUBSH_IS_RC" ] ; then
   unset SUBSH_IS_RC # Allow invoking this script normally again
-  # echo "# subsh sourced as an RC file. SUBSH_LEVEL=$SUBSH_LEVEL"
+  EchoD "# subsh sourced as an RC file "
+  EchoDVars SUBSH_LEVEL
 
   # Source the standard profiles that Bash would have sourced by default
   # See: https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html
@@ -38,28 +156,92 @@ if [ -n "$SUBSH_IS_RC" ] ; then
 
   # Update the prompt string with the shell level
   SUBSH_LEVEL=$(expr $SUBSH_LEVEL + 1)
-  # echo "# Updated SUBSH_LEVEL=$SUBSH_LEVEL"
-  if [ "$(echo "$PS1" | sed -E 's/.*?(\\n)(\\?\$ ?)$/\1/')" = "\\n" ] ; then
+  # We prefer a minimal match, but some versions of sed (Ex: FreeBSD) don't support *? */
+  MIN_MATCH='?'
+  echo ABBC | sed -E 's/B*?//' >/dev/null 2>&1 || unset MIN_MATCH
+  EchoDVars SUBSH_LEVEL MIN_MATCH PS1
+  if [ "$(echo "$PS1" | sed -E 's/.*$MIN_MATCH(\\n)(\\?\$ ?)$/\1/')" = "\\n" ] ; then
   	SUBSH_INFO="#$SUBSH_LEVEL "		# If the $ is on a new line, no need for a separator space.
   else
   	SUBSH_INFO=" #$SUBSH_LEVEL "	# The $ is at the end of its line. Insert an initial space.
   fi
-  PS1="$(echo "$PS1" | sed 's/\( \?#[0-9][0-9]* \?\)\?\(\\\?\$ \?\)$/'"$SUBSH_INFO"'\2/')"
+  PS1="$(echo "$PS1" | sed -E 's/(.\$[[:space:]]?)$/'"$SUBSH_INFO"'\1/')"
+  EchoDVars SUBSH_INFO PS1
   unset SUBSH_INFO
+  EchoD "# Giving control to Shell #$SUBSH_LEVEL"
   return
 fi
 
-# Else, manually invoked as a normal script
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Main                                                      #
+#                                                                             #
+#   Description     Process command line arguments                            #
+#                                                                             #
+#   Arguments       $*      Command line arguments                            #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
 
-# echo "# subsh invoked manually. SUBSH_LEVEL=$SUBSH_LEVEL"
+Help() {
+  cat <<EOF
+$SCRIPT - Open a bash sub-shell, updating the prompt to show its depth
+
+Usage: $SCRIPT [OPTIONS]
+
+Options:
+  -d, --debug       Display debugging information on stderr
+  -h, --help, -?    Display this help screen and exit
+  -V, --version     Display the script version and exit
+
+EOF
+}
+
+#-----------------------------------------------------------------------------#
+
+# Process command line arguments
+# Note: The Bourne Shell does not set $#/$*/$@ for sourced scripts. Arguments are ignored.
+#       All modern POSIX shells work fine, even with the !/bin/sh header line.
+while [ $# -gt 0 ] ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -d|--debug)
+      VERBOSITY=`expr $VERBOSITY + 2`
+    ;;
+    -h|--help|"-?")
+      Help
+      exit 0
+    ;;
+    -t|--test)
+      Test
+      exit 0
+    ;;
+    -V|--version)
+      echo $VERSION
+      $exit 0
+    ;;
+  esac
+done
+
+#-----------------------------------------------------------------------------#
+
+# Run a sub-shell
+EchoD "# subsh invoked manually."
+EchoDVars SUBSH_LEVEL
 
 # Define the shell level variable, if it's not set already
 if [ -z "$SUBSH_LEVEL" ] ; then
   SUBSH_LEVEL=1
 fi
 
-# Work around the issue that $PS1 is NOT passed in the environment to sub-shells
-# by invoking itself as a Bash RC file, and flagging that with a couple of variables.
-SUBSH_IS_RC=1 SUBSH_LEVEL=$SUBSH_LEVEL "$SHELL" --rcfile "$0"
-# echo "# Back in Shell $SUBSH_LEVEL"
+# Work around the issue that $PS1 is NOT passed to Bash scripts, nor to sub-shells,
+# by invoking itself as a Bash RC file, and flagging that with dedicated variables.
+# Also don't run "$SHELL", because on MacOS SHELL=/bin/zsh even when running this Bash script.
+SUBSH_IS_RC=1 SUBSH_LEVEL=$SUBSH_LEVEL SUBSH_VERBOSITY=$VERBOSITY /usr/bin/env bash --rcfile "$0"
+EchoD "# Back in Shell #$SUBSH_LEVEL"
 exit

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #*****************************************************************************#
 #                                                                             #
 #  Filename 	    clean						      #
@@ -11,13 +11,14 @@
 #                                                                             #
 #  History                                                                    #
 #    2020-11-04 JFL Created this script based on exe.			      #
+#    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 # Global variables
-VERSION="2020-11-04"
+VERSION="2023-01-21"
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
 
 EXEC=1				# 1=Execute commands; 0=Don't

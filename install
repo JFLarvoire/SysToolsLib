@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 #                                                                             #
 #  Filename        install                                                    #
@@ -13,11 +13,12 @@
 #   2020-03-23 JFL jf.larvoire@hpe.com created this script.                   #
 #   2020-04-01 JFL Fixed cd & export in Exec(). (No impact on this install.)  #
 #   2020-04-19 JFL Fixed compatibility with bash 3.2.                         #
+#   2023-01-21 JFL Fixed compatibility with FreeBSD.                          #
 #                                                                             #
 ###############################################################################
 
 # Global variables
-VERSION="2020-04-19"
+VERSION="2023-01-21"
 ARGV=("$0" "$@")		# All arguments, as an array of strings
 ARGV0="$0"                      # Full script pathname
 SCRIPT="${ARGV0##*/}"           # Extract the script base name...
@@ -387,11 +388,14 @@ if [ -z ${bindir+_} ] ; then  # bindir isn't set
   fi
 fi
 
+# We prefer relative paths, but some versions of realpath (ex FreeBSD) don't support it
+RELATIVE=--relative-to=.
+realpath $RELATIVE .. >/dev/null 2>&1 || unset RELATIVE
 # Directories where we're likely to find SysToolsLib tools
-stldir=$(realpath --relative-to=. "$SCRIPTDIR")
-cdir=$(realpath --relative-to=. "$SCRIPTDIR/C/SRC/bin/$(GetCOutputDir)")
-tcldir=$(realpath --relative-to=. "$SCRIPTDIR/Tcl")
-shelldir=$(realpath --relative-to=. "$SCRIPTDIR/Shell")
+stldir=$(realpath $RELATIVE "$SCRIPTDIR")
+cdir=$(realpath $RELATIVE "$SCRIPTDIR/C/SRC/bin/$(GetCOutputDir)")
+tcldir=$(realpath $RELATIVE "$SCRIPTDIR/Tcl")
+shelldir=$(realpath $RELATIVE "$SCRIPTDIR/Shell")
 
 Help() {
   cat <<EOF

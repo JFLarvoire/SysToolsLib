@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #*****************************************************************************#
 #                                                                             #
 #  Filename 	    exe							      #
@@ -22,6 +22,7 @@
 #                   Check SysToolLib's environment definitions, and try       #
 #                   recreating them if needed, searching in likely places.    #
 #                   Use make for the build, since we now have a good Makefile.#
+#    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
