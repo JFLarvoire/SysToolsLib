@@ -28,7 +28,13 @@
 *    2023-01-14 JFL Allow building BIOS & LODOS versions. Version 1.6.2.      *
 *    2023-01-16 JFL Make sure the output columns are always aligned, even     *
 *		    when outputing undefined or 0-width characters.           *
-*    2023-01-18 JFL Moved GetCursorPosition() to SysLib. Version 1.7.         *
+*    2023-01-18 JFL Moved GetCursorPosition() to SysLib.		      *
+*    2023-01-26 JFL Fixed the remaining alignment issues in DOS.	      *
+*		    Merged the DOS & Windows exceptions into an ANSI case.    *
+*		    This allows removing the Windows Terminal detection code. *
+*		    Detect failures to get the cursor coordinates. This may   *
+*		    happen in Unix, for example in FreeBSD.		      *
+*		    Version 1.7.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -37,7 +43,7 @@
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
 #define PROGRAM_VERSION "1.7"
-#define PROGRAM_DATE    "2023-01-18"
+#define PROGRAM_DATE    "2023-01-26"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -102,6 +108,12 @@
 
 /********************** End of OS-specific definitions ***********************/
 
+#ifndef _BIOS
+#define PUTC(c) fputc(c, stdout) /* Do not use printf %c for the char, else the NUL char is not written */
+#else
+#define PUTC(c) putchar((char)(c)) /* BIOSLIB's putchar() uses the BIOS int 10H */
+#endif
+
 #ifndef CDECL
 #ifdef _MSC_VER
 #define CDECL _cdecl /* LODOS builds generate a warning if main() does not specify this */
@@ -111,6 +123,7 @@
 #endif
 
 /* SysToolsLib include files */
+#include "debugm.h"     /* SysToolsLib debug macros. Include first. */
 #include "console.h"	/* SysLib console management. Ex: GetCursorPosition */
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -122,9 +135,8 @@ void usage(void);
 int ToUtf8(unsigned int c, char *b);
 #endif /* SUPPORTS_UTF8 */
 
-#ifdef _WIN32
-int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname);
-#endif
+int Puts(const char *pszString) { return fputs(pszString, stdout); } /* Output a string without a new line */
+#define PUTL(pszString) do { Puts(pszString); Puts(EOL); } while (0) /* Output a string with a new line in raw mode (LF untranslated) */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -160,17 +172,13 @@ int CDECL main(int argc, char *argv[]) {
 #ifdef _UNIX
   char *pszLang = getenv("LANG");
 #endif
-#ifdef _WIN32
-  /* The new Windows Terminal behaves differently from the old Windows Console */
-  char szNameBuf[32];
-  pid_t pid = GetAncestorProcessName(0, 2, szNameBuf, sizeof(szNameBuf));
-  int isWindowsTerminal = (pid && streq(szNameBuf, "WindowsTerminal.exe"));
-#endif
 #ifndef _BIOS
   int isTTY = isatty(1);
 #else
   int isTTY = TRUE; /* The BIOS version can only write to the console */
 #endif
+  int isANSI = FALSE; /* ANSI terminals interpret the ESC character */
+  int iErr;
 
 #if SUPPORTS_UTF8
 #ifdef _WIN32
@@ -266,73 +274,98 @@ int CDECL main(int argc, char *argv[]) {
   _setmode(1, _O_BINARY ); /* fileno(stdout) = 1 */
 #endif
 
+  /* Now on, all output must use EOL instead of \n */
+
 #if SUPPORTS_UTF8
   if (iFirst == iLast) {
     char buf[5];
     int n = ToUtf8(iFirst, buf);
     buf[n] = '\0';
     if (!n) {
-      fprintf(stderr, "Invalid code point: 0x%X.\n", iFirst);
+      fprintf(stderr, "Invalid code point: 0x%X." EOL, iFirst);
       return 1;
     }
     if (iVerbose) {
-      printf("UTF-8 ");
+      Puts("UTF-8 ");
       for (i=0; i<n; i++) printf("\\x%02X ", buf[i]&0xFF);
-      printf("\n");
+      Puts(EOL);
     }
-    printf("%s\n", buf);
+    PUTL(buf);
     goto cleanup;
   }
 #endif /* SUPPORTS_UTF8 */
 
+  /* Check if the console handles ANSI escape sequences */
+#if !defined(_BIOSSS)
+  if (isTTY) {
+    int iCol, iCol0;
+    PUTC('\r'); /* Return to the first column (0 or 1 depending on systems) */
+    fflush(stdout);
+    iErr = GetCursorPosition(&iCol0, NULL);
+    if (iErr) {
+failed_to_get_cursor_coord:
+      fprintf(stderr, "Failed to get the cursor coordinates" EOL);
+      return 1;
+    }
+    Puts(" \x1B[1D"); /* Output a space, then move the cursor back left */
+    fflush(stdout);
+    iErr = GetCursorPosition(&iCol, NULL);
+    if (iErr) goto failed_to_get_cursor_coord;
+    /* If it's an ANSI terminal, the cursor will be back on the initial column;
+       Else a string like " ?[1D" will be displayed, with the cursor on column 4 or 5 */
+    isANSI = (iCol == iCol0);
+#ifdef _DEBUG
+    printf(EOL "iCol = %d" EOL, iCol);
+#else
+    if (!isANSI) Puts("\r     \r"); /* Erase the garbage displayed on a non-ANSI terminal */
+#endif
+    if (iVerbose) printf("This %s an ANSI terminal" EOL, isANSI ? "is" : "isn't");
+  }
+#endif
+
   for (iBase = (iFirst & -0x80); iBase < ((iLast + 0x7F) & -0x80); iBase += 0x80) {
     int iDigits = 2;
     for (i=0x100; i; i<<=4) if (iBase >= i) iDigits += 1;
-    if (nBlock) printf(EOL);
+    if (nBlock) Puts(EOL);
     if (iVerbose || (iFirst != 0) || ((iLast != 0x7F) && (iLast != 0xFF))) {
-      printf("[0x%X-0x%X]\n", iBase, iBase + 0x7F);
+      printf("[0x%02X-0x%02X]" EOL, iBase, iBase + 0x7F);
     }
     for (j=0; j<16; j++) {
       for (i=0; i<8; i++) {
 	int k, l;
 	int iRow0, iCol0, iRow1, iCol1;
 
-	if (!(i&3)) printf("  ");
+	if (!(i&3)) Puts("  ");
 
 	l = k = (iBase + 16*i)+j;
 	if ((k < iFirst) || (k > iLast)) {
 	  printf("%.*s", iDigits+4, spaces);
 	  continue;
 	}
-	switch (k) {
-#ifndef _UNIX
-	  case 0x07:
-	  case 0x08:
-	  case 0x09:
-	  case 0x0A:
-	  case 0x0D:
-	  case 0x1A:
-	    if (!iAll) l = ' ';
+	if (!iAll) switch (k) {
+#ifndef _UNIX /* All DOS and Windows terminals interpret these control codes */
+	  case 0x07:		/* Bell */
+	  case 0x08:		/* Backspace */
+	  case 0x09:		/* Tabulation */
+	  case 0x0A:		/* Line Feed */
+	  case 0x0D:		/* Carrier Return */
+	    l = ' ';
 	    break;
 #endif
 	  default:
 #ifdef _UNIX
-	    if (k < 0x20) {
-	      if (!iAll) l = ' ';
+	    if (k < 0x20 || k == 0x7F) { /* All ASCII control characters */
+	      l = ' ';
 	      break;
 	    }
 #endif
-#ifdef _WIN32
-	    /* The new Windows Terminal interprets several ASCII control chars */
-	    if (isWindowsTerminal) {
+#if (!defined(_UNIX)) && (!defined(_BIOSSS)) /* DOS and Windows ANSI terminals choke on these control codes */
+	    if (isANSI) {
 	      switch (k) {
-		case 0x00:
-		case 0x0B:
-		case 0x0C:
-		case 0x0E:
-		case 0x0F:
-		case 0x1B:
-		  if (!iAll) l = ' ';
+		case 0x00:	/* Null */
+		case 0x1B:	/* Escape */
+		case 0x7F:	/* Delete */
+		  l = ' ';
 		  break;
 	      }
 	    }
@@ -344,31 +377,32 @@ int CDECL main(int argc, char *argv[]) {
         iRow0 = iCol0 = 0; /* Prevent an (incorrect) uninitialized variable warning later on */
 	if (isTTY && ((l < ' ') || (l >= '\x7F'))) {
 	  fflush(stdout);
-	  GetCursorPosition(&iCol0, &iRow0);
+	  iErr = GetCursorPosition(&iCol0, &iRow0);
+	  if (iErr) goto failed_to_get_cursor_coord;
 	}
 #if SUPPORTS_UTF8
 	if ((k > 0x7F) && isUTF8) {
 	  char buf[5];
 	  int n = ToUtf8(k, buf);
 	  buf[n] = '\0';
-	  printf("%s", buf);
+	  Puts(buf);
 	} else
 #endif /* SUPPORTS_UTF8 */
-	{
-#ifndef _BIOS
-	  fwrite(&l, 1, 1, stdout); /* Do not use printf %c for the char, else the NUL char is not written */
-#else
-	  putchar((char)l); /* BIOSLIB's putchar() uses the BIOS int 10H */
-#endif
-	}
+	PUTC(l); /* Do not use printf %c for the char, else the NUL char is not written */
 	if (isTTY && ((l < ' ') || (l >= '\x7F'))) { /* The cursor may not move for undefined or 0-width characters */
 	  fflush(stdout);
-	  GetCursorPosition(&iCol1, &iRow1);
-	  /* If it did not move, then add a space to keep the alignment of subsequent columns */
-	  if (iCol1 == iCol0 && iRow1 == iRow0) putchar(' ');
+	  iErr = GetCursorPosition(&iCol1, &iRow1);
+	  if (iErr) goto failed_to_get_cursor_coord;
+	  if (iCol1 == iCol0 && iRow1 == iRow0) {
+	    /* The cursor did not move, so add a space to keep the alignment of subsequent columns */
+	    PUTC(' ');
+	  } else if (iCol1 < iCol0) {
+	    /* Most likely this is FF or VT, and the terminal interpreted it as CRLF */
+	    SetCursorPosition(iCol0+1, iRow0-1);
+	  }
 	}
       }
-      printf(EOL);
+      Puts(EOL);
       nBlock += 1;
     }
   }
@@ -378,9 +412,9 @@ cleanup:
 #endif /* SUPPORTS_UTF8 */
 #ifdef _WIN32
   if (uCP && (uCP != uCP0)) {
-    if (iVerbose) printf("Switching back to code page %d.\n", uCP0);
+    if (iVerbose) printf("Switching back to code page %d." EOL, uCP0);
     if (!SetConsoleOutputCP(uCP0)) {
-      fprintf(stderr, "Failed to switch to code page %d.\n", uCP0);
+      fprintf(stderr, "Failed to switch to code page %d." EOL, uCP0);
       return 1;
     }
   }
@@ -415,6 +449,13 @@ Switches:\n\
   -v|--verbose        Display verbose information\n\
   -V|--version        Display this program version and exit\n\
 "
+#ifndef _UNIX
+"\n\
+Note: Shows the characters that can be output with the C fputc() function.\n\
+      In some code pages, it may be possible to display more by directly\n\
+      storing characters into the video RAM buffer.\n\
+"
+#endif
 #include "footnote.h"
 );
 
@@ -438,63 +479,4 @@ int ToUtf8(unsigned int c, char *b) {
   return (int)(b-b0);
 }
 #endif /* SUPPORTS_UTF8 */
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    GetAncestorProcessName				      |
-|									      |
-|   Description     Get the process ID and name of an ancestor process 	      |
-|									      |
-|   Notes	    							      |
-|									      |
-|   History								      |
-|    2022-02-01 JFL Initial implementattion, based on GetProcessName().	      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-#if defined(_WIN32)
-#include <windows.h>
-#pragma pack(push,8) /* Work around a bug in tlhelp32.h in WIN64, which generates the wrong structure if packing has been changed */
-#include <tlhelp32.h>
-#pragma pack(pop)
-
-int GetAncestorProcessName(pid_t pid, int iLevel, char *name, size_t lname) {
-  size_t len = 0;
-  HANDLE h;
-  BOOL bFound;
-  PROCESSENTRY32 pe = {0};
-  int i;
-
-  if (!pid) pid = getpid();
-
-  h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  if (h == INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "Failed to get list of processes\n");
-    return 0;
-  }
-
-  pe.dwSize = sizeof(PROCESSENTRY32);
-  for (i=0; i<=iLevel; i++) {
-    pid_t ppid = (pid_t)0;
-    for (bFound=Process32First(h, &pe); bFound; bFound=Process32Next(h, &pe)) {
-      if ((pid_t)(pe.th32ProcessID) == pid) {
-      	/* printf("PID %d = %s\n", (int)pid, pe.szExeFile); */
-      	ppid = (pid_t)(pe.th32ParentProcessID);
-	break;
-      }
-    }
-    if (!ppid) return 0;
-    pid = ppid;
-  }
-
-  len = strlen(pe.szExeFile);
-  if (lname <= len) return -(int)len; /* Not enough room in the output buffer */
-  strcpy(name, pe.szExeFile);
-
-  CloseHandle(h);
-
-  return (int)pe.th32ProcessID;
-}
-
-#endif
 
