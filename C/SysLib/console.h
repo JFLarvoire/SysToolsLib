@@ -19,5 +19,6 @@
 #include "SysLib.h"		/* SysLib Library core definitions */
 
 int GetCursorPosition(int *pX, int *pY);
+int SetCursorPosition(int iX, int iY);
 
 #endif /* _CONSOLE_H_ */

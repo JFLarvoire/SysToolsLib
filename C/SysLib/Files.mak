@@ -38,6 +38,7 @@ BASE_OBJECTS = \
     +$(O)/PcUuid.obj		\
     +$(O)/qword.obj		\
     +$(O)/PrintUuid.obj		\
+    +$(O)/SetCurPos.obj		\
     +$(O)/uuid.obj		\
     +$(O)/uuidnull.obj		\
 
@@ -186,6 +187,8 @@ $(S)/R0Ios.h: $(S)/SysLib.h # $(S)/dcb.h now recommended to be put in 98DDK\inc\
 $(S)/Ring0.c: $(S)/Ring0.h
 
 $(S)/Ring0.h: $(S)/SysLib.h
+
+$(S)/SetCurPos.c: $(S)/console.h
 
 $(S)/smbios.c: $(S)/smbios.h
 
