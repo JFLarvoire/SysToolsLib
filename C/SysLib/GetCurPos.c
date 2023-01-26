@@ -11,6 +11,7 @@
 *  History								      *
 *    2023-01-15 JFL jf.larvoire@free.fr created this module.		      *
 *    2023-01-24 JFL Fixed the DOS version and made pointer arguments optional.*
+*    2023-01-26 JFL Added a 2-second timeout to the Unix version.             *
 *		    							      *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -21,9 +22,7 @@
 #include "console.h"
 
 #if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-
 #define _UNIX
-
 #endif /* __unix__ */
 
 /*---------------------------------------------------------------------------*\
@@ -106,25 +105,81 @@ int GetCursorPosition(int *pX, int *pY) {
 #include <termios.h>
 #include <termcap.h>
 
+#include <fcntl.h>
+#include <time.h>
+#include <sys/time.h>
+#include <errno.h>
+
+int timeval_subtract(struct timeval *result, struct timeval *tvFrom, struct timeval *tvTo) {
+  /* Perform the carry for the later subtraction by updating tvFrom. */
+  if (tvTo->tv_usec < tvFrom->tv_usec) {
+    int nsec = (tvFrom->tv_usec - tvTo->tv_usec) / 1000000 + 1;
+    tvFrom->tv_usec -= 1000000 * nsec;
+    tvFrom->tv_sec += nsec;
+  }
+  if (tvTo->tv_usec - tvFrom->tv_usec > 1000000) {
+    int nsec = (tvTo->tv_usec - tvFrom->tv_usec) / 1000000;
+    tvFrom->tv_usec += 1000000 * nsec;
+    tvFrom->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait. tv_usec is certainly positive. */
+  result->tv_sec = tvTo->tv_sec - tvFrom->tv_sec;
+  result->tv_usec = tvTo->tv_usec - tvFrom->tv_usec;
+
+  /* Return 1 if result is negative. */
+  return tvTo->tv_sec < tvFrom->tv_sec;
+}
+
 int GetCursorPosition(int *pX, int *pY) {
   char buf[16];
   int i, n;
   char c;
   struct termios tc, tc0;
   int iErr = 1;
+  int iFile;
+  struct timeval t, t0, dt;
+  struct timespec ts;
+
+  iFile = open("/dev/tty", O_RDWR | O_NONBLOCK);
+  if (iFile == -1) {
+    perror("GetCursorPosition: Error opening /dev/tty");
+    goto cleanup_and_return;
+  }
 
   /* Save the initial TTY echo mode, and turn echo off */
-  tcgetattr(0, &tc);
+  tcgetattr(iFile, &tc);
   tc0 = tc;
-  tc.c_lflag &= ~(ICANON|ECHO); /* Disable per-line-buffering and echoing */ 
-  tcsetattr(0, TCSAFLUSH, &tc); /* Also flush the input buffer */
+  tc.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); /* Disable per-line-buffering and echoing */ 
+  tc.c_cflag |= (CLOCAL | CREAD); 
+  tcsetattr(iFile, TCSAFLUSH, &tc); /* Also flush the input buffer */
 
   /* Query the cursor position using the ANSI escape sequence */
-  write(1, "\x1B[6n", 4); /* The terminal sends back ESC [ ROW ; COL R */
+  write(iFile, "\x1B[6n", 4); /* The terminal sends back ESC [ ROW ; COL R */
 
   /* Scan the intput until the end of the TTY response: ESC [ ROW ; COL R */
+  gettimeofday(&t0, NULL);
   for (i=0, c='\0'; c != 'R' && i < sizeof(buf); i++) {
-    if (!read(0, &c, 1)) {
+    /* int iSec = 0; */
+    while (read(iFile, &c, 1) == -1) {
+      if (errno == EAGAIN) {
+      	/* fprintf(stderr, "."); fflush(stderr); */
+	gettimeofday(&t, NULL);
+	timeval_subtract(&dt, &t0, &t);
+	/*
+	if (dt.tv_sec > iSec) {
+	  fprintf(stderr, " %ds ", ++iSec); fflush(stderr);
+	}
+	*/
+	if (dt.tv_sec >= 2) {
+	  fprintf(stderr, "GetCursorPosition: Timeout waiting for the answer\n");
+	  goto cleanup_and_return;
+	}
+	ts.tv_sec = 0;
+	ts.tv_nsec = 20*1000*1000; /* 20ms */
+	nanosleep(&ts, NULL);
+	continue;
+      }
       perror("GetCursorPosition: Error reading response");
       goto cleanup_and_return;
     }
@@ -133,7 +188,7 @@ int GetCursorPosition(int *pX, int *pY) {
 
   /* Convert the output to a parseable C string */
   if ((i < 2) || (i >= sizeof(buf))) {
-    fprintf(stderr, "GetCursorPosition: Received %d characters", i);
+    fprintf(stderr, "GetCursorPosition: Received %d characters\n", i);
     goto cleanup_and_return;
   }
   buf[i] = '\0';
@@ -154,7 +209,7 @@ int GetCursorPosition(int *pX, int *pY) {
 
 cleanup_and_return:
   /* Restore the initial TTY echo mode */
-  tcsetattr(0, TCSANOW, &tc0);
+  tcsetattr(iFile, TCSANOW, &tc0);
   return iErr;
 }
 
@@ -205,7 +260,7 @@ int GetCursorPosition(int *pX, int *pY) {
 
   /* Convert the output to a parseable C string */
   if ((i < 2) || (i >= sizeof(buf))) {
-    fprintf(stderr, "GetCursorPosition: Received %d characters", i);
+    fprintf(stderr, "GetCursorPosition: Received %d characters\n", i);
     iErr = 4;
     goto cleanup_and_return;
   }
