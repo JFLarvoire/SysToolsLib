@@ -10,6 +10,7 @@
 *		    							      *
 *  History								      *
 *    2023-01-15 JFL jf.larvoire@free.fr created this module.		      *
+*    2023-01-24 JFL Fixed the DOS version and made pointer arguments optional.*
 *		    							      *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -50,10 +51,10 @@
 int GetCursorPosition(int *pX, int *pY) {
   short wX, wY;
 
-  get_cursor_position(&wY, &wX); /* Get it from the BIOS int 10H */
+  get_cursor_position(&wX, &wY); /* Get it from the BIOS int 10H */
 
-  *pX = (int)wX;
-  *pY = (int)wY;
+  if (pX) *pX = (int)wX;
+  if (pY) *pY = (int)wY;
   return 0;
 }
 
@@ -72,8 +73,8 @@ int GetCursorPosition(int *pX, int *pY) {
     return 1;
   }
 
-  *pX = csbi.dwCursorPosition.X;
-  *pY = csbi.dwCursorPosition.Y;
+  if (pX) *pX = csbi.dwCursorPosition.X;
+  if (pY) *pY = csbi.dwCursorPosition.Y;
   return 0;
 }
 
@@ -115,8 +116,8 @@ int GetCursorPosition(int *pX, int *pY) {
   /* Save the initial TTY echo mode, and turn echo off */
   tcgetattr(0, &tc);
   tc0 = tc;
-  tc.c_lflag &= ~(ICANON|ECHO);
-  tcsetattr(0, TCSANOW, &tc);
+  tc.c_lflag &= ~(ICANON|ECHO); /* Disable per-line-buffering and echoing */ 
+  tcsetattr(0, TCSAFLUSH, &tc); /* Also flush the input buffer */
 
   /* Query the cursor position using the ANSI escape sequence */
   write(1, "\x1B[6n", 4); /* The terminal sends back ESC [ ROW ; COL R */
@@ -139,10 +140,14 @@ int GetCursorPosition(int *pX, int *pY) {
   /* DEBUG fwrite(buf+1, 1, i-1, stderr); */
 
   /* Parse the output: ESC [ ROW ; COL R */
-  *pX = 0;
-  for (i -= 2, n = 1; i >= 0 && buf[i] != ';'; i--, n *= 10) *pX += (buf[i] - '0') * n;
-  *pY = 0;
-  for (i-- , n = 1; i >= 0 && buf[i] != '['; i--, n *= 10) *pY += (buf[i] - '0') * n;
+  if (pX) {
+    *pX = 0;
+    for (i -= 2, n = 1; i >= 0 && buf[i] != ';'; i--, n *= 10) *pX += (buf[i] - '0') * n;
+  }
+  if (pY) {
+    *pY = 0;
+    for (i-- , n = 1; i >= 0 && buf[i] != '['; i--, n *= 10) *pY += (buf[i] - '0') * n;
+  }
   /* DEBUG fprintf(stderr, " => %d,%d\n", *pX, *pY); */
 
   iErr = 0;
@@ -208,10 +213,14 @@ int GetCursorPosition(int *pX, int *pY) {
   /* DEBUG fwrite(buf+1, 1, i-1, stderr); */
 
   /* Parse the output: ESC [ ROW ; COL R */
-  *pX = 0;
-  for (i -= 2, n = 1; i >= 0 && buf[i] != ';'; i--, n *= 10) *pX += (buf[i] - '0') * n;
-  *pY = 0;
-  for (i-- , n = 1; i >= 0 && buf[i] != '['; i--, n *= 10) *pY += (buf[i] - '0') * n;
+  if (pX) {
+    *pX = 0;
+    for (i -= 2, n = 1; i >= 0 && buf[i] != ';'; i--, n *= 10) *pX += (buf[i] - '0') * n;
+  }
+  if (pY) {
+    *pY = 0;
+    for (i-- , n = 1; i >= 0 && buf[i] != '['; i--, n *= 10) *pY += (buf[i] - '0') * n;
+  }
   /* DEBUG fprintf(stderr, " => %d,%d\n", *pX, *pY); */
 
   iErr = 0;
