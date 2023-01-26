@@ -117,6 +117,10 @@ for v in STINCLUDE SYSLIB ; do
   fi
 done
 
+# Check if the default make is gmake
+GMAKE=make
+(make --version 2>/dev/null | grep GNU >/dev/null) || GMAKE=gmake 
+
 # Build it.
 # mkdir -p $OUTDIR
 # echo "gcc $CFLAGS -U_DEBUG $SOURCES -o $OUTDIR/$PROGRAM"
@@ -124,4 +128,4 @@ done
 # mkdir -p $OUTDIR/debug
 # echo "gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM"
 # gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM
-make $PROGRAM # Use make for the build, since we now have a good Makefile.
+$GMAKE $PROGRAM # Use make for the build, since we now have a good Makefile.

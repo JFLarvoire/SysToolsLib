@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #*****************************************************************************#
 #                                                                             #
-#  Filename:	    exe							      #
+#  Filename 	    exe							      #
 #                                                                             #
-#  Description:     Build simple C/C++ programs for Unix/Linux		      #
+#  Description      Build simple C/C++ programs for Unix/Linux		      #
 #                                                                             #
-#  Notes:	    Usage: ./exe PROGRAM				      #
+#  Notes 	    Usage: ./exe PROGRAM				      #
 #                                                                             #
 #                   Stores the executables in $OS.$PROC/[Debug/] for	      #
 #                   consistency with the Windows build tools.                 #
@@ -13,10 +13,15 @@
 #                   using VMs for building the various Windows and Linux      #
 #                   versions in a set of OS-specific subdirectories.          #
 #                                                                             #
-#  History:                                                                   #
+#  History                                                                    #
 #    2013-12-16 JFL Added support for MinGW64.				      #
 #    2015-12-12 JFL Help now displays the output directory name.              #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
+#    2016-09-13 JFL Bug fix: FileNoCase() must search only in the . directory.#
+#    2016-10-14 JFL Removed dependencies on my personal laptop pathnames.     #
+#                   Check SysToolLib's environment definitions, and try       #
+#                   recreating them if needed, searching in likely places.    #
+#                   Use make for the build, since we now have a good Makefile.#
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
@@ -25,7 +30,7 @@
 
 FileNoCase() # Case-independant search for a file.
 {
-  find . -type f | grep -i -E "./$1$" | sed s=./==
+  find . -maxdepth 1 -type f | grep -i -E "./$1$" | sed s=./==
 }
 
 # Identify the OS
@@ -39,11 +44,11 @@ if [[ "$OS" == "WindowsNT" ]] ; then
 fi
 OUTDIR=$OS.$PROC
 if [[ "${OS:0:7}" == "MINGW32" ]] ; then # Ex: "MINGW32_NT-6.1"
-  OUTDIR=MINGW32 # MigGW shell if NOT case sensitive
+  OUTDIR=MINGW32 # MinGW shell if NOT case sensitive
   # 2013-12-16 Actually, the 64-bits tool chain also reports MINGW32_NT-6.1
   # So distinguish the two by whether /mingw is mounted on C:\MinGW or C:\MinGW64
   if mount | grep /mingw | grep 64 > /dev/null ; then
-    OUTDIR=MINGW64 # MigGW shell if NOT case sensitive
+    OUTDIR=MINGW64 # MinGW shell if NOT case sensitive
   fi
 fi
 if [[ "${OS:0:7}" == "MINGW64" ]] ; then # Ex: ?
@@ -56,7 +61,7 @@ fi
 # Command line analysis.
 case "$1" in
   "" | "-h" | "-?" | --help)
-    echo "Build simple C/C++ programs, storing the executables in $OUTDIR/"
+    echo "Build simple C/C++ programs, storing the executables in bin/$OUTDIR/"
     echo "Usage: ./exe PROGRAM"
     exit 0
     ;;
@@ -77,24 +82,48 @@ if [[ "${SOURCES}" == "" ]] ; then
   exit 1
 fi
 
+# Get the value of a variable.
+VarValue() {
+  eval "echo \"\${${1}}\""
+}
+
 # Make sure our include directories are accessible
-if [[ -d "/u/JFL/SRC/Include" ]] ; then
-  if [[ ":$C_INCLUDE_PATH:" != *:/u/JFL/SRC/Include:* ]] ; then
-    if [[ "$C_INCLUDE_PATH" == "" ]] ; then
-      export C_INCLUDE_PATH="/u/JFL/SRC/Include"
-    else
-      export C_INCLUDE_PATH="$C_INCLUDE_PATH:/u/JFL/SRC/Include"
-    fi
+STINCLUDE_FILE=debugm.h
+STINCLUDE_NAMES="include Include"
+for v in STINCLUDE ; do
+  names=$(VarValue "${v}_NAMES")
+  file=$(VarValue "${v}_FILE")
+  list=""
+  if [[ -v $v ]] ; then
+    list="$list $(VarValue $v)"
   fi
-fi
-echo "# C_INCLUDE_PATH=\"$C_INCLUDE_PATH\""
+  for name in $names ; do
+    list="$list ../$name ../../$name ../Libs/$name ../../Libs/$name"
+  done
+  found=0
+  for p in $list ; do
+    if [[ $found = 0 ]] ; then
+      if [[ -f "$p/$file" ]] ; then
+      	found=1
+      	declare -x $v="$p"
+      	CFLAGS="$CFLAGS -I $p"
+      fi
+    fi
+  done
+  if [[ $found = 0 ]] ; then
+    undef $v
+  fi
+done
+
+# Check if the default make is gmake
+GMAKE=make
+(make --version 2>/dev/null | grep GNU >/dev/null) || GMAKE=gmake 
 
 # Build it.
-# gmake CC=gcc CFLAGS="$CFLAGS" SOURCES="$SOURCES" PROGRAM="$PROGRAM" OS="$OS" $*
-mkdir -p $OUTDIR
-echo "gcc $CFLAGS -U_DEBUG $SOURCES -o $OUTDIR/$PROGRAM"
-gcc $CFLAGS -U_DEBUG $SOURCES -o $OUTDIR/$PROGRAM
-mkdir -p $OUTDIR/debug
-echo "gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM"
-gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM
-
+# mkdir -p $OUTDIR
+# echo "gcc $CFLAGS -U_DEBUG $SOURCES -o $OUTDIR/$PROGRAM"
+# gcc $CFLAGS -U_DEBUG $SOURCES -o $OUTDIR/$PROGRAM
+# mkdir -p $OUTDIR/debug
+# echo "gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM"
+# gcc $CFLAGS -D_DEBUG $SOURCES -o $OUTDIR/debug/$PROGRAM
+$GMAKE $PROGRAM # Use make for the build, since we now have a good Makefile.
