@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#*****************************************************************************#
+#***************************** :encoding=UTF-8: ******************************#
 #                                                                             #
 #  Filename 	    exe							      #
 #                                                                             #
@@ -23,8 +23,9 @@
 #                   recreating them if needed, searching in likely places.    #
 #                   Use make for the build, since we now have a good Makefile.#
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
+#    2023-01-26 JFL Fixed compatibility with MacOS.                           #
 #                                                                             #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
@@ -82,6 +83,11 @@ if [[ "${SOURCES}" == "" ]] ; then
   exit 1
 fi
 
+# Check if a variable exists
+VarExists() {
+  eval "[ \"\${${1}+true}\" = \"true\" ]"
+}
+
 # Get the value of a variable.
 VarValue() {
   eval "echo \"\${${1}}\""
@@ -96,7 +102,7 @@ for v in STINCLUDE SYSLIB ; do
   names=$(VarValue "${v}_NAMES")
   file=$(VarValue "${v}_FILE")
   list=""
-  if [[ -v $v ]] ; then
+  if VarExists "$v" ; then # Old versions of Bash don't support [[ -v $v ]]
     list="$list $(VarValue $v)"
   fi
   for name in $names ; do
