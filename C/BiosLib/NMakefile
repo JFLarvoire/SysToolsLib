@@ -280,6 +280,7 @@ SOURCES = \
     scancode.asm	\
     scrolldn.asm	\
     scrollup.asm	\
+    setcurpo.asm	\
     setvidmo.asm	\
     sprintf.c		\
     sqrt.c		\

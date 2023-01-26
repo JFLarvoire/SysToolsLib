@@ -252,7 +252,8 @@ extern void     _fastcall   write_rtc_cmos(short, short);
 
    /* Video */
 extern void     _fastcall   gotoXY(short, short);
-extern void     _fastcall   get_cursor_position(short *, short *);
+extern void     _fastcall   get_cursor_position(short *pX, short *pY);
+extern void     _fastcall   set_cursor_position(short iX, short iY);
 extern void     _cdecl      putch_color(short, short);
 extern void     _cdecl      scrolldown(short, short, short, short);
 extern void     _cdecl      scrollup(short, short, short, short);
