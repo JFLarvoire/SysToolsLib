@@ -7,6 +7,12 @@
 *  Notes:	    Useful to see what characters look like in your current   *
 *		    code page.						      *
 *									      *
+*		    In Unix, use the locale command to see what is supported: *
+*		    locale charmap	Display the current character set     *
+*		    locale -m		List all supported character sets     *
+*		    locale -a		List all available locale files       *
+*		    locale-gen LOCALE	Generate a new locale file	      *
+*		    							      *
 *  History:								      *
 *    1995-11-03 JFL jf.larvoire@hp.com created this program.		      *
 *    2015-01-08 JFL Fix output for Linux, including when encoding is UTF-8.   *
@@ -40,6 +46,8 @@
 *		    displaying non-existent characters by default.	      *
 *		    Display more consistent and helpful verbose messages.     *
 *		    Display debug messages in the debug version only.         *
+*    2023-01-30 JFL Added support for any locale in Unix, even if non-ASCII.  *
+*		    In Windows, set the code page using new option -c/--cp.   *
 *		    Version 1.7.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
@@ -49,7 +57,7 @@
 #define PROGRAM_DESCRIPTION "Output character tables"
 #define PROGRAM_NAME    "chars"
 #define PROGRAM_VERSION "1.7"
-#define PROGRAM_DATE    "2023-01-27"
+#define PROGRAM_DATE    "2023-01-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -118,6 +126,7 @@
 #define _UNIX
 
 #include <locale.h>
+#include <ctype.h>
 
 #define EOL "\n"
 
@@ -221,6 +230,18 @@ int CDECL main(int argc, char *argv[]) {
 	iAll = TRUE;
 	continue;
       }
+#ifdef _WIN32
+      if (   streq(opt, "c")	/* -c: Set the code page */
+	  || streq(opt, "-cp")) {
+        char *pszCP = ((i+1)<argc) ? argv[++i] : "0";
+	uCP = atoi(pszCP);
+	if ((uCP <= 0) || (uCP > 65535)) {
+	  fprintf(stderr, "Invalid code page: %s\n", arg);
+	  return 1;
+	}
+	continue;
+      }
+#endif /* defined(_WIN32) */
 #ifdef _DEBUG
       if (streq(opt, "d")) {
 	DEBUG_ON();
@@ -271,16 +292,6 @@ int CDECL main(int argc, char *argv[]) {
       fprintf(stderr, "Unrecognized switch %s. Ignored.\n", arg);
       continue;
     }
-#ifdef _WIN32
-    if (!uCP) {
-      uCP = atoi(arg);
-      if ((uCP <= 0) || (uCP > 65535)) {
-	fprintf(stderr, "Invalid code page: %s\n", arg);
-	return 1;
-      }
-      continue;
-    }
-#endif /* defined(_WIN32) */
     fprintf(stderr, "Unrecognized argument %s. Ignored.\n", arg);
   }
 
@@ -340,7 +351,7 @@ failed_to_get_cursor_coord:
 #endif
 #ifdef _UNIX
   if (pszLocale) {
-    if (strstr(pszLocale, "UTF-8")) isUTF8 = TRUE;
+    if (strstr(pszLocale, "UTF-8") || strstr(pszLocale, "utf8")) isUTF8 = TRUE;
   /* Note that Unix XTerm considers bytes \x80-\x9F as control sequences
      equivalent to ESC @, ESC A, ESC B, ..., ESC _ .
      Do not output them, else there may be unpredictable effects on the console,
@@ -442,7 +453,7 @@ failed_to_get_cursor_coord:
 #endif
 	  default:
 #ifdef _UNIX
-	    if (k < 0x20 || k == 0x7F) { /* All ASCII control characters */
+	    if (iscntrl(k)) { /* All control characters in the current locale */
 	      l = ' ';
 	      break;
 	    }
@@ -540,16 +551,16 @@ void usage(void) {
 
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
-\n"
-#ifdef _WIN32
-"Usage: chars [SWITCHES] [CODEPAGE]\n"
-#else
-"Usage: chars [SWITCHES]\n"
-#endif
-"\n\
+\n\
+Usage: chars [SWITCHES]\n\
+\n\
 Switches:\n\
   -?|-h|--help        Display this help screen\n\
   -a|--all            Output all characters, even control chars like CR LF, etc\n"
+#ifdef _WIN32
+"\
+  -c|--cp CODEPAGE    Use CODEPAGE. Default: Use the current console code page\n"
+#endif
 #ifdef _DEBUG
 "\
   -d|--debug          Display debug information\n"
