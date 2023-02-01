@@ -362,16 +362,16 @@ int CDECL main(int argc, char *argv[]) {
 	    return 1;
 	  }
 	  uCP1 = CP_UTF8;
+	  if (isUnicodeChar && (iFlags & PCC_DUMP) && (strlen(argvCP0[i]) == 1)) {
+	    int iCode1 = argvCP0[i][0] & 0xFF;
+	    if ((argvCP0[i][0] != '?') || (arg[0] == '?')) {
+	      printf("CP%u \\x%02X\n", uCP0, iCode1);
+	    } else {
+	      printf("CP%u (undefined)\n", uCP0);
+	    }
+	  }
 	} else {
 	  DEBUG_PRINTF(("Active code page: %d\n", uCP0));
-	}
-	if (isUnicodeChar && (iFlags & PCC_DUMP) && (strlen(argvCP0[i]) == 1)) {
-	  int iCode1 = argvCP0[i][0] & 0xFF;
-	  if ((argvCP0[i][0] != '?') || (arg[0] == '?')) {
-	    printf("CP%u \\x%02X\n", uCP0, iCode1);
-	  } else {
-	    printf("CP%u (undefined)\n", uCP0);
-	  }
 	}
 #endif /* defined(_WIN32) */
 #ifdef _UNIX
