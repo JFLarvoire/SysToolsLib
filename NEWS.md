@@ -4,6 +4,41 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2023-02-09
+### Changed
+- chars.exe version 2.0:
+  * Breaking change: Added support for multiple ranges, and removed option -u.
+  * Detect the current character set in DOS.
+
+## [Unreleased] 2023-01-30
+### Changed
+- chars.exe:
+  * For single characters, display the UTF8, UTF16 & UTF32 encodings.
+  * Restructured to allow displaying any set of characters, with the character code provided in several possible formats.
+  * Also allow passing or dumping a single character instead of a code.
+
+## [Unreleased] 2023-01-30
+### Changed
+- chars.exe version 1.7:
+  * Added support for any system locale in Unix, even if non-ASCII.
+  * In Windows, set the code page using new option -c/--cp.
+
+## [Unreleased] 2023-01-27
+### New
+- BiosLib: Added a set_cursor_position() routine.
+- SysLib: Added an OS-independent SetCursorPosition() routine.
+
+### Fixed
+- chars.exe:
+  * Fixed the remaining alignment issues in DOS & Unix.
+  * Avoid hanging in FreeBSD.
+  * Fixed the performance issues in all versions of Unix.
+- C/SysLib/GetCurPos.c: Fixed the DOS version and made pointer arguments optional.
+
+## [Unreleased] 2023-01-23
+### Fixed
+- Fixed many Shell scripts compatibility with FreeBSD & MacOS.
+
 ## [Unreleased] 2023-01-18
 ### New
 - Added a config.h file, automatically generated for each target OS.
@@ -12,7 +47,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - Added a GetCursorPosition() routine in SysLib, with versions for DOS, Windows, and Linux.
 
 ### Fixed
-- chars.exe version 1.7: Output columns are now correctly aligned when outputing to the console, even after characters that do not move the cursor.
+- chars.exe: Output columns are now correctly aligned when outputing to the console, even after characters that do not move the cursor.
   (Uses the new GetCursorPosition() to detect when the cursor did not move, and outputs an extra space in that case.)
 
 ## [Unreleased] 2023-01-16
