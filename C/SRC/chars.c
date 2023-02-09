@@ -66,6 +66,7 @@
 *		    Moved operations to the new DetectAnsi() & PrintRange().  *
 *    2023-02-09 JFL More consistent management of alternate code pages.       *
 *		    Corrected and improved the help screen.		      *
+*		    Detect the current character set in DOS.		      *
 *		    Version 2.0.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
@@ -107,6 +108,7 @@
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
+#include <dos.h>
 #include <io.h>		/* For _setmode() */
 #if !(defined(_BIOS) || defined(_LODOS))
 #include <fcntl.h>	/* For _O_BINARY */
@@ -294,6 +296,14 @@ int CDECL main(int argc, char *argv[]) {
   RANGE_DEF *rangeDefs = NULL;
   int nRanges = 0;
 
+#ifdef _MSDOS
+  unsigned uCP0, uCP;
+  union REGS inRegs, outRegs;
+  inRegs.x.ax = 0x6601;	/* Get Global Code Page */
+  intdos(&inRegs, &outRegs);
+  uCP0 = uCP = outRegs.x.bx;
+#endif /* _MSDOS */
+
 #if SUPPORTS_UTF8
 #ifdef _WIN32
   char **argvCP0;
@@ -422,13 +432,16 @@ arg_ignored:
     fprintf(stderr, "Unrecognized argument %s. Ignored.\n", arg);
   }
 
-#ifdef _WIN32
+#if MICROSOFT_OS
   if (iVerbose) printf("The console code page is %d\n", uCP0);
-#endif /* defined(_WIN32) */
+#endif /* MICROSOFT_OS */
 #ifdef _UNIX
   if (iVerbose) printf("The system locale is %s\n", pszLocale);
-#endif /* _UNIX */
+#endif /* UNIX */
 
+#ifdef _MSDOS
+  if ((uCP0 > 930U) && (uCP0 < 950U)) isMBCS = 1; /* Asian MBCS supported by DOS are all in this range */
+#endif /* defined(_MSDOS) */
 #ifdef _WIN32
   if (uCP1 && (uCP1 != uCP)) {
     if (iVerbose) printf("Switching to code page %d.\n", uCP1);
@@ -450,6 +463,9 @@ arg_ignored:
   /* Check if MSBCS code set */
   isMBCS = (cpi.MaxCharSize > 1);
 #endif /* defined(_WIN32) */
+#ifdef _UNIX
+  /* TODO: Detect MBCS in Unix. (Other than IUTF-8, which is flagged as MBCS further down) */
+#endif /* defined(_UNIX) */
 
 #if SUPPORTS_UTF8
 #ifdef _WIN32
