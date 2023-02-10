@@ -67,16 +67,17 @@
 *    2023-02-09 JFL More consistent management of alternate code pages.       *
 *		    Corrected and improved the help screen.		      *
 *		    Detect the current character set in DOS.		      *
+*    2023-02-10 JFL Added option -q to display the char, but not its code.    *
 *		    Version 2.0.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DESCRIPTION "Show the characters that can be written to standard out"
+#define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
 #define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2023-02-09"
+#define PROGRAM_DATE    "2023-02-10"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -189,11 +190,11 @@ DEBUG_GLOBALS			/* Define global variables used by our debugging macros */
 
 /* Chars Flags, passed to and from the subroutines */
 #define CF_VERBOSE  0x01	/* Verbose mode */
-#define CF_ALL	    0x02	/* Output all characters, even control characters */
-#define CF_UNICODE  0x04	/* The user passed a Unicode code point */
-#define CF_TTY 	    0x08	/* The output goes to a terminal */
-#define CF_ANSI	    0x10	/* The terminal processes ANSI escape sequences */
-#define CF_DUMP	    0x20	/* The user requested to display the character codes */
+#define CF_QUIET    0x02	/* Quiet mode */
+#define CF_ALL	    0x04	/* Output all characters, even control characters */
+#define CF_UNICODE  0x08	/* The user passed a Unicode code point */
+#define CF_TTY 	    0x10	/* The output goes to a terminal */
+#define CF_ANSI	    0x20	/* The terminal processes ANSI escape sequences */
 #define CF_UTF8	    0x40	/* The terminal can display UTF-8 characters */
 
 typedef struct _CHAR_DEF {
@@ -234,7 +235,7 @@ int Print(const char *pszString) { return printf("%s", pszString); } /* Output a
 int Puts(const char *pszString) { return fputs(pszString, stdout); } /* Output a string without a new line */
 #define PUTL(pszString) do { Puts(pszString); Puts(EOL); } while (0) /* Output a string with a new line in raw mode (LF untranslated) */
 int ParseCharCode(char *pszString, int *pCode, int *pOutFlags);
-#ifdef _WIN32
+#if MICROSOFT_OS
 int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2);
 #else
 int PrintCharCode(int iCode, int iFlags);
@@ -369,7 +370,12 @@ int CDECL main(int argc, char *argv[]) {
 	usage();
 	return 0;
       }
-      if (   streq(opt, "v")     /* -a: Display all characters */
+      if (   streq(opt, "q")     /* -q: Quiet mode: Minimal output */
+	  || streq(opt, "-quiet")) {
+	iFlags |= CF_QUIET;
+	continue;
+      }
+      if (   streq(opt, "v")     /* -v: Verbose mode: Detailed output */
 	  || streq(opt, "-verbose")) {
 	iVerbose = TRUE;
 	iFlags |= CF_VERBOSE;
@@ -552,12 +558,6 @@ arg_ignored:
 
 /*************** Now on, all output must use EOL instead of \n ***************/
 
-  if (iVerbose) {
-    iFlags |= CF_DUMP;
-  } else {
-    iFlags &= ~CF_DUMP;
-  }
-
   /* Display character ranges in tables */
   iExitCode = 0;
   for (i=0; i<nRanges; i++) {
@@ -634,12 +634,14 @@ arg_ignored:
     if (iLast > iFirst) {
       iExitCode += PrintRange(iFirst, iLast, iFlags);
     } else {
-#ifdef _WIN32
+#if defined(_MSDOS)
+      iExitCode += PrintCharCode(iFirst, iFlags, uCP, iFirst);
+#elif defined(_WIN32)
       int uCP2 = 0;
       int iCode2 = -1;
       char *pszArgCP1 = rangeDefs[i].pszArgCP1;
       char *pszArgUTF8 = rangeDefs[i].pszArgUTF8;
-      if (isUnicodeChar && (iFlags & CF_DUMP) && (strlen(pszArgCP1) == 1)) {
+      if (isUnicodeChar && (iFlags & CF_VERBOSE) && (strlen(pszArgCP1) == 1)) {
       	uCP2 = uCP1;
 	iCode2 = pszArgCP1[0] & 0xFF;
 	if ((pszArgCP1[0] == '?') && (pszArgUTF8[0] != '?')) iCode2 = -1;
@@ -710,6 +712,7 @@ Switches:\n\
 "
 #endif
 "\
+  -q|--quiet        Display only the character, but not its code\n\
   -v|--verbose      Display verbose information\n\
   -V|--version      Display this program version and exit\n\
 \n\
@@ -982,24 +985,26 @@ char *GetCharmap(char *pszBuf, size_t nBufSize) {
 }
 #endif
 
-#ifdef _WIN32
+#if MICROSOFT_OS
 int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2) {
+  char buf[5];
   DEBUG_PRINTF(("PrintCharCode(0x%02X, 0x%X, %u, 0x%02X)" EOL, iCode, iFlags, uCP2, iCode2));
 #else
 int PrintCharCode(int iCode, int iFlags) {
+  char buf[5];
   DEBUG_PRINTF(("PrintCharCode(0x%02X, 0x%X)" EOL, iCode, iFlags));
 #endif
+
 #if SUPPORTS_UTF8
   if (iFlags & CF_UNICODE) { /* Print a Unicode character */
     int i;
-    char buf[5];
     int n8 = ToUtf8(iCode, buf);
     buf[n8] = '\0';
     if (!n8) {
       fprintf(stderr, "Invalid code point: 0x%X." EOL, iCode);
       return 1;
     }
-    if (iFlags & CF_DUMP) {
+    if (iFlags & CF_VERBOSE) {
       WORD buf16[2];
       int n16 = ToUtf16(iCode, buf16);
       printf("Unicode U+%04X" EOL, iCode); /* The standard requires at least 4 hexadecimal characters */
@@ -1019,19 +1024,21 @@ int PrintCharCode(int iCode, int iFlags) {
 	}
       }
 #endif
-      Puts("'");
+    } else if (!(iFlags & CF_QUIET)) {
+      printf("\\u%04X ", iCode);
     }
-    Puts(buf);
   } else
 #endif /* SUPPORTS_UTF8 */
   {		/* Print an 8-bits code page character */
-    if (iFlags & CF_DUMP) {
+    buf[0] = (char)iCode;
+    buf[1] = '\0';
+    if (iFlags & CF_VERBOSE) {
 #ifdef _MSDOS
-      printf("Char \\x%02X" EOL, iCode); /* Display at least 2 hexadecimal characters */
+      printf("CP%u \\x%02X" EOL, uCP2, iCode2); /* Display at least 2 hexadecimal characters */
 #endif
 #ifdef _WIN32
-      unsigned uCP = GetConsoleOutputCP();
-      printf("CP%u \\x%02X" EOL, uCP, iCode); /* Display at least 2 hexadecimal characters */
+      if (!uCP2) uCP2 = GetConsoleOutputCP();
+      printf("CP%u \\x%02X" EOL, uCP2, iCode); /* Display at least 2 hexadecimal characters */
 #endif
 #ifdef _UNIX
       char szCharmap[64];
@@ -1041,11 +1048,18 @@ int PrintCharCode(int iCode, int iFlags) {
       }
       printf("%s \\x%02X" EOL, szCharmap, iCode); /* Display at least 2 hexadecimal characters */
 #endif
-      Puts("'");
+    } else if (!(iFlags & CF_QUIET)) {
+      printf("\\x%02X ", iCode);
     }
-    Puts((char *)&iCode);
   }
-  if (iFlags & CF_DUMP) Puts("'" EOL);
+  if (iFlags & CF_VERBOSE) Puts("'");
+  Puts(buf);
+  if (iFlags & CF_VERBOSE) {
+    Puts("'" EOL);
+  } else if (!(iFlags & CF_QUIET)) {
+    Puts(EOL);
+  }
+
   return 0;
 }
 
