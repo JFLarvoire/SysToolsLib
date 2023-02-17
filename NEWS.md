@@ -4,13 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2023-02-09
+## [Unreleased] 2023-02-17
 ### Changed
 - chars.exe version 2.0:
   * Breaking change: Added support for multiple ranges, and removed option -u.
   * Detect the current character set in DOS.
+  * Added option -q to display the character, but not its code.
+  * Added support for Unicode blocks:
+    - Added the complete list of Unicode 15 blocks.
+    - Added option -b to list the known blocks.
+    - Allow displaying a block by name or partial name.
+    - Display the block name in verbose mode for individual characters.
+- Renamed stristr() as strcasestr(), and moved it from SysLib to MsvcLibX.
 
-## [Unreleased] 2023-01-30
+## [Unreleased] 2023-02-01
 ### Changed
 - chars.exe:
   * For single characters, display the UTF8, UTF16 & UTF32 encodings.
