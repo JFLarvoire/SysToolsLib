@@ -20,7 +20,6 @@
 
 #include "SysLib.h"		/* SysLib Library core definitions */
 
-char *stristr(const char *pszString, const char *pszSearch);
 size_t strnirepl(char *pszResultBuffer, size_t lResultBuffer, const char *pszString,
                  const char *pszSearch, const char *pszReplace);
 

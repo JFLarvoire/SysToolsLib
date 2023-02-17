@@ -10,38 +10,13 @@
 *    2012-02-02 JFL Created this file.					      *
 *    2016-04-12 JFL Include MultiOS.h.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
+*    2023-02-17 JFL Renamed stristr as strcasestr, and moved it to MsvcLibX.  *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #include <stringx.h>
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function:	    stristr						      |
-|									      |
-|   Description:    Case-insensitive search for a sub-string		      |
-|									      |
-|   Parameters:     const char *pszString   Source string to search in	      |
-|		    const char *pszSearch   String to search in pszString     |
-|									      |
-|   Returns:	    A pointer to the first substring found, else NULL.	      |
-|									      |
-|   History:								      |
-|    2012-02-02 JFL Created this routine.				      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-char *stristr(const char *pszString, const char *pszSearch) {
-  size_t lString = strlen(pszString);
-  size_t lSearch = strlen(pszSearch);
-  char *pc;
-  for (pc = pszString; (lSearch <= lString) && *pc; pc++, lString--) {
-    if (strnieq(pc, pszSearch, lSearch)) return pc;
-  }
-  return NULL;
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *

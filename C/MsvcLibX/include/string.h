@@ -27,6 +27,9 @@
 extern "C" {
 #endif
 
+/* Case-insensitive search for a sub-string */
+char *strcasestr(const char *pszHaystack, const char *pszNeedle);
+
 /* These are standard routines, but Microsoft thinks not */
 #define strdup _strdup		/* This one _is_ standard */
 

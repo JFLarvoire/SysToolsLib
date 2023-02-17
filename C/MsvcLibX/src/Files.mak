@@ -82,6 +82,7 @@ OBJECTS = \
     +setenv.obj			\
     +snprintf.obj		\
     +spawn.obj			\
+    +strcasestr.obj		\
     +strerror.obj		\
     +strndup.obj		\
     +strptime.obj		\
@@ -279,6 +280,8 @@ setenv.c: $(I)\stdlib.h $(I)\string.h
 snprintf.c: $(I)\msvclibx.h $(I)\stdio.h $(I)\stdlib.h $(I)\stdarg.h
 
 spawn.c: $(CI)\debugm.h $(I)\errno.h $(I)\msvclibx.h $(I)\process.h $(I)\stdio.h $(I)\windows.h
+
+strcasestr.c: $(I)\string.h
 
 strerror.c: $(I)\errno.h $(I)\msvclibx.h $(I)\stdlib.h $(I)\string.h
 
