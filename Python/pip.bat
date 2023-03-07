@@ -22,13 +22,14 @@
 :#   2021-03-02 JFL Restructured the instances enumeration like in PySetup.bat.
 :#   2021-03-04 JFL List the pip instance corresponding to py.exe instances.  #
 :#                  Use Scripts\pip[3].bat in the absence of Scripts\pip.exe. #
+:#   2023-03-06 JFL Added options -u & -U to upgrade pip & all packages resp. #
 :#                                                                            #
 :#         © Copyright 2019 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions DisableDelayedExpansion
-set "VERSION=2021-03-04"
+set "VERSION=2023-03-06"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -75,12 +76,18 @@ for /l %%n in (1,1,%~2) do shift
 endlocal & set "%VAR%=%~3"
 exit /b
 
-:# Append an element to a list. The list is walkable using a for %%e in (!LIST!) ...
-:lappend %1=LISTNAME %2=value
-if defined %~1 (
-  call set %%~1=%%%1%% %%2
-) else (
-  set %~1=%2
+:# Append elements to a list. The list is walkable using a `for %%e in (!LIST!) do ...`
+:lappend %1=LISTNAME %2=VALUE [%3=VALUE [...]]
+for /f "usebackq tokens=1,*" %%l in ('%*') do ( :# %%l=LISTNAME %%m=VALUES
+  for %%v in (%%m) do ( :# %%v=VALUE
+    :# Always quote the "%%~v" value, to avoid issues when looping on lists with values containing ' or parenthesis, etc.
+    if defined %%~l ( :# If the list is already defined, append to it
+      :# Use !expansion! if possible, else the slower and riskier `call set` method
+      if "!!"=="" (set "%%~l=!%%~l! "%%~v"") else call set %%~l=%%%%~l%% "%%~v"
+    ) else ( :# If the list isn't yet defined, just set the value
+      set %%~l="%%~v"
+    )
+  )
 )
 exit /b
 
@@ -170,7 +177,7 @@ for %%d in (%DRIVES%) do (
   )
 )
 if defined LISTNAME (
-  set SET_RESULT=set %LISTNAME%=%LIST%
+  set SET_RESULT=set !LISTNAME!=!LIST!
   %ECHO.D% !SET_RESULT!
 ) else (
   set SET_RESULT=rem
@@ -189,6 +196,7 @@ set "N=0"
 set ^"PY_VER_ARCH_CMD=import sys, os; print (sys.version.split()[0]+\" \"+os.environ[\"PROCESSOR_ARCHITECTURE\"])^"
 for %%e in (!ALL_PYTHON!) do (
   set "PY_VER=" & set "PY_ARCH="
+  %ECHO.D% %%e -c "!PY_VER_ARCH_CMD!" 2^>NUL
   for /f "tokens=1,2" %%v in ('^"%%e -c "!PY_VER_ARCH_CMD!" 2^>NUL^"') do set "PY_VER=%%v" & set "PY_ARCH=%%w"
   if defined PY_VER if defined PY_ARCH (
     set "PY_DIR=%%~dpe" & set "PY_DIR=!PY_DIR:~0,-1!"
@@ -241,6 +249,8 @@ echo   -?          Display this help
 echo   --          End of %SCRIPT% arguments
 echo   -# N ^| #N   Use pip instance #N in the list. Default=instance #0
 echo   -l          List pip instances installed, with the default instance first
+echo   -u          Upgrade the pip package
+echo   -U          Upgrade all installed Python packages
 echo   -X          Display the pip command line to execute, but don't run it
 echo.
 echo pip.exe options:
@@ -249,6 +259,7 @@ exit /b
 :main
 set "EXEC="
 set "PIPARGS="
+set "ACTION=RUN_PIP"
 if not defined PY# set "PY#=0"
 
 goto :get_arg
@@ -263,6 +274,8 @@ if "%ARG%"=="-#" set "PY#=%~2" & shift & goto :next_arg
 if "%ARG%"=="-d" call :debug.on & goto :next_arg
 if "%ARG:~0,1%"=="#" set "PY#=%ARG:~1%" & goto :next_arg
 if "%ARG%"=="-l" call :EnumPip & exit /b
+if "%ARG%"=="-u" set "ACTION=UPGRADE_PIP" & goto :next_arg
+if "%ARG%"=="-U" set "ACTION=UPGRADE_ALL" & goto :next_arg
 if "%ARG%"=="-V" (echo %SCRIPT% %VERSION%) & set "PIPARGS=-V" & goto :go
 if "%ARG%"=="-X" set "EXEC=echo" & goto :next_arg
 :get_piparg
@@ -280,4 +293,17 @@ if not defined PIP (
   echo %SCRIPT%: Error: No pip command found
   exit /b 1
 )
+
+goto :%ACTION%
+
+:UPGRADE_PIP
+call :lappend PIPARGS install --upgrade pip
+:# Fall through into RUN_PIP
+
+:RUN_PIP
 %EXEC% "%PIP%" %PIPARGS%
+exit /b
+
+:UPGRADE_ALL
+%EXEC% for /F "delims==" %%a in ('"%PIP%" freeze') do "%PIP%" install --upgrade %%a
+exit /b
