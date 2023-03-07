@@ -1756,6 +1756,10 @@ pedump WIN32\winver.exe | findstr subsystem	&:# Default link.exe SUBSYSTEM
 make -a "OS=WIN32" "WINVER=4.0" winver.exe	&:# Check the possibility of building for 95/NT4
 pedump WIN32\winver.exe | findstr subsystem	&:# 4.00 if supported, else the default SUBSYSTEM
 ...
+
+:# Reference data about VS versions:
+https://en.wikipedia.org/wiki/Microsoft_Visual_C%2B%2B#Internal_version_numbering
+https://devblogs.microsoft.com/oldnewthing/20221219-00/?p=107601
 													     :#        Link SUBSYSTEM (Not the same as windows.h WINVER, which is set in the WINSDK)
 :lastvs	&:#  VS Alias	VS Installation directory	     	     VC subdirs	  BIN database		      _MSC_VER	Min   Default	Notes (To find Min & Default, try various WINVER values in a makefile)
 %SEARCH_IN%  17/2022	"%PF64%\Microsoft Visual Studio\2022"		"%VC15S%" BIN15	&& goto :foundvs    &:# 1930	5.01	6.00	Tested and known to work fine
