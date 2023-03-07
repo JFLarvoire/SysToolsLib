@@ -244,6 +244,8 @@
 :#		    Improved routine :RunAsAdmin.                             #
 :#		    Added routines :SaveErrorLevel / :RetrieveErrorLevel to   #
 :#		    allow testing the exit code from the left half of a pipe. #
+:#   2023-03-06 JFL Improved the lappend performance.                         #
+:#                  Added lappend1, supporting multiple values to append.     #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -259,7 +261,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
-set "VERSION=2021-12-06"
+set "VERSION=2023-03-06"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -2698,20 +2700,56 @@ endlocal & set "%~1=%STRING%" & exit /b
 :#                                                                            #
 :#  Notes 	    Inspired from Tcl list management routines                #
 :#                                                                            #
+:#                  The list is walkable using `for %%e in (!LIST!) do ...`   #
+:#                                                                            #
 :#  History                                                                   #
 :#   2016-11-09 JFL Added routine lsort.                                      #
+:#   2023-03-06 JFL Improved the lappend performance.                         #
+:#                  Added lappend1, supporting multiple values to append.     #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
-:# Append an element to a list
-:# %1 = Input/Output variable name
-:# %2 = element value
-:lappend
+:# Append an element to a list. The list is walkable using a `for %%e in (!LIST!) do ...`
+:lappend %1=LISTNAME %2=VALUE
 %FUNCTION%
 %UPVAR% %~1
-if defined %~1 call set "%~1=%%%~1%% "
-call set "%~1=%%%~1%%"%~2""
+if defined %~1 ( :# If the list is already defined, append to it
+  :# Always quote the "%~2" value, to avoid issues when looping on lists with values containing ' or parenthesis etc.
+  :# Use !expansion! if possible, else the slower and riskier `call set` method
+  if "!!"=="" (set "%~1=!%~1! "%~2"") else call set %~1=%%%~1%% "%~2"
+) else ( :# The list isn't yet defined, just set the value
+  set %~1="%~2"
+)
 %RETURN%
+
+:# Append elements to a list. The list is walkable using a `for %%e in (!LIST!) do ...`
+:lappend1 %1=LISTNAME %2=VALUE [%3=VALUE [...]]
+for /f "usebackq tokens=1,*" %%l in ('%*') do ( :# %%l=LISTNAME %%m=VALUES
+  for %%v in (%%m) do ( :# %%v=VALUE
+    :# Always quote the "%%~v" value, to avoid issues when looping on lists with values containing ' or parenthesis, etc.
+    if defined %%~l ( :# If the list is already defined, append to it
+      :# Use !expansion! if possible, else the slower and riskier `call set` method
+      if "!!"=="" (set "%%~l=!%%~l! "%%~v"") else call set %%~l=%%%%~l%% "%%~v"
+    ) else ( :# The list isn't yet defined, just set the value
+      set %%~l="%%~v"
+    )
+  )
+)
+exit /b
+
+:# Append elements to a list. The list is walkable using a `for %%e in (!LIST!) do ...`
+:# Faster than :lappend1, but may cause problems with elements containing ' or ()
+:lappend1a %1=LISTNAME %2=VALUE [%3=VALUE [...]]
+for /f "usebackq tokens=1,*" %%l in ('%*') do ( :# %%l=LISTNAME %%m=VALUES
+  :# No need to loop on each value, as they're already quoted as needed in %%m
+  if defined %%~l ( :# If the list is already defined, append to it
+    :# Use !expansion! if possible, else the slower and riskier `call set` method
+    if "!!"=="" (set "%%~l=!%%~l! %%m") else call set %%~l=%%%%~l%% %%m
+  ) else ( :# The list isn't yet defined, just set the value(s)
+    set %%~l=%%m
+  )
+)
+exit /b
 
 :# Split a string into a list of quoted substrings
 :# %1 = Output variable name
