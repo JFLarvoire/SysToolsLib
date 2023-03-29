@@ -54,13 +54,15 @@
 :#   2020-10-13 JFL Also search the adapter name in the description field.    #
 :#                  Added a special case for the Pulse Secure VPN.            #
 :#   2020-10-15 JFL Generalized the ability to define alias names and types.  #
+:#   2023-03-28 JFL Fixed the language detection to find the current display  #
+:#                  language, instead of the install language as before.      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2020-10-15"
+set "VERSION=2023-03-28"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 
@@ -364,6 +366,7 @@ echo Options:
 echo   -?      Display this help and exit
 echo   -a      Show all devices types
 echo   -A      Show no device type (Useful to then enable just one type below)
+echo   -d      Output debug information
 echo   -e      Show ethernet devices (Default)
 echo   -E      Hide ethernet devices
 echo   -g      Show Windows global IP configuration (Default)
@@ -434,8 +437,27 @@ set "description=Description"
 :# Note that each language uses a specific code page in cmd boxes. Some SBCS and some DBCS.
 :# The language-specific strings to search for cannot be visualized correctly in a Windows editor.
 :# Type this batch at the localized cmd prompt, to see the actual strings in that code page.
-set LANG=unknown
-for /f "tokens=3" %%l in ('reg query "hklm\system\currentcontrolset\control\nls\language" /v Installlanguage ^| findstr REG_SZ') do set LANG=%%l
+
+:# Most comments on the Internet about how to get the OS localization are wrong.
+:# They explain how to get the install language, not the display language. 
+:# I initially got it wrong too, and tested the install language only.
+:# The correct method for getting the display language is documented there:
+:# https://stackoverflow.com/a/35704694
+set "CULTURE="	&:# The display language, aka. culture. Ex: en-US or fr-FR
+set "LCID="	&:# The Culture ID. Ex: 0x409 or 0x40C
+set "LANG="	&:# The install language. Ex: 0409 or 040C
+:# Get the user's preferred display language
+for /f "tokens=3" %%l in ('reg query "HKCU\Control Panel\Desktop" /v PreferredUILanguages ^| findstr /r REG.*SZ') do set "CULTURE=%%l"
+:# Convert the Display Language to the corresponding Culture ID
+if defined CULTURE for /f "tokens=3" %%l in ('reg query "HKLM\System\CurrentControlSet\Control\MUI\UILanguages\%CULTURE%" /v LCID ^| findstr REG_DWORD') do set "LCID=%%l"
+:# Convert the hexadecimal LCID (Ex: 0x409) to a 4-digit install language (Ex: 0409)
+if defined LCID (
+  set "LANG=000%LCID:0x=0%"
+  set "LANG=!LANG:~-4!"
+)
+%PUTVARS.D% CULTURE LCID LANG &:# This is called before cmd-line options are processed, so set "DEBUG=1" in the shell to see these vvariables
+:# If the above failed, revert to getting the install language
+if not defined LANG for /f "tokens=3" %%l in ('reg query "HKLM\system\currentcontrolset\control\nls\language" /v Installlanguage ^| findstr REG_SZ') do set LANG=%%l
 if %LANG%==0407 (
   rem :# 0407 = German:
   set "type_at=0"
@@ -449,12 +471,12 @@ if %LANG%==0407 (
 ) else if %LANG%==0409 (
   rem :# 0409 = English. Strings encoded in code page 437.
   rem :# Already OK. 
-) else if %LANG%==040C (
+) else if /i %LANG%==040C (
   rem :# 040C = French. Strings encoded in code page 850.
   set "type_at=6"
   set "type.Win=ura"
   set "type.Eth=Eth"
-  rem :# The next item is "Rés" for "Réseau sans fil". é = \x82 in code page 850.
+  rem :# The next item is "Rés" for "Réseau sans fil". é = \x82 in code pages 437 & 850.
   set "type.Wir=R‚s"
   set "type.Tun=Tun"
   set "remove.Eth=15"
@@ -503,7 +525,7 @@ if %LANG%==0407 (
   set "remove.Eth=7"
   set "remove.Wir=9"
   set "remove.Tun=6"
-) else if %LANG%==0C0A (
+) else if /i %LANG%==0C0A (
   rem :# 0C0A = Spanish. Strings encoded in code page 850.
   set "type_at=13"
   set "type.Win= IP"
@@ -645,7 +667,7 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
     if "!head!"=="	  " set "head=   "
     if not "!head!"=="   " (
       :# This is an interface title line starting at column 0.
-      set "type=!line:~%type_at%,3!"
+      set "type=!line:~%type_at%,3!" 
       :# Extract the adapter name.
       set name=!line!
       for %%t in (%types%) do if "!type!"=="!type.%%t!" set "n=!remove.%%t!"
@@ -658,7 +680,7 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
       set /a NADAPTERS=NADAPTERS+1
       %PUTVARS.D% line type name NADAPTER NADAPTERS
       :# Except for adapter 0, which is actually Windows properties.
-      if not "!NADAPTER!"=="0" set "ADAPTER.NAMES.!name!=!NADAPTER!"
+      if not "!NADAPTER!"=="0" set "ADAPTER.NAMES.!name!=!NADAPTER!" 
       set "ADAPTER[!NADAPTER!].LINE=!line!"
       set "ADAPTER[!NADAPTER!].NAME=!name!"
       set "ADAPTER[!NADAPTER!].TYPE=!type!"
