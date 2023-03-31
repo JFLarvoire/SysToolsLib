@@ -1,5 +1,5 @@
 @echo off
-:##############################################################################
+:######################### :encoding=UTF-8:tabSize=8: #########################
 :#                                                                            #
 :#  Filename        ipcfg.bat                                                 #
 :#                                                                            #
@@ -56,13 +56,24 @@
 :#   2020-10-15 JFL Generalized the ability to define alias names and types.  #
 :#   2023-03-28 JFL Fixed the language detection to find the current display  #
 :#                  language, instead of the install language as before.      #
+:#   2023-03-29 JFL Fixed the Wi-Fi adapters detection in French.	      #
+:#   2023-03-31 JFL More generally, fixed all non-ASCII signatures detections.#
+:#                  Done by converting this script encoding from 1252 to UTF8,#
+:#                  and by using the actual UTF8 string signatures herein.    #
+:#                  Previously the signatures had to stored here in their     #
+:#		    various native DOS code page. This was done by manually   #
+:#                  converting them this way in a terminal window...	      #
+:#                  Example for French, using CP 850 for its DOS code page:   #
+:#                  chcp 1252						      #
+:#                  echo "Rés" | conv . 850				      #
+:#                  ... Then pasting the output in this script.               #
 :#                                                                            #
-:#         � Copyright 2016 Hewlett Packard Enterprise Development LP         #
+:#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal enableextensions enabledelayedexpansion
-set "VERSION=2023-03-28"
+set "VERSION=2023-03-31"
 set "SCRIPT=%~nx0"
 set "ARG0=%~f0"
 
@@ -299,6 +310,51 @@ goto PutArgs.loop
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        trimleft						      #
+:#                                                                            #
+:#  Description     Trim spaces from the left end of a string		      #
+:#                                                                            #
+:#  Arguments       %1	    Variable name                                     #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2023-03-31 JFL Rewritten a simplified version for maximum speed.         #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:trimleft
+for /f "tokens=*" %%a in ("!%~1!") do set "%~1=%%a"
+exit /b
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        ConvertSig2CP                                             #
+:#                                                                            #
+:#  Description     Convert a non-ASCII signature to the current console CP.  #
+:#                                                                            #
+:#  Arguments       %1 = variable name					      #
+:#                                                                            #
+:#  Returns         Nothing                                                   #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2023-03-29 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:ConvertSig2CP
+for /f %%a in ('echo !%~1!^| conv 8 .') do set "%~1=%%a"
+set "%~1=!%~1:~0,3!" &:# Truncate the signature after 3 bytes
+exit /b
+
+:Convert2CP
+for /f %%a in ('echo !%~1!^| conv 8 .') do set "%~1=%%a"
+exit /b
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        UnsetVars                                                 #
 :#                                                                            #
 :#  Description     Delete all member variables beginning at a given root     #
@@ -340,6 +396,28 @@ goto :eof
 for /f "tokens=*" %%v in ('ver') do @set WINVER=%%v
 for /f "delims=[]" %%v in ('for %%a in ^(%WINVER%^) do @^(echo %%a ^| findstr [0-9]^)') do @set WINVER=%%v
 for /f "tokens=1,2,3 delims=." %%v in ("%WINVER%") do @(set "WINMAJOR=%%v" & set "WINMINOR=%%w" & set "WINBUILD=%%x")
+goto :eof
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        GetCP	                                              #
+:#                                                                            #
+:#  Description     Get code pages		                              #
+:#                                                                            #
+:#  Arguments                                                                 #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2017-05-11 JFL Removed rscp which was trivial and useless.               #
+:#                  Changed chcp into GetCP, returning the current code page. #
+:#                  Added GetACP, GetOEMCP.				      #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Get the current console code page.
+:GetCP %1=variable name
+for /f "tokens=2 delims=:" %%n in ('chcp') do for %%p in (%%n) do set "%1=%%p"
 goto :eof
 
 :#----------------------------------------------------------------------------#
@@ -447,9 +525,9 @@ set "CULTURE="	&:# The display language, aka. culture. Ex: en-US or fr-FR
 set "LCID="	&:# The Culture ID. Ex: 0x409 or 0x40C
 set "LANG="	&:# The install language. Ex: 0409 or 040C
 :# Get the user's preferred display language
-for /f "tokens=3" %%l in ('reg query "HKCU\Control Panel\Desktop" /v PreferredUILanguages ^| findstr /r REG.*SZ') do set "CULTURE=%%l"
+for /f "tokens=3" %%l in ('reg query "HKCU\Control Panel\Desktop" /v PreferredUILanguages 2^>NUL ^| findstr /r REG.*SZ') do set "CULTURE=%%l"
 :# Convert the Display Language to the corresponding Culture ID
-if defined CULTURE for /f "tokens=3" %%l in ('reg query "HKLM\System\CurrentControlSet\Control\MUI\UILanguages\%CULTURE%" /v LCID ^| findstr REG_DWORD') do set "LCID=%%l"
+if defined CULTURE for /f "tokens=3" %%l in ('reg query "HKLM\System\CurrentControlSet\Control\MUI\UILanguages\%CULTURE%" /v LCID 2^>NUL ^| findstr REG_DWORD') do set "LCID=%%l"
 :# Convert the hexadecimal LCID (Ex: 0x409) to a 4-digit install language (Ex: 0409)
 if defined LCID (
   set "LANG=000%LCID:0x=0%"
@@ -470,17 +548,18 @@ if %LANG%==0407 (
   set "remove.Tun=14"
 ) else if %LANG%==0409 (
   rem :# 0409 = English. Strings encoded in code page 437.
-  rem :# Already OK. 
+  rem :# Already OK.
 ) else if /i %LANG%==040C (
   rem :# 040C = French. Strings encoded in code page 850.
   set "type_at=6"
   set "type.Win=ura"
   set "type.Eth=Eth"
-  rem :# The next item is "R�s" for "R�seau sans fil". � = \x82 in code pages 437 & 850.
-  set "type.Wir=R�s"
+  set "type.Wir=R‚s"
+  set "type.Wir=Rés" &rem # "Réseau sans fil"
+  call :ConvertSig2CP type.Wir
   set "type.Tun=Tun"
   set "remove.Eth=15"
-  set "remove.Wir=16"
+  set "remove.Wir=22"
   set "remove.Tun=13"
 ) else if %LANG%==0410 (
   rem :# 0410 = Italian. Strings encoded in code page 850.
@@ -498,7 +577,9 @@ if %LANG%==0407 (
   rem :# has a character \x81\x5b at index 1, and \x81 is invalid in code page 1252 here.
   set "type_at=2"
   set "type.Win=ndo"
-  set "type.Eth=�T�l�b"
+  set "type.Eth=ƒTƒlƒb"
+  set "type.Eth=サネッ"
+  call :ConvertSig2CP type.Eth
   set "type.Wir=rel"
   set "type.Tun=nne"
   set "remove.Eth=13"
@@ -508,10 +589,16 @@ if %LANG%==0407 (
   rem :# 0419 = Russian. Strings encoded in code page 866. (SBCS)
   rem :# Skipping the first letter, capitalized, in the 0x8X range, causing problems in code page 1252.
   set "type_at=1"
-  set "type.Win=���"
+  set "type.Win= áâ"
+  set "type.Win=аст"
+  call :ConvertSig2CP type.Win
   set "type.Eth=the"
-  set "type.Wir=���"
-  set "type.Tun=㭭"
+  set "type.Wir=¤ ¯"
+  set "type.Wir=дап"
+  call :ConvertSig2CP type.Wir
+  set "type.Tun=ã­­"
+  set "type.Tun=у­­"
+  call :ConvertSig2CP type.Tun
   set "remove.Eth=17"
   set "remove.Wir=36"
   set "remove.Tun=19"
@@ -519,9 +606,15 @@ if %LANG%==0407 (
   rem :# 0804 = Chinese. Strings encoded in code page 936. (DBCS)
   set "type_at=0"
   set "type.Win=Win"
-  set "type.Eth=��̫��"
-  set "type.Wir=���߾�"
-  set "type.Tun=������"
+  set "type.Eth=ÒÔÌ«Íø"
+  set "type.Eth=以太网"
+  call :ConvertSig2CP type.Eth
+  set "type.Wir=ÎÞÏß¾Ö"
+  set "type.Wir=无线局"
+  call :ConvertSig2CP type.Wir
+  set "type.Tun=ËíµÀÊÊ"
+  set "type.Tun=隧道适"
+  call :ConvertSig2CP type.Tun
   set "remove.Eth=7"
   set "remove.Wir=9"
   set "remove.Tun=6"
@@ -530,10 +623,12 @@ if %LANG%==0407 (
   set "type_at=13"
   set "type.Win= IP"
   set "type.Eth=Eth"
-  rem :# The next item is for "Adaptador LAN inal�mbrico"
+  rem :# The next item is for "Adaptador LAN inalámbrico"
   set "type.Wir= in"
-  rem :# The next item is "t�n" for "Adaptador de t�nel". � = \xA3 in code page 850.
-  set "type.Tun=t�n"
+  rem :# The next item is "tún" for "Adaptador de túnel". ú = \xA3 in code page 850.
+  set "type.Tun=t£n"
+  set "type.Tun=tún"
+  call :ConvertSig2CP type.Tun
   set "remove.Eth=22"
   set "remove.Wir=26"
   set "remove.Tun=19"
@@ -637,12 +732,19 @@ for /f "tokens=1 delims=." %%i in ('for /f "tokens=*" %%m in ^("%MAC%"^) do @rou
 goto :eof
 
 :start
+:# Get the current console code page
+call :GetCP OLDCP
+
+:# Tricky character that is code-page-dependent
+set "HARDSPACE= " &:# Unicode U+00A0
+call :Convert2CP HARDSPACE
+
 :# If an alias is defined for that name, use it.
 for %%a in ("%adapter%") do ( :# Use a %%a variable as we begin by updating %adapter%
   if defined ALIAS[%%~a].NAME set "adapter=!ALIAS[%%~a].NAME!"
   if defined ALIAS[%%~a].TYPE call :select !ALIAS[%%~a].TYPE! 1
 )
-
+                               
 if "%action%"=="get_interface" goto :get_interface
 %PUTVARS.D% LANG type_at types adapter names.display
 for %%t in (%types%) do %PUTVARS.D% type.%%t show.%%t remove.%%t
@@ -657,28 +759,31 @@ set name=unknown
 set NADAPTERS=0
 call :UnsetVars ADAPTER. &:# Erase all variables beginning with ADAPTER.
 call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
-%FOREACHLINE% %%l in ('ipconfig!opts!') do (
+:# The sub-shell and/or pipe used for capturing the ipconfig.exe output
+:# outputs lines encoded in the DOS code page, whatever the current code page.
+%FOREACHLINE% %%l in ('ipconfig!opts! ^| conv d %OLDCP%') do (
   set "line=%%l"
   :# Work around for XP ipconfig.exe bug: Remove the trailing \x0D
   if %WINMAJOR%==5 set line=!line:~0,-1!
   if not "!line!"=="" (
+    set "line=!line:%HARDSPACE%= !" &rem :# Convert hard spaces to normal spaces
     set "head=!line:~0,3!"
     :# Some lines begin with tab-space-space... Treat them as space-space-space.
     if "!head!"=="	  " set "head=   "
     if not "!head!"=="   " (
       :# This is an interface title line starting at column 0.
-      set "type=!line:~%type_at%,3!" 
+      set "signature=!line:~%type_at%,3!"
+      for %%t in (%types%) do if /i "!signature!"=="!type.%%t!" set "type=%%t"
       :# Extract the adapter name.
       set name=!line!
-      for %%t in (%types%) do if "!type!"=="!type.%%t!" set "n=!remove.%%t!"
+      for %%t in (!type!) do set "n=!remove.%%t!"
       for %%n in (!n!) do set "name=!name:~%%n!"
       if "!name:~-1!"==":" set "name=!name:~0,-1!"
       if "!name:~-1!"==" " set "name=!name:~0,-1!"
-      %PUTVARS.D% line type name
       :# Record the adapter name and type.
       set "NADAPTER=!NADAPTERS!"
       set /a NADAPTERS=NADAPTERS+1
-      %PUTVARS.D% line type name NADAPTER NADAPTERS
+      %PUTVARS.D% line signature type n name NADAPTER NADAPTERS
       :# Except for adapter 0, which is actually Windows properties.
       if not "!NADAPTER!"=="0" set "ADAPTER.NAMES.!name!=!NADAPTER!" 
       set "ADAPTER[!NADAPTER!].LINE=!line!"
@@ -695,13 +800,15 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
       set "ADAPTER[!NADAPTER!].LINES.!NPROP2!=!line!"
       %PUTVARS.D% ADAPTER[!NADAPTER!].LINES.!NPROP2!
       :# Look for the properties with additional information we need
-      if not "!line: : =!"=="!line!" ( :# If this is a "property . . . : value" definition line
+      if not "!line:: =!"=="!line!" ( :# If this is a "property . . . : value" definition line
 	for /f "tokens=1,* delims=:" %%p in ("!line:~3!") do set "prop=%%p" & set "val=%%q"
 	:# Remove all trailing . . . . behind the property name
 	:# Note: Don't use library.bat :trimright for performance reasons.
+	set "prop=!prop: .=!"
 	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
-	set prop=!prop: .=!
-	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	if "!prop:~-1!"=="." set "prop=!prop:~0,-1!"
+	call :trimleft prop
+	call :trimleft val
 	%PUTVARS.D% prop val
 	:# Now check if the description identifies this as a virtual interface
 	if "!prop!"=="!description!" (
@@ -718,11 +825,12 @@ call :UnsetVars ADAPTER[ &:# Erase all variables beginning with ADAPTER[
 
 :# If we didn't get all properties, repeat with them all, because we at least need the description
 set NADAPTER=-1
-if not "!opts: /all=!"=="!opt!" %FOREACHLINE% %%l in ('ipconfig!opts! /all') do (
+if not "!opts: /all=!"=="!opt!" %FOREACHLINE% %%l in ('ipconfig!opts! /all ^|conv d %OLDCP%') do (
   set "line=%%l"
   :# Work around for XP ipconfig.exe bug: Remove the trailing \x0D
   if %WINMAJOR%==5 set line=!line:~0,-1!
   if not "!line!"=="" (
+    set "line=!line:%HARDSPACE%= !" &rem :# Convert hard spaces to normal spaces
     set "head=!line:~0,3!"
     :# Some lines begin with tab-space-space... Treat them as space-space-space.
     if "!head!"=="	  " set "head=   "
@@ -731,13 +839,15 @@ if not "!opts: /all=!"=="!opt!" %FOREACHLINE% %%l in ('ipconfig!opts! /all') do 
       set /a NADAPTER=NADAPTER+1
     ) else (			:# This is an interface property line, shifted to the right.
       :# Look for the properties with additional information we need
-      if not "!line: : =!"=="!line!" ( :# If this is a "property . . . : value" definition line
+      if not "!line:: =!"=="!line!" ( :# If this is a "property . . . : value" definition line
 	for /f "tokens=1,* delims=:" %%p in ("!line:~3!") do set "prop=%%p" & set "val=%%q"
 	:# Remove all trailing . . . . behind the property name
 	:# Note: Don't use library.bat :trimright for performance reasons.
+	set "prop=!prop: .=!"
 	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
-	set prop=!prop: .=!
-	if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	if "!prop:~-1!"=="." set "prop=!prop:~0,-1!"
+	call :trimleft prop
+	call :trimleft val
 	%PUTVARS.D% prop val
 	:# Now check if the description identifies this as a virtual interface
 	if "!prop!"=="!description!" (
@@ -809,9 +919,11 @@ for /f "tokens=1,2 delims==" %%a in ('echo ADAPTER.NAMES.!ADAPTER[0].NAME!^=0^& 
 	  for /f "tokens=1,* delims=:" %%p in ("!line:~3!") do set "prop=%%p" & set "val=%%q"
 	  :# Remove all trailing . . . . behind the property name
 	  :# Note: Don't use library.bat :trimright for performance reasons.
+	  set "prop=!prop: .=!"
 	  if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
-	  set prop=!prop: .=!
-	  if "!prop:~-1!"==" " set "prop=!prop:~0,-1!"
+	  if "!prop:~-1!"=="." set "prop=!prop:~0,-1!"
+	  call :trimleft prop
+	  call :trimleft val
 	) else (
 	  :# Else it's a continuation line for the same property
 	  for /f "tokens=*" %%p in ("!line:~3!") do set "val=%%p"
