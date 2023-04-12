@@ -45,6 +45,8 @@ BASE_OBJECTS = \
 # Common objects usable in all operating systems with a Standard C library
 COMMON_OBJECTS = \
     $(BASE_OBJECTS)		\
+    +$(O)/CondQuoteShellArg.obj	\
+    +$(O)/DupArgLineTail.obj	\
     +$(O)/copydate.obj		\
     +$(O)/JoinPaths.obj		\
     +$(O)/pferror.obj		\
@@ -76,6 +78,8 @@ $(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/
 
 $(S)/Block.h: $(S)/SysLib.h $(S)/qword.h
 
+$(S)/CondQuoteShellArg.c: $(S)/SysLib.h $(S)/CmdLine.h
+
 $(S)/console.h: $(S)/SysLib.h
 
 $(S)/copydate.c: $(S)/SysLib.h $(S)/copyfile.h
@@ -84,6 +88,8 @@ $(S)/crc32.cpp: $(S)/crc32.h \
 		$(GNUEFI)/inc/efi.h $(GNUEFI)/inc/efilib.h
 
 $(S)/crc32.h: $(S)/SysLib.h
+
+$(S)/DupArgLineTail.c: $(S)/SysLib.h $(S)/CmdLine.h
 
 $(S)/efibind.h: $(S)/qword.h
 
