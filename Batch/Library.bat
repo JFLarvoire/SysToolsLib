@@ -4498,21 +4498,23 @@ for /f "tokens=1,*" %%A in ("!LINE:*REG_=!") do set %VALUEVAR%=%%B
 :#  Note            Sets "NEED_BROADCAST=1" if not done already by setx.exe.  #
 :#                                                                            #
 :#  History                                                                   #
-:#   2020-10-01 JFL Created this routine.                                     #
+:#   2020-10-01 JFL Created routine :SysVar.Set.                              #
+:#   2023-03-07 JFL Simplified :SysVar.Set end, and added :SysVar.Broadcast.  #
+:#   2023-04-13 JFL Fixed :SysVar.Set NEED_BROADCAST update.		      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :SysVar.Init
 set "SYS_ENV_KEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
 set "USR_ENV_KEY=HKCU\Environment"
-set "NEED_BROADCAST=0"
+if not defined NEED_BROADCAST set "NEED_BROADCAST=0"
 exit /b
 
 :# Sets "NEED_BROADCAST=1" if not done already by setx.exe.
 :SysVar.Set %1=SYSVARNAME %2=VALUEVAR [%3=S|U for System or User resp. Default: S]
 %FUNCTION% EnableDelayedExpansion
-%UPVAR% %NEED_BROADCAST%
-if not defined SYS_ENV_KEY call :SysVar.Init
+%UPVAR% NEED_BROADCAST
+if not defined SYS_ENV_KEY call :SysVar.Init & %UPVAR% SYS_ENV_KEY USR_ENV_KEY
 set "VARNAME=%~1"
 set "VALUE=!%~2!"
 set "CAT=%~3"
