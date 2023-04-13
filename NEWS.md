@@ -4,6 +4,24 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2023-04-12
+### Fixed
+- in.exe and with.exe: Fixed command-line quoting and escaping issues in DOS & Windows versions,
+  by copying the actual command line instead of rebuilding it.
+  Also moved that code into new SysLib routine DupArgLineTail(), and moved CondQuoteShellArg() to SysLib.
+
+## [Unreleased] 2023-03-31
+### Changed
+- Batch/IpCfg.bat:
+   * Fixed the language detection to find the current display language, instead of the install language as before.
+   * Fixed the Wi-Fi adapters detection in French.
+   * More generally, fixed all non-ASCII signatures detections.
+
+## [Unreleased] 2023-03-07
+### Changed
+- Batch/Library.bat: Improved the lappend performance, and added a version supporting multiple values to append.
+- Python/pip.bat: Added options -u & -U to upgrade pip & all packages resp.
+
 ## [Unreleased] 2023-02-17
 ### Changed
 - chars.exe version 2.0:
