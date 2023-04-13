@@ -246,6 +246,7 @@
 :#		    allow testing the exit code from the left half of a pipe. #
 :#   2023-03-06 JFL Improved the lappend performance.                         #
 :#                  Added lappend1, supporting multiple values to append.     #
+:#   2023-03-07 JFL Added system and user environment variables mngt routines.#
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -4462,6 +4463,116 @@ set "RETCODE=1"
 set %VALUEVAR%=!VALUE!
 if defined TYPEVAR set %TYPEVAR%=%TYPE%
 %RETURN% %RETCODE%
+
+:# Simpler version that assumes a 1-line result, and ignores the type
+:# Get a registry value content. Args: KEY NAME [VALUEVAR]
+:GetRegistryValue1
+%FUNCTION% enableextensions enabledelayedexpansion
+set "KEY=%~1"
+set "NAME=%~2"
+set "VALUEVAR=%~3"
+if not defined VALUEVAR set "VALUEVAR=NAME"
+if not defined VALUEVAR set "VALUEVAR=VALUE"
+set "%VALUEVAR%="
+%UPVAR% %VALUEVAR%
+%ECHOVARS.D% KEY NAME VALUEVAR
+if defined NAME (
+  set CMD=reg query "%KEY%" /v "%NAME%"
+) else (
+  set CMD=reg query "%KEY%" /ve
+)
+%ECHO.D% %CMD%
+:# When used with /ve, the (default) output may be 2 words in some languages. Ex: (par défaut)
+:# => We cannot assume the value begins in the 3rd token, and must do some filtering
+set "RETCODE=1"
+for /f "skip=2 tokens=*" %%L in ('%CMD% 2^>NUL') do set "RETCODE=0" & set LINE=%%L
+for /f "tokens=1,*" %%A in ("!LINE:*REG_=!") do set %VALUEVAR%=%%B
+%RETURN% %RETCODE%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
+:#  Function        SysVar                                                    #
+:#                                                                            #
+:#  Description     Manage system and user environment variables              #
+:#                                                                            #
+:#  Note            Sets "NEED_BROADCAST=1" if not done already by setx.exe.  #
+:#                                                                            #
+:#  History                                                                   #
+:#   2020-10-01 JFL Created this routine.                                     #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:SysVar.Init
+set "SYS_ENV_KEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environment"
+set "USR_ENV_KEY=HKCU\Environment"
+set "NEED_BROADCAST=0"
+exit /b
+
+:# Sets "NEED_BROADCAST=1" if not done already by setx.exe.
+:SysVar.Set %1=SYSVARNAME %2=VALUEVAR [%3=S|U for System or User resp. Default: S]
+%FUNCTION% EnableDelayedExpansion
+%UPVAR% %NEED_BROADCAST%
+if not defined SYS_ENV_KEY call :SysVar.Init
+set "VARNAME=%~1"
+set "VALUE=!%~2!"
+set "CAT=%~3"
+if not defined CAT set "CAT=S"
+set "KEY="
+if "!CAT:~0,1!"=="S" set "KEY=!SYS_ENV_KEY!" & set "SETXOPT=-m"
+if "!CAT:~0,1!"=="U" set "KEY=!USR_ENV_KEY!" & set "SETXOPT="
+if not defined KEY >&2 echo Bug: :SysVar.Set argument #3 = %3 is invalid. Must be S or U. & %RETURN%
+set "MORE_THAN_1KB=!VALUE:~1024!" &:# Defined if the new value is longer than 1 KB
+:# Gotcha: reg.exe and setx.exe interpret a trailing \" as escaping the "
+if "!VALUE:~-1!"=="\" set "VALUE=!VALUE!\"
+set "CMD="
+for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+if not defined MORE_THAN_1KB ( :# If the PATH is less than 1KB long, then try using setx
+  if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred if within the 1KB limit)
+    :# setx.exe updates the %PATHVAR%, and _does_ broadcast a WM_SETTINGCHANGE to all apps
+    :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+    set ^"CMD=setx %VARNAME% "!VALUE!" %SETXOPT%^"
+  )
+)
+if not defined CMD ( :# Fallback to updating the registry value manually using reg.exe.
+  :# reg.exe updates the %PATHVAR%, but does _not_ broadcast a WM_SETTINGCHANGE to all apps
+  :# Note: On XP, /f does not work if it is the last option.
+  set ^"CMD=reg add "%KEY%" /f /v %VARNAME% /d "!VALUE!"^"
+  set "NEED_BROADCAST=1"
+)
+%ECHO.XD% !CMD!
+:# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+:# Errors, if any, will still be output on stderr.
+%IF_EXEC% !CMD! >NUL
+%RETURN%
+
+:# Usage: if "%NEED_BROADCAST%"=="1" call :SysVar.Broadcast
+:SysVar.Broadcast
+%FUNCTION% EnableDelayedExpansion
+%UPVAR% %NEED_BROADCAST%
+%ECHO.V% :# Notifying all windows of the system environment change
+:# Find a way to broadcast a WM_SETTINGCHANGE message
+set "CMD="
+for /f %%i in ("setx.exe") do set "SETX=%%~$PATH:i"
+if defined SETX ( :# If setx.exe is in the PATH, then use it. (Preferred, as this is faster)
+  :# setx.exe updates _does_ broadcast a WM_SETTINGCHANGE to all apps
+  :# Note: The XP version of setx.exe requires the option -m or -M, but fails with /M. The Win7 version supports all.
+  set "VAR=PROCESSOR_ARCHITECTURE" &:# This system variable is always short, and is unlikely to ever change
+  set ^"CMD=setx !VAR! -k "%SYS_ENV_KEY%\!VAR!" -m^"
+) else ( :# If powershell.exe is in the PATH, then use it to run the PS routine at the send of this script. (Slower)
+  for /f %%i in ("powershell.exe") do set "POWERSHELL=%%~$PATH:i"
+  if defined POWERSHELL set ^"CMD=powershell -c "Invoke-Expression $([System.IO.File]::ReadAllText('%SFULL:'=''%'))"^"
+)
+if defined CMD (
+  %ECHO.XD% !CMD!
+  :# Redirect the "SUCCESS: Specified value was saved." message to NUL.
+  :# Errors, if any, will still be output on stderr.
+  %IF_EXEC% !CMD! >NUL
+  set "NEED_BROADCAST=0"
+) else ( :# Only happens in Windows XP or Windows 7 without setx.exe and PowerShell
+  echo Warning: Could not find a way to broadcast the change to other applications.
+  echo New shells will only have the updated settings after you log off and log back in.
+)
+%RETURN%
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
