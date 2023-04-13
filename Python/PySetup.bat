@@ -49,13 +49,14 @@
 :#                  start the selected python instance.                       #
 :#   2021-03-04 JFL Merged in the latest debug library.                       #
 :#                  Fixed %ECHO.V% and %ECHO.D% too agressive optimization.   #
+:#   2023-03-06 JFL Fixed failure reading default registry keys in Windows fr.#
 :#                                                                            #
 :#         © Copyright 2017 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2021-03-04"
+set "VERSION=2023-03-06"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1558,6 +1559,31 @@ set %VALUEVAR%=!VALUE!
 if defined TYPEVAR set %TYPEVAR%=%TYPE%
 %RETURN% %RETCODE%
 
+:# Simpler version that assumes a 1-line result, and ignores the type
+:# Get a registry value content. Args: KEY NAME [VALUEVAR]
+:GetRegistryValue1
+%FUNCTION% enableextensions enabledelayedexpansion
+set "KEY=%~1"
+set "NAME=%~2"
+set "VALUEVAR=%~3"
+if not defined VALUEVAR set "VALUEVAR=NAME"
+if not defined VALUEVAR set "VALUEVAR=VALUE"
+set "%VALUEVAR%="
+%UPVAR% %VALUEVAR%
+%ECHOVARS.D% KEY NAME VALUEVAR
+if defined NAME (
+  set CMD=reg query "%KEY%" /v "%NAME%"
+) else (
+  set CMD=reg query "%KEY%" /ve
+)
+%ECHO.D% %CMD%
+:# When used with /ve, the (default) output may be 2 words in some languages. Ex: (par défaut)
+:# => We cannot assume the value begins in the 3rd token, and must do some filtering
+set "RETCODE=1"
+for /f "skip=2 tokens=*" %%L in ('%CMD% 2^>NUL') do set "RETCODE=0" & set LINE=%%L
+for /f "tokens=1,*" %%A in ("!LINE:*REG_=!") do set %VALUEVAR%=%%B
+%RETURN% %RETCODE%
+
 :#----------------------------------------------------------------------------#
 
 :# Convert a short or long pathname to a full long pathname
@@ -2372,8 +2398,7 @@ if defined CLASS (
 :# (Stored in HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command)
 for %%P in ("%SH%") do set EXE=%%~nxP
 set KEY="HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command"
-set CMD3=
-for /f "skip=2 tokens=2,*" %%A in ('%XEXEC% -f reg query %KEY% 2">"NUL') do set CMD3=%%B
+call :GetRegistryValue1 %KEY% "" CMD3
 :# Note: Replace " with '' to make it a single string for the if command parser.
 set "'CMD3'=%CMD3%"
 if defined CMD3 set "'CMD3'=%CMD3:"=''%"
@@ -2422,8 +2447,7 @@ for /f "tokens=2" %%v in ('%XEXEC% -f "%PYTHON%" -V 2">""&"1') do set PYVER=%%v
 for /f "tokens=1,2 delims=." %%v in ("%PYVER%") do set PYVER=%%v.%%w
 %ECHO.D% Python version %PYVER%
 set "KEY=HKLM\SOFTWARE\Python\Pythoncore\%PYVER%\InstallPath"
-set "InstallPath="
-for /f "tokens=2,*" %%p in ('%XEXEC% -f reg query "%KEY%" /ve 2">"NUL ^| findstr REG_SZ') do set "InstallPath=%%q"
+call :GetRegistryValue1 %KEY% "" InstallPath
 %ECHO% The Python InstallPath registration is: "%InstallPath%"
 call :TrimRightSlash InstallPath &:# Remove the trailing \ in that path
 if "%InstallPath%"=="%PYTHONBIN%" (
@@ -2446,8 +2470,7 @@ if "%InstallPath%"=="%PYTHONBIN%" (
 
 :# Check the PythonPath registration, used by some Python extensions
 set "KEY=HKLM\SOFTWARE\Python\Pythoncore\%PYVER%\PythonPath"
-set "PythonPath="
-for /f "tokens=2,*" %%p in ('%XEXEC% -f reg query "%KEY%" /ve 2">"NUL ^| findstr REG_SZ') do set "PythonPath=%%q"
+call :GetRegistryValue1 "%KEY%" "" PythonPath
 %ECHO% The Python PythonPath registration is: "%PythonPath%"
 set "PythonPath2="
 if defined PythonPath set "PythonPath2=!PythonPath:%PYTHONBIN%=!"
