@@ -40,13 +40,15 @@
 :#                  Bug fix: Allow running as non-administrator, to be able   #
 :#                  to at least update local settings.                        #
 :#   2020-11-03 JFL Fixed the PS call when there's a ' in the script path.    #
+:#   2023-03-06 JFL Fixed failure reading default registry keys in Windows fr.#
+:#   2023-04-13 JFL Fixed :SysVar.Set NEED_BROADCAST update.		      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :#----------------------------------------------------------------------------#
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-11-03"
+set "VERSION=2023-03-06"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -722,10 +724,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -d=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-debug mode
-if not defined LOGFILE set "ECHO.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.D=rem"
-if not defined LOGFILE set "ECHOVARS.D=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.D=rem"
+if not defined LOGFILE set "ECHO.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.D=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.D=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.D=echo >NUL"
 goto :eof
 
 :Debug.On
@@ -818,10 +820,10 @@ set "EXEC.ARGS= %EXEC.ARGS%"
 set "EXEC.ARGS=%EXEC.ARGS: -v=%"
 set "EXEC.ARGS=%EXEC.ARGS:~1%"
 :# Optimization to speed things up in non-verbose mode
-if not defined LOGFILE set "ECHO.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHO.V=rem"
-if not defined LOGFILE set "ECHOVARS.V=rem"
-if .%LOGFILE%.==.NUL. set "ECHOVARS.V=rem"
+if not defined LOGFILE set "ECHO.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHO.V=echo >NUL"
+if not defined LOGFILE set "ECHOVARS.V=echo >NUL"
+if .%LOGFILE%.==.NUL. set "ECHOVARS.V=echo >NUL"
 goto :eof
 
 :Verbose.On
@@ -1400,29 +1402,35 @@ goto :eof
 :#		    Added support for empty pathnames.                        #
 :#   2016-11-09 JFL Fixed this routine, which was severely broken :-(	      #
 :#   2016-11-21 JFL Fixed the "!" quoting, and added "|&<>" quoting.	      #
+:#   2018-11-19 JFL Improved routine condquote2.                              #
 :#   2019-12-13 JFL Always return 0, to avoid alarming the caller.            #
+:#   2021-03-04 JFL Use the non-instrumented condquote2 as the default version.
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
 :# Quote file pathnames that require it.
 :condquote	 %1=Input variable. %2=Opt. output variable.
-%FUNCTION% EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions Disabledelayedexpansion
 set "RETVAR=%~2"
 if not defined RETVAR set "RETVAR=%~1" &:# By default, change the input variable itself
-%UPVAR% %RETVAR%
-set "P=!%~1!"
-:# Remove double quotes inside P. (Fails if P is empty, so skip this in this case)
-if defined P set ^"P=!P:"=!"
+call set "P=%%%~1%%"
 :# If the value is empty, don't go any further.
 if not defined P set "P=""" & goto :condquote_ret
-:# Look for any special character that needs "quoting". See list from (cmd /?).
+:# Remove double quotes inside P. (Fails if P is empty)
+set "P=%P:"=%"
+:# If the value is empty, don't go any further.
+if not defined P set "P=""" & goto :condquote_ret
+:# Look for any special character that needs quoting
 :# Added "@" that needs quoting ahead of commands.
 :# Added "|&<>" that are not valid in file names, but that do need quoting if used in an argument string.
-echo."!P!"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
-if not errorlevel 1 set P="!P!"
+echo."%P%"|findstr /C:" " /C:"&" /C:"(" /C:")" /C:"[" /C:"]" /C:"{" /C:"}" /C:"^^" /C:"=" /C:";" /C:"!" /C:"'" /C:"+" /C:"," /C:"`" /C:"~" /C:"@" /C:"|" /C:"&" /C:"<" /C:">" >NUL
+if not errorlevel 1 set P="%P%"
 :condquote_ret
-set "%RETVAR%=!P!"
-%RETURN% 0
+:# Contrary to the general rule, do NOT enclose the set commands below in "quotes",
+:# because this interferes with the quoting already added above. This would
+:# fail if the quoted string contained an & character.
+:# But because of this, do not leave any space around & separators.
+endlocal&set %RETVAR%=%P%&exit /b 0
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
@@ -1479,6 +1487,48 @@ set "%VARNAME%=!%VARNAME%:::=!"
 
 :#----------------------------------------------------------------------------#
 :#                                                                            #
+:#  Function        GetRegistryValue					      #
+:#                                                                            #
+:#  Description     Get a registry value content.                             #
+:#                                                                            #
+:#  Arguments       KEY NAME [VALUEVAR [TYPEVAR]]			      #
+:#                                                                            #
+:#  Notes 	                                                              #
+:#                                                                            #
+:#  History                                                                   #
+:#   2014-06-23 JFL Renamed GetValue as GetRegistryValue.                     #
+:#                  Fixed the default (nameless) value reading.               #
+:#                  Don't display errors, but return 1 if value not found.    #
+:#                                                                            #
+:#----------------------------------------------------------------------------#
+
+:# Simpler version that assumes a 1-line result, and ignores the type
+:# Get a registry value content. Args: KEY NAME [VALUEVAR]
+:GetRegistryValue1
+%FUNCTION% enableextensions enabledelayedexpansion
+set "KEY=%~1"
+set "NAME=%~2"
+set "VALUEVAR=%~3"
+if not defined VALUEVAR set "VALUEVAR=NAME"
+if not defined VALUEVAR set "VALUEVAR=VALUE"
+set "%VALUEVAR%="
+%UPVAR% %VALUEVAR%
+%ECHOVARS.D% KEY NAME VALUEVAR
+if defined NAME (
+  set CMD=reg query "%KEY%" /v "%NAME%"
+) else (
+  set CMD=reg query "%KEY%" /ve
+)
+%ECHO.D% %CMD%
+:# When used with /ve, the (default) output may be 2 words in some languages. Ex: (par défaut)
+:# => We cannot assume the value begins in the 3rd token, and must do some filtering
+set "RETCODE=1"
+for /f "skip=2 tokens=*" %%L in ('%CMD% 2^>NUL') do set "RETCODE=0" & set LINE=%%L
+for /f "tokens=1,*" %%A in ("!LINE:*REG_=!") do set %VALUEVAR%=%%B
+%RETURN% %RETCODE%
+
+:#----------------------------------------------------------------------------#
+:#                                                                            #
 :#  Function        SysVar                                                    #
 :#                                                                            #
 :#  Description     Manage system and user environment variables              #
@@ -1487,6 +1537,7 @@ set "%VARNAME%=!%VARNAME%:::=!"
 :#                                                                            #
 :#  History                                                                   #
 :#   2020-10-01 JFL Created this routine.                                     #
+:#   2023-04-13 JFL Fixed :SysVar.Set NEED_BROADCAST update.		      #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -1495,9 +1546,10 @@ set "SYS_ENV_KEY=HKLM\System\CurrentControlSet\Control\Session Manager\Environme
 set "USR_ENV_KEY=HKCU\Environment"
 exit /b
 
-:SysVar.Set %1=SYSVARNAME %2=VALUEVAR [%3=S|U]
+:# Sets "NEED_BROADCAST=1" if not done already by setx.exe.
+:SysVar.Set %1=SYSVARNAME %2=VALUEVAR [%3=S|U for System or User resp. Default: S]
 %FUNCTION% EnableDelayedExpansion
-%UPVAR% %NEED_BROADCAST%
+%UPVAR% NEED_BROADCAST
 if not defined SYS_ENV_KEY call :SysVar.Init
 set "VARNAME=%~1"
 set "VALUE=!%~2!"
@@ -1506,7 +1558,7 @@ if not defined CAT set "CAT=S"
 set "KEY="
 if "!CAT:~0,1!"=="S" set "KEY=!SYS_ENV_KEY!" & set "SETXOPT=-m"
 if "!CAT:~0,1!"=="U" set "KEY=!USR_ENV_KEY!" & set "SETXOPT="
-if not defined KEY >&2 echo Bug: :SysVar.Set argument 3 %3 invalid & %RETURN%
+if not defined KEY >&2 echo Bug: :SysVar.Set argument #3 = %3 is invalid. Must be S or U. & %RETURN%
 set "MORE_THAN_1KB=!VALUE:~1024!" &:# Defined if the new value is longer than 1 KB
 :# Gotcha: reg.exe and setx.exe interpret a trailing \" as escaping the "
 if "!VALUE:~-1!"=="\" set "VALUE=!VALUE!\"
@@ -1898,8 +1950,7 @@ if defined CLASS (
 :# (Stored in HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command)
 for %%P in ("%SH%") do set EXE=%%~nxP
 set KEY="HKEY_CLASSES_ROOT\Applications\%EXE%\shell\open\command"
-set CMD3=
-for /f "skip=2 tokens=2,*" %%A in ('%XEXEC% -f reg query %KEY% 2">"NUL') do set CMD3=%%B
+call :GetRegistryValue1 %KEY% "" CMD3
 :# Note: Replace " with '' to make it a single string for the if command parser.
 set "'CMD3'=%CMD3%"
 if defined CMD3 set "'CMD3'=%CMD3:"=''%"
