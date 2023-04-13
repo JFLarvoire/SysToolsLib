@@ -4,6 +4,15 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+Added system and user environment variables mngt routines.
+
+## [Unreleased] 2023-04-13
+### Changed
+- Batch/Library.bat: Added system and user environment variables management routines.
+- Tcl/TclSetup.bat: Fixed a failure to read default registry keys in Windows French.  
+  Fixed a failure to broadcast system environment variables changes.
+- Python/PySetup.bat: Fixed a failure to read default registry keys in Windows French.
+
 ## [Unreleased] 2023-04-12
 ### Fixed
 - in.exe and with.exe: Fixed command-line quoting and escaping issues in DOS & Windows versions,
