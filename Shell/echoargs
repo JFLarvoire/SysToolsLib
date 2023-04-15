@@ -3,20 +3,68 @@
 #                                                                             #
 #   Filename        echoargs                                                  #
 #                                                                             #
-#   Description     Echo all command line arguments		              #
+#   Description     Echo all command line arguments - Bourne Shell version    #
 #                                                                             #
-#   Notes           TODO: Output something more user-friendly than what       #
-#                         `printf '%q'` does.                                 #
+#   Notes           Do not use `printf %q ...`, which is not supported by     #
+#                   old versions of printf, nor by the built-in version of    #
+#		    most old shells.                                          #
 #                                                                             #
 #   History                                                                   #
 #    2023-01-08 JFL Created this script.				      #
+#    2023-04-15 JFL Reverted to using Bourne Shell capabilities only.	      #
+#                   Fixes problems with Mac OS 12, and also makes the output  #
+#                   more readable.                                            #
 #                                                                             #
 #                   © Copyright 2023 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+# Escape the 4 special characters interpreted by the shell within "double-quoted strings"
+EscapeString() { # $1=String to \ escape
+  # Use printf instead of echo, which breaks on -n, -e, etc, arguments
+  # Escape                    anti-slashes,    dollars,        double quotes,  back quotes
+  printf "%s\n" "$1" | sed -e 's/\\/\\\\/g' -e 's/\$/\\\$/g' -e 's/"/\\"/g' -e 's/`/\\`/g'
+}
+
+# Quote and escape a string, so that it can be reentered in the shell verbatim.
+# User friendly output using the minimal number of quotes needed.
+# Does NOT handle control characters in args. ('\x00' to '\x1F')
+CondQuote() { # $1=String to quote if needed
+  case "$1" in
+    "" ) # Special case for the empty string
+      s="''"
+      ;;
+    *' '* | *'"'* | *"'"* | *'\'* | *'`'* | *'$'* | *'&'* | *'|'* | *'<'* | *'>'* | *'#'* | *';'* | *'['* | *']'* )
+      # Quote everything that may be interpreted by the shell
+      if printf "%s\n" "$1" | grep -F "'" >/dev/null ; then # If there are single quotes
+	# The routine EscapeString escapes \ $ " `
+	# And the double quotes around the string escape everything else
+	s="\"`EscapeString "$1"`\"" # Quote with double quotes and EscapeString()
+      else # There are no single quotes
+	s="'$1'" # Quote with single quotes (simple and fast)
+      fi
+      ;;
+    * )
+      s="$1"
+      ;;
+  esac
+  printf "%s\n" "$s" # Do not use echo, which breaks on -n, -e, etc, arguments
+}
+
+# This code does not work in Mac OS 12, and likely not either in many old OS versions
+# if env printf "%q" string >/dev/null 2>&1 ; then
+#   n=0
+#   for a in "$@" ; do
+#     n=`expr $n + 1`
+#     env printf "ARG$n = %q\n" "$a" # The built-in printf does not support %q
+#   done
+#   exit
+# fi
+
+# echo "`which printf` does not support format %q"
+
 n=0
 for a in "$@" ; do
   n=`expr $n + 1`
-  env printf "ARG$n = %q\n" "$a" # The built-in printf does not support %q
+  printf "ARG$n = %s\n" "`CondQuote "$a"`"
 done
