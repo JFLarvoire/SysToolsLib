@@ -14,6 +14,8 @@
 #    2023-04-15 JFL Reverted to using Bourne Shell capabilities only.	      #
 #                   Fixes problems with Mac OS 12, and also makes the output  #
 #                   more readable.                                            #
+#    2023-04-16 JFL Simplified the code even further, and a bit faster too.   #
+#                   Added * ? to the list of characters that need quoting.    #
 #                                                                             #
 #                   © Copyright 2023 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -26,41 +28,39 @@ EscapeString() { # $1=String to \ escape
   printf "%s\n" "$1" | sed -e 's/\\/\\\\/g' -e 's/\$/\\\$/g' -e 's/"/\\"/g' -e 's/`/\\`/g'
 }
 
-# Quote and escape a string, so that it can be reentered in the shell verbatim.
+# If needed, quote and escape a string, so that it can be reentered in the shell verbatim.
 # User friendly output using the minimal number of quotes needed.
 # Does NOT handle control characters in args. ('\x00' to '\x1F')
 CondQuote() { # $1=String to quote if needed
   case "$1" in
-    "" ) # Special case for the empty string
-      s="''"
+    "" )    # Special case for the empty string
+      s="''"                      # Make it visible with single quotes
       ;;
-    *' '* | *'"'* | *"'"* | *'\'* | *'`'* | *'$'* | *'&'* | *'|'* | *'<'* | *'>'* | *'#'* | *';'* | *'['* | *']'* )
-      # Quote everything that may be interpreted by the shell
-      if printf "%s\n" "$1" | grep -F "'" >/dev/null ; then # If there are single quotes
-	# The routine EscapeString escapes \ $ " `
-	# And the double quotes around the string escape everything else
-	s="\"`EscapeString "$1"`\"" # Quote with double quotes and EscapeString()
-      else # There are no single quotes
-	s="'$1'" # Quote with single quotes (simple and fast)
-      fi
+    *"'"* ) # There are single quotes, and possibly other special characters
+      s="\"`EscapeString "$1"`\"" # Quote it with double quotes and \ $ " ` with EscapeString()
       ;;
-    * )
-      s="$1"
+    *' '* | *'"'* | *'\'* | *'`'* | *'$'* | *'&'* | *'|'* | *'<'* | *'>'* | *'#'* | *';'* | *'*'* | *'?'* | *'['* | *']'* )
+            # There are other characters that may be interpreted by the shell
+      s="'$1'"                    # Quote it with single quotes (simple and fast)
+      ;;
+    * )     # Anything else is just a plain word that needs no quoting nor escaping
+      s="$1"                      # Pass it on as it is
       ;;
   esac
   printf "%s\n" "$s" # Do not use echo, which breaks on -n, -e, etc, arguments
 }
 
-# This code does not work in Mac OS 12, and likely not either in many old OS versions
 # if env printf "%q" string >/dev/null 2>&1 ; then
+
+#   # This code does not work in Mac OS 12, and likely not either in many old OS versions
 #   n=0
 #   for a in "$@" ; do
 #     n=`expr $n + 1`
 #     env printf "ARG$n = %q\n" "$a" # The built-in printf does not support %q
 #   done
 #   exit
-# fi
 
+# fi
 # echo "`which printf` does not support format %q"
 
 n=0
