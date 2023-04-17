@@ -38,6 +38,7 @@
 *		    Version 2.0.					      *
 *    2022-12-01 JFL Added (but compiled-out) an experiment on how to display  *
 *		    macro values at compile time.			      *
+*    2023-04-17 JFL Fixed LODOS build warning. No functional change.          *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -70,7 +71,11 @@ int iVerbose = 0;
 #define streq(s1, s2) (!strcmp(s1,s2))
 
 #ifndef CDECL
-#define CDECL /* Ignore that in Unix */
+#ifdef _MSC_VER
+#define CDECL _cdecl /* LODOS builds generate a warning if main() does not specify this */
+#else
+#define CDECL
+#endif
 #endif
 
 #define STRINGIZE( x ) #x		/* Convert a macro name to a string */

@@ -12,6 +12,7 @@
 *    2017-06-29 JFL Fixed a warning. No functional code change.		      *
 *    2019-04-19 JFL Use the version strings from the new stversion.h. V.1.0.1.*
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.0.2.      *
+*    2023-04-17 JFL Fixed LODOS build warning. No functional change.          *
 *		    							      *
 \*****************************************************************************/
 
@@ -35,6 +36,14 @@ DEBUG_GLOBALS	/* Define global variables used by our debugging macros */
 
 #define streq(s1, s2) (!strcmp(s1, s2))
 
+#ifndef CDECL
+#ifdef _MSC_VER
+#define CDECL _cdecl /* LODOS builds generate a warning if main() does not specify this */
+#else
+#define CDECL
+#endif
+#endif
+
 void usage(void);
 
 typedef enum {
@@ -42,7 +51,7 @@ typedef enum {
   ANEW
 } action_t;
 
-int main(int argc, char *argv[]) {
+int CDECL main(int argc, char *argv[]) {
   uuid_t uuid;
   int i;
   action_t action = ANEW;
