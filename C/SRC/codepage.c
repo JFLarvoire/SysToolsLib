@@ -43,6 +43,9 @@
 *		    Added option -l as an alias to -i to list installed CPs.  *
 *		    Version 1.3.					      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.3.1.		      *
+*    2023-04-17 JFL Fixed the localized names in non-US versions of Windows.  *
+*		    Use the common footnote.h in usage().		      *
+*		    Version 1.4.					      *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -50,10 +53,16 @@
 
 #define PROGRAM_DESCRIPTION "Get information about code pages on this system"
 #define PROGRAM_NAME    "codepage"
-#define PROGRAM_VERSION "1.3.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.4"
+#define PROGRAM_DATE    "2023-04-17"
 
-/* Do NOT use _UTF8_SOURCE with MsvcLibX, as we want to test 8-bit code pages output */
+/* Note: Initially this program wrote 8-bit data in the current code page,
+         to show what that CP contained exactly. This prevented from using 
+         _UTF8_SOURCE with MsvcLibX. Which in turn made it difficult to
+         correctly display localized strings, like code page names, etc.
+         As we now write character tables in 16-bits mode, we can now use
+         MsvcLibX automatic code page output conversion for localized strings. */
+#include "predefine.h" /* Define optional features we need in the C libraries */
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -61,6 +70,7 @@
 #include <stdlib.h>
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For _setmode() */
+#include <iconv.h>	/* For converting localized code page names */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros. Include first. */
 #include "mainutil.h"	/* SysLib helper routines for main() */
@@ -253,21 +263,22 @@ codepage_t codepages[] = {
 };
 #define NCODEPAGES (sizeof(codepages) / sizeof(codepage_t))
 
-/* Get the actual name of a code page */
-char *GetCPName(int iCP, LPCPINFOEX lpCpi) {
+/* Get the actual name of a code page as a UTF-8 string */
+char *GetCPName(int iCP, LPCPINFOEXW lpCpi) {
   int i;
   char *pszName = "";
-  CPINFOEX cpi;
+  CPINFOEXW cpi;
   if (!lpCpi) lpCpi = &cpi;
-  if (GetCPInfoEx(iCP, 0, lpCpi)) { /* Most code pages have a good descrition in the CPINFOEX structure */
+  if (GetCPInfoExW(iCP, 0, lpCpi)) { /* Most code pages have a good descrition in the CPINFOEX structure */
     /* (Including many that are not listed in the static list above) */
-    pszName = lpCpi->CodePageName;
-    /* Make a copy because we can't return the address of this one in the local stack frame */
+    char *pszName8 = WideToNewMultiByteString(CP_UTF8, lpCpi->CodePageName);
+    pszName = pszName8;
     /* Skip the code page number copy at the beginning of the CPINFOEX name */
     while (strchr("0123456789", *pszName)) pszName++;
     while (isspace(*pszName)) pszName++;	/* Skip spaces after the number */
     if (*pszName == '(') pszName++;		/* Remove the leading '(' */
     pszName = strdup(pszName);
+    free(pszName8);
     i = (int)strlen(pszName) - 1;
     if (pszName[i] == ')') pszName[i] = '\0'; /* Remove the trailing ')' */
   }
@@ -396,7 +407,7 @@ int main(int argc, char *argv[]) {
     printf("Name\tBytes\tDescription\n");
     printf("-------\t-------\t--------------------------------------------------------\n");
     for (i=0; i<nCP; i++) {
-      CPINFOEX cpi;
+      CPINFOEXW cpi;
       char *pszName;
       iCP = iCPList[i];
       pszName = GetCPName(iCP, &cpi);
@@ -542,11 +553,7 @@ int main(int argc, char *argv[]) {
 \*---------------------------------------------------------------------------*/
 
 void usage(void) {
-  wchar_t wcCCedilla = (wchar_t)0xE7; // 'ç';
-  char szCCedilla[4] = {0};
-  int iCCP = GetConsoleOutputCP();
-  if (!WideCharToMultiByte(iCCP, 0, &wcCCedilla, 1, szCCedilla, 3, NULL, NULL)) szCCedilla[0] = 'c';
-  printf(
+  char *pszUsage =
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
 Usage:\n\
@@ -572,11 +579,10 @@ Sample code page numbers:\n\
 \n\
 Note that code pages other than 437 require cmd.exe using a TrueType font.\n\
 The cmd.exe raster font only supports code page 437.\n\
-\n\
-Author: Jean-Fran%sois Larvoire - jf.larvoire@free.fr\n\
-Sources and updates: https://github.com/JFLarvoire/SysToolsLib\n"
-, szCCedilla);
-
+"
+#include "footnote.h"
+;
+  fputs(pszUsage, stdout);
   exit(0);
 }
 
