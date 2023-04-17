@@ -74,6 +74,7 @@
 *    2023-02-17 JFL Display the Unicode block name for tables, and in verbose *
 *		    mode for individual characters.			      *
 *		    Version 2.0.					      *
+*    2023-04-17 JFL Moved the LODOS-specific realloc() hack to BiosLib. v2.0.1.
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -81,8 +82,8 @@
 
 #define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "2.0"
-#define PROGRAM_DATE    "2023-02-17"
+#define PROGRAM_VERSION "2.0.1"
+#define PROGRAM_DATE    "2023-04-17"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -136,16 +137,6 @@
 #define ANSI_IS_OPTIONAL TRUE	/* In DOS this depends on the use of ANSI.SYS */
 #endif
 
-#if defined(_BIOS) || defined(_LODOS)
-/* Quick & Dirty hack to allow compiling chars.c for BIOS & LODOS */
-/* Will break severely if invoked for a buffer that's not the last allocated one */
-void *realloc(void *buf, size_t len) {
-  size_t oldLen = (char *)malloc_base - (char *)buf;
-  if (!buf) return malloc(len);
-  malloc_base = (char *)malloc_base + (len - oldLen);
-  return buf;
-}
-#endif /* _BIOS */
 #endif /* _MSDOS */
 
 /************************* OS/2-specific definitions *************************/
