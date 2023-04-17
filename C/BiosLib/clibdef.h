@@ -57,6 +57,7 @@
 *		    functions, to make sure that minicom programs compiled    *
 *		    in _MSDOS environments do call C lib functions correctly. *
 *    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. *
+*    2023-04-17 JFL Added malloc_last declaration.                            *
 *		    							      *
 *      (C) Copyright 1990-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -138,8 +139,10 @@ extern unsigned short _psp;	/* Not defined for device drivers */
 
 extern void _fastcall _clearscreen(void);
 extern int _fastcall kbhit(void);
-extern void * malloc_base;
+extern void * malloc_base; /* The base of free memory */
+extern void * malloc_last; /* The base of the last memory allocation */
 extern void * _fastcall malloc(int);
+extern void * BIOSLIBCCC realloc(void *, size_t);
 #define free(p)	/* Place holder for future implementation. */ /* If implemented, also update C++ operator delete() at the end of this file */ 
 /* Equivalent to MS-DOS-specific routines. TO DO: Implement them, really! */
 #define _fmalloc malloc

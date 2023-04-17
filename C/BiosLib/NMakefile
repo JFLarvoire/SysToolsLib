@@ -276,6 +276,7 @@ SOURCES = \
     puts.c		\
     rand.asm		\
     read8042.asm	\
+    realloc.c		\
     relocmgr.c		\
     scancode.asm	\
     scrolldn.asm	\
@@ -429,6 +430,8 @@ $(S)\puts.c:	     $(S)\clibdef.h
 $(S)\rand.asm:       $(S)\adefine.inc
 
 $(S)\read8042.asm:   $(S)\adefine.inc $(S)\io8042.inc
+
+$(S)\realloc.c:	     $(S)\clibdef.h
 
 $(S)\relocmgr.c:     $(S)\utildef.h
 
