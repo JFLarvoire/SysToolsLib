@@ -6,6 +6,17 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 Added system and user environment variables mngt routines.
 
+## [Unreleased] 2023-04-17
+### New
+- BiosLib: Added a minimalistic realloc() routine.
+- LoDosLib: Added intdos() as an alias for _intdos().
+Together these changes allow building several C tools for LODOS: chars.com, macros.com, smbios.com, uuid.com.
+
+## [Unreleased] 2023-04-16
+### Fixed
+- Shell/echoargs: Reverted to using Bourne Shell capabilities only.  
+  Fixes problems with Mac OS 12, and also makes the output more readable.
+
 ## [Unreleased] 2023-04-13
 ### Changed
 - Batch/Library.bat: Added system and user environment variables management routines.
