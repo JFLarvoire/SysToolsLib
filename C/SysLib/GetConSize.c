@@ -9,6 +9,7 @@
 *   History								      *
 *    2023-04-18 JFL Moved GetScreenRows() & GetScreenCols() to SysLib.	      *
 *                   Renamed them as GetConRows() & GetConCols().	      *
+*    2023-04-19 JFL Redefined the DOS version as macros.		      *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -48,6 +49,10 @@
 ******************************************************************************/
 
 #ifdef _MSDOS
+
+/* Now defined as macros. Here are the original definitions as functions */
+#undef GetConRows
+#undef GetConColumns
 
 typedef unsigned char uint8;
 
