@@ -13,12 +13,15 @@
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#ifndef _CONSOLE_H_
-#define _CONSOLE_H_
+#ifndef _SYSLIB_CONSOLE_H_
+#define _SYSLIB_CONSOLE_H_
 
 #include "SysLib.h"		/* SysLib Library core definitions */
 
 int GetCursorPosition(int *pX, int *pY);
 int SetCursorPosition(int iX, int iY);
 
-#endif /* _CONSOLE_H_ */
+int GetConRows(void);
+int GetConColumns(void);
+
+#endif /* _SYSLIB_CONSOLE_H_ */

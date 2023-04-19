@@ -39,6 +39,8 @@
 *    2022-02-24 JFL Fixed the input pipe and redirection detection.           *
 *		    Version 1.3.1.					      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.3.2.		      *
+*    2023-04-19 JFL Moved GetScreenRows() & GetScreenCols() to SysLib.	      *
+*                   Renamed them as GetConRows() & GetConCols(). Ver. 1.3.3.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -46,8 +48,8 @@
 
 #define PROGRAM_DESCRIPTION "Dump data as both hexadecimal and text"
 #define PROGRAM_NAME    "dump"
-#define PROGRAM_VERSION "1.3.2"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.3.3"
+#define PROGRAM_DATE    "2023-04-19"
 
 #define _GNU_SOURCE		/* ISO C, POSIX, BSD, and GNU extensions */
 #define _CRT_SECURE_NO_WARNINGS /* Avoid MSVC security warnings */
@@ -134,6 +136,7 @@
 
 /* SysToolsLib include files */
 #include "mainutil.h"	/* SysLib helper routines for main() */
+#include "console.h"	/* SysLib console management routines */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 typedef unsigned char BYTE;
@@ -149,7 +152,6 @@ int paginate = FALSE;
 void usage(void);
 int between(DWORD floor, DWORD u, DWORD ceiling);
 void printflf(void);
-int GetScreenRows(void);
 int is_redirected(FILE *f);
 
 /*---------------------------------------------------------------------------*\
@@ -200,7 +202,7 @@ int main(int argc, char *argv[])
                 }
 	    if (streq(pszOpt, "p"))
                 {
-		paginate = GetScreenRows() - 1;	/* Pause once per screen */
+		paginate = GetConRows() - 1;	/* Pause once per screen */
 		continue;
                 }
 	    if (streq(pszOpt, "V")) {		/* -V: Display the version */
@@ -450,213 +452,3 @@ int is_redirected(FILE *f) {
 	 );
 }
 
-/*---------------------------------------------------------------------------*\
-*									      *
-|   Function:	    GetScreenRows					      |
-|									      |
-|   Description:    Get the number of rows on the text screen		      |
-|									      |
-|   Arguments:								      |
-|									      |
-|	None								      |
-|									      |
-|   Return value:   Per the function definition 			      |
-|									      |
-|   Notes:								      |
-|									      |
-|   History:								      |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-/*****************************************************************************\
-*									      *
-*				OS/2 Version				      *
-*									      *
-\*****************************************************************************/
-
-#ifdef _OS2
-
-/* Make sure to include os2.h at the beginning of this file, and before that
-    to define the INCL_VIO constant to enable the necessary section */
-
-int GetScreenRows(void)
-    {
-    VIOMODEINFO vmi;
-
-    VioGetMode(&vmi, 0);
-
-    return vmi.row;
-    }
-
-#endif
-
-/*****************************************************************************\
-*									      *
-*				WIN32 Version				      *
-*									      *
-\*****************************************************************************/
-
-#ifdef _WIN32
-
-/* Make sure to include windows.h at the beginning of this file, and especially
-    the kernel section */
-
-int GetScreenRows(void)
-    {
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-    if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-	return 0;	/* Disable pause mode if console size unknown */
-
-    return csbi.srWindow.Bottom + 1 - csbi.srWindow.Top;
-    }
-
-#endif
-
-/*****************************************************************************\
-*									      *
-*				MS_DOS Version				      *
-*									      *
-\*****************************************************************************/
-
-#ifdef _MSDOS
-
-int GetScreenRows(void)
-    {
-    BYTE far *fpc;
-
-    fpc = (BYTE far *)0x00400084L; 	/* Index of the last line, 0-based. */
-    return *fpc + 1; 			/* Add 1 to get the number of lines. */
-    }
-
-#endif
-
-/*****************************************************************************\
-*									      *
-*				 Unix Version				      *
-*									      *
-\*****************************************************************************/
-
-/* Requires linking with the  -ltermcap option */
-
-#ifdef _UNIX
-
-#if defined(USE_TERMCAP) && USE_TERMCAP
-
-#include <termcap.h>
-
-static char term_buffer[2048];
-static int tbInitDone = FALSE;
-
-int init_terminal_data()
-    {
-    char *termtype;
-    int success;
-
-    if (tbInitDone) return 0;
-
-    termtype = getenv ("TERM");
-    if (termtype == 0) {
-      printf("Specify a terminal type with `setenv TERM <yourtype>'.\n");
-      exit(1);
-    }
-
-    success = tgetent (term_buffer, termtype);
-    if (success < 0) {
-      printf("Could not access the termcap data base.\n");
-      exit(1);
-    }
-    if (success == 0) {
-      printf("Terminal type `%s' is not defined.\n", termtype);
-      exit(1);
-    }
-
-    tbInitDone = TRUE;
-    return 0;
-    }
-
-int GetScreenRows(void)
-    {
-    init_terminal_data();
-    return tgetnum("li");
-    }
-
-int GetScreenColumns(void)
-    {
-    init_terminal_data();
-    return tgetnum ("co");
-    }
-
-#else
-
-extern int errno;
-
-/* Execute a command, and capture its output */
-#define TEMP_BLOCK_SIZE 1024
-char *Exec(char *pszCmd) {
-  size_t nBufSize = 0;
-  char *pszBuf = malloc(0);
-  size_t nRead = 0;
-  int iPid = getpid();
-  char szTempFile[32];
-  char *pszCmd2 = malloc(strlen(pszCmd) + 32);
-  int iErr;
-  FILE *hFile;
-  sprintf(szTempFile, "/tmp/RowCols.%d", iPid);
-  sprintf(pszCmd2, "%s >%s", pszCmd, szTempFile);
-  iErr = system(pszCmd2);
-  if (iErr) {
-    free(pszBuf);
-    return NULL;
-  }
-  /* Read the temp file contents */
-  hFile = fopen(szTempFile, "r");
-  while (1) {
-    char *pszBuf2 = realloc(pszBuf, nBufSize + TEMP_BLOCK_SIZE);
-    if (!pszBuf2) break;
-    pszBuf = pszBuf2;
-    nRead = fread(pszBuf+nBufSize, 1, TEMP_BLOCK_SIZE, hFile);
-    nBufSize += TEMP_BLOCK_SIZE;
-    if (nRead < TEMP_BLOCK_SIZE) break;
-    if (feof(hFile)) break;
-  }
-  fclose(hFile);
-  /* Cleanup */
-  remove(szTempFile);
-  free(pszCmd2);
-  return pszBuf; /* Must be freed by the caller */
-}
-
-int GetScreenRows(void) {
-  int nRows = 25; /* Default for VGA screens */
-  /* char *pszRows = getenv("LINES"); */
-  /* if (pszRows) nRows = atoi(pszRows); */
-  char *pszBuf = Exec("tput lines");
-  if (pszBuf) {
-    nRows = atoi(pszBuf);
-    free(pszBuf);
-  }
-  return nRows;
-}
-
-int GetScreenColumns(void) {
-  int nCols = 80; /* Default for VGA screens */
-  /* char *pszCols = getenv("COLUMNS"); */
-  /* if (pszCols) nCols = atoi(pszCols); */
-  char *pszBuf = Exec("tput cols");
-  if (pszBuf) {
-    nCols = atoi(pszBuf);
-    free(pszBuf);
-  }
-  return nCols;
-}
-
-#endif
-
-#endif
-
-/*****************************************************************************\
-*									      *
-*			  End of OS-specific routines			      *
-*									      *
-\*****************************************************************************/

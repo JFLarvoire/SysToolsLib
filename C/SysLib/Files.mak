@@ -26,6 +26,7 @@
 
 # Common objects usable in all environments, including in BIOS or LODOS
 BASE_OBJECTS = \
+    +$(O)/GetConSize.obj	\
     +$(O)/GetCurPos.obj		\
     +$(O)/IsMBR.obj		\
     +$(O)/IsSwitch.obj		\
@@ -104,6 +105,8 @@ $(S)/FDiskW32.cpp: $(S)/FloppyDisk.h
 $(S)/File.cpp: $(S)/File.h $(S)/FileLibc.cpp $(S)/FileW32.cpp
 
 $(S)/File.h: $(S)/SysLib.h
+
+$(S)/GetConSize.c: $(S)/console.h
 
 $(S)/GetCurPos.c: $(S)/console.h
 

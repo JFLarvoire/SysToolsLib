@@ -238,6 +238,8 @@
 *    2022-10-12 JFL Separate new option -I (ignore <=2s) from -i (ignore TZ). *
 *                   Version 3.8.                                              *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.8.1.		      *
+*    2023-04-18 JFL Moved GetScreenRows() & GetScreenCols() to SysLib.	      *
+*                   Renamed them as GetConRows() & GetConCols(). Ver. 3.8.2.  *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -245,14 +247,10 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.8.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "3.8.2"
+#define PROGRAM_DATE    "2023-04-18"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
-
-#ifndef USE_TERMCAP
-#define USE_TERMCAP 0		/* 1=Use termcap lib; 0=Don't */
-#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -275,6 +273,7 @@
 #include "debugm.h"	/* SysToolsLib debug macros. Include first. */
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "dirx.h"	/* SysLib Directory access functions eXtensions */
+#include "console.h"	/* SysLib console management routines */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
@@ -569,8 +568,6 @@ int makepathname(char *, char *, char *);
 int filecompare(char *, char *);    /* Compare two files */
 int CompareToNext(fif **, t_opts);  /* Compare dates w. next entry in fiflist */
 
-int GetScreenRows(void);	    /* Get the number of rows of a text screen */
-int GetScreenColumns(void);	    /* Get the number of columns of a text screen */
 void printflf(void);		    /* Print a line feed, and possibly pause */
 
 int parse_date(char *token, time_t *pdate);
@@ -718,8 +715,8 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "g")) {	/* Debug: Get screen dimensions */
-	printf("\nScreen size: %d lines", GetScreenRows());
-	printf(" * %d columns\n", GetScreenColumns());
+	printf("\nScreen size: %d lines", GetConRows());
+	printf(" * %d columns\n", GetConColumns());
 	finis(0);
       }
       if (   streq(opt, "help")
@@ -763,7 +760,7 @@ int main(int argc, char *argv[]) {
       }
 #endif
       if (streq(opt, "p")) {
-	iPause = GetScreenRows() - 1; /* Pause once per screen */
+	iPause = GetConRows() - 1; /* Pause once per screen */
 	continue;
       }
       if (streq(opt, "r")) {	/* Alias for -d -f -s -z */
@@ -853,8 +850,8 @@ int main(int argc, char *argv[]) {
 #endif
 
   /* Dynamically size columns based on screen width */
-  iRows = GetScreenRows();
-  if (!iCols) iCols = GetScreenColumns(); // If not forced by the -w option
+  iRows = GetConRows();
+  if (!iCols) iCols = GetConColumns(); // If not forced by the -w option
   if (iCols < 80) iCols = 100; // Don't allow anything below 80. Dflt=100.
   iBudget = (iCols + 2 - (3*nDirs)) / nDirs;  // Space available for each directory output.
   					      // (3 chars between each column, and 1 in the end)
@@ -2393,224 +2390,6 @@ int parse_date(char *token, time_t *pdate) {
   *pdate = mktime(&sTM);
   return (*pdate != (time_t)-1L);
 }
-
-/******************************************************************************
-*                                                                             *
-*	Function:	GetScreenRows					      *
-*                                                                             *
-*	Description:	Get the number of rows on the text screen	      *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*	 None								      *
-*                                                                             *
-*	Return value:	Per the function definition			      *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*                                                                             *
-******************************************************************************/
-
-/******************************************************************************
-*                                                                             *
-*                               OS/2 Version                                  *
-*                                                                             *
-******************************************************************************/
-
-#ifdef _OS2
-
-/* Make sure to include os2.h at the beginning of this file, and before that
-    to define the INCL_VIO constant to enable the necessary section */
-
-int GetScreenRows(void) {
-  VIOMODEINFO vmi;
-
-  VioGetMode(&vmi, 0);
-
-  return vmi.row;
-}
-
-#endif
-
-/******************************************************************************
-*                                                                             *
-*                               WIN32 Version                                 *
-*                                                                             *
-******************************************************************************/
-
-#ifdef _WIN32
-
-/* Make sure to include windows.h at the beginning of this file, and especially
-    the kernel section */
-
-int GetScreenRows(void) {
-  CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-    return 0;   /* Disable pause mode if console size unknown */
-
-  return csbi.srWindow.Bottom + 1 - csbi.srWindow.Top;
-}
-
-int GetScreenColumns(void) {
-  CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-    return 0;   /* Disable pause mode if console size unknown */
-
-  return csbi.srWindow.Right + 1 - csbi.srWindow.Left;
-}
-
-#endif
-
-/******************************************************************************
-*                                                                             *
-*                               MS_DOS Version                                *
-*                                                                             *
-******************************************************************************/
-
-#ifdef _MSDOS
-
-int GetScreenRows(void) {
-  uint8_t far *fpc;
-
-  fpc = (uint8_t far *)0x00400084L;	// *fpc = Index of the last row
-  return *fpc + 1;               	// Number of rows
-}
-
-int GetScreenColumns(void) {
-  return *(int far *)0x0040004AL;
-}
-
-#endif
-
-/*****************************************************************************\
-*									      *
-*				 Unix Version				      *
-*									      *
-\*****************************************************************************/
-
-/* Requires linking with the  -ltermcap option */
-
-#ifdef _UNIX
-
-#if defined(USE_TERMCAP) && USE_TERMCAP
-
-#include <termcap.h>
-
-static char term_buffer[2048];
-static int tbInitDone = FALSE;
-
-int init_terminal_data() {
-  char *termtype;
-  int success;
-
-  if (tbInitDone) return 0;
-
-  termtype = getenv ("TERM");
-  if (termtype == 0) {
-    printf("Specify a terminal type with `setenv TERM <yourtype>'.\n");
-    exit(1);
-  }
-
-  success = tgetent (term_buffer, termtype);
-  if (success < 0) {
-    printf("Could not access the termcap data base.\n");
-    exit(1);
-  }
-  if (success == 0) {
-    printf("Terminal type `%s' is not defined.\n", termtype);
-    exit(1);
-  }
-
-  tbInitDone = TRUE;
-  return 0;
-}
-
-int GetScreenRows(void) {
-  init_terminal_data();
-  return tgetnum("li");
-}
-
-int GetScreenColumns(void) {
-  init_terminal_data();
-  return tgetnum ("co");
-}
-
-#else
-
-extern int errno;
-
-/* Execute a command, and capture its output */
-#define TEMP_BLOCK_SIZE 1024
-char *Exec(char *pszCmd) {
-  size_t nBufSize = 0;
-  char *pszBuf = malloc(0);
-  size_t nRead = 0;
-  int iPid = getpid();
-  char szTempFile[32];
-  char *pszCmd2 = malloc(strlen(pszCmd) + 32);
-  int iErr;
-  FILE *hFile;
-  sprintf(szTempFile, "/tmp/RowCols.%d", iPid);
-  sprintf(pszCmd2, "%s >%s", pszCmd, szTempFile);
-  iErr = system(pszCmd2);
-  if (iErr) {
-    free(pszBuf);
-    return NULL;
-  }
-  /* Read the temp file contents */
-  hFile = fopen(szTempFile, "r");
-  while (1) {
-    char *pszBuf2 = realloc(pszBuf, nBufSize + TEMP_BLOCK_SIZE);
-    if (!pszBuf2) break;
-    pszBuf = pszBuf2;
-    nRead = fread(pszBuf+nBufSize, 1, TEMP_BLOCK_SIZE, hFile);
-    nBufSize += TEMP_BLOCK_SIZE;
-    if (nRead < TEMP_BLOCK_SIZE) break;
-    if (feof(hFile)) break;
-  }
-  fclose(hFile);
-  /* Cleanup */
-  remove(szTempFile);
-  free(pszCmd2);
-  return pszBuf; /* Must be freed by the caller */
-}
-
-int GetScreenRows(void) {
-  int nRows = 25; // Default for VGA screens
-  // char *pszRows = getenv("LINES");
-  // if (pszRows) nRows = atoi(pszRows);
-  char *pszBuf = Exec("tput lines");
-  if (pszBuf) {
-    nRows = atoi(pszBuf);
-    free(pszBuf);
-  }
-  return nRows;
-}
-
-int GetScreenColumns(void) {
-  int nCols = 80; // Default for VGA screens
-  // char *pszCols = getenv("COLUMNS");
-  // if (pszCols) nCols = atoi(pszCols);
-  char *pszBuf = Exec("tput cols");
-  if (pszBuf) {
-    nCols = atoi(pszBuf);
-    free(pszBuf);
-  }
-  return nCols;
-}
-
-#endif
-
-#endif
-
-/******************************************************************************
-*                                                                             *
-*                         End of OS-specific routines                         *
-*                                                                             *
-******************************************************************************/
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
