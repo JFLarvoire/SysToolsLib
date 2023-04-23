@@ -24,6 +24,7 @@
 #                   Use make for the build, since we now have a good Makefile.#
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
 #    2023-01-26 JFL Fixed compatibility with MacOS.                           #
+#    2024-04-20 JFL Use SysToolsLib's distrib script to identify the proc.    #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -34,9 +35,14 @@ FileNoCase() # Case-independant search for a file.
   find . -maxdepth 1 -type f | grep -i -E "./$1$" | sed s=./==
 }
 
+#-----------------------------------------------------------------------------#
 # Identify the OS
+
 OS=`uname -s`
-PROC=`uname -p`
+if [[ ! -x ../../Shell/distrib ]] ; then
+  chmod +x ../../Shell/distrib
+fi
+PROC=`../../Shell/distrib processor` # More reliable than using `uname -p`
 if [[ "$OS" == "OSF1" && "`uname -m`" == "alpha" ]] ; then
   OS=Tru64
 fi
@@ -59,7 +65,10 @@ if [[ "${OS:0:6}" == "CYGWIN" ]] ; then # Ex: "CYGWIN_NT-6.1-WOW64"
   OUTDIR=cygwin # Cygwin shell if case sensitive, so use lower case
 fi
 
-# Command line analysis.
+#-----------------------------------------------------------------------------#
+# Main routine
+# Process command line arguments
+
 case "$1" in
   "" | "-h" | "-?" | --help)
     echo "Build simple C/C++ programs, storing the executables in bin/$OUTDIR/"

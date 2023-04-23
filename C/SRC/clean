@@ -12,6 +12,7 @@
 #  History                                                                    #
 #    2020-11-04 JFL Created this script based on exe.			      #
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
+#    2024-04-20 JFL Use SysToolsLib's distrib script to identify the proc.    #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -38,7 +39,10 @@ clean() {
 # Identify the OS
 
 OS=`uname -s`
-PROC=`uname -p`
+if [[ ! -x ../../Shell/distrib ]] ; then
+  chmod +x ../../Shell/distrib
+fi
+PROC=`../../Shell/distrib processor` # More reliable than using `uname -p`
 if [[ "$OS" == "OSF1" && "`uname -m`" == "alpha" ]] ; then
   OS=Tru64
 fi
