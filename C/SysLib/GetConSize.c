@@ -271,8 +271,6 @@ int GetConColumns(void) {
     nCols = atoi(pszBuf);
     free(pszBuf);
   }
-  char *pszBuf2 = Exec("/bin/sh -c 'uname -a'");
-  free(pszBuf2);
   return nCols;
 }
 
