@@ -6,11 +6,24 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 Added system and user environment variables mngt routines.
 
+## [Unreleased] 2023-04-19
+### Changed
+- C/SysLib/GetConSize.c: Fixed building the termcap version, and simplified the tput version using popen().
+- C/Makefile & C/SRC/Makefile: Create the links bin -> ../bin -> ../../bin, and fixed a failure linking with the termcap library.
+
+## [Unreleased] 2023-04-19
+### Changed
+- Moved GetScreenRows() and GetScreenCols() from dirc.c and dump.c to SysLib,  
+  and renamed them as GetConRows() & GetConCols().
+
 ## [Unreleased] 2023-04-17
 ### New
 - BiosLib: Added a minimalistic realloc() routine.
 - LoDosLib: Added intdos() as an alias for _intdos().
 Together these changes allow building several C tools for LODOS: chars.com, macros.com, smbios.com, uuid.com.
+
+### Fixed
+- codepage.exe: Fixed the localized codepage names output in non-US versions of Windows.
 
 ## [Unreleased] 2023-04-16
 ### Fixed
