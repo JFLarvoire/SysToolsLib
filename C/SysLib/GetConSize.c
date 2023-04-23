@@ -1,21 +1,27 @@
-/*****************************************************************************\
+﻿/*****************************************************************************\
 *                                                                             *
-*   Filename	    GetConSize.c					      *
+*  Filename	    GetConSize.c					      *
 *									      *
-*   Description     Get the number of rows or columns of the text console     *
+*  Description      Get the number of rows or columns of the text console     *
 *									      *
-*   Notes	    							      *
+*  Notes	    The Unix version is more efficient when using the termcap *
+*		    library. This requires linking with option -ltermcap.     *
+*		    Termcap is part of the libncurses5-dev package. Ex:       *
+*		    sudo apt-get install libncurses5-dev                      *
 *		    							      *
-*   History								      *
+*  History								      *
 *    2023-04-18 JFL Moved GetScreenRows() & GetScreenCols() to SysLib.	      *
 *                   Renamed them as GetConRows() & GetConCols().	      *
 *    2023-04-19 JFL Redefined the DOS version as macros.		      *
+*                   Added the missing inclusion of <config.h>.                *
 *                                                                             *
-*       � Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
+*       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
 #define _GNU_SOURCE	/* ISO C, POSIX, BSD, and GNU extensions */
+
+#include <config.h>	/* The Unix version has multiple alternatives */
 
 #include "console.h"	/* SysLib console management functions */
 
@@ -39,6 +45,7 @@
 |    2005-02-22 JFL Fixed bug with GetScreenRows, off by 1 line in DOS.       |
 |    2005-05-03 JFL Added Unix versions.				      |
 |    2023-04-18 JFL Renamed them as GetConRows() & GetConCols().	      |
+|    2023-04-19 JFL Simplified Unix' Exec() using popen().      	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -141,9 +148,7 @@ int GetConColumns(void) {
 \*****************************************************************************/
 
 #if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-
 #define _UNIX
-
 #endif
 
 #ifdef _UNIX
@@ -153,9 +158,22 @@ int GetConColumns(void) {
 
 #if defined(HAS_TERMCAP) && HAS_TERMCAP
 
+/*
+#if defined(_DEBUG)
+#pragma message "Building the termcap library version"
+#endif
+*/
+
 /* Requires linking with the  -ltermcap option */
 
 #include <termcap.h>
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+#ifndef TRUE
+#define TRUE 1
+#endif
 
 static char term_buffer[2048];
 static int tbInitDone = FALSE;
@@ -198,39 +216,37 @@ int GetConColumns(void) {
 
 #else /* !HAS_TERMCAP */
 
+#if defined(_DEBUG)
+#pragma GCC warning "Building the tput command version, which is inefficient. Consider installing the termcap library (part of libncurses5-dev)."
+#endif
+
 /* Execute a command, and capture its output */
-#define TEMP_BLOCK_SIZE 1024
+#define BLOCK_SIZE 1024
 char *Exec(char *pszCmd) {
-  size_t nBufSize = 0;
-  char *pszBuf = malloc(0);
-  size_t nRead = 0;
-  int iPid = getpid();
-  char szTempFile[32];
-  char *pszCmd2 = malloc(strlen(pszCmd) + 32);
-  int iErr;
+  char *pszBuf = NULL;
   FILE *hFile;
-  sprintf(szTempFile, "/tmp/RowCols.%d", iPid);
-  sprintf(pszCmd2, "%s >%s", pszCmd, szTempFile);
-  iErr = system(pszCmd2);
-  if (iErr) {
-    free(pszBuf);
-    return NULL;
+
+  /* Read the command output via a pipe */
+  hFile = popen(pszCmd, "r");
+  if (hFile) {
+    size_t nReadTotal = 0;
+    size_t nRead;
+    do {
+      char *pszLast = pszBuf;
+      pszBuf = realloc(pszBuf, nReadTotal + BLOCK_SIZE);
+      if (!pszBuf) { free(pszLast); break; }
+      nRead = fread(pszBuf+nReadTotal, 1, BLOCK_SIZE, hFile);
+      nReadTotal += nRead;
+    } while (!(feof(hFile) || ferror(hFile)));
+    if (pszBuf) {
+      char *pszLast = pszBuf;
+      pszBuf[nReadTotal] = '\0';
+      pszBuf = realloc(pszBuf, nReadTotal + 1);
+      if (!pszBuf) free(pszLast);
+    }
+    pclose(hFile);
   }
-  /* Read the temp file contents */
-  hFile = fopen(szTempFile, "r");
-  while (1) {
-    char *pszBuf2 = realloc(pszBuf, nBufSize + TEMP_BLOCK_SIZE);
-    if (!pszBuf2) break;
-    pszBuf = pszBuf2;
-    nRead = fread(pszBuf+nBufSize, 1, TEMP_BLOCK_SIZE, hFile);
-    nBufSize += TEMP_BLOCK_SIZE;
-    if (nRead < TEMP_BLOCK_SIZE) break;
-    if (feof(hFile)) break;
-  }
-  fclose(hFile);
-  /* Cleanup */
-  remove(szTempFile);
-  free(pszCmd2);
+
   return pszBuf; /* Must be freed by the caller */
 }
 
@@ -255,6 +271,8 @@ int GetConColumns(void) {
     nCols = atoi(pszBuf);
     free(pszBuf);
   }
+  char *pszBuf2 = Exec("/bin/sh -c 'uname -a'");
+  free(pszBuf2);
   return nCols;
 }
 
