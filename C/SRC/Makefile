@@ -32,6 +32,8 @@
 #    2020-11-18 JFL Disable diagnostics carets for gcc and clang that have it.#
 #    2020-11-21 JFL Avoid displaying entering/leaving directory for same dir. #
 #    2021-11-08 JFL Define C macro HAS_SYSLIB when SYSLIB is present.         #
+#    2023-04-23 JFL Create the link bin -> ../bin.			      #
+#                   Fixed a failure to link with the termcap library.         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -150,6 +152,8 @@ CFLAGS = -std=c99 -pthread -Wall
 CXXFLAGS =        -pthread -Wall
 LFLAGS = 
 LDLIBS = -ltermcap
+NLDLIBS := $(LDLIBS) # Normal build linker flags
+DLDLIBS := $(LDLIBS) # Debug build linker flags
 CPPFLAGS += -DEXE_PROC_NAME='"$(PROC)"'
 
 # The C compiler diagnostic caret is useful, but annoying when outputing information messages.
@@ -218,8 +222,9 @@ endif
 ifdef SYSLIB
 CFLAGS := $(CFLAGS) -I $(SYSLIB) -DHAS_SYSLIB=1
 CXXFLAGS := $(CXXFLAGS) -I $(SYSLIB) -DHAS_SYSLIB=1
-NLDLIBS := $(NLDLIBS) -L $(SYSLIB)/$(OSPN) -l SysLib # Normal build linker flags
-DLDLIBS := $(DLDLIBS) -L $(SYSLIB)/$(OSPD) -l SysLib # Debug build linker flags
+# Important: Place SysLib ahead of termcap, else there's a link failure
+NLDLIBS := -L $(SYSLIB)/$(OSPN) -l SysLib $(NLDLIBS) # Normal build linker flags
+DLDLIBS := -L $(SYSLIB)/$(OSPD) -l SysLib $(DLDLIBS) # Debug build linker flags
 endif
 
 # Make file messages control
@@ -330,9 +335,13 @@ endif
 
 # Create output directories
 .PHONY: dirs ddirs
-dirs: $(XPN) $(OPN) $(LPN)
+dirs: bin $(XPN) $(OPN) $(LPN)
 
 ddirs: $(XPD) $(OPD) $(LPD)
+
+bin:
+	$(info Creating link $@ to directory ../$@)
+	ln -s "../$@" "$@"
 
 $(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
 	$(info Creating directory $@)
@@ -406,7 +415,7 @@ clean:
 	-$(RM) *.log    >/dev/null 2>&1
 
 $(BP)/$(PROGRAM): dirs $(SOURCES)
-	$(CC) -o $@ -pthread -ltermcap $(CFLAGS) $(SOURCES)
+	$(CC) -o $@ -pthread -l termcap $(CFLAGS) $(SOURCES)
 	@echo "$(BP)/$(PROGRAM) done."
 
 define HELP

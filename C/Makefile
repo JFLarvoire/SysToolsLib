@@ -22,6 +22,7 @@
 #                   Fixed recursion with command-line VAR=VALUE definitions.  #
 #    2020-04-13 JFL Moved the scripts installation to ../Makefile.	      #
 #                   Added an uninstall target rule.			      #
+#    2023-04-23 JFL Create the link bin -> ../bin.			      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -75,12 +76,20 @@ check:
 # How to rebuild all targets
 DIRS=SysLib SRC
 .PHONY: all
-all: $(DIRS)
+all: ../bin bin $(DIRS)
 	@echo "All done."
 
 STINCLUDE := $(PWD)/include
 SYSLIB := $(PWD)/SysLib
 MAKEDEFS="STINCLUDE=$(STINCLUDE)" "SYSLIB=$(SYSLIB)"
+
+../bin:
+	$(info Creating directory $@)
+	mkdir -p $@
+
+bin:
+	$(info Creating link $@ to directory ../$@)
+	ln -s "../$@" "$@"
 
 $(DIRS): force
 	$(MAKE) -C $@ $(MFLAGS) $(MAKEDEFS)
