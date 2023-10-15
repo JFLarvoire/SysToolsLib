@@ -4,7 +4,7 @@
 *									      *
 *  Description:     Display all 8-bit characters in hexadecimal		      *
 *									      *
-*  Notes:	    The primary goal if to view what characters can actually  *
+*  Notes:	    The primary goal is to view what characters can actually  *
 *		    be displayed on the current console or terminal.	      *
 *		    This is particularly useful in cases where the console or *
 *		    terminal can only display an 8-bits character set.	      *
@@ -17,7 +17,7 @@
 *		    In this case, in Windows, the console code page is 	      *
 *		    switched to code page 65001, supporting UTF8.	      *
 *		    							      *
-*		    In Unix, use the locale command to see what is supported: *
+*		    In Unix, use the locale command to see what is supported: *                                                  
 *		    locale charmap	Display the current character set     *
 *		    locale -m		List all supported character sets     *
 *		    locale -a		List all available locale files       *
@@ -75,6 +75,15 @@
 *		    mode for individual characters.			      *
 *		    Version 2.0.					      *
 *    2023-04-17 JFL Moved the LODOS-specific realloc() hack to BiosLib. v2.0.1.
+*    2023-10-09 JFL Added support for UTF-8 bytes codes on the command line.  *
+*		    Added support for doubly encoded UTF-8 chars on cmd. line.*
+*		    In Windows, added option -8 as a synonym for -c 65001.    *
+*		    In Windows, display both the current code page character  *
+*		    code and the unicode code point.			      *
+*    2023-10-15 JFL In Windows, display the Windows code page instead of the  *
+*		    Unicode block name for non Unicode character ranges.      *
+*		    Fixed character ranges which output � for all characters. *
+*		    Version 2.1.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -82,8 +91,8 @@
 
 #define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "2.0.1"
-#define PROGRAM_DATE    "2023-04-17"
+#define PROGRAM_VERSION "2.1"
+#define PROGRAM_DATE    "2023-10-15"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -601,8 +610,10 @@ int Print(const char *pszString) { return printf("%s", pszString); } /* Output a
 int Puts(const char *pszString) { return fputs(pszString, stdout); } /* Output a string without a new line */
 #define PUTL(pszString) do { Puts(pszString); Puts(EOL); } while (0) /* Output a string with a new line in raw mode (LF untranslated) */
 int ParseCharCode(char *pszString, int *pCode, int *pOutFlags);
-#if MICROSOFT_OS
+#if defined(_MSDOS)
 int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2);
+#elif defined(_WIN32)
+int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char *pszCode2);
 #else
 int PrintCharCode(int iCode, int iFlags);
 #endif
@@ -710,6 +721,13 @@ int CDECL main(int argc, char *argv[]) {
     char *arg = argv[i];
     if (IsSwitch(arg)) {
       char *opt = arg+1;
+#ifdef _WIN32
+      if (   streq(opt, "8")	/* -8: Set the UTF8 code page */
+	  || streq(opt, "-utf8")) {
+	uCP1 = 65001;
+	continue;
+      }
+#endif /* defined(_WIN32) */
       if (   streq(opt, "a")     /* -a: Display all characters */
 	  || streq(opt, "-all")) {
 	iFlags |= CF_ALL;
@@ -866,6 +884,7 @@ arg_ignored:
       return 1;
     }
     uCP = uCP1;
+    isUTF8 = (uCP1 == CP_UTF8);
     GetCpArgv(uCP1, &argvCP1);
   } else {
     uCP1 = uCP0;
@@ -902,7 +921,7 @@ arg_ignored:
   }
 #endif
   if (isUTF8) isMBCS = TRUE;
-  if (isUTF8) iFlags |= CF_UTF8;
+  if (isUTF8) iFlags |= (CF_UTF8 | CF_UNICODE);
 #endif /* SUPPORTS_UTF8 */
 
 #if SUPPORTS_UTF8
@@ -973,10 +992,15 @@ arg_ignored:
   for (i=0; i<nRanges; i++) {
     int iMax = iMaxChar;
     char c = 'x';
+#ifdef _WIN32
+    WCHAR wcBuf[3] = {0};
+    char szBuf[8];
+    int nInBuf = 0;
+#endif
 #if SUPPORTS_UTF8
     int isUnicodeChar = isUTF8 || ((rangeDefs[i].iFlags & CF_UNICODE) != 0);
     iFlags &= ~CF_UNICODE;
-    iFlags |= (rangeDefs[i].iFlags & CF_UNICODE);
+    if (isUnicodeChar) iFlags |= CF_UNICODE;
 #endif
     iFirst = rangeDefs[i].iFirst;
     iLast = rangeDefs[i].iLast;
@@ -994,8 +1018,29 @@ arg_ignored:
 
     /* Change the code page if needed */
 #if SUPPORTS_UTF8
+    DEBUG_PRINT_INT_VAR(isUnicodeChar);
+    DEBUG_PRINT_INT_VAR(isUTF8);
     if (isUnicodeChar && !isUTF8) {
 #ifdef _WIN32
+      /* Convert the Unicode character to the requested code page */
+      *(int *)wcBuf = iFirst;
+      nInBuf = WideCharToMultiByte(uCP1,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
+			           0,			/* dwFlags, */
+			           wcBuf,		/* lpWideCharStr, */
+			           -1,			/* cchWideChar, */
+			           szBuf,		/* lpMultiByteStr, */
+			           sizeof(szBuf),	/* cbMultiByte, */
+			           NULL,		/* lpDefaultChar, */
+			           NULL			/* lpUsedDefaultChar */
+			           );
+      if (!nInBuf) {
+	DEBUG_PRINTF(("Can't convert the first character to CP %u" EOL, uCP1));
+      } else {
+      	int j;
+	DEBUG_PRINTF(("iFirst[CP %u] = ", uCP1));
+      	for (j=0; szBuf[j]; j++) DEBUG_PRINTF(("\\x%02X", szBuf[j] & 0xFF));
+	DEBUG_PRINTF((EOL));
+      }
       if (iVerbose) printf("Switching to code page %d" EOL, CP_UTF8);
       fflush(stdout);
       if (!SetConsoleOutputCP(CP_UTF8)) {
@@ -1049,15 +1094,18 @@ arg_ignored:
       iExitCode += PrintCharCode(iFirst, iFlags, uCP, iFirst);
 #elif defined(_WIN32)
       int uCP2 = 0;
-      int iCode2 = -1;
+      char *pszCode2 = szBuf;
       char *pszArgCP1 = rangeDefs[i].pszArgCP1;
-      char *pszArgUTF8 = rangeDefs[i].pszArgUTF8;
-      if (isUnicodeChar && (iFlags & CF_VERBOSE) && (strlen(pszArgCP1) == 1)) {
+      /* char *pszArgUTF8 = rangeDefs[i].pszArgUTF8; */
+      int j;
+      DEBUG_PRINTF(("pszArgCP1 = \""));
+      for (j=0; pszArgCP1[j]; j++) DEBUG_PRINTF(("\\x%02X", pszArgCP1[j] & 0xFF));
+      DEBUG_PRINTF(("\"" EOL));
+      if (isUnicodeChar /* && (iFlags & CF_VERBOSE) */ && (strlen(pszArgCP1) > 0)) {
       	uCP2 = uCP1;
-	iCode2 = pszArgCP1[0] & 0xFF;
-	if ((pszArgCP1[0] == '?') && (pszArgUTF8[0] != '?')) iCode2 = -1;
+	if ((pszCode2[0] == '?') && (iFirst != '?')) pszCode2 = NULL;
       }
-      iExitCode += PrintCharCode(iFirst, iFlags, uCP2, iCode2);
+      iExitCode += PrintCharCode(iFirst, iFlags, uCP2, pszCode2);
 #else
       iExitCode += PrintCharCode(iFirst, iFlags);
 #endif /* defined(_WIN32) */
@@ -1120,6 +1168,13 @@ Usage: chars [SWITCHES] [CHAR|CHAR_CODE|CHAR_RANGE] ...\n\
 \n\
 Switches:\n\
   -?|-h|--help      Display this help screen\n\
+"
+#ifdef _WIN32
+"\
+  -8|--utf8         Same as -c 65001\n\
+"
+#endif
+"\
   -a|--all          Output all characters, even control chars like CR LF, etc\n\
 "
 #if SUPPORTS_UTF8
@@ -1153,6 +1208,8 @@ Char. Code: X=[1-9,A-F] N=[1-9] (Use -v to display the various encodings)\n\
   \\uXXXX            Unicode code point. Ex: \\u20AC for '€'\n\
   U+XXXX            Unicode code point. Ex: U+1F310 for '🌐'\n\
   Alternatives:     XXH = \\xXX, NNT = \\tNN, NNO = \\oNN, XXXXU = \\uXXXX\n\
+  \\xXX\\xXX...       A sequence of UTF-8 byte codes. Ex: \\xC3\\xA7 for 'ç'\n\
+  CC...             A character encoded twice in UTF-8. Ex: \"Ã§\" for 'ç'\n\
 "
 #else
 "\
@@ -1257,32 +1314,85 @@ int ToUtf16(unsigned int c, WORD *pw) {
 /* Don't complain about non canonic encodings (Ex: 3-byte encodings where 2 would have been enough) */
 /* Returns the number of characters read. <=0 = Failed = Minus the number of invalid characters */
 int FromUtf8(char *psz, int *pi) {
-  int c0, c1, c2, c3, i=0, nChar=0;
+  int c0, c1, c2, c3, i=0, nChar=0;   
+  DEBUG_ENTER(("FromUtf8(\"%s\", %p)" EOL, psz, pi));
+  if (!psz[0]) RETURN_INT(0);		/* Empty string */
   do {
     c0 = psz[nChar++] & 0xFF;
-    if (!c0) return 0;			/* Empty string */
+    if ((c0 & 0xC0) == 0x80) RETURN_INT(-1);	/* Starting with a UTF-8 tail byte => Invalid 1-byte sequence */
     i = c0;
     if (c0 < 0x80) break;		/* This is one ASCII byte */
 
     c1 = psz[nChar++] & 0xFF;
-    if ((c1 & 0xC0) != 0x80) return -1;	/* Invalid UTF-8 tail byte => Incomplete 1-byte sequence */
+    if ((c1 & 0xC0) != 0x80) RETURN_INT(-1);	/* Invalid UTF-8 tail byte => Incomplete 1-byte sequence */
     i = ((i & 0x1F) << 6) | (c1 & 0x3F);    /* 5 bits from c0 and 6 from c1 */
     if ((c0 & 0xE0) == 0xC0) break;	/* This is a 2-bytes UTF-8 sequence */
 
     c2 = psz[nChar++] & 0xFF;
-    if ((c2 & 0xC0) != 0x80) return -2;	/* Invalid UTF-8 tail byte => Incomplete 2-byte sequence */
+    if ((c2 & 0xC0) != 0x80) RETURN_INT(-2);	/* Invalid UTF-8 tail byte => Incomplete 2-byte sequence */
     i = ((i & 0x3FF) << 6) | (c2 & 0x3F);   /* 4 bits from c0 and 6 each from c1 & c2 */
     if ((c0 & 0xF0) == 0xE0) break;	/* This is a 3-bytes UTF-8 sequence */
 
     c3 = psz[nChar++] & 0xFF;
-    if ((c3 & 0xC0) != 0x80) return -3;	/* Invalid UTF-8 tail byte => Incomplete 3-byte sequence */
+    if ((c3 & 0xC0) != 0x80) RETURN_INT(-3);	/* Invalid UTF-8 tail byte => Incomplete 3-byte sequence */
     i = ((i & 0x7FFF) << 6) | (c3 & 0x3F);  /* 3 bits from c0 and 6 each from c1 to c3 */
     if ((c0 & 0xF8) == 0xF0) break;	/* This is a 4-bytes UTF-8 sequence */
 
-    return -4;				/* Incomplete 4-byte or more sequence */
+    RETURN_INT(-4);				/* Incomplete 4-byte or more sequence */
   } while (0);
   *pi = i;
-  return nChar;
+  RETURN_INT_COMMENT(nChar, ("char = '\\U%08lX'" EOL, i));
+}
+
+/* Convert a hexadecimal byte dump to the equivalent byte. Ex: "41" -> 'A' or "\x41" -> 'A' */
+int FromHexByteDump(char *psz, char *pc) {
+  int nHex=0, nChar=0, i;
+  DEBUG_ENTER(("FromHexByteDump(\"%s\", %p)" EOL, psz, pc));
+  if ((psz[0] == '\\') && (psz[1] == 'x')) nChar = 2;
+  if ((!sscanf(psz+nChar, "%2x%n", &i, &nHex)) || !nHex) RETURN_INT(0);
+  *pc = (char)i;
+  nChar += nHex;
+  RETURN_INT_COMMENT(nChar, ("char = '\\x%02X'" EOL, i & 0xFF));
+}
+
+/* Convert a UTF-8 dump to the unicode code point. Ex: "C3A7" -> L'ç' or "\xC3\xA7" -> L'ç' */
+int FromUtf8Dump(char *psz, int *pi) {
+  int n, nBytes, nChars=0;
+#define SZUTF8BUFSIZE 6
+  char szUtf8[SZUTF8BUFSIZE];
+  int iUtf8Index[SZUTF8BUFSIZE];
+  DEBUG_ENTER(("FromUtf8Dump(\"%s\", %p)" EOL, psz, pi));
+  for (nBytes=0; nBytes<(SZUTF8BUFSIZE-1); nBytes++) {
+    iUtf8Index[nBytes] = nChars;
+    n = FromHexByteDump(psz+nChars, szUtf8+nBytes);
+    if (!n) break;
+    nChars += n;
+  }
+  if (!nBytes) RETURN_INT(0);
+  szUtf8[nBytes] = '\0';
+  n = FromUtf8(szUtf8, pi);
+  n = (n >= 0) ? iUtf8Index[nBytes] : -iUtf8Index[nBytes];
+  RETURN_INT_COMMENT(n, ("char = '\\U%08X'" EOL, *pi));
+}
+
+/* Convert a doubly UTF-8 encoded character. Ex: "Ã§" -> L'ç' */
+int FromDoubleUtf8(char *psz, int *pi) {
+  int n, c, nIn, nOut;
+  char szUtf8[SZUTF8BUFSIZE];
+  DEBUG_ENTER(("FromDoubleUtf8(\"%s\", %p)" EOL, psz, pi));
+  for (nIn=nOut=0; nOut<(SZUTF8BUFSIZE-1); nOut++) {
+    n = FromUtf8(psz+nIn, &c);
+    if (n < 0) RETURN_INT_COMMENT(0, ("Not UTF-8" EOL));
+    if (!n) break;
+    nIn += n;
+    if (c > 0xFF) RETURN_INT_COMMENT(0, ("Does not fit in a byte: 0x%X" EOL, c));
+    szUtf8[nOut] = (char)c;
+  }
+  if (!nOut) RETURN_INT_COMMENT(0, ("Empty string" EOL));
+  szUtf8[nOut] = '\0';
+  n = FromUtf8(szUtf8, pi);
+  if (n <= 0) RETURN_INT_COMMENT(0, ("Not double UTF-8" EOL));
+  RETURN_INT_COMMENT(nIn, ("char = '\\U%08X'" EOL, *pi));
 }
 
 #endif /* SUPPORTS_UTF8 */
@@ -1320,10 +1430,22 @@ int ParseCharCode(char *pszString, int *pCode, int *piFlags) {
     RETURN_INT_COMMENT(1, ("A single 8-bits character" EOL));
   }
 #if SUPPORTS_UTF8
-  nRead = FromUtf8(pszString, pCode);
-  if ((!pszString[nRead]) || (pszString[nRead] == '-')) { /* A single UTF-8 character */
+  nRead = FromUtf8Dump(pszString, pCode);	/* "\xC3\xA7" -> L'ç' */
+  if ((nRead > 0) && ((!pszString[nRead]) || (pszString[nRead] == '-'))) { /* A single UTF-8 character */
     if (piFlags) *piFlags |= CF_UNICODE;
-    RETURN_INT_COMMENT(nRead, ("A single UTF-8 character" EOL));
+    RETURN_INT_COMMENT(nRead, ("A single UTF-8 character dump" EOL));
+  }
+  if ((pszString[0] & 0xFF) > 0x7F) {
+    nRead = FromDoubleUtf8(pszString, pCode);	/* Ex: "Ã§" -> L'ç' */ 
+    if ((nRead > 0) && ((!pszString[nRead]) || (pszString[nRead] == '-'))) { /* A single UTF-8 character */
+      if (piFlags) *piFlags |= CF_UNICODE;
+      RETURN_INT_COMMENT(nRead, ("A single UTF-8 character doubly encoded" EOL));
+    }
+    nRead = FromUtf8(pszString, pCode);		/* Ex: "ç" -> L'ç' */
+    if ((nRead > 0) && ((!pszString[nRead]) || (pszString[nRead] == '-'))) { /* A single UTF-8 character */
+      if (piFlags) *piFlags |= CF_UNICODE;
+      RETURN_INT_COMMENT(nRead, ("A single UTF-8 character" EOL));
+    }
   }
 #endif /* SUPPORTS_UTF8 */
   if (pszString[0] == '\\') switch (pszString[1]) {{ /* C or Python style \xXX, etc */
@@ -1420,14 +1542,31 @@ char *GetCharmap(char *pszBuf, size_t nBufSize) {
 }
 #endif
 
-#if MICROSOFT_OS
+#if defined(_MSDOS)
 int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2) {
   char buf[5];
-  DEBUG_PRINTF(("PrintCharCode(0x%02X, 0x%X, %u, 0x%02X)" EOL, iCode, iFlags, uCP2, iCode2));
+  DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X, %u, 0x%02X)" EOL, iCode, iFlags, uCP2, iCode2));
+#elif defined(_WIN32)
+int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char *pszCode2) {
+  char buf[5];
+  WCHAR wcBuf[3];
+  int nwc;
+  int j;
+  DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X, %u, ", iCode, iFlags, uCP2));
+  DEBUG_CODE(
+  if (pszCode2) {
+    DEBUG_PRINTF(("\""));
+    for (j=0; pszCode2[j]; j++) DEBUG_PRINTF(("\\x%02X", pszCode2[j] & 0xFF));
+    DEBUG_PRINTF(("\""));
+  } else {
+    DEBUG_PRINTF(("NULL"));
+  }
+  )
+  DEBUG_PRINTF((")" EOL));
 #else
 int PrintCharCode(int iCode, int iFlags) {
   char buf[5];
-  DEBUG_PRINTF(("PrintCharCode(0x%02X, 0x%X)" EOL, iCode, iFlags));
+  DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X)" EOL, iCode, iFlags));
 #endif
 
 #if SUPPORTS_UTF8
@@ -1437,7 +1576,7 @@ int PrintCharCode(int iCode, int iFlags) {
     buf[n8] = '\0';
     if (!n8) {
       fprintf(stderr, "Invalid code point: 0x%X." EOL, iCode);
-      return 1;
+      RETURN_INT(1);
     }
     if (iFlags & CF_VERBOSE) {
       WORD buf16[2];
@@ -1461,14 +1600,22 @@ int PrintCharCode(int iCode, int iFlags) {
       printf("UTF-32 \\U%08X" EOL, iCode);
 #ifdef _WIN32
       if (uCP2) {
-      	if (iCode2 >= 0) {
-	  printf("CP%u \\x%02X" EOL, uCP2, iCode2);
+	printf("CP%u ", uCP2);
+      	if (pszCode2) {
+	  for (j=0; pszCode2[j]; j++) printf("\\x%02X", pszCode2[j] & 0xFF);
 	} else {
-	  printf("CP%u (undefined)" EOL, uCP2);
+	  Puts("(undefined)");
 	}
+	Puts(EOL);
       }
 #endif
     } else if (!(iFlags & CF_QUIET)) {
+#ifdef _WIN32
+      if (pszCode2) {
+	for (j=0; pszCode2[j]; j++) printf("\\x%02X", pszCode2[j] & 0xFF);
+	Puts(" ");
+      }
+#endif
       printf("\\u%04X ", iCode);
     }
   } else
@@ -1476,24 +1623,37 @@ int PrintCharCode(int iCode, int iFlags) {
   {		/* Print an 8-bits code page character */
     buf[0] = (char)iCode;
     buf[1] = '\0';
+#ifdef _WIN32
+    if (!uCP2) uCP2 = GetConsoleOutputCP();
+    nwc = MultiByteToWideChar(uCP2,			    /* CodePage */
+			      0,			    /* dwFlags */
+			      (LPCCH)buf,		    /* lpMultiByteStr */
+			      2,			    /* cbMultiByte */
+			      wcBuf,			    /* lpWideCharStr */
+			      sizeof(wcBuf)/sizeof(WCHAR)   /* cchWideChar */
+			     );
+#endif
     if (iFlags & CF_VERBOSE) {
 #ifdef _MSDOS
       printf("CP%u \\x%02X" EOL, uCP2, iCode2); /* Display at least 2 hexadecimal characters */
 #endif
 #ifdef _WIN32
-      if (!uCP2) uCP2 = GetConsoleOutputCP();
       printf("CP%u \\x%02X" EOL, uCP2, iCode); /* Display at least 2 hexadecimal characters */
+      if (nwc > 1) printf("UTF-16 \\u%04X" EOL, *(int *)wcBuf);
 #endif
 #ifdef _UNIX
       char szCharmap[64];
       if (!GetCharmap(szCharmap, sizeof(szCharmap))) {
 	fprintf(stderr, "Can't run `locale charmap`. %s" EOL, strerror(errno));
-	return 1;
+	RETURN_INT(1);
       }
       printf("%s \\x%02X" EOL, szCharmap, iCode); /* Display at least 2 hexadecimal characters */
 #endif
     } else if (!(iFlags & CF_QUIET)) {
       printf("\\x%02X ", iCode);
+#ifdef _WIN32
+      if (nwc > 1) printf("\\u%04X ", *(int *)wcBuf);
+#endif
     }
   }
   if (iFlags & CF_VERBOSE) Puts("'");
@@ -1504,7 +1664,7 @@ int PrintCharCode(int iCode, int iFlags) {
     Puts(EOL);
   }
 
-  return 0;
+  RETURN_INT(0);
 }
 
 /*---------------------------------------------------------------------------*\
@@ -1540,9 +1700,12 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
   int isUnicode = ((iFlags & CF_UNICODE) != 0);
   char *pszBlock = NULL;	/* Name of the Unicode block */
   int iBlock;			/* Index of the Unicode block */
+#ifdef _WIN32
+  char szCodePage[16];
+#endif
 #endif
 
-  DEBUG_PRINTF(("PrintRange(0x%02X, 0x%02X, 0x%X)" EOL, iFirst, iLast, iFlags));
+  DEBUG_ENTER(("PrintRange(0x%02X, 0x%02X, 0x%X)" EOL, iFirst, iLast, iFlags));
 
   DEBUG_PRINTF(("isTTY = %d" EOL, isTTY));
 #if ANSI_IS_OPTIONAL
@@ -1552,13 +1715,21 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
   DEBUG_PRINTF(("isUTF8 = %d" EOL, isUTF8));
   DEBUG_PRINTF(("isUnicode = %d" EOL, isUnicode));
 
-  for (iBlock=0; iBlock<N_UNICODE_BLOCKS; iBlock++) {
-    if (   (iFirst == unicodeBlock[iBlock].iFirst)
-        && (iLast == unicodeBlock[iBlock].iLast)) {
-      pszBlock = unicodeBlock[iBlock].pszName;
-      break;
+  if (isUnicode) {
+    for (iBlock=0; iBlock<N_UNICODE_BLOCKS; iBlock++) {
+      if (   (iFirst == unicodeBlock[iBlock].iFirst)
+	  && (iLast == unicodeBlock[iBlock].iLast)) {
+	pszBlock = unicodeBlock[iBlock].pszName;
+	break;
+      }
     }
   }
+#ifdef _WIN32
+  else if (iFirst >= 0x80) {
+    sprintf(szCodePage, "Code Page %d", (int)GetConsoleOutputCP());
+    pszBlock = szCodePage;
+  }
+#endif /* defined(_WIN32) */
 #endif /* SUPPORTS_UTF8 */
 
   for (iBase = (iFirst & -0x80); iBase < ((iLast + 0x7F) & -0x80); iBase += 0x80) {
@@ -1636,7 +1807,7 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
 	  if (iErr) {
 failed_to_get_cursor_coord:
 	    fprintf(stderr, "Failed to get the cursor coordinates\n");
-	    return 1;
+	    RETURN_INT(1);
 	  }
 	}
 #endif /* EXTRA_CHARS_IN_CONTROL_CODES */
@@ -1680,7 +1851,7 @@ failed_to_get_cursor_coord:
     }
   }
 
-  return 0;
+  RETURN_INT(0);
 }
 
 /*---------------------------------------------------------------------------*\
