@@ -142,6 +142,7 @@
 *		    much as possible.					      *
 *    2020-12-11 JFL Added XDEBUG_WPRINTF and RETURN_DWORD* macros.            *
 *    2022-02-17 JFL Added the INLINE macro, and ShrinkBuf() inline function.  *
+*    2023-10-15 JFL Added macro DEBUG_PRINT_INT_VAR().                        *
 *		    							      *
 *	 (C) Copyright 2016 Hewlett Packard Enterprise Development LP	      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -501,6 +502,8 @@ extern DEBUG_TLS int iIndent;	/* Debug messages indentation. Thread local. */
 #define SET_DEBUG_PUT(pFunc) DEBUG_DO_NOTHING() /* Set the debug put routine */
 
 #endif /* defined(_DEBUG) */
+
+#define DEBUG_PRINT_INT_VAR(var) DEBUG_PRINTF((#var " = %d\n", (int)(var)))
 
 #define STRINGIZE(s) #s		   /* Convert a macro name to a string */
 #define VALUEIZE(s) STRINGIZE(s)   /* Convert a macro value to a string */
