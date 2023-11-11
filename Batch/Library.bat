@@ -4226,10 +4226,14 @@ for /f "delims=" %%l in ('netsh advfirewall firewall show rule name^=%1 verbose'
 :#  Arguments       %1	    Server name                                       #
 :#                  %2      Name of the return variable. Default: ADDRESS     #
 :#                                                                            #
-:#  Notes 	    Returns an empty string if it cannot resolve the address. #
+:#  Notes 	    Return the last address found, or an empty string.        #
 :#                                                                            #
 :#  History                                                                   #
 :#   2015-03-02 JFL Created this routine.                                     #
+:#   2023-11-09 JFL Added option -4 to limit results to IPv4 addresses.       #
+:#                  Added option -6 to limit results to IPv6 addresses.       #
+:#                  Bugfix: Do not depend on the number of name servers.      #
+:#   2023-11-10 JFL Bugfix: Ignore alias names that may follow addresses.     #
 :#                                                                            #
 :#----------------------------------------------------------------------------#
 
@@ -4252,27 +4256,45 @@ for /f "delims=" %%l in ('netsh advfirewall firewall show rule name^=%1 verbose'
 :#	Then, if there are multiple addresses, N lines with just an address
 :#		                  10.18.131.1
 :#		                  10.17.131.1
+:#	Then, possibly some alias names
+:#			Aliases:  test.larvoire.net
 
 :# Use nslookup.exe to resolve an IP address. Return the last one found, or an empty string.
 
-:GetServerAddress %1=Name %2=RetVar
-%FUNCTION% enableextensions enabledelayedexpansion
+:GetServerAddress [-4|-6] NAME [RETVAR]
+%FUNCTION% EnableExtensions EnableDelayedExpansion
+set "CMD=nslookup"
+if "%~1"=="-4" set "CMD=%CMD% -type^=A" & shift
+if "%~1"=="-6" set "CMD=%CMD% -type^=AAAA" & shift
 set "NAME=%~1"
 set "RETVAR=%~2"
-if "%RETVAR%"=="" set "RETVAR=ADDRESS"
+if not defined RETVAR set "RETVAR=ADDRESS"
 set "ADDRESS="
-set "NFIELD=0"
-for /f "tokens=1,2" %%a in ('nslookup %NAME% 2^>NUL') do (
-  set "A=%%a"
-  set "B=%%b"
-  %ECHOVARS.D% A B
-  set "ADDRESS=%%b"			&REM Normally the address is the second token.
-  if "%%b"=="" set "ADDRESS=%%a"	&REM But for final addresses it may be the first.
-  if not "!A!"=="!A::=!" set /a "NFIELD=NFIELD+1" &REM Count lines with a NAME: header.
-  if "!NFIELD!"=="0" set "ADDRESS="	&REM The first two values are for the DNS server, not for the target server.
-  if "!NFIELD!"=="1" set "ADDRESS="
-  if "!NFIELD!"=="2" set "ADDRESS="
-  %ECHOVARS.D% NFIELD ADDRESS
+set "NBLANK=0"
+set "CMD=%CMD% %NAME%"
+%ECHO.D% %CMD%
+:# Pipe the output into `findstr /n` to also catch the blank lines
+for /f "tokens=1,* delims=: " %%k in ('%CMD% 2^>NUL ^| findstr /n /r "^"') do (
+  set "LINE=%%l" &:# Ignore %%k, which is the line number
+  %ECHOVARS.D% LINE
+  if not defined LINE (
+    set /a "NBLANK=NBLANK+1"
+    %ECHOVARS.D% NBLANK
+    set "NTAG=0"
+  ) else if not "!NBLANK!"=="0" for /f "tokens=1,*" %%a in ("!LINE: :=:!") do (
+    set "A=%%a"
+    set "B=%%b"
+    %ECHOVARS.D% A B
+    if defined B (
+      set /a "NTAG+=1"
+      %ECHOVARS.D% NTAG
+    )
+    if "!NTAG!"=="2" ( :# The address is the second named token
+      set "ADDRESS=%%b"				&REM Normally the address is the second token.
+      if not defined ADDRESS set "ADDRESS=%%a"	&REM But for additional addresses it may be the first.
+      %ECHOVARS.D% ADDRESS
+    )
+  )
 )
 %UPVAR% %RETVAR%
 set "%RETVAR%=%ADDRESS%"
