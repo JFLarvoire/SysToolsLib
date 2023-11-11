@@ -13,6 +13,7 @@
 *		    Renamed IO_REPARSE_TAG_LXSS_SYMLINK as ..._TAG_LX_SYMLINK.*
 *    2020-12-11 JFL Added read structure for tag IO_REPARSE_TAG_APPEXECLINK.  *
 *    2020-12-14 JFL Added lots of definitions from newer MS docs and others.  *
+*    2023-11-11 JFL Updated definitions and comments.                         *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -27,6 +28,10 @@
    Reparse tags
    https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/c8e77b37-3909-4fe6-a4ea-2b9d423b1ee4
    
+   When a file is opened, and it has the attribute FILE_ATTRIBUTE_REPARSE_POINT,
+   then Windows reads the reparse tag, and passes control to the corresponding
+   filter driver. This allows extending the file system with new capabilities.
+   
    All are processed on the server side, except IO_REPARSE_TAG_SYMLINK.
 */
 
@@ -36,13 +41,15 @@
 
 /* Constants from http://msdn.microsoft.com/en-us/library/dd541667.aspx */
 /* Some, but not all, of them also defined in recent versions of winnt.h. */
-/* All seem to come from NT DDK's ntifs.h, for installable file system drivers. */
+/* They're defined in NT DDK's ntifs.h, for Installable File System drivers.
+   But this IFS DDK is not freely available. */
 /* Since the list varies a lot, redefine them one by one as needed */
 /* Bit 31 = Tag owned by Microsoft
    Bit 30 = Reserved for Microsoft. Must be 0 for non-MS tags.
    Bit 29 = Surrogate bit. Points to another file of directory.
    Bit 28 = Directory bit. Any directory with this reparse tag can have children.
-   Bits 16-27: Invalid and must be 0. */
+   Bits 16-27: Invalid and must be 0.
+   Bits 12-14: Several reparse filter drivers use this as a 0-15 device counter */
 /* Reparse tags, with the exception of IO_REPARSE_TAG_SYMLINK,
    are processed on the server and are not processed by a client after transmission over the wire. */
 /* See https://github.com/prsyahmi/GpuRamDrive/blob/master/GpuRamDrive/3rdparty/inc/imdisk/ntumapi.h
@@ -61,11 +68,11 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_MOUNT_POINT
-#define IO_REPARSE_TAG_MOUNT_POINT	0xA0000003	/* Used for mount point support */
+#define IO_REPARSE_TAG_MOUNT_POINT	0xA0000003	/* Mount Point, aka. Junction */
 #endif
 
 #ifndef IO_REPARSE_TAG_HSM
-#define IO_REPARSE_TAG_HSM		0xC0000004	/* Obsolete. Used by legacy Hierarchical Storage Manager Product */
+#define IO_REPARSE_TAG_HSM		0xC0000004	/* Obsolete. Used by legacy Hierarchical Storage Manager product */
 #endif
 
 #ifndef IO_REPARSE_TAG_DRIVE_EXTENDER
@@ -77,19 +84,19 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_SIS
-#define IO_REPARSE_TAG_SIS		0x80000007	/* Used by single-instance storage (SIS) filter driver. Server-side interpretation only, not meaningful over the wire */
+#define IO_REPARSE_TAG_SIS		0x80000007	/* Single-Instance Storage */
 #endif
 
 #ifndef IO_REPARSE_TAG_WIM
-#define IO_REPARSE_TAG_WIM              0x80000008      /* Mounted Windows boot Image File? */
+#define IO_REPARSE_TAG_WIM              0x80000008      /* Windows Image File mount point */
 #endif
 
 #ifndef IO_REPARSE_TAG_CSV
-#define IO_REPARSE_TAG_CSV              0x80000009      /* Cluster Shared Volume? */
+#define IO_REPARSE_TAG_CSV              0x80000009      /* Cluster Shared Volume version 1 */
 #endif
 
 #ifndef IO_REPARSE_TAG_DFS
-#define IO_REPARSE_TAG_DFS		0x8000000A	/* Used by the DFS filter. The DFS is described in the Distributed File System (DFS): Referral Protocol Specification [MS-DFSC]. Server-side interpretation only, not meaningful over the wire */
+#define IO_REPARSE_TAG_DFS		0x8000000A	/* Distributed File System */
 #endif
 
 #ifndef IO_REPARSE_TAG_FILTER_MANAGER
@@ -97,7 +104,7 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_SYMLINK
-#define IO_REPARSE_TAG_SYMLINK		0xA000000C	/* Used for symbolic link support */
+#define IO_REPARSE_TAG_SYMLINK		0xA000000C	/* Symbolic Link */
 #endif
 
 #ifndef IO_REPARSE_TAG_IIS_CACHE
@@ -105,7 +112,7 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_DFSR
-#define IO_REPARSE_TAG_DFSR		0x80000012	/* Used by the DFS filter. The DFS is described in [MS-DFSC]. Server-side interpretation only, not meaningful over the wire */
+#define IO_REPARSE_TAG_DFSR		0x80000012	/* Distributed File System */
 #endif
 
 #ifndef IO_REPARSE_TAG_DEDUP
@@ -121,35 +128,43 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_FILE_PLACEHOLDER
-#define IO_REPARSE_TAG_FILE_PLACEHOLDER 0x80000015	/* Placeholder files enable users to view and manage Microsoft OneDrive files regardless of connectivity. */
+#define IO_REPARSE_TAG_FILE_PLACEHOLDER 0x80000015	/* Obsolete. Placeholder files enable users to view and manage Microsoft OneDrive files regardless of connectivity. */
 #endif                                                  /* See https://msdn.microsoft.com/en-us/windows/compatibility/placeholder-files */
 
 #ifndef IO_REPARSE_TAG_DFM
-#define IO_REPARSE_TAG_DFM		0x80000016	/* Dynamic File filter */
+#define IO_REPARSE_TAG_DFM		0x80000016	/* Dynamic File */
 #endif
 
 #ifndef IO_REPARSE_TAG_WOF
-#define IO_REPARSE_TAG_WOF		0x80000017	/* WOF (Windows Overlay Filesystem) compressed file */
+#define IO_REPARSE_TAG_WOF		0x80000017	/* Windows Overlay Filesystem compressed file */
 #endif							/* See http://ntfs-3g-devel.sf.narkive.com/CRy8v4Ja/experimental-support-for-windows-10-system-compressed-files */
 
 #ifndef IO_REPARSE_TAG_WCI
-#define IO_REPARSE_TAG_WCI		0x80000018	/* Windows Container Image? */
+#define IO_REPARSE_TAG_WCI		0x80000018	/* Windows Container Isolation */
+#endif
+
+#ifndef IO_REPARSE_TAG_WCI_1
+#define IO_REPARSE_TAG_WCI_1		0x90001018	/* Windows Container Isolation */
 #endif
 
 #ifndef IO_REPARSE_TAG_GLOBAL_REPARSE
-#define IO_REPARSE_TAG_GLOBAL_REPARSE	0x80000019	/* NPFS named pipe symbolic link from a server silo into the host silo */
+#define IO_REPARSE_TAG_GLOBAL_REPARSE	0xA0000019	/* NPFS named pipe symbolic link from a server silo into the host silo */
 #endif
 
 #ifndef IO_REPARSE_TAG_CLOUD
-#define IO_REPARSE_TAG_CLOUD		0x9000001A	/* Cloud Files filter, for files managed by a sync engine such as Microsoft OneDrive */
+#define IO_REPARSE_TAG_CLOUD		0x9000001A	/* Cloud Files, for files managed by a sync engine such as Microsoft OneDrive */
+#endif
+
+#ifndef IO_REPARSE_TAG_CLOUD_MASK
+#define IO_REPARSE_TAG_CLOUD_MASK	0x0000F000	/* There are actually 15 other CLOUD tags (CLOUD_1 to CLOUF_F), based on that digit in the above tag */
 #endif
 
 #ifndef IO_REPARSE_TAG_APPEXECLINK
-#define IO_REPARSE_TAG_APPEXECLINK	0x8000001B	/* Universal Windows Platform (UWP) application execution links */
+#define IO_REPARSE_TAG_APPEXECLINK	0x8000001B	/* Universal Windows Platform (UWP) Application Execution Links */
 #endif
 
 #ifndef IO_REPARSE_TAG_PROJFS
-#define IO_REPARSE_TAG_PROJFS		0x9000001C	/* Windows Projected File System filter, for files managed by a user mode provider such as VFS for Git */
+#define IO_REPARSE_TAG_PROJFS		0x9000001C	/* Windows Projected File System, for files managed by a user mode provider such as VFS for Git */
 #endif
 
 #ifndef IO_REPARSE_TAG_LX_SYMLINK
@@ -157,23 +172,23 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_STORAGE_SYNC
-#define IO_REPARSE_TAG_STORAGE_SYNC	0xA000001E	/* Azure File Sync (AFS) filter */
+#define IO_REPARSE_TAG_STORAGE_SYNC	0x8000001E	/* Azure File Sync (AFS) */
 #endif
 
 #ifndef IO_REPARSE_TAG_WCI_TOMBSTONE
-#define IO_REPARSE_TAG_WCI_TOMBSTONE	0xA000001F	/* Windows Container Isolation filter */
+#define IO_REPARSE_TAG_WCI_TOMBSTONE	0xA000001F	/* Windows Container Isolation */
 #endif
 
 #ifndef IO_REPARSE_TAG_UNHANDLED
-#define IO_REPARSE_TAG_UNHANDLED	0xA0000020	/* Windows Container Isolation filter */
+#define IO_REPARSE_TAG_UNHANDLED	0xA0000020	/* Windows Container Isolation */
 #endif
 
 #ifndef IO_REPARSE_TAG_ONEDRIVE
-#define IO_REPARSE_TAG_ONEDRIVE		0x80000021	/* Not used (?) */
+#define IO_REPARSE_TAG_ONEDRIVE		0x80000021	/* Not used */
 #endif
 
 #ifndef IO_REPARSE_TAG_PROJFS_TOMBSTONE
-#define IO_REPARSE_TAG_PROJFS_TOMBSTONE	0xA0000022	/* Windows Projected File System filter, for files managed by a user mode provider such as VFS for Git */
+#define IO_REPARSE_TAG_PROJFS_TOMBSTONE	0xA0000022	/* Windows Projected File System, for files managed by a user mode provider such as VFS for Git */
 #endif
 
 #ifndef IO_REPARSE_TAG_AF_UNIX
@@ -193,8 +208,13 @@
 #endif
 
 #ifndef IO_REPARSE_TAG_WCI_LINK
-#define IO_REPARSE_TAG_WCI_LINK		0x80000027	/* Windows Container Isolation filter */
+#define IO_REPARSE_TAG_WCI_LINK		0x80000027	/* Windows Container Isolation */
 #endif
+
+#ifndef IO_REPARSE_TAG_WCI_LINK_MASK
+#define IO_REPARSE_TAG_WCI_LINK_MASK	0x0000F000	/* There's 1 other WCI_LINK tags (WCI_LINK_1), based on that digit in the above tag */
+#endif
+
 
 #pragma pack(1)
 
