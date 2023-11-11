@@ -360,7 +360,7 @@ int symlinkW(const WCHAR *targetName, const WCHAR *linkName) {
   // Windows needs to know if the target is a file or a directory;
   // But Unix allows creating dangling links, in which case we cannot guess what type it'll be. */
   dwAttr = GetFileAttributesW(targetName);
-  DEBUG_PRINTF(("GetFileAttributes() = 0x%lX\n", dwAttr));
+  DEBUG_WPRINTF((L"GetFileAttributes(\"%ls\") = 0x%lX\n", targetName, dwAttr));
   dwFlags = 0;
   if (dwAttr != INVALID_FILE_ATTRIBUTES) {	/* File exists */
     if (dwAttr & FILE_ATTRIBUTE_DIRECTORY) dwFlags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
@@ -372,6 +372,7 @@ int symlinkW(const WCHAR *targetName, const WCHAR *linkName) {
     }
   }
 
+  DEBUG_WPRINTF((L"CreateSymbolicLink(\"%ls\", \"%ls\", 0x%lX)\n", linkName, targetName, dwFlags));
   done = CreateSymbolicLinkW(linkName, targetName, dwFlags);
 
   if (done) {
