@@ -42,7 +42,13 @@
 :#		    To do: Manage complex multi-line values.		      #
 :#		           Ex: HKLM\Cluster\Exchange\DagNetwork		      #
 :#		    							      #
-:#  History:                                                                  #
+:#		    Known issues:					      #
+:#		    - Value names can themselves contain the \ character.     #
+:#		      This script assumes that they don't, and breaks if so.  #
+:#		      For example, see the values in 			      #
+:#    HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers #
+:#		    							      #
+:#  History:                                                                  #                            
 :#   2010-03-31 JFL created this batch file.       			      #
 :#   2011-12-01 JFL Restructured.                  			      #
 :#   2011-12-12 JFL Finalized change and fixed bugs.			      #
@@ -76,13 +82,15 @@
 :#   2021-03-08 JFL Updated the debug library.                                #
 :#                  Fixed an issue with the open command breaking the console.#
 :#   2021-03-11 JFL Fixed a bug when setting a value ending with a "\".       #
+:#   2023-09-26 JFL Fixed a failure to open regedit.exe at a given key on     #
+:#                  non English systems.                                      #
 :#                                                                            #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
 :##############################################################################
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2021-03-11"
+set "VERSION=2023-09-26"
 set "SCRIPT=%~nx0"				&:# Script name
 set "SPATH=%~dp0" & set "SPATH=!SPATH:~0,-1!"	&:# Script path, without the trailing \
 set "SFULL=%~f0"				&:# Script full pathname
@@ -1923,12 +1931,17 @@ for /f "tokens=1* delims=\" %%h in ("!KEY!") do (
   if not defined HIVE set "HIVE=%%h" & rem :# Assume the user entered the full name already
   set "KEY=!HIVE!\%%i"
 )
-:# Get the local system name. Ex: "My Computer" or "Computer"
-setlocal & %IF_NOEXEC% call :Exec.on &:# Make sure the :get is always executed
-call :get "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\0\DisplayName" COMPUTER
-endlocal & set "COMPUTER=%COMPUTER%" &:# Restore the initial NOEXEC mode
-:# Change RegEdit's last used key, so that next time it opens that key "again".
-call :set "HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit\LastKey" "%COMPUTER%\!KEY!" >NUL
+:# 2023-09-26 On my system, regedit.exe names the localhost "Ordinateur",
+:#            yet the HKU\...\DisplayName value COMPUTER contains "Computer" like on English systems.
+:#            regedit.exe fails to open the right key if the name "Computer" is used.
+:#            And when _not_ prepending that name, it works and opens the right key.
+:# :# Get the local system name. Ex: "My Computer" or "Computer"
+:# setlocal & %IF_NOEXEC% call :Exec.on &:# Make sure the :get is always executed
+:# call :get "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\0\DisplayName" COMPUTER
+:# endlocal & set "COMPUTER=%COMPUTER%" &:# Restore the initial NOEXEC mode
+:# :# Change RegEdit's last used key, so that next time it opens that key "again".
+:# call :set "HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit\LastKey" "%COMPUTER%\!KEY!" >NUL
+call :set "HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Regedit\LastKey" "!KEY!" >NUL
 %EXEC% start regedit.exe &:# Don't use 'start /b regedit' as a workaround for the possible presence of a regedit.bat, as this breaks the return stack
 %RETURN%
 
