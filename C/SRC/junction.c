@@ -19,12 +19,14 @@
 *                   themselves in a binary tree. Renamed the old -1 as -o.    *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib.				      *
 *    2022-10-22 JFL Added option -t to list all types of reparse points.      *
+*    2023-11-15 JFL Bug fix: When listing junctions in verbose mode, the      *
+*                   target was not displayed.                                 *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2022-10-22"
+#define PROGRAM_VERSION "2023-11-15"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -441,6 +443,7 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
   char *pszTarget = buf;
   char *pszType = "?";
   char szTag[16];
+  int iErr;
 
   if (pDE->d_type != DT_LNK) return 0;
 
@@ -449,7 +452,6 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
 
   if (iOnce) { /* Check if that same junction has been seen before */
     struct stat sStat;
-    int iErr;
 
     if (!pTree) { /* Create the tree, if this has not yet been done */
       pTree = pJcbRef->pTree = new_knownJunction_tree();
@@ -492,46 +494,43 @@ int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
 
   pJcbRef->nJunction += 1;
 
-  if (iAllTypes) {
-    int iErr;
-    switch (dwTag) {
-      case IO_REPARSE_TAG_MOUNT_POINT: {
-	pszType = "Junction";
-	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
-	if (iErr == -1) pszTarget = "?";
-	break;
+  iErr = -1;
+  switch (dwTag) {
+    case IO_REPARSE_TAG_MOUNT_POINT: {
+      pszType = "Junction";
+      iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+      break;
+    }
+    case IO_REPARSE_TAG_SYMLINK: {
+      if (!iAllTypes) break;
+      pszType = "Symlink";
+      iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+      if (iErr != -1) {
+	struct stat st;
+	iErr = dirent2stat(pDE, &st);
+	if ((!iErr) && (st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) pszType = "SymlinkD";
       }
-      case IO_REPARSE_TAG_SYMLINK: {
-      	pszType = "Symlink";
-	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
-	if (iErr == -1) {
-	  pszTarget = "?";
-	} else {
-	  struct stat st;
-	  iErr = dirent2stat(pDE, &st);
-	  if ((!iErr) && (st.st_Win32Attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) pszType = "SymlinkD";
-	}
-	break;
-      }
-      case IO_REPARSE_TAG_LX_SYMLINK: {
-	pszType = "LinuxLink";
-	pszTarget = "?";
-	break;
-      }
-      case IO_REPARSE_TAG_APPEXECLINK: {
-	pszType = "AppExecLnk";
-	int iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
-	if (!iLen) pszTarget = "?";
-	break;
-      }
-      default: {
-	pszType = szTag;
-	sprintf(szTag, "0x%08X", (int)dwTag);
-	pszTarget = "?";
-	break;
-      }
+      break;
+    }
+    case IO_REPARSE_TAG_LX_SYMLINK: {
+      if (!iAllTypes) break;
+      pszType = "LinuxLink";
+      break;
+    }
+    case IO_REPARSE_TAG_APPEXECLINK: {
+      if (!iAllTypes) break;
+      pszType = "AppExecLnk";
+      int iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
+      iErr = (iLen <= 0) ? -1 : 0;
+      break;
+    }
+    default: {
+      pszType = szTag;
+      sprintf(szTag, "0x%08X", (int)dwTag);
+      break;
     }
   }
+  if (iErr == -1) pszTarget = "?";
 
   if (!iVerbose) {
     if (!iAllTypes) {
