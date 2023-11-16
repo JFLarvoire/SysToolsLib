@@ -75,6 +75,8 @@
 *                   Version 3.5.					      *
 *    2022-01-12 JFL Added option -f to follow links to directories. Ver. 3.6. *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.6.1.		      *
+*    2023-11-16 JFL Bugfix: In case of error, pList may be used after realloc.*
+*                   Version 3.6.2.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -82,8 +84,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.6.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "3.6.2"
+#define PROGRAM_DATE    "2023-11-16"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1297,10 +1299,11 @@ long GetClusterSize(char drive)	{       /* Get cluster size */
 *   Return value:   # of entries in the array, or -1 if error.		      *
 *									      *
 *   Notes:	    Extension of the standard scandir routine, allowing to    *
-*		    pass arguments to the selection routine.
+*		    pass arguments to the selection routine.		      *
 *		    							      *
 *   History:								      *
 *    2012-01-11 JFL Initial implementation				      *
+*    2023-11-16 JFL Bugfix: In case of error, pList may be used after realloc.*
 *                                                                             *
 \*****************************************************************************/
 
@@ -1335,7 +1338,11 @@ int scandirX(const char *pszName,
     /* OK, we've selected this one. So append a copy of this dirent to the list. */
     n += 1;
     pList2 = (struct dirent **)realloc(pList, n * sizeof(struct dirent *));
-    pDirent2 = malloc(sizeof(struct dirent));
+    pDirent2 = NULL;
+    if (pList2) {
+      pList = pList2;
+      pDirent2 = malloc(sizeof(struct dirent));
+    }
     if (!pList2 || !pDirent2) {
       if (pDirent2) free(pDirent2);
       for (n-=1; n>0; ) free(pList[--n]);
@@ -1344,7 +1351,6 @@ int scandirX(const char *pszName,
       return -1;
     }
     *pDirent2 = *pDirent;
-    pList = pList2;
     pList[n-1] = pDirent2;
   }
 
