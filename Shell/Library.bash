@@ -22,13 +22,14 @@
 #    2022-01-26 JFL Added routine ReadSecret().                               #
 #                   Added routines Info(), Warning(), Error().                #
 #                   Check whether the script was sourced or executed directly.#
+#    2023-11-16 JFL Added option -C to make it easier to test a single cmd.   #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2022-01-26"
+VERSION="2023-11-16"
 
 # Check if the script is sourced
 (return 0 2>/dev/null) && sourced=1 || sourced=0
@@ -702,7 +703,8 @@ $SCRIPT - A sourceable library of Bash functions
 Usage: $SCRIPT [OPTIONS] [COMMANDS]
 
 Options:
-  -c CMD ...        Evaluate each argument as a separate command
+  -c CMDLINE ...    Evaluate each argument as a separate command line
+  -C CMD [ARG ...]  Run the given command and optional arguments
   -d, --debug       Debug mode: Tell the script author what code is being run
   -h, --help, -?    Display this help screen and exit
   -l LOGFILE        Set the log file name. Use -l /dev/null to disable
@@ -730,6 +732,10 @@ while (( $# > 0 )) ; do
   case "$arg" in
     -c|--commands)
       exec_all_cmds "$@"
+      exit
+    ;;
+    -C|--command)
+      "$@"
       exit
     ;;
     -d|--debug)
