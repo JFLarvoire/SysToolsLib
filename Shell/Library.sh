@@ -14,13 +14,17 @@
 #    2020-09-25 JFL Created this script.                                      #
 #    2022-01-26 JFL Added routine ReadSecret().                               #
 #                   Added logging. Added variable values debug output.        #
+#    2023-04-22 JFL Rewrote routine Exec() to receive a list of arguments,    #
+#                   as that in Library.bash; Renamed the old one as Exec1().  #
+#                   Added routine mkdir_p().                                  #
+#    2023-11-16 JFL Added option -C to make it easier to test a single cmd.   #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Global variables
-VERSION="2022-01-26"
+VERSION="2023-11-16"
 
 # Check if the script is sourced. (Posix version from https://stackoverflow.com/a/28776166/2215591)
 sourced=0
@@ -191,11 +195,21 @@ EchoDSVars() { # $1=String; $2...=Variables names. Display in debug mode only...
 }
 
 # Conditionally execute a command line
-Exec() {
+Exec1() {
   if [ $EXEC -eq 1 ] ; then
     eval $1
   else
     echo $1
+  fi
+}
+
+# Conditionally execute a command line
+Exec() {
+  if [ $EXEC -eq 1 ] ; then
+    EchoD $*
+    $*
+  else
+    Echo $*
   fi
 }
 
@@ -221,6 +235,18 @@ ReadSecret() {		# $1=Prompt string $2=Output variable
   echo				# Print a newline following what was read
   stty echo			# Re-enable echo
   trap - EXIT			# Disable the exit trap
+}
+
+#-----------------------------------------------------------------------------#
+
+# Replacement for `mkdir -p` in cases it can't be used, for ex. when there's a symlink in the path.
+mkdir_p() {
+  if [ ! -d "$1" ] ; then
+    mkdir_p "`dirname "$1"`"
+    if [ ! -L "$1" ] ; then
+      Exec mkdir "$1"
+    fi
+  fi
 }
 
 #-----------------------------------------------------------------------------#
@@ -267,7 +293,8 @@ $SCRIPT - A sourceable library of Bourne Shell functions
 Usage: $SCRIPT [OPTIONS]
 
 Options:
-  -c CMD ...        Evaluate each argument as a separate command
+  -c CMDLINE ...    Evaluate each argument as a separate command line
+  -C CMD [ARG ...]  Run the given command and optional arguments
   -d, --debug       Debug mode: Tell the script author what code is being run
   -h, --help, -?    Display this help screen and exit
   -l LOGFILE        Set the log file name. Use -l /dev/null to disable
@@ -293,6 +320,10 @@ while [ $# -gt 0 ] ; do
   case "$arg" in
     -c|--commands)
       exec_all_cmds "$@"
+      exit
+    ;;
+    -C|--command)
+      "$@"
       exit
     ;;
     -d|--debug)
