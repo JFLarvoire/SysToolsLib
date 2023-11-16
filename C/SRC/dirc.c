@@ -240,6 +240,8 @@
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.8.1.		      *
 *    2023-04-18 JFL Moved GetScreenRows() & GetScreenCols() to SysLib.	      *
 *                   Renamed them as GetConRows() & GetConCols(). Ver. 3.8.2.  *
+*    2023-11-16 JFL Bugfix in the debug version: Buffer used after free().    *
+*                   Version 3.8.3.                                            *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -247,8 +249,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.8.2"
-#define PROGRAM_DATE    "2023-04-18"
+#define PROGRAM_VERSION "3.8.3"
+#define PROGRAM_DATE    "2023-11-16"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -1269,9 +1271,10 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
       }
       if (opts.cont) {
 	FREE_PATHNAME_BUF(initdir);
+	DEBUG_PRINTF(("// Cannot access directory %s\n", path));
 	FREE_PATHNAME_BUF(path);
 	FREE_PATHNAME_BUF(pathname);
-	RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
+	RETURN_INT(nfif);
       }
       finis(RETCODE_INACCESSIBLE, NULL);
     }

@@ -48,6 +48,8 @@
 *    2020-03-17 JFL Fixed issue with Unix readdir() not always setting d_type.*
 *                   Version 3.1.3.					      *
 *    2020-04-20 JFL Added support for MacOS. Version 3.2.                     *
+*    2023-11-16 JFL Bugfix in the debug version: Buffer used after free().    *
+*                   Version 3.2.1.                                            *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,8 +57,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.2"
-#define PROGRAM_DATE    "2020-04-20"
+#define PROGRAM_VERSION "3.2.1"
+#define PROGRAM_DATE    "2023-11-16"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -928,9 +930,10 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
     if (!pc || err) {
       fprintf(stderr, "redo: Error: Cannot access directory %s.\n", path);
       FREE_PATHNAME_BUF(initdir);
+      DEBUG_PRINTF(("// Cannot access directory %s\n", path));
       FREE_PATHNAME_BUF(path);
       FREE_PATHNAME_BUF(pathname);
-      RETURN_INT_COMMENT(nfif, ("Cannot access directory %s\n", path));
+      RETURN_INT(nfif);
     }
   }
 
