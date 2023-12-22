@@ -84,6 +84,7 @@
 *		    Unicode block name for non Unicode character ranges.      *
 *		    Fixed character ranges which output � for all characters. *
 *		    Version 2.1.					      *
+*    2023-12-20 JFL Added the ability to decompose accented Unicode characters.
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -91,8 +92,8 @@
 
 #define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "2.1"
-#define PROGRAM_DATE    "2023-10-15"
+#define PROGRAM_VERSION "2.2"
+#define PROGRAM_DATE    "2023-12-20"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -1599,6 +1600,20 @@ int PrintCharCode(int iCode, int iFlags) {
       Puts(EOL);
       printf("UTF-32 \\U%08X" EOL, iCode);
 #ifdef _WIN32
+      /* Try splitting accented characters to their decomposed form */
+      if (n16 == 1) {
+      	WORD w = buf16[0];
+	int nDec = FoldStringW(MAP_COMPOSITE, &w, 1, buf16, 2);
+	if (!nDec) {
+	  fprintf(stderr, "FoldString() failed. Error %d.\n", GetLastError());
+	}
+	if (nDec > 1) {
+	  Puts("Decomposed ");
+	  for (i=0; i<nDec; i++) printf("\\u%04X", buf16[i]);
+	  Puts(EOL);
+	}
+      }
+      /* Output the equivalent character code in the selected code page */
       if (uCP2) {
 	printf("CP%u ", uCP2);
       	if (pszCode2) {
