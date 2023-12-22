@@ -4,7 +4,49 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-Added system and user environment variables mngt routines.
+## [Unreleased] 2023-12-21
+### Changed
+- chars.exe: Added the ability to decompose accented Unicode characters.
+
+## [Unreleased] 2023-11-16
+### Changed
+- C/MsvcLibX/include/reparsept.h: Updated definitions and comments.
+- C/MsvcLibX/src/symlink.c: Added a couple of new debug messages, to help diagnose issues.
+- Shell/Library.sh:
+   * Rewrote routine Exec() to receive a list of arguments, as that in Library.bash; Renamed the old one as Exec1().
+   * Added routine mkdir_p().
+   * Added option -C to make it easier to test a single command line.
+- Shell/Library.bash:
+   * Added option -C to make it easier to test a single command line.
+
+### Fixed
+- junction.exe: Bug fix: When listing junctions in verbose mode, the target was not displayed.
+- Batch/Library.bat: Fixed :GetServerAddress, and added optional arguments -4 and -6.
+- Batch/regx.bat: Fixed a failure to open regedit.exe at a given key on non English systems.
+- dirc.exe, redo.exe: In the debug version only: A buffer was used after free() while displaying a return comment.
+- dirsize.exe: In case of memory allocation error, a reallocated buffer may be used incorrectly, leading to further errors.
+
+## [Unreleased] 2023-10-15
+### Changed
+- C/Include/debugm.h: Added macro DEBUG_PRINT_INT_VAR().
+- chars.exe: 
+   * Added support for UTF-8 bytes codes on the command line.
+   * Added support for doubly encoded UTF-8 chars on the command line.
+   * In Windows, added option -8 as a synonym for -c 65001.
+   * In Windows, display both the current code page character code and the Unicode code point.
+   * In Windows, display the Windows code page instead of the Unicode block name for non Unicode character ranges.
+   * Fixed character ranges which in some cases output all characters as �.
+
+## [Unreleased] 2023-04-23
+### Changed
+- C/SRC/clean, C/SRC/make: Use SysToolsLib's Shell/distrib script to identify the processor.
+
+### Fixed
+- C/SysLib/GetConSize.c: Fixed building GetConSize.c termcap version, and simplified the tput version using popen().
+- C/Makefile, C/SRC/Makefile:
+   * Create the links bin -> ../bin -> ../../bin.
+   * Fixed a failure to link with the termcap library.
+- C/SysLib/GetConSize.c: Removed debug code left in by mistake.
 
 ## [Unreleased] 2023-04-19
 ### Changed
