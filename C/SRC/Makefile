@@ -34,6 +34,7 @@
 #    2021-11-08 JFL Define C macro HAS_SYSLIB when SYSLIB is present.         #
 #    2023-04-23 JFL Create the link bin -> ../bin.			      #
 #                   Fixed a failure to link with the termcap library.         #
+#    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -192,14 +193,30 @@ ifneq "$(CC_NOCARET_OPT)" ""
   CXXFLAGS += $(CC_NOCARET_OPT)
 endif
 
+# Add the path to NMaker include files
+ifdef NMINCLUDE
+  ifeq '$(shell ls -1 "$(NMINCLUDE)/debugm.h" 2>/dev/null)' ''
+    $(error "Can't find NMaker include files in $(NMINCLUDE)")
+  endif
+endif
+ifndef NMINCLUDE
+  ifneq '$(shell ls -1 "../include/debugm.h" 2>/dev/null)' ''
+    NMINCLUDE := ../include
+  endif
+endif
+ifdef NMINCLUDE
+CFLAGS := $(CFLAGS) -I $(NMINCLUDE)
+CXXFLAGS := $(CXXFLAGS) -I $(NMINCLUDE)
+endif
+
 # Add the path to SysToolsLib global include files
 ifdef STINCLUDE
-  ifeq '$(shell ls -1 "$(STINCLUDE)/debugm.h" 2>/dev/null)' ''
+  ifeq '$(shell ls -1 "$(STINCLUDE)/stversion.h" 2>/dev/null)' ''
     $(error "Can't find SysToolsLib global include files in $(STINCLUDE)")
   endif
 endif
 ifndef STINCLUDE
-  ifneq '$(shell ls -1 "../include/debugm.h" 2>/dev/null)' ''
+  ifneq '$(shell ls -1 "../include/stversion.h" 2>/dev/null)' ''
     STINCLUDE := ../include
   endif
 endif
@@ -360,7 +377,11 @@ check:
 # Check the build environment. Ex: global include files location
 .PHONY: checkenv
 checkenv:
-	if [ ! -r "$(STINCLUDE)/debugm.h" ] ; then \
+	if [ ! -r "$(NMINCLUDE)/debugm.h" ] ; then \
+	    >&2 echo "C/Makefile: Error: Can't find NMaker include files. Please export their location in NMINCLUDE." ; \
+	    false ; \
+	fi
+	if [ ! -r "$(STINCLUDE)/stversion.h" ] ; then \
 	    >&2 echo "C/Makefile: Error: Can't find SysToolsLib global include files. Please export their location in STINCLUDE." ; \
 	    false ; \
 	fi
@@ -423,6 +444,7 @@ Usage: make [MAKEOPTS] [MAKEDEFS] [TARGETS]
 
 MakeDefs:
   bindir=PATH       With install: Where to install files. Default: $(bindir)
+  NMINCLUDE=PATH    NMaker include directory. Default: $(NMINCLUDE)
   STINCLUDE=PATH    SysToolsLib global include dir. Default: $(STINCLUDE)
   SYSLIB=PATH       SysLib library base dir. Default: $(SYSLIB)
 

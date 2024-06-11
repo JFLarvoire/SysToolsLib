@@ -22,18 +22,24 @@ For a list of all available tools, see [Catalog.md](../Docs/Catalog.md).
 Quick Guide for rebuilding everything in Windows
 ------------------------------------------------
 
-1. Install Microsoft Visual C++ if you don't have it already.
-   If needed, it's part of the free Visual Studio Community Edition, available from this URL:
-   https://www.visualstudio.com/downloads/
+1. Install Microsoft Visual C++ if you don't have it already.  
+   If needed, it's part of the free Visual Studio Community Edition, available from this URL:  
+   https://www.visualstudio.com/downloads/  
    Important: While installing Visual Studio Community Edition, make sure to select the following optional components:
 
     - The workload "Desktop Development with C++"
     - Options "C++/CLI support" and "Standard Library modules" (In the list at the right of the installation wizard)
 
-2. Optional. Install the other compilers and SDKs for DOS and Windows that some tools depend on. See details further down.
+2. Optional. Install the other compilers and SDKs for DOS and Windows that some tools depend on. See details further down.  
    Note: All tools will build correctly without these optional compilers and SDKs, with just some features missing.
 
-3. Download the whole SysToolsLib source tree into a %WORKDIR% directory.
+3. Download the latest project sources archive, and extract its contents into a new work %WORKDIR% directory.  
+   Alternative: Get the latest sources from GitHub: `git clone https://github.com/JFLarvoire/SysToolsLib`
+
+4. Download the NMaker build system.
+
+       cd %WORKDIR%
+       git submodule update --remote
 
 4. Rebuild everything
 
@@ -43,6 +49,8 @@ Quick Guide for rebuilding everything in Windows
 
 Notes:
 
+- The `git submodule ...` command needs to be run only once, the first time a build is done.  
+  You can run it again later on, if you wish to upgrade the NMaker build system.
 - The `configure.bat` script needs to be run only once, the first time a build is done.
 - Before running `make.bat`, verify in the `configure.bat` output that it correctly detected the location of your
   C compiler (CC) and Windows Software Development Kit (WINSDK).
@@ -98,8 +106,14 @@ In all cases:
 Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
 -------------------------------------------------------------------------
 
-1. Download the whole SysToolsLib source tree into a $WORKDIR directory.
+1. Download the latest SysTools-src.zip sources archive, and extract its contents into a new $WORKDIR directory.  
+   
+   Alternative:
+   
+   Clone the project from GitHub
 
+       git clone --recurse-submodules https://github.com/JFLarvoire/SysToolsLib
+   
 2. Rebuild everything.
 
        cd $WORKDIR
@@ -107,6 +121,15 @@ Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
 
    Note: The makefiles use GNU Make extensions. So on systems like FreeBSD, which do not have GNU Make installed as the
    default make, use `gmake` instead of `make`.
+
+   Note: There's no ./configure file.
+
+3. Install all Unix scripts and the C programs built above.
+
+       sudo make install
+
+   If you're on the cautious side, you can first dry-run the installation using `sudo make -n install`.
+   Individual scripts and programs can also be installed separately by running `sudo ./install PROGNAME`.
 
 ### Individual components can be built separately if desired
 
@@ -131,8 +154,8 @@ Note: The other components (BiosLib/LoDos/Lib/PModeLib/MsvcLibX) are for DOS or 
 Optional compilers and SDKs for DOS and Windows
 -----------------------------------------------
 
-After installing any of these tools, run configure.bat in the base %WORKDIR%.
-This will update the config.HOSTNAME.bat file in each library directory.
+After installing any of these tools, run configure.bat in the base %WORKDIR%.  
+This will update the config.HOSTNAME.bat file in each library directory.  
 Subsequent builds with make.bat will automatically use the new tools and SDKs, and build the programs that depend on them.
 
 - If you're interested in building Windows 95/98 tools, install Microsoft Visual 2005.  
@@ -178,15 +201,17 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
 Procedure for generating a new release
 --------------------------------------
 
-* Edit C/Include/stversion, and update the release date.
-* Edit NEWS.md, and add comments about the release.
+* Edit `C/Include/stversion.h`, and update the release date.
+* Edit `NEWS.md`, and add comments about the release.
 * Then run:
   
-      cd %WORKDIR%\C
+      cd %WORKDIR%
       make distclean
+      git submodule update --remote
       configure
       make "OS=all"
       make release
+      make source-release
 
 * Test it in various Windows systems.
 * Also test building it and installing it in various Linux, MacOS, etc, Unix systems.

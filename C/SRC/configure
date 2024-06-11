@@ -14,22 +14,33 @@
 #    2016-01-08 JFL Actually copy the file instead of making a link.          #
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
+#    2024-01-09 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 # Global variables
-VERSION="2023-01-21"
+VERSION="2024-01-09"
 
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 
 # Helper routines to test verbosity levels
+Normal() {
+  [[ $VERBOSITY > 0 ]]
+}
 Verbose() {
   [[ $VERBOSITY > 1 ]]
 }
 Debug() {
   [[ $VERBOSITY > 2 ]]
+}
+
+# Display a string in normal mode
+EchoN() { # $*=echo arguments
+  if Normal ; then
+    echo "$@"
+  fi
 }
 
 # Display a string in verbose mode
@@ -48,6 +59,9 @@ case "$1" in
     echo "Prepare the environment for making SysToolsLib C tools"
     echo "Usage: ./configure [-v]"
     exit 0
+  ;;
+  -q | --quiet)
+    VERBOSITY=0
   ;;
   -v | --verbose)
     VERBOSITY=$(expr $VERBOSITY + 1)
@@ -77,14 +91,30 @@ if [ $? -ne 0 ] ; then
 fi
 EchoV "OK"
 
-# Make sure that the SysToolsLib global include directory is accessible
-EchoV "Making sure that the SysToolsLib global include directory is accessible"
-CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
+# Make sure that the NMaker include directory is accessible
+EchoV "Making sure that the NMaker include directory is accessible"
+CPATH=$NMINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
 #include "debugm.h"
 int main(int argc, char *argv[]) {return 0;}
 EOF
 if [ $? -ne 0 ] ; then # It's not accessible
-  if [ -r ../include/debugm.h ] ; then
+  if [ -r ../../NMaker/include/debugm.h ] ; then
+    NMINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
+  else
+    >&2 echo "Error: Please set NMINCLUDE with the pathname of NMaker include directory"
+    exit 1
+  fi
+fi
+EchoV "OK      NMINCLUDE=$NMINCLUDE"
+
+# Make sure that the SysToolsLib global include directory is accessible
+EchoV "Making sure that the SysToolsLib global include directory is accessible"
+CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
+#include "stversion.h"
+int main(int argc, char *argv[]) {return 0;}
+EOF
+if [ $? -ne 0 ] ; then # It's not accessible
+  if [ -r ../include/stversion.h ] ; then
     STINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
   else
     >&2 echo "Error: Please set STINCLUDE with the pathname of SysToolsLib's global include directory"
@@ -93,6 +123,7 @@ if [ $? -ne 0 ] ; then # It's not accessible
 fi
 EchoV "OK      STINCLUDE=$STINCLUDE"
 
+# Make sure that the SysLib include directory is accessible
 EchoV "Making sure that the SysLib library is accessible"
 CPATH=$SYSLIB cc -o /dev/null -xc - >&6 2>&1 <<EOF
 #include "SysLib.h"
@@ -108,4 +139,4 @@ if [ $? -ne 0 ] ; then # It's not accessible
 fi
 EchoV "OK      SYSLIB=$SYSLIB"
 
-echo Configuration done successfully.
+EchoN Configuration done successfully.

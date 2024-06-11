@@ -9,6 +9,7 @@
 #   History								      #
 #    2014-12-03 JFL Initial version                                           #
 #    2022-10-19 JFL Added dependencies on mainutil.h.                         #
+#    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -163,6 +164,7 @@ ZIPSOURCES =		 \
 #			Include files dependencies			      #
 #-----------------------------------------------------------------------------#
 
+MI=$(NMINCLUDE)
 SI=$(STINCLUDE)
 SL=$(SYSLIB)
 SX=$(MSVCLIBX)/include

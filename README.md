@@ -52,7 +52,7 @@ Batch and PowerShell for Windows-only tools; Python and Tcl for cross-OS tools; 
 
 Jean-François Larvoire
 jf.larvoire@free.fr
-2023-01-10
+2024-06-11
 
 
 Installation
@@ -74,9 +74,10 @@ You can also rebuild all C programs from sources. More details about this furthe
 The C programs need to be rebuilt from source.
 As for scripts, only the Shell and Tcl directories contain useful scripts in Unix.
 
-* Download the project sources archive.
-* Extract files from that archive, and put them in a new work directory.
-* Run `make` in that work directory to rebuild the C programs. (There's no ./configure script.)
+* Download the latest SysTools-src.zip sources release, and extract its contents into a new work directory.
+* Alternative: Clone the project sources from GitHub. See the [C/README.md](C/README.md) file for details.
+* Run `make` to rebuild the C programs. (There's no ./configure script.)  
+  (In versions of Unix that come with non-GNU build tools, you need to run `gmake` instead `make`.) 
 * Then run `sudo make install` to install them and the Tcl and Shell scripts.
   If you're on the cautious side, you can first dry-run the installation using `sudo make -n install`.
   Individual scripts and programs can also be installed separately by running `sudo ./install PROGNAME`.

@@ -23,6 +23,7 @@
 #    2020-04-13 JFL Moved the scripts installation to ../Makefile.	      #
 #                   Added an uninstall target rule.			      #
 #    2023-04-23 JFL Create the link bin -> ../bin.			      #
+#    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -79,9 +80,10 @@ DIRS=SysLib SRC
 all: ../bin bin $(DIRS)
 	@echo "All done."
 
+NMINCLUDE := $(shell dirname "$(PWD)")/NMaker/include
 STINCLUDE := $(PWD)/include
 SYSLIB := $(PWD)/SysLib
-MAKEDEFS="STINCLUDE=$(STINCLUDE)" "SYSLIB=$(SYSLIB)"
+MAKEDEFS="NMINCLUDE=$(NMINCLUDE)" "STINCLUDE=$(STINCLUDE)" "SYSLIB=$(SYSLIB)"
 
 ../bin:
 	$(info Creating directory $@)
@@ -118,6 +120,7 @@ Usage: make [MAKEOPTS] [MAKEDEFS] [TARGETS]
 
 MakeDefs:
   bindir=PATH       With install: Where to install files. Default: $(bindir)
+  NMINCLUDE=PATH    NMaker include directory. Default: $(NMINCLUDE)
   STINCLUDE=PATH    SysToolsLib global include dir. Default: $(STINCLUDE)
   SYSLIB=PATH       SysLib library base dir. Default: $(SYSLIB)
 

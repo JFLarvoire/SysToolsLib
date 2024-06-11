@@ -23,6 +23,7 @@
 :#   2016-12-16 JFL Only use setx if requested by user, with PERSISTENT_VARS. *
 :#   2017-03-12 JFL Don't automatically set the SYSLIB variable.              *
 :#   2023-01-14 JFL Added library dependencies for BIOS & LODOS builds.       *
+:#   2024-01-07 JFL Added a library dependency on STINCLUDE.		      *
 :#                                                                            *
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
@@ -34,6 +35,7 @@ if not defined SYSLIB set "SYSLIB=%CD%" &:# Default: Use the current directory
 
 :# Declare the SDKs and libraries we need
 %BEGIN_SDK_DEFS%
+%USE_SDK% STINCLUDE &:# SysToolsLib Global C include files
 %USE_SDK% BIOSLIB &:# Used for building OS=BIOS
 %USE_SDK% LODOSLIB &:# Used for building OS=LODOS
 %USE_SDK% MSVCLIBX &:# Used for building OS=DOS, and all Windows flavors

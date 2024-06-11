@@ -4,6 +4,11 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2024-06-11
+### Changed
+- All make files and build scripts: Major refactoring: Use the [NMaker](https://github.com/JFLarvoire/NMaker) subproject,
+  instead of having a version of it built-in in the C/include directory.
+
 ## [Unreleased] 2023-12-21
 ### Changed
 - chars.exe: Added the ability to decompose accented Unicode characters.

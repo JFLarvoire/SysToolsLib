@@ -3,13 +3,16 @@
 :#                                                                            *
 :#  Filename:	    configure.bat / make.bat				      *
 :#                                                                            *
-:#  Description:    Search for the eponym script in SysToolsLib and run it.   *
+:#  Description:    Search for the eponym script in NMaker\include and run it *
 :#                                                                            *
-:#  Notes:	    If the %STINCLUDE% variable is not defined, search for    *
-:#		    the SysToolsLib include directory, and define %STINCLUDE%.*
+:#  Notes:	    If the %NMINCLUDE% variable is not defined, search for    *
+:#		    the NMaker\include directory, and define %NMINCLUDE%.     *
+:#                                                                            *
+:#                  The NMINCLUDE name comes from JFL's Systems Tools Library,*
+:#                  for which this make system was originally created.        *
 :#                                                                            *
 :#                  Make any change needed regarding the actual configuration *
-:#		    process in %STINCLUDE%\configure.bat. Idem for the make   *
+:#		    process in %NMINCLUDE%\configure.bat. Idem for the make   *
 :#                  process in make.bat.				      *
 :#                                                                            *
 :#  History:                                                                  *
@@ -24,26 +27,29 @@
 :#                  Fixed several :# comments, which should have been &:#.    *
 :#   2018-01-12 JFL Improved comments and the debugging output.               *
 :#   2020-12-10 JFL Search for batchs in [.|..|..\..]\[.|WIN32|C]\include.    *
+:#   2021-01-28 JFL Search in [.|..|..\..]\[.|NMaker|WIN32|C]\include.        *
+:#                  Update the STINCLUDE variable in the caller's scope.      *
+:#   2021-02-03 JFL Renamed variable STINCLUDE as NMINCLUDE.                  *
 :#                                                                            *
 :#        © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 *
 :#*****************************************************************************
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "VERSION=2020-12-10"
+set "VERSION=2021-02-03"
 set "SCRIPT=%~nx0"				&:# Script name
 
 goto main
 
-:# Check if a directory contains the SysToolsLib make system
-:CheckDir DIRNAME [DIRNAME ...] :# Sets STINCLUDE and ERRORLEVEL=0 if success
+:# Check if a directory contains the NMaker make system
+:CheckDir DIRNAME [DIRNAME ...] :# Sets NMINCLUDE and ERRORLEVEL=0 if success
 for %%a in (%*) do (
-  %ECHO.D% Searching for STINCLUDE in "%%~a"
-  set "STINCLUDE="
+  %ECHO.D% Searching for NMINCLUDE in "%%~a"
+  set "NMINCLUDE="
   if exist "%%~a\make.bat" if exist "%%~a\configure.bat" if exist "%%~a\win32.mak" (
-    for /f "delims=" %%d in ('pushd %%a ^& cd ^& popd') do set "STINCLUDE=%%d"
+    for /f "delims=" %%d in ('pushd %%a ^& cd ^& popd') do set "NMINCLUDE=%%d"
   )
-  if defined STINCLUDE %ECHO.D% set "STINCLUDE=!STINCLUDE!" & exit /b 0
+  if defined NMINCLUDE %ECHO.D% set "NMINCLUDE=!NMINCLUDE!" & exit /b 0
 )
 exit /b 1
 
@@ -64,21 +70,21 @@ if "%~1"=="-v" set "ECHO.V=echo" & goto :next_arg
 goto :next_arg
 :done_arg
 
-:# Get the full pathname of the STINCLUDE library directory
-if defined STINCLUDE %CHECKDIR% "%STINCLUDE%" &:# If pre-defined, make sure the value is valid
+:# Get the full pathname of the NMINCLUDE library directory
+if defined NMINCLUDE %CHECKDIR% "%NMINCLUDE%" &:# If pre-defined, make sure the value is valid
 
 :# As a first choice, use the make.bat provided in this project
-if not defined STINCLUDE %CHECKDIR% include win32\include C\include &:# If we have one here, use it
+if not defined NMINCLUDE %CHECKDIR% include NMaker\include win32\include C\include &:# If we have one here, use it
 :# Else try in the near context
-for %%p in (.. ..\..) do if not defined STINCLUDE %CHECKDIR% %%p\include %%p\win32\include %%p\C\include &:# Default: Search it the parent directory, and 2nd level.
+for %%p in (.. ..\..) do if not defined NMINCLUDE %CHECKDIR% %%p\include %%p\NMaker\include %%p\win32\include %%p\C\include &:# Default: Search it the parent directory, and 2nd level.
 :# We might also store the information in the registry
-if not defined STINCLUDE ( :# Try getting the copy in the master environment
-  for /f "tokens=3" %%v in ('reg query "HKCU\Environment" /v STINCLUDE 2^>NUL') do set "STINCLUDE=%%v"
+if not defined NMINCLUDE ( :# Try getting the copy in the master environment
+  for /f "tokens=3" %%v in ('reg query "HKCU\Environment" /v NMINCLUDE 2^>NUL') do set "NMINCLUDE=%%v"
 )
 :# Else try finding it in the PATH
 set P=!PATH!
 :NextP
-if not defined STINCLUDE (
+if not defined NMINCLUDE (
   for /f "tokens=1* delims=;" %%a in ("!P!") do (
     set "DIR=%%a
     set "P=%%b"
@@ -87,11 +93,12 @@ if not defined STINCLUDE (
   )
 )
 :# If we still can't find it, admit defeat
-if not exist %STINCLUDE%\make.bat (
-  >&2 echo %0 Error: Cannot find SysToolsLib's global C include directory. Please define variable STINCLUDE.
+if not exist %NMINCLUDE%\make.bat (
+  >&2 echo %0 Error: Cannot find NMaker's global C include directory. Please define variable NMINCLUDE.
   exit /b 1
 )
 
-%ECHO.D% "%STINCLUDE%\%SCRIPT%" %*
+%ECHO.D% "%NMINCLUDE%\%SCRIPT%" %*
+:# Update the NMINCLUDE variable in the caller's scope. This ensures that child instances don't search it again.
 :# Must call the target batch, not run it directly, else the cmd window title is not removed in the end!
-endlocal & call "%STINCLUDE%\%SCRIPT%" %*
+endlocal & set "NMINCLUDE=%NMINCLUDE%" & call "%NMINCLUDE%\%SCRIPT%" %*

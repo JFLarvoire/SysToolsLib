@@ -29,6 +29,7 @@
 #    2020-03-11 JFL Don't attempt to build for IA64 or ARM by default.        #
 #    2022-12-21 JFL Changed the output subdirectories for DOS builds.         #
 #    2022-12-22 JFL `make clean` fixes and improvements.                      #
+#    2024-01-07 JFL Changed STINCLUDE to NMINCLUDE.			      #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -47,12 +48,12 @@ LIBDIR=lib
 !ENDIF
 
 # Check requirements for 16-bits builds statically and silently 
-!IF DEFINED(DOS_CC) && EXIST("$(STINCLUDE)\BIOS.mak") && DEFINED(BIOSLIB)
+!IF DEFINED(DOS_CC) && EXIST("$(NMINCLUDE)\BIOS.mak") && DEFINED(BIOSLIB)
 REQS_BIOS=1
 !ELSE
 REQS_BIOS=0
 !ENDIF
-!IF DEFINED(DOS_CC) && EXIST("$(STINCLUDE)\LODOS.mak") && DEFINED(LODOSLIB)
+!IF DEFINED(DOS_CC) && EXIST("$(NMINCLUDE)\LODOS.mak") && DEFINED(LODOSLIB)
 REQS_LODOS=1
 !ELSE
 REQS_LODOS=0
@@ -63,7 +64,7 @@ REQS_DOS=1
 REQS_DOS=0
 !ENDIF
 # Check requirements for 32/64-bits builds statically and silently 
-!IF DEFINED(WIN95_CC) && EXIST("$(STINCLUDE)\WIN95.mak") && DEFINED(WIN95_WINSDK) && DEFINED(HAS_98DDK)
+!IF DEFINED(WIN95_CC) && EXIST("$(NMINCLUDE)\WIN95.mak") && DEFINED(WIN95_WINSDK) && DEFINED(HAS_98DDK)
 REQS_WIN95=1
 !ELSE
 REQS_WIN95=0
@@ -73,7 +74,7 @@ REQS_WIN32=1
 !ELSE
 REQS_WIN32=0
 !ENDIF
-!IF DEFINED(IA64_CC) && EXIST("$(STINCLUDE)\IA64.mak") && DEFINED(IA64_WINSDK)
+!IF DEFINED(IA64_CC) && EXIST("$(NMINCLUDE)\IA64.mak") && DEFINED(IA64_WINSDK)
 REQS_IA64=1
 !ELSE
 REQS_IA64=0
@@ -83,12 +84,12 @@ REQS_WIN64=1
 !ELSE
 REQS_WIN64=0
 !ENDIF
-!IF DEFINED(ARM_CC) && EXIST("$(STINCLUDE)\ARM.mak") && DEFINED(ARM_WINSDK)
+!IF DEFINED(ARM_CC) && EXIST("$(NMINCLUDE)\ARM.mak") && DEFINED(ARM_WINSDK)
 REQS_ARM=1
 !ELSE
 REQS_ARM=0
 !ENDIF
-!IF DEFINED(ARM64_CC) && EXIST("$(STINCLUDE)\ARM64.mak") && DEFINED(ARM64_WINSDK)
+!IF DEFINED(ARM64_CC) && EXIST("$(NMINCLUDE)\ARM64.mak") && DEFINED(ARM64_WINSDK)
 REQS_ARM64=1
 !ELSE
 REQS_ARM64=0
@@ -492,7 +493,7 @@ $(LIBDIR)\SysLibbt.lib: $(OD)BIOS\T\SysLib.lib $(LIBDIR)
 
 $(OD)BIOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\BIOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\lodos: $(LIBDIR)\SysLiblt.lib
 
@@ -501,7 +502,7 @@ $(LIBDIR)\SysLiblt.lib: $(OD)LODOS\T\SysLib.lib $(LIBDIR)
 
 $(OD)LODOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library LODOS release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\LODOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\dos: lib\dosT lib\dosS lib\dosL
     rem All DOS versions done
@@ -513,7 +514,7 @@ $(LIBDIR)\SysLibdt.lib: $(OD)DOS\T\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "MEM=T" $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\dosS: $(LIBDIR)\SysLibds.lib
 
@@ -522,7 +523,7 @@ $(LIBDIR)\SysLibds.lib: $(OD)DOS\S\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "MEM=S" $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "MEM=S" $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\dosL: $(LIBDIR)\SysLibdl.lib
 
@@ -531,7 +532,7 @@ $(LIBDIR)\SysLibdl.lib: $(OD)DOS\L\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "MEM=L" $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "MEM=L" $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\win95: $(LIBDIR)\SysLibw95.lib
 
@@ -540,7 +541,7 @@ $(LIBDIR)\SysLibw95.lib: $(OD)WIN95\SysLib.lib $(LIBDIR)
 
 $(OD)WIN95\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN95 release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN95.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN95.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\win32: $(LIBDIR)\SysLibw32.lib
 
@@ -549,7 +550,7 @@ $(LIBDIR)\SysLibw32.lib: $(OD)WIN32\SysLib.lib $(LIBDIR)
 
 $(OD)WIN32\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN32 release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN32.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN32.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\ia64: $(LIBDIR)\SysLibia64.lib
 
@@ -558,7 +559,7 @@ $(LIBDIR)\SysLibia64.lib: $(OD)IA64\SysLib.lib $(LIBDIR)
 
 $(OD)IA64\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library IA64 release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\IA64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\IA64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\win64: $(LIBDIR)\SysLibw64.lib
 
@@ -567,7 +568,7 @@ $(LIBDIR)\SysLibw64.lib: $(OD)WIN64\SysLib.lib $(LIBDIR)
 
 $(OD)WIN64\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN64 release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\arm: $(LIBDIR)\SysLiba32.lib
 
@@ -576,7 +577,7 @@ $(LIBDIR)\SysLiba32.lib: $(OD)ARM\SysLib.lib $(LIBDIR)
 
 $(OD)ARM\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\ARM.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 lib\arm64: $(LIBDIR)\SysLiba64.lib
 
@@ -585,7 +586,7 @@ $(LIBDIR)\SysLiba64.lib: $(OD)ARM64\SysLib.lib $(LIBDIR)
 
 $(OD)ARM64\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM64 release version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\ARM64.mak $(MAKEDEFS) "DEBUG=0" dirs $@
 
 
 lib\bios\debug: $(LIBDIR)\SysLibbtd.lib
@@ -595,7 +596,7 @@ $(LIBDIR)\SysLibbtd.lib: $(OD)BIOS\Debug\T\SysLib.lib $(LIBDIR)
 
 $(OD)BIOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library BIOS debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\BIOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\BIOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
 
 lib\lodos\debug: $(LIBDIR)\SysLibltd.lib
 
@@ -604,7 +605,7 @@ $(LIBDIR)\SysLibltd.lib: $(OD)LODOS\Debug\T\SysLib.lib $(LIBDIR)
 
 $(OD)LODOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library LODOS debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\LODOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\LODOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
 
 lib\dos\debug: lib\dosT\debug lib\dosS\debug lib\dosL\debug
     rem All DOS versions done
@@ -616,7 +617,7 @@ $(LIBDIR)\SysLibdtd.lib: $(OD)DOS\Debug\T\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\T\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS tiny debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "DEBUG=1" "MEM=T" $(MAKEDEFS) dirs $@
 
 lib\dosS\debug: $(LIBDIR)\SysLibdsd.lib
 
@@ -625,7 +626,7 @@ $(LIBDIR)\SysLibdsd.lib: $(OD)DOS\Debug\S\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\S\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS small debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "MEM=S" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "DEBUG=1" "MEM=S" $(MAKEDEFS) dirs $@
 
 lib\dosL\debug: $(LIBDIR)\SysLibdld.lib
 
@@ -634,7 +635,7 @@ $(LIBDIR)\SysLibdld.lib: $(OD)DOS\Debug\L\SysLib.lib $(LIBDIR)
 
 $(OD)DOS\Debug\L\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library DOS large debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\DOS.mak "DEBUG=1" "MEM=L" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\DOS.mak "DEBUG=1" "MEM=L" $(MAKEDEFS) dirs $@
 
 lib\win32\debug: $(LIBDIR)\SysLibw32d.lib
 
@@ -643,7 +644,7 @@ $(LIBDIR)\SysLibw32d.lib: $(OD)WIN32\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN32\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN32 debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN32.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN32.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 lib\win95\debug: $(LIBDIR)\SysLibw95d.lib
 
@@ -652,7 +653,7 @@ $(LIBDIR)\SysLibw95d.lib: $(OD)WIN95\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN95\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN95 debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN95.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN95.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 lib\ia64\debug: $(LIBDIR)\SysLibia64d.lib
 
@@ -661,7 +662,7 @@ $(LIBDIR)\SysLibia64d.lib: $(OD)IA64\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)IA64\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library IA64 debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\IA64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\IA64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 lib\win64\debug: $(LIBDIR)\SysLibw64d.lib
 
@@ -670,7 +671,7 @@ $(LIBDIR)\SysLibw64d.lib: $(OD)WIN64\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)WIN64\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library WIN64 debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\WIN64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\WIN64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 lib\arm\debug: $(LIBDIR)\SysLiba32d.lib
 
@@ -679,7 +680,7 @@ $(LIBDIR)\SysLiba32d.lib: $(OD)ARM\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)ARM\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\ARM.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 lib\arm64\debug: $(LIBDIR)\SysLiba64d.lib
 
@@ -688,7 +689,7 @@ $(LIBDIR)\SysLiba64d.lib: $(OD)ARM64\Debug\SysLib.lib $(LIBDIR)
 
 $(OD)ARM64\Debug\SysLib.lib: NUL
     $(HEADLINE) Building SysLib library ARM64 debug version
-    $(MAKE) $(MAKEFLAGS_) /f $(STINCLUDE)\ARM64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
+    $(MAKE) $(MAKEFLAGS_) /f $(NMINCLUDE)\ARM64.mak "DEBUG=1" $(MAKEDEFS) dirs $@
 
 # Dummy target, to build a source archive
 dist zip: SysLib.lib
