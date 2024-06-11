@@ -33,13 +33,11 @@ Quick Guide for rebuilding everything in Windows
 2. Optional. Install the other compilers and SDKs for DOS and Windows that some tools depend on. See details further down.  
    Note: All tools will build correctly without these optional compilers and SDKs, with just some features missing.
 
-3. Download the latest project sources archive, and extract its contents into a new work %WORKDIR% directory.  
-   Alternative: Get the latest sources from GitHub: `git clone https://github.com/JFLarvoire/SysToolsLib`
+3. Download the latest SysTools-src.zip source archive, and extract its contents into a new work %WORKDIR% directory.
 
-4. Download the NMaker build system.
-
-       cd %WORKDIR%
-       git submodule update --remote
+   Alternative: Get the latest sources from GitHub:
+   
+       git clone --recurse-submodules https://github.com/JFLarvoire/SysToolsLib
 
 4. Rebuild everything
 
@@ -49,8 +47,6 @@ Quick Guide for rebuilding everything in Windows
 
 Notes:
 
-- The `git submodule ...` command needs to be run only once, the first time a build is done.  
-  You can run it again later on, if you wish to upgrade the NMaker build system.
 - The `configure.bat` script needs to be run only once, the first time a build is done.
 - Before running `make.bat`, verify in the `configure.bat` output that it correctly detected the location of your
   C compiler (CC) and Windows Software Development Kit (WINSDK).
@@ -106,7 +102,7 @@ In all cases:
 Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
 -------------------------------------------------------------------------
 
-1. Download the latest SysTools-src.zip sources archive, and extract its contents into a new $WORKDIR directory.  
+1. Download the latest SysTools-src.zip source archive, and extract its contents into a new $WORKDIR directory.  
    
    Alternative:
    
@@ -197,6 +193,17 @@ Subsequent builds with make.bat will automatically use the new tools and SDKs, a
       :# Assuming that configure found both the ARM and ARM64 compilers
       make "OS=ARM ARM64"
 
+      
+Getting updates from GitHub
+---------------------------
+
+If the project was cloned from GitHub, the following commands can be used
+to get updates from GitHub master branch:
+
+      git pull
+
+      git submodule update --remote
+
 
 Procedure for generating a new release
 --------------------------------------
@@ -207,7 +214,6 @@ Procedure for generating a new release
   
       cd %WORKDIR%
       make distclean
-      git submodule update --remote
       configure
       make "OS=all"
       make release
