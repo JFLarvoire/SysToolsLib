@@ -247,6 +247,7 @@
 :#   2023-03-06 JFL Improved the lappend performance.                         #
 :#                  Added lappend1, supporting multiple values to append.     #
 :#   2023-03-07 JFL Added system and user environment variables mngt routines.#
+:#   2024-01-22 JFL Define DEL and ESC variables together, to save time.      #
 :#		                                                              #
 :#         © Copyright 2016 Hewlett Packard Enterprise Development LP         #
 :# Licensed under the Apache 2.0 license  www.apache.org/licenses/LICENSE-2.0 #
@@ -262,7 +263,7 @@ ver | find "Windows NT" >NUL && goto ErrNT
 if '%1'=='call' goto :call
 
 setlocal EnableExtensions DisableDelayedExpansion &:# Make sure ! characters are preserved
-set "VERSION=2023-03-06"
+set "VERSION=2024-01-22"
 set "SCRIPT=%~nx0"		&:# Script name
 set "SNAME=%~n0"		&:# Script name, without its extension
 set "SPATH=%~dp0"		&:# Script path
@@ -443,9 +444,16 @@ set LF=^
 for /f %%a in ('copy /Z %COMSPEC% nul') do set "CR=%%a"
 
 :# Define a BS variable containing a BackSpace ('\x08')
-:# Use prompt to store a  backspace+space+backspace into a DEL variable.
-for /F "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "DEL=%%a"
-:# Then extract the first backspace
+:# Use prompt to store a backspace+space+backspace into a DEL variable.
+:# for /f "tokens=1 delims=#" %%a in ('"prompt #$H# & echo on & for %%b in (1) do rem"') do set "DEL=%%a"
+
+:# Define an ESC variable containing an Escape character ('\x1B')
+:# for /f %%a in ('"echo prompt $E|cmd"') do set "ESC=%%a"
+:# for /f "tokens=1 delims=#" %%a in ('"prompt #$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%a"
+
+:# Use prompt to define DEL and ESC variables containing respectively "\x08\x20\x08" and "\x1B"
+for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%r in (1) do rem"') do set "DEL=%%a" & set "ESC=%%b"
+:# Extract the first backspace from DEL, containing backspace+space+backspace
 set "BS=%DEL:~0,1%"
 
 :# Define a FF variable containing a Form Feed ('\x0C')
