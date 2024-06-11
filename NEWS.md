@@ -8,6 +8,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 ### Changed
 - All make files and build scripts: Major refactoring: Use the [NMaker](https://github.com/JFLarvoire/NMaker) subproject,
   instead of having a version of it built-in in the C/include directory.
+- Batch/Library.bat: Define DEL and ESC variables together, to save time.
 
 ## [Unreleased] 2023-12-21
 ### Changed
