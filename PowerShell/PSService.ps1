@@ -17,7 +17,9 @@
 #                   The initial version of this script was described in an    #
 #                   article published in the May 2016 issue of MSDN Magazine. #
 #                   https://msdn.microsoft.com/en-us/magazine/mt703436.aspx   #
-#                   This updated version has one major change:                #
+#                   Major changes since then:                                 #
+#                                                                             #
+#                   2016-06:                                                  #
 #                   The -Service handler in the end has been rewritten to be  #
 #                   event-driven, with a second thread waiting for control    #
 #                   messages coming in via a named pipe.                      #
@@ -28,6 +30,14 @@
 #                   On the other hand, these thread management routines are   #
 #                   reusable, and will allow building much more powerful      #
 #                   services.                                                 #
+#                                                                             #
+#                   2024-06:                                                  #
+#                   The code now handles pre-shutdown events, and stops the   #
+#                   service before the OS shuts down. If this is not desired, #
+#                   change global variable $stopOnPreShutdown to 0.           #
+#                                                                             #
+#                   --------------------------------------------------------- #
+#                   Internal design information:                              #
 #                                                                             #
 #                   Dynamically generates a small PSService.exe wrapper       #
 #                   application, that in turn invokes this PowerShell script. #
@@ -58,6 +68,11 @@
 #                   It is very convenient to monitor what's written into that #
 #                   file with a WIN32 port of the Unix tail program. Usage:   #
 #                   tail -f C:\Windows\Logs\PSService.log                     #
+#                                                                             #
+#                   The PSService.exe stub does not write messages into the   #
+#                   above log file, but instead stores events in the Windows  #
+#                   Event Log. To see them, open the Event Viewer, and create #
+#                   a filter on events from the PSService source.             #
 #                                                                             #
 #   History                                                                   #
 #    2015-07-10 JFL jf.larvoire@hpe.com created this script.                  #
@@ -100,6 +115,14 @@
 #                   Renamed arguments ServiceUser and ServicePassword to the  #
 #                   more standard UserName and Password.                      #
 #                   Also added the standard argument -Credential.             #
+#    2022-04-13 AG  gayealexandre@gmail.com Added event OnPreShutdown().      #
+#    2024-06-14 JFL Added a $stopOnPreShutdown global variable to enable or   #
+#                   disable the OnPreShutdown() handling.                     #
+#                   Log a warning in the Event Log if this cannot be enabled. #
+#                   Added a -SCMPreShutdown PS switch, to allow the PS        #
+#                   control code to distinguish Stop and PreShutdown events.  #
+#                   Refactored common code in the C# event handlers.          #
+#                   Added lots of comments.                                   #
 #                                                                             #
 ###############################################################################
 #Requires -version 2
@@ -174,6 +197,10 @@
     Process Service Control Manager stop requests. Used internally by the script.
     Do not use, except for test purposes.
 
+  .PARAMETER SCMPreShutdown
+    Process Service Control Manager pre-shutdown requests. Used internally by the script.
+    Do not use, except for test purposes.
+
   .PARAMETER Control
     Send a control message to the service thread.
 
@@ -235,11 +262,11 @@ Param(
   [Switch]$Setup,               # Install the service
 
   [Parameter(ParameterSetName='Setup', Mandatory=$true)]
-  [String]$UserName,              # Set the service to run as this user
-  
+  [String]$UserName,            # Set the service to run as this user
+
   [Parameter(ParameterSetName='Setup', Mandatory=$false)]
-  [String]$Password,              # Use this password for the user
-  
+  [String]$Password,            # Use this password for the user
+
   [Parameter(ParameterSetName='Setup2', Mandatory=$false)]
   [System.Management.Automation.PSCredential]$Credential, # Service account credential
 
@@ -247,13 +274,16 @@ Param(
   [Switch]$Remove,              # Uninstall the service
 
   [Parameter(ParameterSetName='Service', Mandatory=$true)]
-  [Switch]$Service,               # Run the service (Internal use only)
+  [Switch]$Service,             # Run the service (Internal use only)
 
   [Parameter(ParameterSetName='SCMStart', Mandatory=$true)]
-  [Switch]$SCMStart,              # Process SCM Start requests (Internal use only)
+  [Switch]$SCMStart,            # Process SCM Start requests (Internal use only)
 
   [Parameter(ParameterSetName='SCMStop', Mandatory=$true)]
-  [Switch]$SCMStop,               # Process SCM Stop requests (Internal use only)
+  [Switch]$SCMStop,             # Process SCM Stop requests (Internal use only)
+
+  [Parameter(ParameterSetName='SCMPreShutdown', Mandatory=$true)]
+  [Switch]$SCMPreShutdown,      # Process SCM PreShutdown requests (Internal use only)
 
   [Parameter(ParameterSetName='Control', Mandatory=$true)]
   [String]$Control = $null,     # Control message to send to the service
@@ -262,7 +292,7 @@ Param(
   [Switch]$Version              # Get this script version
 )
 
-$scriptVersion = "2017-12-10"
+$scriptVersion = "2024-06-14"
 
 # This script name, with various levels of details
 $argv0 = Get-Item $MyInvocation.MyCommand.Definition
@@ -284,12 +314,13 @@ $logDir = "${ENV:windir}\Logs"          # Where to log the service messages
 $logFile = "$logDir\$serviceName.log"
 $logName = "Application"                # Event Log name (Unrelated to the logFile!)
 # Note: The current implementation only supports "classic" (ie. XP-compatble) event logs.
-#	To support new style (Vista and later) "Applications and Services Logs" folder trees, it would
-#	be necessary to use the new *WinEvent commands instead of the XP-compatible *EventLog commands.
+#       To support new style (Vista and later) "Applications and Services Logs" folder trees, it would
+#       be necessary to use the new *WinEvent commands instead of the XP-compatible *EventLog commands.
 # Gotcha: If you change $logName to "NEWLOGNAME", make sure that the registry key below does not exist:
 #         HKLM\System\CurrentControlSet\services\eventlog\Application\NEWLOGNAME
-#	  Else, New-EventLog will fail, saying the log NEWLOGNAME is already registered as a source,
-#	  even though "Get-WinEvent -ListLog NEWLOGNAME" says this log does not exist!
+#         Else, New-EventLog will fail, saying the log NEWLOGNAME is already registered as a source,
+#         even though "Get-WinEvent -ListLog NEWLOGNAME" says this log does not exist!
+$stopOnPreShutdown = 1                  # Change to 0 if the service is to run until the end
 
 # If the -Version switch is specified, display the script version and exit.
 if ($Version) {
@@ -330,7 +361,7 @@ Function Now {
       $ms = $true
       $nsSuffix = "000"
     }
-  } 
+  }
   if ($ms) {
     $now += ".{0:000}$nsSuffix" -f $Date.MilliSecond
   }
@@ -705,6 +736,8 @@ Function Receive-PipeHandlerThread () {
 #                   unclosed process was an orphaned process that would       #
 #                   remain until the pid was manually killed or the computer  #
 #                   was rebooted                                              #
+#    2024-06-13 JFL Refactored the C# code, so that all invocations of the    #
+#                   PowerShell service go through RunPSServiceCommand().      #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -749,16 +782,17 @@ $source = @"
     ERROR_FATAL_APP_EXIT = 713,
     ERROR_SERVICE_NOT_ACTIVE = 1062,
     ERROR_EXCEPTION_IN_SERVICE = 1064,
-    ERROR_SERVICE_SPECIFIC_ERROR = 1066,
+    ERROR_SERVICE_SPECIFIC_ERROR = 1066, // Then the actual error is in serviceStatus.dwServiceSpecificExitCode
     ERROR_PROCESS_ABORTED = 1067,
   };
 
   public class Service_$serviceName : ServiceBase { // $serviceName may begin with a digit; The class name must begin with a letter
-    private System.Diagnostics.EventLog eventLog;                       // EVENT LOG
-    private ServiceStatus serviceStatus;                                // SET STATUS
+    private System.Diagnostics.EventLog eventLog;                               // EVENT LOG
+    private ServiceStatus serviceStatus;                                        // SET STATUS
+    private int stopOnPreShutdown = $stopOnPreShutdown;                         // PreShutdown
 
-    public const int SERVICE_ACCEPT_PRESHUTDOWN = 0x100;                // Preshutdown
-    public const int SERVICE_CONTROL_PRESHUTDOWN = 0xf;                 // Preshutdown
+    public const int SERVICE_ACCEPT_PRESHUTDOWN = 0x100;                        // PreShutdown
+    public const int SERVICE_CONTROL_PRESHUTDOWN = 0xf;                         // PreShutdown
 
     public Service_$serviceName() {
       ServiceName = "$serviceName";
@@ -767,75 +801,73 @@ $source = @"
       CanPauseAndContinue = false;
       AutoLog = true;
 
-      // PreShutdown Section
-      FieldInfo acceptedCommandsFieldInfo = typeof(ServiceBase).GetField("acceptedCommands", BindingFlags.Instance | BindingFlags.NonPublic);
-      if (acceptedCommandsFieldInfo == null)
-      {
-          throw new ApplicationException("acceptedCommands field not found");
-      }    
-      int value = (int)acceptedCommandsFieldInfo.GetValue(this);
-      acceptedCommandsFieldInfo.SetValue(this, value | SERVICE_ACCEPT_PRESHUTDOWN);
-      // End PreShutdown Section
-
-      eventLog = new System.Diagnostics.EventLog();                     // EVENT LOG [
-      if (!System.Diagnostics.EventLog.SourceExists(ServiceName)) {         
+      // Create a new source of Event Log events                                // EVENT LOG [
+      eventLog = new System.Diagnostics.EventLog();
+      if (!System.Diagnostics.EventLog.SourceExists(ServiceName)) {
         System.Diagnostics.EventLog.CreateEventSource(ServiceName, "$logName");
       }
       eventLog.Source = ServiceName;
-      eventLog.Log = "$logName";                                        // EVENT LOG ]
-      EventLog.WriteEntry(ServiceName, "$exeName $serviceName()");      // EVENT LOG
+      eventLog.Log = "$logName";                                                // EVENT LOG ]
+
+      // Tell the SCM if we accept PreShutdown events                           // PreShutdown [
+      if (stopOnPreShutdown != 0) {
+        // The .NET ServiceBase class does not expose its acceptedCommands property. Access it using .NET reflection.
+        FieldInfo acceptedCommandsFieldInfo = typeof(ServiceBase).GetField("acceptedCommands", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (acceptedCommandsFieldInfo == null) {
+          // Fallback to the original PSService behaviour, as if $stopOnPreShutdown == 0, and log a warning explaining what will happen
+          EventLog.WriteEntry(ServiceName, "$exeName $serviceName() // acceptedCommands field not found. The $serviceName service will not stop on OS shutdown.", EventLogEntryType.Warning);
+        } else {
+	  int value = (int)acceptedCommandsFieldInfo.GetValue(this);
+	  acceptedCommandsFieldInfo.SetValue(this, value | SERVICE_ACCEPT_PRESHUTDOWN);
+	}
+      }                                                                         // PreShutdown ]
+
+      EventLog.WriteEntry(ServiceName, "$exeName $serviceName() // Init done");    // EVENT LOG
     }
 
-    [DllImport("advapi32.dll", SetLastError=true)]                      // SET STATUS
+    [DllImport("advapi32.dll", SetLastError=true)]                              // SET STATUS
     private static extern bool SetServiceStatus(IntPtr handle, ref ServiceStatus serviceStatus);
 
     protected override void OnStart(string [] args) {
-      EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Entry. Starting script '$scriptCopyCname' -SCMStart"); // EVENT LOG
-      // Set the service state to Start Pending.                        // SET STATUS [
+      EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Entry");          // EVENT LOG
+      // Set the service state to Start Pending.                                // SET STATUS [
       // Only useful if the startup time is long. Not really necessary here for a 2s startup time.
       serviceStatus.dwServiceType = ServiceType.SERVICE_WIN32_OWN_PROCESS;
       serviceStatus.dwCurrentState = ServiceState.SERVICE_START_PENDING;
       serviceStatus.dwWin32ExitCode = 0;
+      serviceStatus.dwServiceSpecificExitCode = 0;
       serviceStatus.dwWaitHint = 2000; // It takes about 2 seconds to start PowerShell
-      SetServiceStatus(ServiceHandle, ref serviceStatus);               // SET STATUS ]
+      SetServiceStatus(ServiceHandle, ref serviceStatus);                       // SET STATUS ]
       // Start a child process with another copy of this script
       try {
-        Process p = new Process();
-        // Redirect the output stream of the child process.
-        p.StartInfo.UseShellExecute = false;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.StartInfo.FileName = "PowerShell.exe";
-        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -SCMStart"; // Works if path has spaces, but not if it contains ' quotes.
-        p.Start();
-        // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
-        string output = p.StandardOutput.ReadToEnd();
-        // Wait for the completion of the script startup code, that launches the -Service instance
-        p.WaitForExit();
-        if (p.ExitCode != 0) throw new Win32Exception((int)(Win32Error.ERROR_APP_INIT_FAILURE));
-        // Success. Set the service state to Running.                   // SET STATUS
-        serviceStatus.dwCurrentState = ServiceState.SERVICE_RUNNING;    // SET STATUS
+        RunPSServiceCommand("SCMStart");
+        // Success. Set the service state to Running.                           // SET STATUS
+        serviceStatus.dwCurrentState = ServiceState.SERVICE_RUNNING;            // SET STATUS
       } catch (Exception e) {
         EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Failed to start $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
-        // Change the service state back to Stopped.                    // SET STATUS [
-        serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;
-        Win32Exception w32ex = e as Win32Exception; // Try getting the WIN32 error code
-        if (w32ex == null) { // Not a Win32 exception, but maybe the inner one is...
-          w32ex = e.InnerException as Win32Exception;
-        }    
-        if (w32ex != null) {    // Report the actual WIN32 error
-          serviceStatus.dwWin32ExitCode = w32ex.NativeErrorCode;
-        } else {                // Make up a reasonable reason
-          serviceStatus.dwWin32ExitCode = (int)(Win32Error.ERROR_APP_INIT_FAILURE);
-        }                                                               // SET STATUS ]
+        // Failure. Change the service state back to Stopped.                   // SET STATUS
+        serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;            // SET STATUS
+        serviceStatus.dwWin32ExitCode = GetExceptionWin32Error(e);              // SET STATUS
       } finally {
-        serviceStatus.dwWaitHint = 0;                                   // SET STATUS
-        SetServiceStatus(ServiceHandle, ref serviceStatus);             // SET STATUS
-        EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Exit"); // EVENT LOG
+        serviceStatus.dwWaitHint = 0;                                           // SET STATUS
+        SetServiceStatus(ServiceHandle, ref serviceStatus);                     // SET STATUS
+        EventLog.WriteEntry(ServiceName, "$exeName OnStart() // Exit");         // EVENT LOG
       }
     }
 
-    private void SCMStop()
-    {
+    private int GetExceptionWin32Error(Exception e) {
+      Win32Exception w32ex = e as Win32Exception; // Try getting the WIN32 error code // SET STATUS [
+      if (w32ex == null) { // Not a Win32 exception, but maybe the inner one is...
+        w32ex = e.InnerException as Win32Exception;
+      }
+      if (w32ex != null) {    // Report the actual WIN32 error
+        return w32ex.NativeErrorCode;
+      } else {                // We don't know what the WIN32 error is
+        return (int)(Win32Error.ERROR_EXCEPTION_IN_SERVICE); // Just report that there was an exception
+      }                                                                 // SET STATUS ]
+    }
+
+    private void RunPSServiceCommand(string cmd) { // cmd = "SCMStart" or "SCMStop" or "SCMPreShutdown"
       // Start a child process with another copy of ourselves
       try {
         Process p = new Process();
@@ -843,56 +875,64 @@ $source = @"
         p.StartInfo.UseShellExecute = false;
         p.StartInfo.RedirectStandardOutput = true;
         p.StartInfo.FileName = "PowerShell.exe";
-        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -SCMStop"; // Works if path has spaces, but not if it contains ' quotes.
+        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -c & '$scriptCopyCname' -" + cmd; // Works if path has spaces, but not if it contains ' quotes.
+        string cmdLine = p.StartInfo.FileName + " " + p.StartInfo.Arguments;
+        EventLog.WriteEntry(ServiceName, "$exeName RunPSServiceCommand() // Running: " + cmdLine); // EVENT LOG
         p.Start();
         // Read the output stream first and then wait. (To avoid deadlocks says Microsoft!)
         string output = p.StandardOutput.ReadToEnd();
         // Wait for the PowerShell script to be fully stopped.
         p.WaitForExit();
-        if (p.ExitCode != 0) throw new Win32Exception((int)(Win32Error.ERROR_APP_INIT_FAILURE));
-        // Success. Set the service state to Stopped.                   // SET STATUS
-        serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;      // SET STATUS
-      } catch (Exception e) {
-        EventLog.WriteEntry(ServiceName, "$exeName SCMStop() // Failed to stop $scriptCopyCname.", EventLogEntryType.Error); // EVENT LOG
-        throw e;                                                        // SET STATUS ]
-      } finally {
-        serviceStatus.dwWaitHint = 0;                                   // SET STATUS
-        SetServiceStatus(ServiceHandle, ref serviceStatus);             // SET STATUS
-      }
-    }
-    protected override void OnStop() {
-      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Entry");   // EVENT LOG
-      try {
-        this.SCMStop();
-        base.OnStop();
-      }
-      catch(Exception e)
-      {
-          EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Fail. " + e.Message, EventLogEntryType.Error);   // EVENT LOG
-          throw e;
-      }
-      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit");   // EVENT LOG
-    }
-    protected override void OnCustomCommand(int command)
-    {
-        if (command == SERVICE_CONTROL_PRESHUTDOWN)
-        {
-            EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Entry");   // EVENT LOG
-            try{
-                this.SCMStop();
-            }
-            catch(Exception e)
-            {
-                EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Fail. " + e.Message, EventLogEntryType.Error);   // EVENT LOG
-                throw e;
-            }
-            EventLog.WriteEntry(ServiceName, "$exeName OnPreshutdown() // Exit");   // EVENT LOG
+        if (p.ExitCode != 0) {
+          EventLog.WriteEntry(ServiceName, "$exeName RunPSServiceCommand() // PowerShell.exe returned " + p.ExitCode); // EVENT LOG
+          throw new Win32Exception((int)(Win32Error.ERROR_APP_INIT_FAILURE));
         }
-        base.OnCustomCommand(command);
+      } catch (Exception e) {
+        EventLog.WriteEntry(ServiceName, "$exeName RunPSServiceCommand() // Command failed: " + e.Message, EventLogEntryType.Error); // EVENT LOG
+        throw e; // Pass the exception back to the caller
+      }
+    }
+
+    protected override void OnStop() {
+      EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Entry");           // EVENT LOG
+      serviceStatus.dwWin32ExitCode = 0;
+      try {
+        RunPSServiceCommand("SCMStop");
+        // Success. Set the service state to Stopped.                           // SET STATUS
+        serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;            // SET STATUS
+      } catch(Exception e) {
+        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Failed to stop $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
+        serviceStatus.dwWin32ExitCode = GetExceptionWin32Error(e);              // SET STATUS
+      } finally {
+        SetServiceStatus(ServiceHandle, ref serviceStatus);                     // SET STATUS
+        EventLog.WriteEntry(ServiceName, "$exeName OnStop() // Exit");          // EVENT LOG
+      }
+    }
+
+    protected override void OnCustomCommand(int command) {
+      if (command == SERVICE_CONTROL_PRESHUTDOWN) { // Pseudo OnPreShutdown() handler
+        EventLog.WriteEntry(ServiceName, "$exeName OnPreShutdown() // Entry");  // EVENT LOG
+        serviceStatus.dwWin32ExitCode = 0;
+        try {
+          RunPSServiceCommand("SCMPreShutdown");
+          // Success. Set the service state to Stopped.                         // SET STATUS
+          serviceStatus.dwCurrentState = ServiceState.SERVICE_STOPPED;          // SET STATUS
+        } catch(Exception e) {
+          EventLog.WriteEntry(ServiceName, "$exeName OnPreShutdown() // Failed to stop $scriptCopyCname. " + e.Message, EventLogEntryType.Error); // EVENT LOG
+          serviceStatus.dwWin32ExitCode = GetExceptionWin32Error(e);                    // SET STATUS
+        } finally {
+          SetServiceStatus(ServiceHandle, ref serviceStatus);                   // SET STATUS
+          EventLog.WriteEntry(ServiceName, "$exeName OnPreShutdown() // Exit"); // EVENT LOG
+        }
+      } else {
+	base.OnCustomCommand(command);
+      }
     }
 
     protected override void OnShutdown() {
-        // * NOP *
+      // Very few system services are available during shutdown events.
+      // This is why it's preferable to stop the service during the PreShutdown event.
+      // So do nothing here.
     }
 
     public static void Main() {
@@ -943,11 +983,23 @@ if ($Start) {                   # The user tells us to start the service
   return
 }
 
-if ($SCMStop) {         #  The SCM tells us to stop the service
+if ($SCMStop) {                 #  The SCM tells us to stop the service
   # Do whatever is necessary to stop the service script instance
   Write-EventLog -LogName $logName -Source $serviceName -EventId 1003 -EntryType Information -Message "$scriptName -SCMStop: Stopping script $scriptName -Service"
   Log "$scriptName -SCMStop: Stopping script $scriptName -Service"
   # Send an exit message to the service instance
+  Send-PipeMessage $pipeName "exit"
+  return
+}
+
+if ($SCMPreShutdown) {          #  The SCM tells us the system is about to shutdown
+  # Do whatever is necessary to stop the service script instance
+  Write-EventLog -LogName $logName -Source $serviceName -EventId 1005 -EntryType Information -Message "$scriptName -SCMPreShutdown: Stopping script $scriptName -Service"
+  Log "$scriptName -SCMPreShutdown: Stopping script $scriptName -Service"
+  # Send an exit message to the service instance
+  # If the service instance exit needs to be managed differently when the system shuts down,
+  # then change the "exit" message below to (for example) "shutdown",
+  # and handle that "shutdown" message in the (if ($Service) { code block }) in the end below.
   Send-PipeMessage $pipeName "exit"
   return
 }
@@ -1007,7 +1059,7 @@ if ($Setup) {                   # Install the service
     Write-Debug "Installation is necessary" # Also avoids a ScriptAnalyzer warning
     # And continue with the installation.
   }
-  if (!(Test-Path $installDir)) {											 
+  if (!(Test-Path $installDir)) {
     New-Item -ItemType directory -Path $installDir | Out-Null
   }
   # Copy the service script into the installation directory
@@ -1113,7 +1165,7 @@ if ($Service) {                 # Run the service
     Register-ObjectEvent $timer -EventName Elapsed -SourceIdentifier $timerName -MessageData "TimerTick"
     $timer.start() # Must be stopped in the finally block
     # Now enter the main service event loop
-    do { # Keep running until told to exit by the -Stop handler
+    do { # Keep running until told to exit by the OnStop() or OnPreShutdown() handlers
       $event = Wait-Event # Wait for the next incoming event
       $source = $event.SourceIdentifier
       $message = $event.MessageData
@@ -1152,7 +1204,13 @@ if ($Service) {                 # Run the service
     $msg = $_.Exception.Message
     $line = $_.InvocationInfo.ScriptLineNumber
     Log "$scriptName -Service # Error at line ${line}: $msg"
-  } finally { # Invoked in all cases: Exception or normally by -Stop
+  } finally { # Invoked in all cases: Exception or normally by -Stop or OS shutdown.
+    # Note: If a lenghty cleanup is necessary at this stage, consider skipping
+    # as much of it as possible in case of a shutdown, to speed-up reboots.
+    # For that, change the (if ($SCMPreShutdown) {code block}) above to send a
+    # "shutdown" message instead of "exit", and handle that "shutdown" message
+    # above. Then in that case, skip whatever can be skipped in the cleanup below.
+
     # Cleanup the periodic timer used in the above example
     Unregister-Event -SourceIdentifier $timerName
     $timer.stop()
