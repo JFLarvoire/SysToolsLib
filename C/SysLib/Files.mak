@@ -27,6 +27,7 @@
 
 # Common objects usable in all environments, including in BIOS or LODOS
 BASE_OBJECTS = \
+    +$(O)/dict.obj		\
     +$(O)/GetConSize.obj	\
     +$(O)/GetCurPos.obj		\
     +$(O)/IsMBR.obj		\

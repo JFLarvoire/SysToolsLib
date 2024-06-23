@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/************************ :encoding=UTF-8:tabSize=8: *************************\
 *                                                                             *
 *   File name	    dict.h						      *
 *									      *
@@ -30,6 +30,7 @@
 *    2020-07-29 JFL MsvcLibX now supports a standard snprintf().	      *
 *    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
 *                   allow having multiple kinds of trees in the same program. *
+*    2024-06-22 JFL Fixed the declaration of inline routines.                 *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -90,7 +91,7 @@ TREE_DEFINE_PROCS(dict_t, dictnode);						\
 int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {				\
   dict_t *tree = (pn1 && pn1->sbbt_tree) ? pn1->sbbt_tree : (pn2 ? pn2->sbbt_tree : NULL);	\
   int dif = 0;									\
-  TREE_ENTRY(dictnode,(TREE_V(TREE_CMP(dictnode)) "(%p, %p)\n", pn1, pn2));		\
+  TREE_ENTRY(dictnode,(TREE_V(TREE_CMP(dictnode)) "(%p, %p)\n", pn1, pn2));	\
   TREE_IF_DEBUG({                                                               \
     char key1[80] = "NULL";			                                \
     char key2[80] = "NULL";			                                \
@@ -110,7 +111,7 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {				\
     dif = tree->keycmp(pn1->pszKey, pn2->pszKey);				\
     if (!dif && tree->datacmp) dif = tree->datacmp(pn1->pData, pn2->pData);	\
   }										\
-  TREE_RETURN_INT(dictnode,dif);								\
+  TREE_RETURN_INT(dictnode,dif);						\
 }										\
                                                                                 \
 TREE_IF_DEBUG(                                                                  \
@@ -127,7 +128,7 @@ void *dictnode_tree_callback(dictnode *node, void *ref) {			\
                                                                                 \
 void *NewDictValue(dict_t *dict, char *key, void *value) {                      \
   dictnode *node = calloc(1, sizeof(dictnode));                                 \
-  TREE_ENTRY(dictnode,("NewDictValue(%p, \"%s\", %p)\n", dict, key, value));		\
+  TREE_ENTRY(dictnode,("NewDictValue(%p, \"%s\", %p)\n", dict, key, value));	\
   if (node) {                                                                   \
     dictnode *oldNode;                                                          \
     node->pszKey = strdup(key);                                                 \
@@ -141,13 +142,13 @@ void *NewDictValue(dict_t *dict, char *key, void *value) {                      
       add_dictnode(dict, node); /* Register the new node in the tree */         \
     }                                                                           \
   }                                                                             \
-  TREE_RETURN(dictnode,node);                                                            \
+  TREE_RETURN(dictnode,node);                                                   \
 }                                                                               \
                                                                                 \
 void *SetDictValue(dict_t *dict, char *key, void *value) { /* Simple maps only */ \
   dictnode *node;                                                               \
   dictnode refNode = {0};                                                       \
-  TREE_ENTRY(dictnode,("SetDictValue(%p, \"%s\", %p)\n", dict, key, value));		\
+  TREE_ENTRY(dictnode,("SetDictValue(%p, \"%s\", %p)\n", dict, key, value));	\
   refNode.pszKey = key;                                                         \
   node = get_dictnode(dict, &refNode);                                          \
   if (node) {                                                                   \
@@ -155,7 +156,7 @@ void *SetDictValue(dict_t *dict, char *key, void *value) { /* Simple maps only *
   } else {                                                                      \
     node = NewDictValue(dict, key, value);                                      \
   }                                                                             \
-  TREE_RETURN(dictnode,node);                                                            \
+  TREE_RETURN(dictnode,node);                                                   \
 }                                                                               \
                                                                                 \
 void DeleteDictValue(dict_t *dict, char *key, void (*cb)(void *value)) {        \
@@ -184,19 +185,19 @@ void *DictValue(dict_t *dict, char *key) {                                      
   return pNodeFound->pData;                                                     \
 }                                                                               \
 
-extern inline dict_t *NewDict(void) {
+inline dict_t *NewDict(void) {
   dict_t *dict = new_dictnode_tree();
   if (dict) dict->keycmp = strcmp;	/* Case-dependant key comparison */
   return dict;
 }
 
-extern inline dict_t *NewIDict(void) {
+inline dict_t *NewIDict(void) {
   dict_t *dict = new_dictnode_tree();
   if (dict) dict->keycmp = _stricmp;	/* Case-independant key comparison */
   return dict;
 }
 
-extern inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
+inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
   dict_t *dict = new_dictnode_tree();
   if (dict) {
     dict->keycmp = strcmp;		/* Case-dependant key comparison */
@@ -205,7 +206,7 @@ extern inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
   return dict;
 }
 
-extern inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
+inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
   dict_t *dict = new_dictnode_tree();
   if (dict) {
     dict->keycmp = _stricmp;		/* Case-independant key comparison */
@@ -214,30 +215,30 @@ extern inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
   return dict;
 }
 
-extern inline void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref) {
+inline void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref) {
   DICT_CB_STRUCT s;
   s.cb = cb;
   s.ref = ref;
   return foreach_dictnode(dict, dictnode_tree_callback, &s);
 }
 
-extern inline dictnode *FirstDictValue(dict_t *dict) {
+inline dictnode *FirstDictValue(dict_t *dict) {
   return first_dictnode(dict);
 }
 
-extern inline dictnode *NextDictValue(dict_t *dict, dictnode *pn) {
+inline dictnode *NextDictValue(dict_t *dict, dictnode *pn) {
   return next_dictnode(dict, pn);
 }
 
-extern inline dictnode *LastDictValue(dict_t *dict) {
+inline dictnode *LastDictValue(dict_t *dict) {
   return last_dictnode(dict);
 }
 
-extern inline dictnode *PrevDictValue(dict_t *dict, dictnode *pn) {
+inline dictnode *PrevDictValue(dict_t *dict, dictnode *pn) {
   return prev_dictnode(dict, pn);
 }
 
-extern inline int GetDictSize(dict_t *dict) {
+inline int GetDictSize(dict_t *dict) {
   return num_dictnode(dict);
 }
 

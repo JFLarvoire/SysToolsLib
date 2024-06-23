@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/************************ :encoding=UTF-8:tabSize=8: *************************\
 *                                                                             *
 *   File name	    tree.h						      *
 *									      *
@@ -72,6 +72,7 @@
 *    2017-01-04 JFL Allow defining global tree properties.            	      *
 *    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
 *                   allow having multiple kinds of trees in the same program. *
+*    2024-06-22 JFL Fixed the declaration of inline routines.                 *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -169,55 +170,55 @@ extern int TREE_LOG_RETURN_INT_##node_t(int result);				\
 										\
 /* Declare and define public inline functions. */				\
 										\
-extern inline tree_t *new_##node_t##_tree() {					\
+inline tree_t *new_##node_t##_tree() {						\
   tree_t *tree = calloc(1, sizeof(node_t));					\
   return tree;									\
 }										\
 										\
-extern inline void add_##node_t(tree_t *tree, node_t *n) {			\
+inline void add_##node_t(tree_t *tree, node_t *n) {				\
   n->sbbt_tree = tree; /* Back link into the tree this node belongs to now */	\
   tree->sbbt_root = TREE_ADD_##node_t(tree->sbbt_root, n);			\
   tree->sbbt_length += 1;							\
 }										\
 										\
-extern inline void remove_##node_t(tree_t *tree, node_t *n) {			\
+inline void remove_##node_t(tree_t *tree, node_t *n) {				\
   tree->sbbt_length -= 1;							\
   tree->sbbt_root = TREE_REMOVE_##node_t(tree->sbbt_root, n);			\
 }										\
 										\
-extern inline node_t *get_##node_t(tree_t *tree, node_t *n) {			\
+inline node_t *get_##node_t(tree_t *tree, node_t *n) {				\
   return TREE_GET_##node_t(tree->sbbt_root, n);					\
 }										\
 										\
-extern inline node_t *first_##node_t(tree_t *tree) {				\
+inline node_t *first_##node_t(tree_t *tree) {					\
   return TREE_FIRST_##node_t(tree->sbbt_root);					\
 }										\
 										\
-extern inline node_t *next_##node_t(tree_t *tree, node_t *n) {			\
+inline node_t *next_##node_t(tree_t *tree, node_t *n) {				\
   return TREE_NEXT_##node_t(tree->sbbt_root, n, 0);			    	\
 }										\
 										\
-extern inline node_t *last_##node_t(tree_t *tree) {				\
+inline node_t *last_##node_t(tree_t *tree) {					\
   return TREE_LAST_##node_t(tree->sbbt_root);					\
 }										\
 										\
-extern inline node_t *prev_##node_t(tree_t *tree, node_t *n) {			\
+inline node_t *prev_##node_t(tree_t *tree, node_t *n) {				\
   return TREE_PREV_##node_t(tree->sbbt_root, n, 0);				\
 }										\
 										\
-extern inline int num_##node_t(tree_t *tree) {					\
+inline int num_##node_t(tree_t *tree) {						\
   return tree->sbbt_length;							\
 }										\
 										\
-extern inline int depth_##node_t(tree_t *tree) {				\
+inline int depth_##node_t(tree_t *tree) {					\
   return tree->sbbt_root->sbbt_depth;						\
 }										\
 										\
-extern inline void *foreach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
+inline void *foreach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
   return TREE_FOREACH_##node_t(tree->sbbt_root, function, ref);			\
 }										\
 										\
-extern inline void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
+inline void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
   return TREE_RFOREACH_##node_t(tree->sbbt_root, function, ref);		\
 }										\
 
