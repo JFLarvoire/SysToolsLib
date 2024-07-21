@@ -9,6 +9,7 @@
 *   History                                                                   *
 *    2021-11-27 JFL Created this file.					      *
 *    2022-10-16 JFL Avoid errors in MacOS.				      *
+*    2024-06-21 JFL Added support for detecting already visited paths in Unix.*
 *                                                                             *
 \*****************************************************************************/
 
@@ -27,7 +28,7 @@
 #include <limits.h>
 
 /* SysToolsLib include files */
-#include "debugm.h"	/* SysToolsLib debugging macros */
+#include "debugm.h"		/* SysToolsLib debugging macros */
 
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
@@ -55,7 +56,7 @@
 |		    							      |
 |   History								      |
 |    2017-10-05 JFL Created this routine				      |
-|    2020-03-16 JFL Use stat instead of lstat, it faster and simpler!         |
+|    2020-03-16 JFL Use stat instead of lstat, it's faster and simpler!       |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -65,6 +66,99 @@ int isEffectiveDir(const char *pszPath) {
   if (iErr) return 0;
   return S_ISDIR(sStat.st_mode);
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetRealName						      |
+|									      |
+|   Description     Generate a name that uniquely identifies the real file    |
+|									      |
+|   Parameters      const char *path		A file pathname		      |
+|		    							      |
+|   Returns	    NULL if a buffer cannot be allocated.		      |
+|		    "" if an error occurred while resolving links. See errno. |
+|		    The true pathname (Windows) or a unique string (Unix).    |
+|		    							      |
+|   Notes	    Resolves links to see what they point to		      |
+|		    							      |
+|   History								      |
+|    2024-06-21 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* Check the list of supported OS/Compiler pairs */
+#if defined(_MSDOS) || defined(_WIN32)
+
+#if defined(_MSC_VER)
+#if !HAS_MSVCLIBX
+#error "This code requires Standard C library routines missing from Microsoft's C library. Install MsvcLibX to get them."
+#endif /* !HAS_MSVCLIBX */
+#else /* !defined(_MSC_VER) */
+#error "Links resolution only implemented for this OS using MSVC + MsvcLibX library"
+#endif /* defined(_MSC_VER) */
+
+#elif defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+#define _UNIX
+
+#define KEY_SIZE (2*(sizeof(dev_t) + sizeof(ino_t)))
+#define HAS_DEV_AND_FILE_ID 1 /* If the OS doesn't have them, there will be an error when using KEY_SIZE */
+
+#else /* None of MS-DOS, Windows, Unix, Mach */
+
+#if OS_HAS_LINKS
+#error "Links resolution not implemented for this OS"
+#endif /* OS_HAS_LINKS */
+
+#endif /* defined(_MSDOS) || defined(_WIN32) */
+
+#if OS_HAS_LINKS
+
+#if HAS_MSVCLIBX
+char *GetRealName(char *pathname) {
+  int iRet;
+  char *pTrueName = malloc(PATH_MAX);
+  if (!pTrueName) return NULL;
+  pTrueName[0] = '\0';
+  iRet = MlxResolveLinks(pathname, pTrueName, PATH_MAX); /* MsvcLibX resolves all links */
+  if (iRet) return pTrueName; /* if GetRealName()=="", check errno */
+  pTrueName = ShrinkBuf(pTrueName, lstrlen(pTrueName)+1); /* Free the unused space */
+  return pTrueName;
+}
+#elif HAS_DEV_AND_FILE_ID
+/* Convert a devID/fileID pair into a new hexadecimal string */
+char *MakeDevIdKey(char *pszKey, dev_t devID, ino_t fileID) {
+  int i, o=0;
+  if (!pszKey) pszKey = malloc(KEY_SIZE + 1); /* If not provided, allocate a buffer */
+  if (!pszKey) return NULL;
+  for (i=sizeof(dev_t)-1; i>=0; i--) {
+    unsigned char c = ((unsigned char *)&devID)[i];
+    char hex[] = "0123456789ABCDEF";
+    pszKey[o++] = hex[c>>4];
+    pszKey[o++] = hex[c&0x0F];
+  }
+  for (i=sizeof(ino_t)-1; i>=0; i--) {
+    unsigned char c = ((unsigned char *)&fileID)[i];
+    char hex[] = "0123456789ABCDEF";
+    pszKey[o++] = hex[c>>4];
+    pszKey[o++] = hex[c&0x0F];
+  }
+  pszKey[o] = '\0';
+  return pszKey;
+}
+char *GetRealName(char *pathname) {
+  struct stat st;
+  int iErr;
+  char *pszKey = malloc(KEY_SIZE + 1);
+  if (!pszKey) return NULL;
+  pszKey[0] = '\0';
+  iErr = stat(pathname, &st); /* Let the OS resolve all links */
+  if (iErr) return pszKey; /* if GetRealName()=="", check errno */
+  MakeDevIdKey(pszKey, st.st_dev, st.st_ino);
+  return pszKey;
+}
+#endif /* HAS_DEV_AND_FILE_ID */
+
+#endif /* OS_HAS_LINKS */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -96,6 +190,7 @@ int isEffectiveDir(const char *pszPath) {
 |    2022-01-08 JFL Detect duplicate pathnames to folders visited before.     |
 |    2022-01-10 JFL Optionally detect alias names for folders visited before. |
 |    2022-01-11 JFL More consistent error handling & better statistics.       |
+|    2024-06-21 JFL Added support for detecting already visited paths in Unix.|
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -106,7 +201,6 @@ int isEffectiveDir(const char *pszPath) {
 /* TODO: It would be even better and faster to use a hash table, but I don't have one yet in my C library */
 #if OS_HAS_LINKS
 #include "dict.h"
-DICT_DEFINE_PROCS();
 #endif /* OS_HAS_LINKS */
 
 /* Linked list of parent directories. Useful to detect back links */
@@ -114,8 +208,6 @@ typedef struct _NAMELIST {
   struct _NAMELIST *prev;
   const char *path;
 } NAMELIST;
-
-#if (defined(_MSDOS) || defined(_WIN32)) && HAS_MSVCLIBX
 
 /* Internal subroutine, used to avoid infinite loops on link back loops */
 static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef, NAMELIST *prev, int iDepth) {
@@ -128,7 +220,7 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
   char *pRootBuf = NULL;
   char *pTrueName = NULL;
   dict_t *dict = NULL;
-  BOOL bCreatedDict = FALSE;
+  int bCreatedDict = FALSE;
 #endif /* OS_HAS_LINKS */
   NAMELIST root = {0};
   NAMELIST list = {0};
@@ -142,24 +234,25 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
     if (errno == EACCES) goto access_denied;
     goto fail_entry;
   }
-  
+
   pOpts->nDir += 1;	/* One more directory scanned */
 
   if (!prev) { /* Record the true name of the directory tree root to search from */
 #if OS_HAS_LINKS
-    pRootBuf = malloc(PATH_MAX);
+    pRootBuf = GetRealName(path);
     if (!pRootBuf) goto out_of_memory;
-
-    iRet = MlxResolveLinks(path, pRootBuf, PATH_MAX);
-    if (iRet) {
+    if (!pRootBuf[0]) {
+#if HAS_MSVCLIBX
       if ((errno == EBADF) || (errno == EINVAL)) { /* Unsupported link type, ex: Windows Container Isolation filter */
       	iRet = 0; /* opendir() succeeded, so as far as we're concerned, this is a directory */
       	strcpy(pRootBuf, path); /* opendir() succeeded, so the name fits in PATHMAX bytes */
       } else {
 	goto fail_entry;
       }
+#elif HAS_DEV_AND_FILE_ID
+      goto fail_entry; /* Unlikely to happen, since opendir() did work */
+#endif
     }
-    pRootBuf = ShrinkBuf(pRootBuf, lstrlen(pRootBuf)+1); /* Free the unused space */
     root.path = pRootBuf;
     
     if (pOpts->iFlags & WDT_ONCE) { /* Check if an alias has been visited before */
@@ -200,26 +293,23 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
     pTrueName = NULL;
     if (   ((pDE->d_type == DT_DIR) || (pDE->d_type == DT_LNK))
         && ((pOpts->iFlags & WDT_FOLLOW) || (pOpts->iFlags & WDT_ONCE))) {
-      pTrueName = malloc(PATH_MAX);
-      if (!pTrueName) goto out_of_memory;
       errno = 0;
-      bIsDir = isEffectiveDir(pPathname);
-      if (bIsDir && (MlxResolveLinks(pPathname, pTrueName, PATH_MAX) == 0)) {
-	/* Resolution succeeded */
-	pTrueName = ShrinkBuf(pTrueName, lstrlen(pTrueName)+1); /* Free the unused space */
+      bIsDir = isEffectiveDir(pPathname); /* In Windows+MsvcLibX, this may fail, despite d_type == DT_DIR above */
+      if (bIsDir && ((pTrueName = GetRealName(pPathname)) != NULL) && pTrueName[0]) {
 	if (pOpts->iFlags & WDT_FOLLOW) {
 	  NAMELIST *pList;
 	  list.path = pTrueName; /* Record this path for next time */
 	  /* Check if we've seen this path before in the parent folders */
 	  for (pList = prev; pList; pList = pList->prev) {
-	    if (!lstrcmp(pTrueName, pList->path)) {
+	    if (!strcmp(pTrueName, pList->path)) {
 	      pszBadLinkMsg = "Link loops back";
 	      break;
 	    }
 	  }
 	}
       } else { /* pPathname is a symlink pointing to a file, or a link looping to itself */
-      	if (errno) switch (errno) {
+	if (bIsDir && !pTrueName) goto out_of_memory;
+	if (errno) switch (errno) {
 	case ELOOP:	/* There's a link looping to itself */
 	  pszBadLinkMsg = "Link loops to itself"; break;
 	case ENOENT:	/* There's a dangling link */
@@ -298,8 +388,9 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 #endif /* OS_HAS_LINKS */
   }
   if (iRet) goto cleanup_and_return;;	/* -1 = Error, abort; 1 = Success, stop */
+  if (errno == 0) goto cleanup_and_return;	/* There are no more files (Unix) */
   /* Else it's readdir() that failed. Check errno to see the reason */
-  if (errno == ENOENT) goto cleanup_and_return;	/* There are no more files */
+  if (errno == ENOENT) goto cleanup_and_return;	/* There are no more files (MsvcLibX) */
   if (errno == EACCES) {
 access_denied:
     if (!((pOpts->iFlags & WDT_CONTINUE) && (pOpts->iFlags & WDT_QUIET))) {
@@ -342,5 +433,3 @@ cleanup_and_return:
 int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef) {
   return WalkDirTree1(path, pOpts, pWalkDirTreeCB, pRef, NULL, 0);
 }
-
-#endif /* defined(_WIN32) && HAS_MSVCLIBX */

@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/************************ :encoding=UTF-8:tabSize=8: *************************\
 *                                                                             *
 *   Filename	    pathnames.h						      *
 *									      *
@@ -33,6 +33,7 @@ extern "C" {
 #define DIRSEPARATOR_STRING "\\"
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
+#define IGNORECASE TRUE
 
 #endif /* _MSDOS */
 
@@ -44,6 +45,7 @@ extern "C" {
 #define DIRSEPARATOR_STRING "\\"
 #define PATTERN_ALL "*.*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
+#define IGNORECASE TRUE
 
 #endif /* _OS2 */
 
@@ -55,6 +57,7 @@ extern "C" {
 #define DIRSEPARATOR_STRING "\\"
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define HAS_DRIVES TRUE
+#define IGNORECASE TRUE
 
 #endif /* _WIN32 */
 
@@ -66,6 +69,7 @@ extern "C" {
 #define DIRSEPARATOR_STRING "/"
 #define PATTERN_ALL "*"     		/* Pattern matching all files */
 #define HAS_DRIVES FALSE
+#define IGNORECASE FALSE
 
 #endif /* __unix__ */
 
@@ -97,7 +101,7 @@ typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   void *pOnce;			/* [RESERVED] Used internally to process WDT_ONCE */
 } wdt_opts;
 
-typedef int (*pWalkDirTreeCB_t)(char *pszRelPath, struct dirent *pDE, void *pRef);
+typedef int (*pWalkDirTreeCB_t)(const char *pszRelPath, const struct dirent *pDE, void *pRef);
 
 extern int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
 
