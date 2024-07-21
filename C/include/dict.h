@@ -31,6 +31,7 @@
 *    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
 *                   allow having multiple kinds of trees in the same program. *
 *    2024-06-22 JFL Fixed the declaration of inline routines.                 *
+*    2024-07-21 JFL Improved the fix for compatibility with C99 compilers.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -83,6 +84,88 @@ typedef struct {
   DICT_CALLBACK_PROC *cb;
   void *ref;
 } DICT_CB_STRUCT;
+
+/* Declare inline functions. C99 requires to provide callable alternatives.
+   This is done in the DICT_INLINE_FUNCTIONS_ALTERNATIVES macro below */
+inline dict_t *NewDict(void) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) dict->keycmp = strcmp;	/* Case-dependant key comparison */
+  return dict;
+}
+
+inline dict_t *NewIDict(void) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) dict->keycmp = _stricmp;	/* Case-independant key comparison */
+  return dict;
+}
+
+inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = strcmp;		/* Case-dependant key comparison */
+    dict->datacmp = datacmp;		/* Data comparison */
+  }
+  return dict;
+}
+
+inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = _stricmp;		/* Case-independant key comparison */
+    dict->datacmp = datacmp;		/* Data comparison */
+  }
+  return dict;
+}
+
+inline void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref) {
+  DICT_CB_STRUCT s;
+  s.cb = cb;
+  s.ref = ref;
+  return foreach_dictnode(dict, dictnode_tree_callback, &s);
+}
+
+inline dictnode *FirstDictValue(dict_t *dict) {
+  return first_dictnode(dict);
+}
+
+inline dictnode *NextDictValue(dict_t *dict, dictnode *pn) {
+  return next_dictnode(dict, pn);
+}
+
+inline dictnode *LastDictValue(dict_t *dict) {
+  return last_dictnode(dict);
+}
+
+inline dictnode *PrevDictValue(dict_t *dict, dictnode *pn) {
+  return prev_dictnode(dict, pn);
+}
+
+inline int GetDictSize(dict_t *dict) {
+  return num_dictnode(dict);
+}
+
+#if __STDC_VERSION__ >= 199901L
+
+/* Provide static alternatives for all inline functions, as required by C99 */
+#define DICT_INLINE_FUNCTIONS_ALTERNATIVES                                      \
+dict_t *NewDict(void);                                                          \
+dict_t *NewIDict(void);                                                         \
+dict_t *NewMMap(int (*datacmp)(void *p1, void *p2));                            \
+dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2));                           \
+void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref);         \
+dictnode *FirstDictValue(dict_t *dict);                                         \
+dictnode *NextDictValue(dict_t *dict, dictnode *pn);                            \
+dictnode *LastDictValue(dict_t *dict);                                          \
+dictnode *PrevDictValue(dict_t *dict, dictnode *pn);                            \
+int GetDictSize(dict_t *dict);                                                  \
+
+#else
+
+/* Older compilers that implement inline functions don't need these alternatives.
+   Furthermore, the MSVC 1.5 compilers for DOS choke on them due to macro size limitations. */
+#define DICT_INLINE_FUNCTIONS_ALTERNATIVES
+
+#endif /* __STDC_VERSION__ >= 199901L */
 
 /* Static routines that need to be defined once somewhere. */
 #define DICT_DEFINE_PROCS()							\
@@ -184,62 +267,5 @@ void *DictValue(dict_t *dict, char *key) {                                      
   }                                                                             \
   return pNodeFound->pData;                                                     \
 }                                                                               \
-
-inline dict_t *NewDict(void) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) dict->keycmp = strcmp;	/* Case-dependant key comparison */
-  return dict;
-}
-
-inline dict_t *NewIDict(void) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) dict->keycmp = _stricmp;	/* Case-independant key comparison */
-  return dict;
-}
-
-inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) {
-    dict->keycmp = strcmp;		/* Case-dependant key comparison */
-    dict->datacmp = datacmp;		/* Data comparison */
-  }
-  return dict;
-}
-
-inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) {
-    dict->keycmp = _stricmp;		/* Case-independant key comparison */
-    dict->datacmp = datacmp;		/* Data comparison */
-  }
-  return dict;
-}
-
-inline void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref) {
-  DICT_CB_STRUCT s;
-  s.cb = cb;
-  s.ref = ref;
-  return foreach_dictnode(dict, dictnode_tree_callback, &s);
-}
-
-inline dictnode *FirstDictValue(dict_t *dict) {
-  return first_dictnode(dict);
-}
-
-inline dictnode *NextDictValue(dict_t *dict, dictnode *pn) {
-  return next_dictnode(dict, pn);
-}
-
-inline dictnode *LastDictValue(dict_t *dict) {
-  return last_dictnode(dict);
-}
-
-inline dictnode *PrevDictValue(dict_t *dict, dictnode *pn) {
-  return prev_dictnode(dict, pn);
-}
-
-inline int GetDictSize(dict_t *dict) {
-  return num_dictnode(dict);
-}
-
-
+                                                                                \
+DICT_INLINE_FUNCTIONS_ALTERNATIVES

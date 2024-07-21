@@ -73,6 +73,7 @@
 *    2021-02-16 JFL Make sure the debug macros also have unique names, to     *
 *                   allow having multiple kinds of trees in the same program. *
 *    2024-06-22 JFL Fixed the declaration of inline routines.                 *
+*    2024-07-21 JFL Improved the fix for compatibility with C99 compilers.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -170,7 +171,7 @@ extern int TREE_LOG_RETURN_INT_##node_t(int result);				\
 										\
 /* Declare and define public inline functions. */				\
 										\
-inline tree_t *new_##node_t##_tree() {						\
+inline tree_t *new_##node_t##_tree(void) {					\
   tree_t *tree = calloc(1, sizeof(node_t));					\
   return tree;									\
 }										\
@@ -221,6 +222,31 @@ inline void *foreach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *
 inline void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref) {	\
   return TREE_RFOREACH_##node_t(tree->sbbt_root, function, ref);		\
 }										\
+
+#if __STDC_VERSION__ >= 199901L
+
+/* Provide static alternatives for all inline functions, as required by C99 */
+#define TREE_INLINE_FUNCTIONS_ALTERNATIVES(tree_t, node_t)                      \
+tree_t *new_##node_t##_tree(void);						\
+void add_##node_t(tree_t *tree, node_t *n);					\
+void remove_##node_t(tree_t *tree, node_t *n);					\
+node_t *get_##node_t(tree_t *tree, node_t *n);					\
+node_t *first_##node_t(tree_t *tree);						\
+node_t *next_##node_t(tree_t *tree, node_t *n);					\
+node_t *last_##node_t(tree_t *tree);						\
+node_t *prev_##node_t(tree_t *tree, node_t *n);					\
+int num_##node_t(tree_t *tree);							\
+int depth_##node_t(tree_t *tree);						\
+void *foreach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref);	\
+void *rforeach_##node_t(tree_t *tree, TREE_##node_t##_CB *function, void *ref);	\
+
+#else
+
+/* Older compilers that implement inline functions don't need these alternatives.
+   Furthermore, the MSVC 1.5 compilers for DOS choke on them due to macro size limitations. */
+#define TREE_INLINE_FUNCTIONS_ALTERNATIVES(tree_t, node_t)
+
+#endif /* __STDC_VERSION__ >= 199901L */
 
 /* Private routines, to be defined once in one file for each tree type. */
 
@@ -423,6 +449,8 @@ int TREE_LOG_RETURN_INT_##node_t(int result) {					\
   return result;								\
 }										\
 )										\
+										\
+TREE_INLINE_FUNCTIONS_ALTERNATIVES(tree_t, node_t)
 
 #endif /* _sbb_tree_h_ */
 

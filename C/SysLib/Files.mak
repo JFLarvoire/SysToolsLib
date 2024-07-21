@@ -27,7 +27,6 @@
 
 # Common objects usable in all environments, including in BIOS or LODOS
 BASE_OBJECTS = \
-    +$(O)/dict.obj		\
     +$(O)/GetConSize.obj	\
     +$(O)/GetCurPos.obj		\
     +$(O)/IsMBR.obj		\
@@ -49,6 +48,7 @@ BASE_OBJECTS = \
 COMMON_OBJECTS = \
     $(BASE_OBJECTS)		\
     +$(O)/CondQuoteShellArg.obj	\
+    +$(O)/dict.obj		\
     +$(O)/DupArgLineTail.obj	\
     +$(O)/copydate.obj		\
     +$(O)/JoinPaths.obj		\
@@ -92,6 +92,8 @@ $(S)/crc32.cpp: $(S)/crc32.h \
 		$(GNUEFI)/inc/efi.h $(GNUEFI)/inc/efilib.h
 
 $(S)/crc32.h: $(S)/SysLib.h
+
+$(S)/dict.c: $(CI)/dict.h $(CI)/tree.h
 
 $(S)/DupArgLineTail.c: $(S)/SysLib.h $(S)/CmdLine.h
 
