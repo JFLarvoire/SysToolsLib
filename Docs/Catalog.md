@@ -175,7 +175,7 @@ whichinc.exe    | DW- | Enumerate all include files that a C/C++ source potentia
 with.exe        | DW- | Run a command with specific environment variables.                                    | `with DEBUG=1 build` &:# Build the debug version of your application
 wm.bat          | -W- | Invoke WinMerge, even if it's not in the PATH.                                        | `wm old_version new_version`
 
-## Harware and BIOS management
+## Hardware and BIOS management
 
 Name            | OS  | Description                                                                           | Example
 ----------------|-----|---------------------------------------------------------------------------------------|-------------
