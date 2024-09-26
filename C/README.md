@@ -154,9 +154,10 @@ After installing any of these tools, run configure.bat in the base %WORKDIR%.
 This will update the config.HOSTNAME.bat file in each library directory.  
 Subsequent builds with make.bat will automatically use the new tools and SDKs, and build the programs that depend on them.
 
-- If you're interested in building Windows 95/98 tools, install Microsoft Visual 2005.  
+- If you're interested in building Windows 95/98 tools, install Microsoft Visual Studio 2005.  
   It is still available for MSDN subscribers in 2017.
-  It can be installed in parallel with more recent versions of Visual Studio.
+  It can be installed in parallel with more recent versions of Visual Studio.  
+  Then make sure to upgrade it with Microsoft Visual Studio 2005 SP1, and Visual Studio 2005 SP1 update for Windows Vista.
 
 - If you're interested in building BIOS and MS-DOS tools, install Microsoft Visual C++ 1.52c.  
   It is still available for MSDN subscribers in 2017, as part of the Visual Studio 2005 DVD image, but not installed by default.
