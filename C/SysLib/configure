@@ -10,6 +10,7 @@
 #  History:                                                                   #
 #    2023-01-18 JFL Created this script.                                      #
 #    2024-01-09 JFL Define both NMINCLUDE and STINCLUDE.		      #
+#    2024-06-21 JFL Define macro UNUSED_ARG() in config.h.		      #
 #                                                                             #
 #                   © Copyright 2023 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -125,6 +126,9 @@ CONFIG_H=$($MAKE config_dir)/config.h
 EchoV "config.h = $CONFIG_H"
 rm $CONFIG_H 2>/dev/null
 
+# Define a macro for flagging unused arguments, and avoid a warnings
+echo "#define UNUSED_ARG(arg_name) (void)arg_name" >>$CONFIG_H
+
 # Check if the termcap development library is available
 # Termcap is part of the libncurses5-dev package. Ex: install with:
 #  sudo apt-get install libncurses5-dev
@@ -146,7 +150,7 @@ Example: (Replace apt-get with you package manager name if needed.)
 sudo apt-get install libncurses5-dev
 EOF
 fi
-echo "#define HAS_TERMCAP $HAS_TERMCAP" >$CONFIG_H
+echo "#define HAS_TERMCAP $HAS_TERMCAP" >>$CONFIG_H
 EchoV "HAS_TERMCAP = $HAS_TERMCAP"
 
 EchoN Configuration done successfully.
