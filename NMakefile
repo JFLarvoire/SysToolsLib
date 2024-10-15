@@ -8,10 +8,13 @@
 #									      #
 #   History								      #
 #    2020-12-16 JFL jf.larvoire@hpe.com created this file.                    #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
 #		    							      #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
+
+TEST_OS=DOS WIN95 WIN32 THIS # Build versions for these OSs when testing
 
 default: all
 

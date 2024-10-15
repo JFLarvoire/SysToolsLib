@@ -1,4 +1,25 @@
+###############################################################################
+#									      #
+#   File name:	    NMakefile						      #
+#									      #
+#   Description:    An NMake makefile to build all SysToolsLib C programs     #
+#									      #
+#   Notes:	    							      #
+#									      #
+#   History:								      #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
+#		    							      #
+#      (c) Copyright 1993-2017 Hewlett Packard Enterprise Development LP      #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+TEST_OS=DOS WIN95 WIN32 THIS # Build versions for these OSs when testing
+
 !INCLUDE <All.mak>
+
+# Default log file name, etc
+module_name:
+    echo systoolslib
 
 cleanenv:
     rem

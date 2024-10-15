@@ -31,10 +31,14 @@
 #    2017-12-18 JFL Renamed old upper-case-named sources to lower-case names. #
 #    2022-11-24 JFL Added Nchkstk.asm, Fchkstk.asm, puts.c, fputc.c.	      #
 #    2022-11-28 JFL Define the _LODOS constant when compiling sources.	      #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
 #		    							      #
 #      (c) Copyright 1995-2017 Hewlett Packard Enterprise Development LP      #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
+
+ONLY_OS=DOS LODOS # Here we're dealing exclusively with programs for DOS
+!INCLUDE <select_os.mak> # Returns OS=intersection($(OS), $(ONLY_OS))
 
 # Memory model for C compilation and misc macros
 MODELE=S			# Memory model for C compilation. Good for both small & tiny programs.
@@ -98,6 +102,10 @@ AFLAGS=/Cx /Fl$(L)\ /Fo$(O)\ /I$(N) /Sn /Zim /D_LODOS
 ###############################################################################
 
 all lodoslib: headline check_reqs dosdrv.inc $(B)\lodos.lib $(O)\startexe.obj
+
+# Default log file name, etc
+module_name:
+    echo lodoslib
 
 headline:
     $(HEADLINE) Building the LoDosLib library

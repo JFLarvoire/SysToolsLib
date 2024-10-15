@@ -4,6 +4,31 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+
+## [Unreleased] 2024-10-15
+### Changed
+- */NMakeFile: Adapted for use with the redesigned NMaker system.
+- C/syslib/configure: Define macro UNUSED_ARG() in config.h.
+
+## [Unreleased] 2024-06-14
+### Changed
+- C/include/tree.h, dict.h: More changes for compatibility with all operating systems.
+- C/SysLib/WalkDirTree.c: Added support for WalkDirTree detecting already visited paths in Unix.
+
+## [Unreleased] 2024-06-14
+### Fixed
+- C/include/dict.h, tree.h: Fixed the declaration of inline routines
+
+### New
+- SysLib/dict.c: Dictionary management functions.
+
+## [Unreleased] 2024-06-14
+### Fixed
+- PowerShell/PSService.ps1: Fixed bug #32. The service now stops automatically when the OS shuts down.
+  Added a $stopOnPreShutdown global variable to enable that fix (default) or disable it (to return to the original behaviour).
+  Log a warning in the Event Log if this cannot be enabled.
+  Added comments explaining how to do different things on shutdown, if needed.
+
 ## [Unreleased] 2024-06-11
 ### Changed
 - All make files and build scripts: Major refactoring: Use the [NMaker](https://github.com/JFLarvoire/NMaker) subproject,

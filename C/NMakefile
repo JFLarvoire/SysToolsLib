@@ -43,10 +43,13 @@
 #		    Add ARM64 executables.				      #
 #		    Added the EXEC macro, and use it for all 7-zip calls.     #
 #    2019-11-22 JFL Add extras scripts from \bin\Scripts\.		      #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
+
+TEST_OS=DOS WIN95 WIN32 THIS # Build versions for these OSs when testing
 
 !IF !DEFINED(OUTDIR)
 OUTDIR=bin

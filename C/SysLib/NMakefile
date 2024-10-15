@@ -30,6 +30,7 @@
 #    2022-12-21 JFL Changed the output subdirectories for DOS builds.         #
 #    2022-12-22 JFL `make clean` fixes and improvements.                      #
 #    2024-01-07 JFL Changed STINCLUDE to NMINCLUDE.			      #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -38,6 +39,8 @@
 !IF DEFINED(MESSAGES)
 !MESSAGE Started NMakefile in $(MAKEDIR) # Display this make file name
 !ENDIF
+
+TEST_OS=DOS WIN95 WIN32 THIS # Build versions for these OSs when testing
 
 !IF DEFINED(OUTDIR)
 OD=$(OUTDIR)^\
@@ -99,6 +102,7 @@ REQS_ARM64=0
 # Note: The OS variable here conflicts with Windows' %OS%, defaulting to Windows_NT
 !IF "$(OS)"=="all"
 OS_ALL=1 # Note: Don't attempt to build IA64 or ARM versions by default, unless OS=all
+!UNDEF OS
 OS=
 !ENDIF
 !IF !DEFINED(OS) || "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
@@ -150,12 +154,26 @@ MAKEFLAGS_=/NOLOGO $(MAKEFLAGS_)
 !ENDIF
 !UNDEF MAKEFLAGS__
 
+!IF !DEFINED(DEBUG)
+DEBUG=0
+!ELSEIF "$(DEBUG)"=="all"
+!UNDEF DEBUG
+DEBUG=0 1
+!ENDIF
+
+!UNDEF MAKE_RELEASE
+!IF "$(DEBUG:0=)"!="$(DEBUG)"
+MAKE_RELEASE=1
+!ENDIF
+
+!UNDEF MAKE_DEBUG
+!IF "$(DEBUG:1=)"!="$(DEBUG)"
+MAKE_DEBUG=1
+!ENDIF
+
 # Command-line definitions that need carrying through to sub-make instances
 # Note: Cannot redefine MAKEFLAGS, so defining an alternate variable instead.
 MAKEDEFS="PROGRAM=SysLib" "LIBDIR=$(LIBDIR)"
-!IF DEFINED(DEBUG)
-MAKEDEFS="DEBUG=$(DEBUG)" $(MAKEDEFS)
-!ENDIF
 !IF DEFINED(WINVER) # Windows target version. 4.0=Win95/NT4 5.1=XP 6.0=Vista ...
 MAKEDEFS="WINVER=$(WINVER)" $(MAKEDEFS)
 !ENDIF
@@ -170,138 +188,185 @@ syslib_default: headline all
 headline:
     $(HEADLINE) Building all SysLib library versions
 
+_OS_=_ $(OS) _
+
 ALL = \
-!IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
+!IF !("$(_OS_: BIOS =)"=="$(_OS_)") # IF $(OS) contains BIOS
 !IF $(REQS_BIOS)
-     check_bios_opts bios \
+     check_bios_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     bios \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      bios\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for BIOS builds
      explain_bios_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF !("$(_OS_: LODOS =)"=="$(_OS_)") # IF $(OS) contains LODOS
 !IF $(REQS_LODOS)
-     check_lodos_opts lodos \
+     check_lodos_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     lodos \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      lodos\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for LODOS builds
      explain_lodos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
+!IF !("$(_OS_: DOS =)"=="$(_OS_)") # IF $(OS) contains DOS
 !IF $(REQS_DOS)
-     check_dos_opts dos \
+     check_dos_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     dos \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      dos\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for DOS builds
      explain_dos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN95=)"=="$(OS)") # IF $(OS) contains WIN95
+!IF !("$(_OS_: WIN95 =)"=="$(_OS_)") # IF $(OS) contains WIN95
 !IF $(REQS_WIN95)
-     check_win95_opts win95 \
+     check_win95_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     win95 \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      win95\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for Win95 builds
      explain_win95_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN32=)"=="$(OS)") # IF $(OS) contains WIN32
+!IF !("$(_OS_: WIN32 =)"=="$(_OS_)") # IF $(OS) contains WIN32
 !IF $(REQS_WIN32)
-     check_win32_opts win32 \
+     check_win32_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     win32 \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      win32\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for Win32 builds
      explain_win32_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:IA64=)"=="$(OS)") # IF $(OS) contains IA64
+!IF !("$(_OS_: IA64 =)"=="$(_OS_)") # IF $(OS) contains IA64
 !IF $(REQS_IA64)
-     check_ia64_opts ia64 \
+     check_ia64_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     ia64 \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      ia64\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for IA64 builds
      explain_ia64_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN64=)"=="$(OS)") # IF $(OS) contains WIN64
+!IF !("$(_OS_: WIN64 =)"=="$(_OS_)") # IF $(OS) contains WIN64
 !IF $(REQS_WIN64)
-     check_win64_opts win64 \
+     check_win64_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     win64 \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      win64\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for Win64 builds
      explain_win64_reqs \
 !ENDIF
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="ARM" exit 1]
+!IF !("$(_OS_: ARM =)"=="$(_OS_)") # IF $(OS) contains ARM
 !IF $(REQS_ARM)
-     check_arm_opts arm \
+     check_arm_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     arm \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      arm\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for ARM builds
      explain_arm_reqs \
 !ENDIF
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="ARM64" exit 1]
+!IF !("$(_OS_: ARM64 =)"=="$(_OS_)") # IF $(OS) contains ARM64
 !IF $(REQS_ARM64)
-     check_arm64_opts arm64 \
+     check_arm64_opts \
+!  IF DEFINED(MAKE_RELEASE)
+     arm64 \
+!  ENDIF
+!  IF DEFINED(MAKE_DEBUG)
      arm64\debug \
+!  ENDIF
 !ELSE # failed the static requirements test for ARM64 builds
      explain_arm64_reqs \
 !ENDIF
 !ENDIF
 
 syslib.lib: \
-!IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
+!IF !("$(_OS_: BIOS =)"=="$(_OS_)") # IF $(OS) contains BIOS
 !IF $(REQS_BIOS)
      check_bios_opts bios \
 !ELSE # failed the static requirements test for BIOS builds
      explain_bios_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF !("$(_OS_: LODOS =)"=="$(_OS_)") # IF $(OS) contains LODOS
 !IF $(REQS_LODOS)
      check_lodos_opts lodos \
 !ELSE # failed the static requirements test for LODOS builds
      explain_lodos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
+!IF !("$(_OS_: DOS =)"=="$(_OS_)") # IF $(OS) contains DOS
 !IF $(REQS_DOS)
      check_dos_opts dos \
 !ELSE # failed the static requirements test for DOS builds
      explain_dos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN95=)"=="$(OS)") # IF $(OS) contains WIN95
+!IF !("$(_OS_: WIN95 =)"=="$(_OS_)") # IF $(OS) contains WIN95
 !IF $(REQS_WIN95)
      check_win95_opts win95 \
 !ELSE # failed the static requirements test for Win95 builds
      explain_win95_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN32=)"=="$(OS)") # IF $(OS) contains WIN32
+!IF !("$(_OS_: WIN32 =)"=="$(_OS_)") # IF $(OS) contains WIN32
 !IF $(REQS_WIN32)
      check_win32_opts win32 \
 !ELSE # failed the static requirements test for Win32 builds
      explain_win32_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:IA64=)"=="$(OS)") # IF $(OS) contains IA64
+!IF !("$(_OS_: IA64 =)"=="$(_OS_)") # IF $(OS) contains IA64
 !IF $(REQS_IA64)
      check_ia64_opts ia64 \
 !ELSE # failed the static requirements test for IA64 builds
      explain_ia64_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN64=)"=="$(OS)") # IF $(OS) contains WIN64
+!IF !("$(_OS_: WIN64 =)"=="$(_OS_)") # IF $(OS) contains WIN64
 !IF $(REQS_WIN64)
      check_win64_opts win64 \
 !ELSE # failed the static requirements test for Win64 builds
      explain_win64_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS: ARM = )"=="$(OS)") # IF $(OS) contains ARM
+!IF !("$(_OS_: ARM = )"=="$(_OS_)") # IF $(OS) contains ARM
 !IF $(REQS_ARM)
      check_arm_opts arm \
 !ELSE # failed the static requirements test for ARM builds
      explain_arm_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:ARM64=)"=="$(OS)") # IF $(OS) contains ARM64
+!IF !("$(_OS_: ARM64 =)"=="$(_OS_)") # IF $(OS) contains ARM64
 !IF $(REQS_ARM64)
      check_arm64_opts arm64 \
 !ELSE # failed the static requirements test for ARM64 builds
@@ -310,63 +375,63 @@ syslib.lib: \
 !ENDIF
 
 debug\syslib.lib: \
-!IF !("$(OS:BIOS=)"=="$(OS)") # IF $(OS) contains BIOS
+!IF !("$(_OS_: BIOS =)"=="$(_OS_)") # IF $(OS) contains BIOS
 !IF $(REQS_BIOS)
      check_bios_opts bios\debug \
 !ELSE # failed the static requirements test for BIOS builds
      explain_bios_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:LODOS=)"=="$(OS)") # IF $(OS) contains LODOS
+!IF !("$(_OS_: LODOS =)"=="$(_OS_)") # IF $(OS) contains LODOS
 !IF $(REQS_LODOS)
      check_lodos_opts lodos\debug \
 !ELSE # failed the static requirements test for LODOS builds
      explain_lodos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:DOS=)"=="$(OS)") # IF $(OS) contains DOS
+!IF !("$(_OS_: DOS =)"=="$(_OS_)") # IF $(OS) contains DOS
 !IF $(REQS_DOS)
      check_dos_opts dos\debug \
 !ELSE # failed the static requirements test for DOS builds
      explain_dos_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN95=)"=="$(OS)") # IF $(OS) contains WIN95
+!IF !("$(_OS_: WIN95 =)"=="$(_OS_)") # IF $(OS) contains WIN95
 !IF $(REQS_WIN95)
      check_win95_opts win95\debug \
 !ELSE # failed the static requirements test for Win95 builds
      explain_win95_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN32=)"=="$(OS)") # IF $(OS) contains WIN32
+!IF !("$(_OS_: WIN32 =)"=="$(_OS_)") # IF $(OS) contains WIN32
 !IF $(REQS_WIN32)
      check_win32_opts win32\debug \
 !ELSE # failed the static requirements test for Win32 builds
      explain_win32_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:IA64=)"=="$(OS)") # IF $(OS) contains IA64
+!IF !("$(_OS_: IA64 =)"=="$(_OS_)") # IF $(OS) contains IA64
 !IF $(REQS_IA64)
      check_ia64_opts ia64\debug \
 !ELSE # failed the static requirements test for IA64 builds
      explain_ia64_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:WIN64=)"=="$(OS)") # IF $(OS) contains WIN64
+!IF !("$(_OS_: WIN64 =)"=="$(_OS_)") # IF $(OS) contains WIN64
 !IF $(REQS_WIN64)
      check_win64_opts win64\debug \
 !ELSE # failed the static requirements test for Win64 builds
      explain_win64_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS: ARM = )"=="$(OS)") # IF $(OS) contains ARM
+!IF !("$(_OS_: ARM = )"=="$(_OS_)") # IF $(OS) contains ARM
 !IF $(REQS_ARM)
      check_arm_opts arm\debug \
 !ELSE # failed the static requirements test for ARM builds
      explain_arm_reqs \
 !ENDIF
 !ENDIF
-!IF !("$(OS:ARM64=)"=="$(OS)") # IF $(OS) contains ARM64
+!IF !("$(_OS_: ARM64 =)"=="$(_OS_)") # IF $(OS) contains ARM64
 !IF $(REQS_ARM64)
      check_arm64_opts arm64\debug \
 !ELSE # failed the static requirements test for ARM64 builds

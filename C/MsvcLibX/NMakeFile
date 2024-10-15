@@ -1,0 +1,16 @@
+###############################################################################
+#									      #
+#   File name	    NMakefile						      #
+#									      #
+#   Description     An NMake file for making all MsvcLibX library versions    #
+#									      #
+#   Notes	    make.bat looks for a default nmake file called nmakefile. #
+#									      #
+#   History								      #
+#    2024-10-15 JFL Added this file for use with the redesigned NMaker system.#
+#		    							      #
+#                   © Copyright 2024 Jean-François Larvoire                   #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+!INCLUDE <All.mak>

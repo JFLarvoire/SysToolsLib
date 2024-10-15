@@ -35,6 +35,8 @@
 #    2022-12-21 JFL Changed the output subdirectories for DOS builds.         #
 #    2022-12-22 JFL `make clean` fixes and improvements.                      #
 #    2024-01-07 JFL Changed STINCLUDE to NMINCLUDE.			      #
+#    2024-10-10 JFL Build only for the current OS by default.		      #
+#    2024-10-15 JFL Adapted for use with the redesigned NMaker system.        #
 #		    							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -43,6 +45,8 @@
 !IF DEFINED(MESSAGES)
 !MESSAGE Started MsvcLibX/src/NMakefile in $(MAKEDIR) # Display this make file name
 !ENDIF
+
+TEST_OS=DOS WIN95 WIN32 THIS # Build versions for these OSs when testing
 
 !IF !DEFINED(OUTDIR)
 OUTDIR=bin
@@ -74,12 +78,26 @@ MAKEFLAGS_=/NOLOGO $(MAKEFLAGS_)
 !ENDIF
 !UNDEF MAKEFLAGS__
 
+!IF !DEFINED(DEBUG)
+DEBUG=0
+!ELSEIF "$(DEBUG)"=="all"
+!UNDEF DEBUG
+DEBUG=0 1
+!ENDIF
+
+MAKE_RELEASE=0
+!IF "$(DEBUG:0=)"!="$(DEBUG)"
+MAKE_RELEASE=1
+!ENDIF
+
+MAKE_DEBUG=0
+!IF "$(DEBUG:1=)"!="$(DEBUG)"
+MAKE_DEBUG=1
+!ENDIF
+
 # Command-line definitions that need carrying through to sub-make instances
 # Note: Cannot redefine MAKEFLAGS, so defining an alternate variable instead.
 MAKEDEFS="PROGRAM=MsvcLibX" "LIBDIR=$(LIBDIR)"
-!IF DEFINED(DEBUG)
-MAKEDEFS="DEBUG=$(DEBUG)" $(MAKEDEFS)
-!ENDIF
 !IF DEFINED(WINVER) # Windows target version. 4.0=Win95/NT4 5.1=XP 6.0=Vista ...
 MAKEDEFS="WINVER=$(WINVER)" $(MAKEDEFS)
 !ENDIF
@@ -92,11 +110,14 @@ ALL_OS_TYPES=DOS WIN95 WIN32 IA64 WIN64 ARM ARM64 # All managed types
 
 # $(OS) = List of target operating systems to build for, separated by spaces
 # Note: The OS variable here conflicts with Windows' %OS%, defaulting to Windows_NT
-!IF "$(OS)"=="all"
-OS_ALL=1 # Note: Don't attempt to build IA64 or ARM versions by default, unless OS=all
-OS=
-!ENDIF
 !IF !DEFINED(OS) || "$(OS)"=="Windows_NT" # ie. if OS is not specified on the command line
+OS=$(THIS_OS)
+!ELSEIF "$(OS)"=="this"
+OS=$(THIS_OS)
+!ELSEIF "$(OS)"=="test"
+OS=$(TEST_OS)
+!ELSEIF "$(OS)"=="all"
+OS_ALL=1 # Note: Don't attempt to build IA64 or ARM versions by default, unless OS=all
 OS=/		# Initialize with a recognizable string that we'll remove later
 !IF DEFINED(DOS_CC) && EXIST("$(NMINCLUDE)\DOS.mak")
 OS=$(OS) DOS
@@ -125,6 +146,8 @@ OS=$(OS:/ =)	# Remove the initial / and the first following space
 OS=$(OS:/=)	# Again, in the unlikely case that none of the default OSs matched
 !ENDIF
 
+_OS_=_ $(OS) _
+
 # Convert that $(OS) text list to boolean variables, one for each OS.
 DODOS=0
 DOWIN95=0
@@ -133,25 +156,25 @@ DOIA64=0
 DOWIN64=0
 DOARM=0
 DOARM64=0
-!IF [for %o in ($(OS)) do @if /i "%o"=="DOS" exit 1]
+!IF "$(_OS_: DOS =)"!="$(_OS_)" # IF $(OS) contains DOS
 DODOS=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="WIN95" exit 1]
+!IF "$(_OS_: WIN95 =)"!="$(_OS_)" # IF $(OS) contains WIN95
 DOWIN95=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="WIN32" exit 1]
+!IF "$(_OS_: WIN32 =)"!="$(_OS_)" # IF $(OS) contains WIN32
 DOWIN32=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="IA64" exit 1]
+!IF "$(_OS_: IA64 =)"!="$(_OS_)" # IF $(OS) contains IA64
 DOIA64=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="WIN64" exit 1]
+!IF "$(_OS_: WIN64 =)"!="$(_OS_)" # IF $(OS) contains WIN64
 DOWIN64=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="ARM" exit 1]
+!IF "$(_OS_: ARM =)"!="$(_OS_)" # IF $(OS) contains ARM
 DOARM=1
 !ENDIF
-!IF [for %o in ($(OS)) do @if /i "%o"=="ARM64" exit 1]
+!IF "$(_OS_: ARM64 =)"!="$(_OS_)" # IF $(OS) contains ARM64
 DOARM64=1
 !ENDIF
 # !MESSAGE DOBIOS=$(DOBIOS) DOLODOS=$(DOLODOS) DODOS=$(DODOS) DOWIN32=$(DOWIN32) DOWIN64=$(DOWIN64)
@@ -184,10 +207,11 @@ IFARM=
 !IF $(DOARM64)
 IFARM64=
 !ENDIF
-# !MESSAGE IFBIOS=$(IFBIOS) IFLODOS=$(IFLODOS) IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM) IFARM64=$(IFARM64)
+# !MESSAGE IFDOS=$(IFDOS) IFWIN32=$(IFWIN32) IFIA64=$(IFIA64) IFWIN64=$(IFWIN64) IFARM=$(IFARM) IFARM64=$(IFARM64)
 
 # Default goal: Generate all versions
 all: headline \
+!IF $(MAKE_RELEASE)
 !IF $(DODOS)
      $(OD)DOS\MsvcLibX.lib \
 !ENDIF
@@ -209,6 +233,8 @@ all: headline \
 !IF $(DOARM64)
      $(OD)ARM64\MsvcLibX.lib \
 !ENDIF
+!ENDIF # $(MAKE_RELEASE)
+!IF $(MAKE_DEBUG)
 !IF $(DODOS)
      $(OD)DOS\DEBUG\MsvcLibX.lib \
 !ENDIF
@@ -230,6 +256,11 @@ all: headline \
 !IF $(DOARM64)
      $(OD)ARM64\DEBUG\MsvcLibX.lib \
 !ENDIF
+!ENDIF # $(MAKE_DEBUG)
+
+# Default log file name, etc
+module_name:
+    echo msvclibx
 
 headline:
     $(HEADLINE) Building all MsvcLibX library versions
