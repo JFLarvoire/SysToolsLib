@@ -21,12 +21,13 @@
 *    2022-10-22 JFL Added option -t to list all types of reparse points.      *
 *    2023-11-15 JFL Bug fix: When listing junctions in verbose mode, the      *
 *                   target was not displayed.                                 *
+*    2024-09-26 JFL Fixed a minor warning.                                    *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2023-11-15"
+#define PROGRAM_VERSION "2024-09-26"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -57,7 +58,7 @@ typedef struct { /* Reference data to pass to the WalkDirTree callback */
   long nJunction;	/* Output: The number of junctions found */
   void *pTree;		/* Internal: The binary tree of known junctions */
 } JCB_REF;	 /* Initialize as {0}, except for the inut flags */
-int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pJcbRef);
+int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pJcbRef);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -432,7 +433,7 @@ knownJunction *new_knownJunction(dev_t devID, ino_t fileID, const char *pszPathn
 #pragma warning(disable:4100) /* Ignore the unreferenced formal parameter warning */
 
 /* Callback called by WalkDirTree for every file it finds */
-int ShowJunctionsCB(char *pszRelPath, struct dirent *pDE, void *pRef) {
+int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef) {
   DWORD dwTag;
   JCB_REF *pJcbRef = (JCB_REF *)pRef;
   int iVerbose = pJcbRef->iFlags & JCB_VERBOSE;
