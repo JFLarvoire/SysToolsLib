@@ -1,4 +1,4 @@
-###############################################################################
+############################## :encoding=UTF-8: ###############################
 #                                                                             #
 #  File name        Makefile                                                  #
 #                                                                             #
@@ -35,8 +35,10 @@
 #    2023-04-23 JFL Create the link bin -> ../bin.			      #
 #                   Fixed a failure to link with the termcap library.         #
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
+#    2024-10-17 JFL Added a configuration step generating a config.h file.    #
+#                   Added goals mostlyclean & veryclean.                      #
 #                                                                             #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
@@ -135,6 +137,7 @@ OSP := $(OSPN)
 endif
 # Sources path
 SP = .
+IP = $(OSPN)/INC
 # Objects path
 OP = $(OSP)/OBJ
 OPN = $(OSPN)/OBJ
@@ -192,6 +195,10 @@ ifneq "$(CC_NOCARET_OPT)" ""
   CFLAGS   += $(CC_NOCARET_OPT)
   CXXFLAGS += $(CC_NOCARET_OPT)
 endif
+
+# Add the path to the system-specific config.h
+CFLAGS := $(CFLAGS) -I $(IP)
+CXXFLAGS := $(CXXFLAGS) -I $(IP)
 
 # Add the path to NMaker include files
 ifdef NMINCLUDE
@@ -351,10 +358,10 @@ else
 endif
 
 # Create output directories
-.PHONY: dirs ddirs
-dirs: bin $(XPN) $(OPN) $(LPN)
+.PHONY: dirs ddirs files
+dirs: bin $(XPN) $(OPN) $(LPN) files
 
-ddirs: $(XPD) $(OPD) $(LPD)
+ddirs: $(XPD) $(OPD) $(LPD) files
 
 bin:
 	$(info Creating link $@ to directory ../$@)
@@ -363,6 +370,21 @@ bin:
 $(XPN) $(OPN) $(LPN) $(XPD) $(OPD) $(LPD):
 	$(info Creating directory $@)
 	mkdir -p $@
+
+files: $(IP)/config.h
+
+$(IP)/config.h: Makefile configure
+	echo "Configuring ..."
+	$(MAKE) -$(QMAKEFLAGS) mostlyclean # Force rebuilding everything thereafter
+	chmod +x configure # Sources are installed without execution rights
+	./configure -q
+	echo " ... done"
+
+# Manage the dialog with the ./configure script
+.PHONY: config_dir
+config_dir: # Tell it where to store config.h
+	mkdir -p $(IP) # Silently create it if not done already
+	echo $(IP)
 
 # Place holder for build results self test
 .PHONY: check
@@ -419,21 +441,28 @@ INSTALLED = $(wildcard $(addprefix $(bindir)/,$(PROGRAMS)))
 uninstall: $(subst $(bindir)/,dummy_uninstall_dir/,$(INSTALLED))
 
 # Cleanup all
-.PHONY: clean
-clean:
+.PHONY: clean mostlyclean veryclean
+mostlyclean:
 	-$(RM) $(OPD)/* >/dev/null 2>&1
-	-rmdir $(OPD)   >/dev/null 2>&1
 	-$(RM) $(LPD)/* >/dev/null 2>&1
-	-rmdir $(LPD)   >/dev/null 2>&1
 	-$(RM) $(XPD)/* >/dev/null 2>&1
-	-rmdir $(XPD)   >/dev/null 2>&1
 	-$(RM) $(OPN)/* >/dev/null 2>&1
-	-rmdir $(OPN)   >/dev/null 2>&1
 	-$(RM) $(LPN)/* >/dev/null 2>&1
-	-rmdir $(LPN)   >/dev/null 2>&1
 	-$(RM) $(XPN)/* >/dev/null 2>&1
+
+clean: mostlyclean
+	-rmdir $(OPD)   >/dev/null 2>&1
+	-rmdir $(LPD)   >/dev/null 2>&1
+	-rmdir $(XPD)   >/dev/null 2>&1
+	-rmdir $(OPN)   >/dev/null 2>&1
+	-rmdir $(LPN)   >/dev/null 2>&1
 	-rmdir $(XPN)   >/dev/null 2>&1
 	-$(RM) *.log    >/dev/null 2>&1
+
+veryclean: clean	# Also clean the files created by the configuration
+	-$(RM) $(IP)/*  >/dev/null 2>&1
+	-rmdir $(IP)    >/dev/null 2>&1
+	-rmdir $(OSPN)  >/dev/null 2>&1
 
 $(BP)/$(PROGRAM): dirs $(SOURCES)
 	$(CC) -o $@ -pthread -l termcap $(CFLAGS) $(SOURCES)

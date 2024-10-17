@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#*****************************************************************************#
+#***************************** :encoding=UTF-8: ******************************#
 #                                                                             #
 #  Filename:	    configure						      #
 #                                                                             #
@@ -15,13 +15,14 @@
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
 #    2023-01-21 JFL Fixed compatibility with FreeBSD.                         #
 #    2024-01-09 JFL Define both NMINCLUDE and STINCLUDE.		      #
+#    2024-10-17 JFL Create a config.h file and define macro UNUSED_ARG().     #
 #                                                                             #
-#         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
+#         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 # Global variables
-VERSION="2024-01-09"
+VERSION="2024-10-17"
 
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 
@@ -138,5 +139,15 @@ if [ $? -ne 0 ] ; then # It's not accessible
   fi
 fi
 EchoV "OK      SYSLIB=$SYSLIB"
+
+# Recreate the config.h file
+MAKE=$(which gmake || which make)
+EchoV "MAKE = $MAKE"
+CONFIG_H=$($MAKE config_dir)/config.h
+EchoV "config.h = $CONFIG_H"
+rm $CONFIG_H 2>/dev/null
+
+# Define a macro for flagging unused arguments, and avoid a warnings
+echo "#define UNUSED_ARG(arg_name) (void)arg_name" >>$CONFIG_H
 
 EchoN Configuration done successfully.
