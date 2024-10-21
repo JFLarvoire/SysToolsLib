@@ -77,6 +77,10 @@
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 3.6.1.		      *
 *    2023-11-16 JFL Bugfix: In case of error, pList may be used after realloc.*
 *                   Version 3.6.2.					      *
+*    2024-06-21 JFL Restructured to use SysLib's WalkDirTree(), to fix errors *
+*		    when reading huge directories with > 200.000 files.       *
+*    2024-07-19 JFL Renamed structures to make the code easier to understand. *
+*    2024-10-17 JFL Use the UNUSED_ARG() macro in config.h.                   *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -84,8 +88,10 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.6.2"
-#define PROGRAM_DATE    "2023-11-16"
+#define PROGRAM_VERSION "3.99"
+#define PROGRAM_DATE    "2024-10-17"
+
+#include <config.h>	/* OS and compiler-specific definitions */
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -107,6 +113,7 @@
 #include "debugm.h"	/* SysToolsLib debug macros. Include first. */
 #include "mainutil.h"	/* SysLib helper routines for main() */
 #include "dirx.h"	/* SysLib Directory access functions eXtensions */
+#include "pathnames.h"	/* SysLib pathname management functions */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 #ifndef UINTMAX_MAX /* For example Tru64 doesn't define it */
@@ -119,12 +126,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-#define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
-#define DIRSEPARATOR_STRING "\\"
-#define HAS_DRIVES TRUE
-#define PATTERN_ALL "*.*"     		/* Pattern matching all files */
-#define IGNORECASE TRUE
-
 /* CDECL is defined in syslib.h, which is included indirectly by SysLib *.h */
 
 #endif /* defined(_MSDOS) */
@@ -133,12 +134,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
 
-#define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
-#define DIRSEPARATOR_STRING "\\"
-#define HAS_DRIVES TRUE
-#define PATTERN_ALL "*.*"     		/* Pattern matching all files */
-#define IGNORECASE TRUE
-
 /* CDECL is defined in WinDef.h, which is already included by MsvcLibX */
 
 #endif /* defined(_WIN32) */
@@ -146,12 +141,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 /************************* OS/2-specific definitions *************************/
 
 #ifdef _OS2	/* Automatically defined when targeting an OS/2 application? */
-
-#define DIRSEPARATOR_CHAR '\\'		/* Directory separator character */
-#define DIRSEPARATOR_STRING "\\"
-#define HAS_DRIVES TRUE
-#define PATTERN_ALL "*.*"     		/* Pattern matching all files */
-#define IGNORECASE TRUE
 
 #define CDECL __cdecl
 
@@ -162,12 +151,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
 
 #define _UNIX
-
-#define DIRSEPARATOR_CHAR '/'		/* Directory separator character */
-#define DIRSEPARATOR_STRING "/"
-#define HAS_DRIVES FALSE
-#define PATTERN_ALL "*"     		/* Pattern matching all files */
-#define IGNORECASE FALSE
 
 #define CDECL				/* No such thing needed for Linux builds */
 
@@ -266,8 +249,8 @@ int parse_date(char *token, time_t *pdate); /* Convert the argument to a time_t 
 int Size2String(char *pBuf, total_t ll); /* Convert size to a decimal, with a comma every 3 digits */
 int Size2StringWithUnit(char *pBuf, total_t llSize); /* Idem, appending the user-specified unit */
 
-total_t ScanFiles(scanOpts *pOpts, void *pConstraints); /* Scan the current dir */
-total_t ScanDirs(scanOpts *pOpts, void *pConstraints);  /* Scan every subdir */
+total_t ScanFiles(scanOpts *pScanOpts, selectOpts *pSelectOpts); /* Scan the current dir */
+total_t ScanDirs(scanOpts *pScanOpts, selectOpts *pSelectOpts);  /* Scan every subdir */
 void affiche(char *path, total_t size);/* Display sorted list */
 int scandirX(const char *pszName,
 	     struct dirent ***resultList,
@@ -286,8 +269,8 @@ long GetClusterSize(char drive);    /* Get cluster size */
 int main(int argc, char *argv[]) {
   char *from = NULL;		/* What directory to list */
   int i;
-  selectOpts fConstraints = {0};/* Constraints. None by default */
-  scanOpts sOpts = {0};		/* Scanning options. All disabled by default */
+  selectOpts sSelectOpts = {0};/* Constraints. None by default */
+  scanOpts sScanOpts = {0};		/* Scanning options. All disabled by default */
   char *dateminarg = NULL;	/* Minimum date argument */
   char *datemaxarg = NULL;	/* Maximum date argument */
   int iUseCsz = FALSE;		/* If TRUE, use the cluster size */
@@ -314,7 +297,7 @@ int main(int argc, char *argv[]) {
       continue;
       }
       if (streq(opt, "D")) {
-	sOpts.subdirs = TRUE;
+	sScanOpts.subdirs = TRUE;
 	continue;
       }
 #ifdef _DEBUG
@@ -325,13 +308,13 @@ int main(int argc, char *argv[]) {
 #endif
 #if OS_HAS_LINKS
       if (streq(opt, "f")) {
-	sOpts.follow = TRUE;
+	sScanOpts.follow = TRUE;
 	continue;
       }
 #endif
       if (streq(opt, "from")) {
 	dateminarg = argv[++i];
-	if (!parse_date(dateminarg, &fConstraints.datemin)) {
+	if (!parse_date(dateminarg, &sSelectOpts.datemin)) {
 	  fprintf(stderr, "Error: Invalid date format: -from %s\n", dateminarg);
 	  dateminarg = NULL;
 	}
@@ -373,20 +356,20 @@ int main(int argc, char *argv[]) {
       }
       if (   streq(opt, "r")
       	  || streq(opt, "s")) {
-	sOpts.recur = TRUE;
+	sScanOpts.recur = TRUE;
 	continue;
       }
       if (streq(opt, "t")) {
-	sOpts.total = TRUE;
+	sScanOpts.total = TRUE;
 	continue;
       }
       if (streq(opt, "T")) {
-	sOpts.total = FALSE;
+	sScanOpts.total = FALSE;
 	continue;
       }
       if (streq(opt, "to")) {
 	datemaxarg = argv[++i];
-	if (!parse_date(datemaxarg, &fConstraints.datemax)) {
+	if (!parse_date(datemaxarg, &sSelectOpts.datemax)) {
 	  fprintf(stderr, "Error: Invalid date format: -to %s\n", datemaxarg);
 	  datemaxarg = NULL;
 	}
@@ -413,7 +396,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* If not explicitely defined, set iContinue based on context */
-  if ((iContinue == -1) && (sOpts.total || sOpts.recur)) iContinue = TRUE; /* For all recursive operations, default to TRUE */
+  if ((iContinue == -1) && (sScanOpts.total || sScanOpts.recur)) iContinue = TRUE; /* For all recursive operations, default to TRUE */
   if (iContinue == -1) iContinue = FALSE; /* Fon non-recusive operations, default to FALSE */
 
   /* Extract the search pattern if provided as part of the target pathname */
@@ -423,11 +406,11 @@ int main(int argc, char *argv[]) {
     if (err || ((st.st_mode & S_IFMT) != S_IFDIR)) { /* If this is not a dir */
       pc = strrchr(from, DIRSEPARATOR_CHAR);
       if (!pc) {
-	fConstraints.pattern = from;
+	sSelectOpts.pattern = from;
 	from = NULL;	/* Contrary to our initial guess, there's no dir name */
       } else {
 	*pc = '\0';	/* Cut the wildcards pattern off the directory name */
-	fConstraints.pattern = pc+1;
+	sSelectOpts.pattern = pc+1;
       }
     }
   }
@@ -508,20 +491,20 @@ int main(int argc, char *argv[]) {
   }
 
   /* Compute the files sizes */
-  if (!sOpts.subdirs) {
-    size = ScanFiles(&sOpts, &fConstraints);
-    if (!sOpts.recur) {
+  if (!sScanOpts.subdirs) {
+    size = ScanFiles(&sScanOpts, &sSelectOpts);
+    if (!sScanOpts.recur) {
       char szBuf[40];
       Size2StringWithUnit(szBuf, size);
       printf("%s\n", szBuf);
     }
   } else {
-    size = ScanDirs(&sOpts, &fConstraints);
+    size = ScanDirs(&sScanOpts, &sSelectOpts);
   }
 
   /* Report if some errors were ignored */
-  if (sOpts.nErrors) {
-    finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d directories", sOpts.nErrors);
+  if (sScanOpts.nErrors) {
+    finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d directories", sScanOpts.nErrors);
   }
 
   /* Restores the initial drive and directory and exit */
@@ -635,12 +618,22 @@ void finis(int retcode, ...) {
 *                                                                             *
 ******************************************************************************/
 
-int SelectFilesCB(const struct dirent *pDE, void *p) {
-  selectOpts *pC = p;
-  struct stat sStat;
+typedef struct {
+  selectOpts *pSelectOpts;
+  total_t size;
+  total_t nFiles;
+} selectFiles;
+
+int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
+  selectFiles *pSelectFiles = p;
+  selectOpts *pSelectOpts = pSelectFiles->pSelectOpts;
+  struct stat sStat;                         
+  uintmax_t fsize;
   int iErr;
 
-  /* Invoked by scandirX(), so d_type always valid, even under Unix */
+  UNUSED_ARG(pszPathname);
+
+  /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
   if (pDE->d_type != DT_REG) return FALSE;	/* We want only files */
 
 #if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
@@ -651,43 +644,60 @@ int SelectFilesCB(const struct dirent *pDE, void *p) {
   if (iErr) return FALSE;	/* Ignore suspect entries */
 
   /* Skip files outside date range */
-  if (pC->datemin && (sStat.st_mtime < pC->datemin)) return FALSE;
-  if (pC->datemax && (sStat.st_mtime > pC->datemax)) return FALSE;
+  if (pSelectOpts->datemin && (sStat.st_mtime < pSelectOpts->datemin)) return FALSE;
+  if (pSelectOpts->datemax && (sStat.st_mtime > pSelectOpts->datemax)) return FALSE;
 
   /* Skip files which don't match the wildcard pattern */
-  if (pC->pattern) {
-    if (fnmatch(pC->pattern, pDE->d_name, FNM_CASEFOLD) == FNM_NOMATCH) {
+  if (pSelectOpts->pattern) {
+    if (fnmatch(pSelectOpts->pattern, pDE->d_name, FNM_CASEFOLD) == FNM_NOMATCH) {
       return FALSE;
     }
   }
 
   /* OK, all criteria pass. */
-  return TRUE;
+  memset(&sStat, 0, sizeof(sStat));
+
+#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
+  iErr = dirent2stat(pDE, &sStat);
+#else /* Unix has to query it separately */
+  iErr = lstat(pDE->d_name, &sStat);
+#endif
+  if (iErr) return -1;
+  DEBUG_PRINTF(("// Counting %10"PRIuMAX" bytes for %-32s\n", (uintmax_t)(sStat.st_size), pDE->d_name));
+  fsize = sStat.st_size; /* Get the actual file size */
+  if (csz) {	/* If the cluster size is provided */
+	      /* Round it to the next cluster multiple */
+    fsize += csz-1;
+    fsize -= fsize % csz;
+  }
+  pSelectFiles->nFiles += 1;    /* Count files */
+  pSelectFiles->size += fsize;  /* Totalize sizes */
+
+  return FALSE; /* Continue scanning */
 }
 
-total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
+total_t ScanFiles(scanOpts *pScanOpts, selectOpts *pSelectOpts) {
   total_t size = 0;
   total_t dSize;
   NEW_PATHNAME_BUF(szCurDir);
-  struct dirent *pDE;
-  struct dirent **ppDE;
-  struct dirent **pDElist;
-  int nDE;
-  uintmax_t fsize;
-  struct stat sStat;
   int iErr;
+  wdt_opts wdtOpts = {0};
+  selectFiles sSelectFiles = {0};
+  int iResult;
 
-  DEBUG_ENTER(("ScanFiles(%p);\n", pConstraints));
+  DEBUG_ENTER(("ScanFiles(%p);\n", pSelectOpts));
 
 #if PATHNAME_BUFS_IN_HEAP
   if (!szCurDir) {
     finis(RETCODE_NO_MEMORY, "Out of memory");
-  }
+  }                                                        
 #endif
 
   /* Scan all files */
-  nDE = scandirX(".", &pDElist, SelectFilesCB, NULL, pConstraints);
-  if (nDE < 0) {
+  wdtOpts.iFlags = WDT_CONTINUE	| WDT_QUIET | WDT_NORECURSE;
+  sSelectFiles.pSelectOpts = pSelectOpts;
+  iResult = WalkDirTree(".", &wdtOpts, SelectFilesCB, &sSelectFiles);
+  if (iResult < 0) { /* An error occurred */
     iErr = errno;
     if (iVerbose || !iContinue) {
       char *pszSeverity = iContinue ? "Warning" : "Error";
@@ -698,42 +708,22 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
       fprintf(stderr, "%s: Failed to scan files in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
     }
     if ((iErr == EACCES) && iContinue) {
-      pOpts->nErrors += 1;
+      pScanOpts->nErrors += 1;
       return 0;
     }
     iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
     finis(iErr, NULL); /* The error message has already been displayed */
   }
-  for (ppDE = pDElist; nDE--; ppDE++) {
-    pDE = *ppDE;
-    memset(&sStat, 0, sizeof(sStat));
-
-#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
-    iErr = dirent2stat(pDE, &sStat);
-#else /* Unix has to query it separately */
-    iErr = lstat(pDE->d_name, &sStat);
-#endif
-    if (iErr) continue;
-    DEBUG_PRINTF(("// Counting %10"PRIuMAX" bytes for %-32s\n", (uintmax_t)(sStat.st_size), pDE->d_name));
-    fsize = sStat.st_size; /* Get the actual file size */
-    if (csz) {	/* If the cluster size is provided */
-		/* Round it to the next cluster multiple */
-      fsize += csz-1;
-      fsize -= fsize % csz;
-    }
-    size += fsize;  /* Totalize sizes */
-
-    free(pDE);
-  }
-  free(pDElist);
+  size += sSelectFiles.size;
+  /* printf("// Processed %ld files\n", (long)sSelectFiles.nFiles); */
 
   /* Optionally scan all subdirectories */
-  if (pOpts->recur || pOpts->total) {
-    pOpts->depth += 1;
-    dSize = ScanDirs(pOpts, pConstraints);
-    pOpts->depth -= 1;
-    if (pOpts->total) size += dSize;  /* Totalize sizes */
-    if (pOpts->recur) {
+  if (pScanOpts->recur || pScanOpts->total) {
+    pScanOpts->depth += 1;
+    dSize = ScanDirs(pScanOpts, pSelectOpts);
+    pScanOpts->depth -= 1;
+    if (pScanOpts->total) size += dSize;  /* Totalize sizes */
+    if (pScanOpts->recur) {
       char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
       if (!pcd) {
 	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
@@ -765,94 +755,56 @@ total_t ScanFiles(scanOpts *pOpts, void *pConstraints) {
 *                                                                             *
 ******************************************************************************/
 
-#ifdef _MSC_VER
-#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
-#endif
+typedef struct {
+  scanOpts *pScanOpts;
+  selectOpts *pSelectOpts;
+  total_t size;
+  total_t nFiles;
+} selectDirs;
 
-int SelectDirsCB(const struct dirent *pDE, void *pRef) {
-  /* Invoked by scandirX(), so d_type always valid, even under Unix */
-  if (   (pDE->d_type == DT_DIR)	/* We want only directories */
-      && (!streq(pDE->d_name, "."))	/* Except . */
-      && (!streq(pDE->d_name, ".."))) { /* and .. */
-    return TRUE;
-#if OS_HAS_LINKS
-  } else if (pDE->d_type == DT_LNK) {
-    scanOpts *pOpts = pRef;
-    if (pOpts->follow) {
-      struct stat s;
-      int iErr = stat(pDE->d_name, &s);
-      if (iErr) {
-	char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
-	if (iVerbose || !iContinue) {
-	  char *pcd = NULL;
-	  NEW_PATHNAME_BUF(szCurDir);
-	  if (szCurDir) pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-	  if (!pcd) {
-	    finis(RETCODE_INACCESSIBLE, "Invalid link \"%s\". %s", pDE->d_name, strerror(errno));
-	  }
-	  fprintf(stderr, "%s: Invalid link \"%s" DIRSEPARATOR_STRING "%s\". %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
-	  FREE_PATHNAME_BUF(szCurDir);
-	}
-	if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
-	pOpts->nErrors += 1;
-      	return FALSE;
-      }
-      return S_ISDIR(s.st_mode);
-    } else {
-      return FALSE;
-    }
-#endif /* OS_HAS_LINKS */
-  } else {
-    return FALSE;
-  }
-}
-
-#ifdef _MSC_VER
-#pragma warning(default:4100) /* Ignore the "unreferenced formal parameter" warning */
-#endif
-
-/* Scan all subdirectories */
-total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
-  total_t size = 0;
-  total_t dSize;
-  struct dirent *pDE;
-  struct dirent **ppDE;
-  struct dirent **pDElist;
-  int nDE;
-  int iErr;
+int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
+  selectDirs *pSelectDirs = p;
+  scanOpts *pScanOpts = pSelectDirs->pScanOpts;
+  selectOpts *pSelectOpts = pSelectDirs->pSelectOpts;
+  int isDir = FALSE;
+  total_t dSize = 0;
   struct stat sStat;
+  int iErr;
   NEW_PATHNAME_BUF(szCurDir);
 
-  DEBUG_ENTER(("ScanDirs(%p);\n", pConstraints));
+  UNUSED_ARG(pszPathname);
 
-#if PATHNAME_BUFS_IN_HEAP
-  if (!szCurDir) {
-    finis(RETCODE_NO_MEMORY, "Out of memory");
-  }
-#endif
-
-  /* Get all subdirectories */
-  nDE = scandirX(".", &pDElist, SelectDirsCB, alphasort, pOpts);
-  if (nDE < 0) {
-    iErr = errno;
-    if (iVerbose || !iContinue) {
-      char *pszSeverity = iContinue ? "Warning" : "Error";
-      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-      if (!pcd) {
-	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+  do {
+    /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
+    if (   (pDE->d_type == DT_DIR)	/* We want only directories */
+	&& (!streq(pDE->d_name, "."))	/* Except . */
+	&& (!streq(pDE->d_name, ".."))) { /* and .. */
+      isDir = TRUE;
+  #if OS_HAS_LINKS
+    } else if (pDE->d_type == DT_LNK) {
+      if (pScanOpts->follow) {
+	struct stat s;
+	iErr = stat(pDE->d_name, &s);
+	if (iErr) {
+	  char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
+	  if (iVerbose || !iContinue) {
+	    fprintf(stderr, "%s: Invalid link \"%s" DIRSEPARATOR_STRING "%s\". %s\n", pszSeverity, pszPathname, pDE->d_name, strerror(errno));
+	  }
+	  if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
+	  pScanOpts->nErrors += 1;
+	  isDir = FALSE;
+	}
+	isDir = S_ISDIR(s.st_mode);
+      } else {
+	isDir = FALSE;
       }
-      fprintf(stderr, "%s: Failed to scan directories in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
+  #endif /* OS_HAS_LINKS */
+    } else {
+      isDir = FALSE;
     }
-    if ((iErr == EACCES) && iContinue) {
-      pOpts->nErrors += 1;
-      return 0;
-    }
-    iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
-    finis(iErr, NULL); /* The error message has already been displayed */
-  }
-  for (ppDE = pDElist; nDE--; ppDE++) {
-    pDE = *ppDE;
+  } while (0);
 
+  if (isDir) {
 #if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
     iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
@@ -873,10 +825,10 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
       	fprintf(stderr, "%s: Cannot access directory %s" DIRSEPARATOR_STRING "%s. %s\n", pszSeverity, szCurDir, pDE->d_name, strerror(errno));
       }
       if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
-      pOpts->nErrors += 1;
+      pScanOpts->nErrors += 1;
     } else {
-      dSize = ScanFiles(pOpts, pConstraints);
-      if (!pOpts->depth) {
+      dSize = ScanFiles(pScanOpts, pSelectOpts);
+      if (!pScanOpts->depth) {
 	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
 	if (!pcd) {
 	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
@@ -891,14 +843,58 @@ total_t ScanDirs(scanOpts *pOpts, void *pConstraints) {
       if (iErr) {
 	finis(RETCODE_INACCESSIBLE, "Cannot return to \"%s\" parent directory. %s", szCurDir, strerror(errno));
       }
-  
-      size += dSize;  /* Totalize sizes */
+
+      pSelectDirs->size += dSize;  /* Totalize sizes */
     }
-
-    free(pDE);
   }
-  free(pDElist);
 
+  FREE_PATHNAME_BUF(szCurDir);
+  return FALSE; /* Continue scanning */
+}
+
+/* Scan all subdirectories */
+total_t ScanDirs(scanOpts *pScanOpts, selectOpts *pSelectOpts) {
+  total_t size = 0;
+  int iErr;
+  wdt_opts wdtOpts = {0};
+  selectDirs sSelectDirs = {0};
+  int iResult;
+  NEW_PATHNAME_BUF(szCurDir);
+
+  DEBUG_ENTER(("ScanDirs(%p);\n", pSelectOpts));
+
+#if PATHNAME_BUFS_IN_HEAP
+  if (!szCurDir) {
+    finis(RETCODE_NO_MEMORY, "Out of memory");
+  }
+#endif
+
+  /* Get all subdirectories */
+  /* But for now, manage recursion locally */
+  wdtOpts.iFlags = WDT_CONTINUE	| WDT_QUIET | WDT_NORECURSE;
+  sSelectDirs.pScanOpts = pScanOpts;
+  sSelectDirs.pSelectOpts = pSelectOpts;
+  iResult = WalkDirTree(".", &wdtOpts, SelectDirsCB, &sSelectDirs);
+  if (iResult < 0) { /* An error occurred */
+    iErr = errno;
+    if (iVerbose || !iContinue) {
+      char *pszSeverity = iContinue ? "Warning" : "Error";
+      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
+      if (!pcd) {
+	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
+      }
+      fprintf(stderr, "%s: Failed to scan directories in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
+    }
+    if ((iErr == EACCES) && iContinue) {
+      pScanOpts->nErrors += 1;
+      goto exit_ScanDirs;
+    }
+    iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
+    finis(iErr, NULL); /* The error message has already been displayed */
+  }
+  size = sSelectDirs.size;
+
+exit_ScanDirs:
   FREE_PATHNAME_BUF(szCurDir);
   DEBUG_LEAVE(("return %" TOTAL_FMT ";\n", size));
   return size;
@@ -1283,85 +1279,3 @@ long GetClusterSize(char drive)	{       /* Get cluster size */
 *                                                                             *
 ******************************************************************************/
 
-
-/*****************************************************************************\
-*                                                                             *
-*   Function:	    scandirX		 				      *
-*									      *
-*   Description:    Select entries in a directory			      *
-*									      *
-*   Arguments:	    const char *name	Directory name            	      *
-*		    dirent ***namelist  where to store the result array       *
-*		    int (*cbSelect)()   Selection callback function           *
-*		    int (CDECL *cbCompare)()  Comparison function for sorting *
-*		    void *pRef		Reference data to pass to cbSelect    *
-*									      *
-*   Return value:   # of entries in the array, or -1 if error.		      *
-*									      *
-*   Notes:	    Extension of the standard scandir routine, allowing to    *
-*		    pass arguments to the selection routine.		      *
-*		    							      *
-*   History:								      *
-*    2012-01-11 JFL Initial implementation				      *
-*    2023-11-16 JFL Bugfix: In case of error, pList may be used after realloc.*
-*                                                                             *
-\*****************************************************************************/
-
-typedef int (CDECL *pCompareProc)(const void *item1, const void *item2);
-
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
-int scandirX(const char *pszName,
-	     struct dirent ***resultList,
-	     int (*cbSelect) (const struct dirent *, void *pRef),
-	     int (CDECL *cbCompare) (const struct dirent **, const struct dirent **),
-	     void *pRef) {
-  int n = 0;
-  DIR *pDir;
-  struct dirent *pDirent;
-  struct dirent *pDirent2;
-  struct dirent **pList = NULL;
-  struct dirent **pList2;
-
-  DEBUG_ENTER(("scandirX(\"%s\", %p, %p, %p, %p);\n", pszName, resultList, cbSelect, cbCompare, pRef));
-
-  pDir = opendirx(pszName);
-  if (!pDir) {
-    DEBUG_LEAVE(("return -1; // errno=%d\n", errno));
-    return -1;
-  }
-
-  while ((pDirent = readdirx(pDir))) { /* readdirx() ensures d_type is set */
-    if (cbSelect && !cbSelect(pDirent, pRef)) continue; /* We don't want this one. Continue search. */
-    /* OK, we've selected this one. So append a copy of this dirent to the list. */
-    n += 1;
-    pList2 = (struct dirent **)realloc(pList, n * sizeof(struct dirent *));
-    pDirent2 = NULL;
-    if (pList2) {
-      pList = pList2;
-      pDirent2 = malloc(sizeof(struct dirent));
-    }
-    if (!pList2 || !pDirent2) {
-      if (pDirent2) free(pDirent2);
-      for (n-=1; n>0; ) free(pList[--n]);
-      /* errno = ENOMEM; */ /* Out of memory. Should already be set by malloc failure */
-      DEBUG_LEAVE(("return -1; // errno=%d\n", errno));
-      return -1;
-    }
-    *pDirent2 = *pDirent;
-    pList[n-1] = pDirent2;
-  }
-
-  closedirx(pDir);
-
-  if (cbCompare) qsort(pList, n, sizeof(struct dirent *), (pCompareProc)cbCompare);
-  *resultList = pList;
-  DEBUG_LEAVE(("return %d;\n", n));
-  return n;
-}
-
-#ifdef _MSC_VER
-#pragma warning(default:4706)
-#endif
