@@ -5,6 +5,11 @@ Major changes for the System Tools Library are recorded here.
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
 
+## [Unreleased] 2024-10-22
+### Fixed
+- dirsize.exe: Major restructuration, to avoid failures in directories with > 200,000 files.  
+  Abort the operation and return to the initial directory when the user presses Ctrl-C, even in DOS.  
+
 ## [Unreleased] 2024-10-15
 ### Changed
 - */NMakeFile: Adapted for use with the redesigned NMaker system.
