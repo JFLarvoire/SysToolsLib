@@ -81,6 +81,7 @@
 *		    when reading huge directories with > 200.000 files.       *
 *    2024-07-19 JFL Renamed structures to make the code easier to understand. *
 *    2024-10-17 JFL Use the UNUSED_ARG() macro in config.h.                   *
+*    2024-10-22 JFL Abort the walk and cleanup properly after a Ctrl-C.       *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -89,7 +90,7 @@
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
 #define PROGRAM_VERSION "3.99"
-#define PROGRAM_DATE    "2024-10-17"
+#define PROGRAM_DATE    "2024-10-22"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -109,6 +110,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <signal.h>
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros. Include first. */
 #include "mainutil.h"	/* SysLib helper routines for main() */
@@ -127,6 +129,8 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
 /* CDECL is defined in syslib.h, which is included indirectly by SysLib *.h */
+
+#include <conio.h>	/* For _kbhit() */
 
 #endif /* defined(_MSDOS) */
 
@@ -209,6 +213,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define RETCODE_SUCCESS 0               /* Return codes processed by finis() */
 #define RETCODE_NO_MEMORY 1
 #define RETCODE_INACCESSIBLE 2
+#define RETCODE_CTRL_C 3
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
@@ -240,6 +245,7 @@ int iQuiet = FALSE;		    /* If TRUE, only display major errors */
 int iVerbose = FALSE;		    /* If TRUE, display additional information */
 int iHuman = TRUE;		    /* If TRUE, display human-friendly values with a comma every 3 digits */
 char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
+volatile int iCtrlC = FALSE;	    /* If TRUE, a Ctrl-C has been detected */
 
 /* Function prototypes */
 
@@ -259,6 +265,7 @@ int scandirX(const char *pszName,
 	     void *pRef);	    /* scandir() extension, passing a pRef to cbSelect() */
 
 long GetClusterSize(char drive);    /* Get cluster size */
+void OnControlC(int iSignal);	    /* Ctrl-C signal handler */
 
 /******************************************************************************
 *                                                                             *
@@ -471,6 +478,9 @@ int main(int argc, char *argv[]) {
     finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
   }
 
+  /* Make sure to restore the initial drive/directory in case of a Ctrl-C */
+  signal(SIGINT, OnControlC);
+
   /* Go to the target directory */
   if (from && from[0]) {
 #if !HAS_MSVCLIBX
@@ -493,7 +503,7 @@ int main(int argc, char *argv[]) {
   /* Compute the files sizes */
   if (!sScanOpts.subdirs) {
     size = ScanFiles(&sScanOpts, &sSelectOpts);
-    if (!sScanOpts.recur) {
+    if ((!sScanOpts.recur) && (!iCtrlC)) { /* If Ctrl-C pressed, the computed size is incomplete */
       char szBuf[40];
       Size2StringWithUnit(szBuf, size);
       printf("%s\n", szBuf);
@@ -579,6 +589,8 @@ Pattern:      Wildcards pattern. Default: " PATTERN_ALL "\n\
 \*---------------------------------------------------------------------------*/
 
 void finis(int retcode, ...) {
+  if (iCtrlC && (retcode != RETCODE_CTRL_C)) OnControlC(0); /* Report a soft Ctrl-C stop */
+    
   if (retcode) { /* There might be an error message to report */
     va_list vl;
     char *pszFormat;
@@ -586,19 +598,50 @@ void finis(int retcode, ...) {
     va_start(vl, retcode);
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
-      fprintf(stderr, "dirsize: Error: ");
+      fputs("dirsize: ", stderr);
+      if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
       vfprintf(stderr, pszFormat, vl);
       fputs(".\n", stderr);
     }
     va_end(vl);
   }
 
+  DEBUG_PRINTF(("finis(): Returning to the initial directory.\n"));
   chdir(init_dir);	/* Don't test errors, as we're likely to be here due to another error */
 #if HAS_DRIVES
   chdrive(init_drive);
 #endif
 
   exit(retcode);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function:	    OnControlC						      |
+|									      |
+|   Description:    Restore the initial directory before aborting on a Ctrl-C |
+|									      |
+|   Parameters:     							      |
+|		    							      |
+|   Notes:	    Warning: Called asynchronously from the foreground thread,|
+|		    so error messages output in this signal thread might be   |
+|		    mixed with the foreground thread output.		      |
+|		    							      |
+|   Returns:	    Nothing						      |
+|									      |
+|   History:								      |
+|    2024-10-22 JFL Added this routine.                                       |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+void OnControlC(int iSignal) {
+  UNUSED_ARG(iSignal);
+  if (!iCtrlC) {	/* The first time, try aborting the walk softly */
+    iCtrlC = TRUE;
+  } else {		/* The following times, do a hard stop now */
+    fflush(stdout); /* Unsuccessful attempt at preventing the mixing of the foreground output */
+    finis(RETCODE_CTRL_C, "Ctrl-C detected, aborting");
+  }
 }
 
 /******************************************************************************
@@ -632,6 +675,11 @@ int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
   int iErr;
 
   UNUSED_ARG(pszPathname);
+
+#ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
+  _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
+#endif
+  if (iCtrlC) return TRUE;	/* Abort scan */
 
   /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
   if (pDE->d_type != DT_REG) return FALSE;	/* We want only files */
@@ -717,8 +765,8 @@ total_t ScanFiles(scanOpts *pScanOpts, selectOpts *pSelectOpts) {
   size += sSelectFiles.size;
   /* printf("// Processed %ld files\n", (long)sSelectFiles.nFiles); */
 
-  /* Optionally scan all subdirectories */
-  if (pScanOpts->recur || pScanOpts->total) {
+  /* Optionally scan all subdirectories, unless aborting with iResult = 1 */
+  if ((pScanOpts->recur || pScanOpts->total) && (iResult < 1)) {
     pScanOpts->depth += 1;
     dSize = ScanDirs(pScanOpts, pSelectOpts);
     pScanOpts->depth -= 1;
@@ -771,8 +819,17 @@ int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
   struct stat sStat;
   int iErr;
   NEW_PATHNAME_BUF(szCurDir);
+  int iRet;
 
   UNUSED_ARG(pszPathname);
+
+#ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
+  _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
+#endif
+  if (iCtrlC) {
+    iRet = TRUE;
+    goto exit_SelectDirsCB;	/* Abort scan */
+  }
 
   do {
     /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
@@ -780,7 +837,7 @@ int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 	&& (!streq(pDE->d_name, "."))	/* Except . */
 	&& (!streq(pDE->d_name, ".."))) { /* and .. */
       isDir = TRUE;
-  #if OS_HAS_LINKS
+#if OS_HAS_LINKS
     } else if (pDE->d_type == DT_LNK) {
       if (pScanOpts->follow) {
 	struct stat s;
@@ -798,13 +855,13 @@ int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
       } else {
 	isDir = FALSE;
       }
-  #endif /* OS_HAS_LINKS */
+#endif /* OS_HAS_LINKS */
     } else {
       isDir = FALSE;
     }
   } while (0);
 
-  if (isDir) {
+  if (isDir && !iCtrlC) {
 #if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
     iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
@@ -848,8 +905,10 @@ int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
     }
   }
 
+  iRet = FALSE; /* Continue scanning */
+exit_SelectDirsCB:
   FREE_PATHNAME_BUF(szCurDir);
-  return FALSE; /* Continue scanning */
+  return iRet;
 }
 
 /* Scan all subdirectories */
@@ -980,6 +1039,11 @@ int Size2StringWithUnit(char *pBuf, total_t llSize) {
 void affiche(char *path, total_t llSize) {
   static int group=0;
   char szSize[40];
+
+#ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
+  _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
+#endif
+  if (iCtrlC) return;	/* Scan aborted, so the size is invalid */
 
   /* Display the size and path name */
   Size2StringWithUnit(szSize, llSize);
