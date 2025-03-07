@@ -242,6 +242,9 @@
 *                   Renamed them as GetConRows() & GetConCols(). Ver. 3.8.2.  *
 *    2023-11-16 JFL Bugfix in the debug version: Buffer used after free().    *
 *                   Version 3.8.3.                                            *
+*    2024-11-08 JFL Added option -S pattern to skip files with that pattern.  *
+*                   Version 3.9.                                              *
+*		    TO DO: Allow entering several patterns.		      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -249,8 +252,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.8.3"
-#define PROGRAM_DATE    "2023-11-16"
+#define PROGRAM_VERSION "3.9"
+#define PROGRAM_DATE    "2024-11-08"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -547,6 +550,7 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 // UINT cp = 0;			    /* Initial console code page */
 #define cp codePage		    /* Initial console code page in iconv.c */
 #endif
+char *ppszIgnoredFiles[2] = {NULL, NULL};
 
 /* Function prototypes */
 
@@ -770,6 +774,10 @@ int main(int argc, char *argv[]) {
 	attrib &= ~_A_SUBDIR;   /* Clear the directory attribute */
 	opts.recurse = 1;
 	opts.zero = 1;
+	continue;
+      }
+      if (streq(opt, "S")) {	/* Ignore files with a given pattern */
+	ppszIgnoredFiles[0] = argv[++i];
 	continue;
       }
       if (streq(opt, "s")) {	/* Recursive search */
@@ -1064,6 +1072,7 @@ Switches:\n\
   -p          Pause for each page displayed.\n\
   -r          Same as {-d -f -s -z}\n\
   -s          Compare matching subdirectories too.\n\
+  -S PATTERN  Skip files that match that wildcards pattern.\n\
   -t	      Display statistics about total number of files, sizes, etc.\n\
   -u	      Convert all displayed names to upper case.\n"
 #ifdef _WIN32
@@ -1159,11 +1168,19 @@ void finis(int retcode, ...) {
 *                                                                             *
 ******************************************************************************/
 
-/* Check is a file name if a backup file name */
+/* Check if a file name is a backup file name */
 int isBackupFile(char *pszName) {
-  static char *patterns[] = {"*.bak", "*~", "#*#", NULL};
+  static char *patterns[] = {"*.bak", "*~", "#*#", "Thumbs.db", NULL};
   char **ppPattern;
   for (ppPattern = patterns; *ppPattern; ppPattern++) {
+    if (fnmatch(*ppPattern, pszName, FNM_CASEFOLD) == 0) return TRUE; /* Match */
+  }
+  return FALSE;
+}
+
+int isIgnoredFile(char *pszName) {
+  char **ppPattern;
+  for (ppPattern = ppszIgnoredFiles; *ppPattern; ppPattern++) {
     if (fnmatch(*ppPattern, pszName, FNM_CASEFOLD) == 0) return TRUE; /* Match */
   }
   return FALSE;
@@ -1334,6 +1351,8 @@ int lis(char *startdir, char *pattern, int nfif, int col, int attrib,
 	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
 	      DEBUG_CODE(&& ((reason = "it's a backup file") != NULL))
 	   && (!(opts.nobak && isBackupFile(pDirent->d_name)))
+	      DEBUG_CODE(&& ((reason = "it's a file to be ignored") != NULL))
+	   && (!(ppszIgnoredFiles[0] && isIgnoredFile(pDirent->d_name)))
 	 ) {
 	fif *pfif;
 
