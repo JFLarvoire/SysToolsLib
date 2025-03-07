@@ -12,6 +12,7 @@
 *    2023-01-15 JFL jf.larvoire@free.fr created this module.		      *
 *    2023-01-24 JFL Fixed the DOS version and made pointer arguments optional.*
 *    2023-01-26 JFL Added a 2-second timeout to the Unix version.             *
+*    2025-03-06 JFL Fixed a build failure on a Raspberry Pi 2.              *
 *		    							      *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -82,6 +83,8 @@ int GetCursorPosition(int *pX, int *pY) {
 /******************************* Unix Version ********************************/
 
 #ifdef _UNIX
+
+#define _GNU_SOURCE /* Makes sure struct timespec is defined in time.h */
 
 #include <stdio.h>
 #include <string.h>
