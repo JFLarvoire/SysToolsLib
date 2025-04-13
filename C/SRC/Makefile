@@ -17,6 +17,7 @@
 #    2014-12-05 JFL Finished the job. Yes, 10 years later!                    #
 #    2016-01-07 JFL Added compilation option -Wall.                           #
 #    2016-10-12 JFL Search includes in $(STINCLUDE) and $(SYSLIB).	      #
+#		    Use variable QMAKEFLAGS instead of MAKEFLAGS.	      #
 #    2016-10-14 JFL Fixed rules for building C++ programs.        	      #
 #    2017-08-29 JFL `make install` now verifies that $bindir is in the PATH.  #
 #                   `make check` now checks if $bindir is in the PATH.        #
@@ -37,6 +38,7 @@
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #    2024-10-17 JFL Added a configuration step generating a config.h file.    #
 #                   Added goals mostlyclean & veryclean.                      #
+#    2025-04-07 JFL Fixed the use of MAKEFLAGS. No need for a QMAKEFLAGS var. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -254,49 +256,49 @@ endif
 # Make file messages control
 TRACE_MSGS = $(or $(filter-out 0, $(VERBOSE)), $(filter-out 0, $(DEBUG)))
 REPORT_FAILURE = (ERR=$$? ; echo " ... FAILED" ; exit $$ERR)
-QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory # Don't print entering/leaving even if -w is in the inherited flags
+MAKEFLAGS += --no-print-directory # Don't print entering/leaving even if -w is in the inherited flags
 
 # Pattern rules for compiling any standalone C or C++ source.
 $(OSPN)/%: %.c
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.c
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPN)/%: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Building $@ ..."
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< $(NLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Building $@ ..."
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< $(DLDLIBS) || $(REPORT_FAILURE)
 	echo " ... done"
 
 # Pattern rules for Building the normal and debug versions of a C or C++ program.
 %: %.c
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.c
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 # Make sure all commands are silent by default
 .SILENT:
@@ -375,7 +377,7 @@ files: $(IP)/config.h
 
 $(IP)/config.h: Makefile configure
 	echo "Configuring ..."
-	$(MAKE) -$(QMAKEFLAGS) mostlyclean # Force rebuilding everything thereafter
+	$(MAKE) mostlyclean # Force rebuilding everything thereafter
 	chmod +x configure # Sources are installed without execution rights
 	./configure -q
 	echo " ... done"

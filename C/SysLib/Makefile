@@ -28,6 +28,7 @@
 #                   Fixed a bug which cause partial builds to _not_ replace   #
 #                   the modified objects in the library.                      #
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
+#    2025-04-07 JFL Fixed the use of MAKEFLAGS. No need for a QMAKEFLAGS var. #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -231,74 +232,74 @@ CXXFLAGS := $(CXXFLAGS) -DHAS_SYSLIB=1
 # Make file messages control
 TRACE_MSGS = $(or $(filter-out 0, $(VERBOSE)), $(filter-out 0, $(DEBUG)))
 REPORT_FAILURE = (ERR=$$? ; echo " ... FAILED" ; exit $$ERR)
-QMAKEFLAGS := $(MAKEFLAGS) --no-print-directory # Don't print entering/leaving even if -w is in the inherited flags
+MAKEFLAGS += --no-print-directory # Don't print entering/leaving even if -w is in the inherited flags
 
 # Pattern rules for compiling a C or C++ source.
 $(OPN)/%.o: %.c
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.c
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Compiling $< ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPN)/%.o: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OPD)/%.o: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Compiling $< ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -c -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 # Pattern rules for compiling and linking a standalone C or C++ program.
 $(OSPN)/%: %.c
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.c
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Building $@ ..."
 	$(CC) $(CFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPN)/%: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Building $@ ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -U_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 $(OSPD)/%: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) ddirs
+	$(MAKE) ddirs
 	echo "Building $@ ..."
 	$(CC) $(CXXFLAGS) $(CPPFLAGS) -D_DEBUG -o $@ $< || $(REPORT_FAILURE)
 	echo " ... done"
 
 # Pattern rules for Building the normal and debug versions of a C or C++ program.
 %: %.c
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.c
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 %.exe: %.cpp
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPN)/$@
-	$(MAKE) -$(QMAKEFLAGS) PROGRAM=$* $(OSPD)/$@
+	$(MAKE) PROGRAM=$* $(OSPN)/$@
+	$(MAKE) PROGRAM=$* $(OSPD)/$@
 
 .SILENT:
 
@@ -369,7 +370,7 @@ files: $(IP)/config.h
 
 $(IP)/config.h: Makefile configure
 	echo "Configuring ..."
-	$(MAKE) -$(QMAKEFLAGS) mostlyclean # Force rebuilding everything thereafter
+	$(MAKE) mostlyclean # Force rebuilding everything thereafter
 	chmod +x configure # Sources are installed without execution rights
 	./configure -q
 	echo " ... done"
@@ -401,12 +402,12 @@ checkenv:
 .PHONY: lib libSysLib SysLib libsyslib syslib
 _DEBUG :=
 lib libSysLib libsyslib SysLib syslib: checkenv $(IP)/config.h
-	$(MAKE) -$(QMAKEFLAGS)            $(OSPN)/libSysLib.a
-	$(MAKE) -$(QMAKEFLAGS) "_DEBUG=1" $(OSPD)/libSysLib.a
+	$(MAKE)            $(OSPN)/libSysLib.a
+	$(MAKE) "_DEBUG=1" $(OSPD)/libSysLib.a
 	echo "All SysLib library versions built."
 
 $(OSP)/libSysLib.a: $(OBJECTS)
-	$(MAKE) -$(QMAKEFLAGS) dirs
+	$(MAKE) dirs
 	echo "Building $@ ..."
 	$(AR) -cvr $@ $? || $(REPORT_FAILURE)
 	echo " ... $@ done"
