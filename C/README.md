@@ -113,12 +113,14 @@ Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
 2. Rebuild everything.
 
        cd $WORKDIR
+       ./configure
        make
 
    Note: The makefiles use GNU Make extensions. So on systems like FreeBSD, which do not have GNU Make installed as the
    default make, use `gmake` instead of `make`.
 
-   Note: There's no ./configure file.
+   The ./configure file is invoked automatically the first time make runs, if this was not done manually already.  
+   Run ./configure again if anything changes in the development environment. (A compiler update, a new library added, etc.)
 
 3. Install all Unix scripts and the C programs built above.
 
@@ -132,16 +134,19 @@ Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
 1. Rebuild the SysLib library.
 
        cd $WORKDIR/C/SysLib
+       ./configure
        make
 
 2. Rebuild all C tools.
 
        cd $WORKDIR/C/SRC
+       ./configure
        make
 
    Or rebuild one particular tool.
 
        cd $WORKDIR/C/SRC
+       ./configure
        make dirc
 
 Note: The other components (BiosLib/LoDos/Lib/PModeLib/MsvcLibX) are for DOS or Windows only.

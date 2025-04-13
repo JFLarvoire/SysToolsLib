@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+############################## :encoding=UTF-8: ###############################
+#                                                                             #
+#   Filename        configure                                                 #
+#                                                                             #
+#   Description     Reconfigure SysToolsLib Unix builds                       #
+#                                                                             #
+#   Note                                                                      #
+#                                                                             #
+#   History                                                                   #
+#    2025-03-10 JFL Created this script.                                      #
+#    2025-04-13 JFL Added a help, and pass-on other arguments recursively.    #
+#                                                                             #
+#                 © Copyright 2025 Jean-François Larvoire                     #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# Global variables
+VERSION="2025-04-13"
+
+# Command line analysis
+case "$1" in
+  -h | --help | "-?")
+    cat <<EOF
+Prepare the environment for making SysToolsLib C libraries and tools
+Usage: ./configure [OPTIONS]
+Options:
+  -h|--help|-?      Display this help
+  -v|--verbose      Display details about what's done
+  -V|--version      Display this script version
+EOF
+    exit 0
+  ;;
+  -V | --version)
+    echo $VERSION
+    exit 0
+  ;;
+esac
+
+# Configure the sub-directories
+BASEDIR="$PWD"
+
+cd "$BASEDIR/C"
+./configure "$@"
+cd "$BASEDIR"
