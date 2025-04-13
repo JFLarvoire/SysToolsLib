@@ -244,7 +244,7 @@
 *                   Version 3.8.3.                                            *
 *    2024-11-08 JFL Added option -S pattern to skip files with that pattern.  *
 *                   Version 3.9.                                              *
-*		    TO DO: Allow entering several patterns.		      *
+*    2025-03-10 JFL Allow entering several skip patterns. Version 3.9.1.      *
 *		    							      *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -252,8 +252,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare directories side by side, sorted by file names"
 #define PROGRAM_NAME    "dirc"
-#define PROGRAM_VERSION "3.9"
-#define PROGRAM_DATE    "2024-11-08"
+#define PROGRAM_VERSION "3.9.1"
+#define PROGRAM_DATE    "2025-03-10"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -550,7 +550,7 @@ PSTATFUNC pStat = lstat;	    /* Function to use for getting file infos */
 // UINT cp = 0;			    /* Initial console code page */
 #define cp codePage		    /* Initial console code page in iconv.c */
 #endif
-char *ppszIgnoredFiles[2] = {NULL, NULL};
+char **ppszIgnoredFiles = NULL;
 
 /* Function prototypes */
 
@@ -629,6 +629,7 @@ int main(int argc, char *argv[]) {
   char *pszOneToEnv = NULL;	/* Copy one file name to environment variable */
 #endif
   int iBudget;
+  int nIgnoredFiles = 0;
 
   /* Set the default options */
   opts.cont = 1;		/* Continue in case of error */
@@ -640,6 +641,10 @@ int main(int argc, char *argv[]) {
   init_drive = (char)_getdrive();
 #endif
   getdir(init_dir, PATHNAME_SIZE);
+
+  /* Initialize the array of ignored files */
+  ppszIgnoredFiles = calloc(1, sizeof(char *)); /* Initially just a terminating NULL */
+  if (!ppszIgnoredFiles) finis(RETCODE_NO_MEMORY, "Out of memory for ignored files");
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
@@ -777,7 +782,10 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "S")) {	/* Ignore files with a given pattern */
-	ppszIgnoredFiles[0] = argv[++i];
+	ppszIgnoredFiles = realloc(ppszIgnoredFiles, (nIgnoredFiles+2) * sizeof(char *));
+	if (!ppszIgnoredFiles) finis(RETCODE_NO_MEMORY, "Out of memory for ignored files");
+	ppszIgnoredFiles[nIgnoredFiles++] = argv[++i];
+	ppszIgnoredFiles[nIgnoredFiles] = NULL;
 	continue;
       }
       if (streq(opt, "s")) {	/* Recursive search */
@@ -1072,7 +1080,7 @@ Switches:\n\
   -p          Pause for each page displayed.\n\
   -r          Same as {-d -f -s -z}\n\
   -s          Compare matching subdirectories too.\n\
-  -S PATTERN  Skip files that match that wildcards pattern.\n\
+  -S PATTERN  Skip files that match that wildcards pattern. May be repeated.\n\
   -t	      Display statistics about total number of files, sizes, etc.\n\
   -u	      Convert all displayed names to upper case.\n"
 #ifdef _WIN32
