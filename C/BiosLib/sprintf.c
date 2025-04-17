@@ -11,12 +11,14 @@
 *                   Should you want to improve it, remember to keep it small! *
 *                                                                             *
 *   History:                                                                  *
-*    1993/10/06 JFL Separated this file from CLIBC.C.                         *
-*    1997/08/25 JFL Added routines sctli_d() and stcli_h().                   *
+*    1993-10-06 JFL Separated this file from CLIBC.C.                         *
+*    1997-08-25 JFL Added routines sctli_d() and stcli_h().                   *
 *                   Support formats %ld and %lx.                              *
-*    1997/10/06 JFL Moved stcx_x routines into new stc.c.		      *
-*    1999/09/06 JFL Added standard C library's vsprintf().                    *
-*    2002/07/15 JFL Added support for %Fs format (far strings).               *
+*    1997-10-06 JFL Moved stcx_x routines into new stc.c.		      *
+*    1999-09-06 JFL Added standard C library's vsprintf().                    *
+*    2002-07-15 JFL Added support for %Fs format (far strings).               *
+*    2025-03-10 JFL Improved sprintf() internals, to fix printf limitations.  *
+*    2025-04-17 JFL Don't explicitely output a terminating NUL.               *
 *                                                                             *
 *      (c) Copyright 1987-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -26,7 +28,7 @@
                                      definition there */
 /* Forward references */
 
-static int strcpyform(char *, char far *, int, int, char);
+static int strcpyform(PSPRINTPROC, char *, char far *, int, int, char);
 
 //+--------------------------------------------------------------------------
 //+ Function   : sprintf
@@ -63,6 +65,7 @@ static int strcpyform(char *, char far *, int, int, char);
 //+ 09-Mar-1994  JFL     Split routine sprintf1 to removed the limit on the
 //+                      number of arguments to printf.
 //+ 31-Aug-1995  JFL     Added a test to ignore the 'l' format specification.
+//+ 2025-03-10   JFL     Added an output proc, to allow printing chars directly.
 //+
 //+--------------------------------------------------------------------------
 
@@ -86,10 +89,27 @@ extern int vsprintf(char *pszOutput, const char *pszFormat, va_list pArgs)
 
 extern int _cdecl _snprintf(char *pszOutput, size_t uSize, const char *pszFormat, ...)
     {
-    return _vsnprintf(pszOutput, uSize, pszFormat, (va_list)((&pszFormat)+1));
+    auto va_list vl;
+    va_start(vl, pszFormat);
+    return _vsnprintf(pszOutput, uSize, pszFormat, vl);
     }
 
-extern int _vsnprintf(char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs)
+#if 0 /* May be used to allow counting the number of characters to output */
+static void DropChar(char *pszOutput, char c) {
+  UNUSED_ARG(pszOutput);
+  UNUSED_ARG(c);
+}
+#endif
+
+static void AppendChar(char *pszOutput, char c) {
+  *(short *)pszOutput = (short)(c & 0x00FF);
+}
+
+extern int _vsnprintf(char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs) {
+  return _vsnprintf1(AppendChar, pszOutput, uSize, pszFormat, pArgs);
+}
+
+extern int _vsnprintf1(PSPRINTPROC pSPrintProc, char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs)
     {
     int *pparms;	    // Pointer to the optional arguments following the format
     char c;
@@ -134,16 +154,16 @@ test_format:
 			iAvailable = stci_d(szTempBuf, *(pparms++)); // Convert int to string
 		    else
 			iAvailable = stcli_d(szTempBuf, *(((long *)pparms)++)); // Convert int to string
-		    pszOutput += strcpyform(pszOutput, szTempBuf, iRequested, iAvailable, cFill);
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, szTempBuf, iRequested, iAvailable, cFill);
 		    break;
 		case 'u':
 		    iAvailable = stcu_d(szTempBuf, *(pparms++)); // Convert uint to string
-		    pszOutput += strcpyform(pszOutput, szTempBuf, iRequested, iAvailable, cFill);
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, szTempBuf, iRequested, iAvailable, cFill);
 		    break;
 		case 'p':
 		    if (iLong)
-			pszOutput += sprintf(pszOutput, "%04X:", pparms[1]);
-		    pszOutput += sprintf(pszOutput, "%04X", pparms[0]);
+			pszOutput += _vsnprintf1(pSPrintProc, pszOutput, uSize, "%04X:", (va_list)(pparms+1));
+		    pszOutput += _vsnprintf1(pSPrintProc, pszOutput, uSize, "%04X", (va_list)(pparms+0));
 		    pparms += iLong+1;
 		    break;
 		case 'x':   // Incompatible! Processed as %X to save space.
@@ -152,37 +172,37 @@ test_format:
 			iAvailable = stci_h(szTempBuf, *(pparms++)); // Convert uint to hex. string
 		    else
 			iAvailable = stcli_h(szTempBuf, *(((long *)pparms)++)); // Convert uint to hex. string
-		    pszOutput += strcpyform(pszOutput, szTempBuf, iRequested, iAvailable, cFill);
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, szTempBuf, iRequested, iAvailable, cFill);
 		    break;
 		case 's':
 		    if (!iLong)
 			lpszTemp = *(((char **)pparms)++);		 // Pointer on the given string
 		    else
 			lpszTemp = *(((char far **)pparms)++);		 // Pointer on the given string
-		    pszOutput += strcpyform(pszOutput, lpszTemp, iRequested, fstrlen(lpszTemp), cFill);
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, lpszTemp, iRequested, fstrlen(lpszTemp), cFill);
 		    break;
 		case 'c':
 		    *pparms &= 0x00FF;	 // Make sure the char is followed by a NUL.
-		    pszOutput += strcpyform(pszOutput, (char *)(pparms++), iRequested, 1, ' ');
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, (char *)(pparms++), iRequested, 1, ' ');
 		    break;
 		case '%':
-		    *(pszOutput++) = '%';
+		    pSPrintProc(pszOutput++, '%');
 		    break;
 		case 'l':
 		case 'F':
 		    iLong = TRUE;
 		    goto test_format;	 // Ignore long integer specifications
 		default:    // Unsupported format. Just output question marks
-		    pszOutput += strcpyform(pszOutput, "", iRequested, 0, '?');
+		    pszOutput += strcpyform(pSPrintProc, pszOutput, "", iRequested, 0, '?');
 		    break;
 		}
 	    }
 	else		  // Else c is a normal character
 	    {
-	    *(pszOutput++) = c;  // Just copy it to the output
+	    pSPrintProc(pszOutput++, c); // Just copy it to the output
 	    }
 	}
-    *pszOutput = '\0';
+    // pSPrintProc(pszOutput, '\0'); // AppendChar() always adds a terminating NUL
     return pszOutput - pszOutput0;   // Number of characters written
     }
 
@@ -207,10 +227,12 @@ test_format:
 //+ 04-Feb-1988  JFL     Ported from Lattice C to Microsoft C 5.0
 //+ 07-Dev-1990  JFL     Made routines static.
 //+ 09-Mar-1993  JFL     Reformatted according to Pike coding standards
+//+ 2025-03-10   JFL     Added an output proc, to allow printing chars directly.
 //+
 //+--------------------------------------------------------------------------
 
 static int strcpyform(
+PSPRINTPROC pSPP, /* How to output the formatted string */
 char *to,       /* Where to copy the from string */
 char far *from, /* String to copy */
 int size,       /* Number of characters to copy or 0 = copy actual size */
@@ -236,14 +258,14 @@ char cFill)     /* Character to use to fill the left of the field */
 
     if (right)			  /* If right justified ... */
 	{
-	while (fill--) *to++ = cFill; /* ... fill left with fill character */
+	while (fill--) pSPP(to++, cFill); /* ... fill left with fill character */
 	}
-    while (actual--) *to++ = *from++; /* Actual copy */
+    while (actual--) pSPP(to++, *from++); /* Actual copy */
     if (!right) 		  /* If left justified ... */
 	{
-	while (fill--) *to++ = ' ';   /* ... fill right with spaces */
+	while (fill--) pSPP(to++, ' ');   /* ... fill right with spaces */
 	}
-    *to = '\0';
+    // pSPP(to, '\0'); // AppendChar() always adds a terminating NUL
 
     return size;
     }

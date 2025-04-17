@@ -18,7 +18,7 @@
 
 #include "clibdef.h"            /* Make sure our implementation matches the
                                      definition there */
-
+                                         
 //+--------------------------------------------------------------------------
 //+ Function   : printf
 //+
@@ -42,14 +42,37 @@
 //+ 09-Jul-1993  JFL     Changed the printf buffer to 1024 bytes. Same reason.
 //+ 07-Oct-1993  JFL     Changed the limit from 4 to 6 arguments.
 //+ 09-Mar-1994  JFL     Removed the limit on the # of arguments altogether.
+//+ 2025-03-10   JFL     Rewritten to work with strings of any length.
 //+
 //+--------------------------------------------------------------------------
 
+static void SprintChar(char *pszOutput, char c) {
+  UNUSED_ARG(pszOutput);
+  if (c == '\n') putchar('\r');
+  if (c) putchar(c);
+}
+
 int _cdecl printf(const char *format, ...) {
-  char uneligne[1024];
+  auto va_list vl;
+  va_start(vl, format);
+  return _vsnprintf1(SprintChar, NULL, 0, format, vl);
+}
+
+#if 0
+int _cdecl printf(const char *format, ...) {
+  char uneligne[128];
+  char *pLigne;
   int n;
-  
+
+  n = sprintf1(NULL, &format);
+  if (n < sizeof(uneligne)) {
+    pLigne = uneLigne;
+  } else {
+    pLigne = malloc(n+1);
+  }
   n = sprintf1(uneligne, &format);
   fputs(uneligne, stdout);
+  if (pLigne != uneLigne) free(uneLigne);
   return n;
 }
+#endif

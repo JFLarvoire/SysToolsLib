@@ -58,6 +58,8 @@
 *		    in _MSDOS environments do call C lib functions correctly. *
 *    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. *
 *    2023-04-17 JFL Added malloc_last declaration.                            *
+*    2025-03-10 JFL Added improvements to printf() and sprintf() internals.   *
+*		    Define the UNUSED_ARG() macro for BiosLib.		      *
 *		    							      *
 *      (C) Copyright 1990-2017 Hewlett Packard Enterprise Development LP      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -76,6 +78,10 @@
 #pragma message("Adding pragma comment(lib, \"" BIOS_LIB "\")")
 #pragma comment(lib, BIOS_LIB)
 #endif /* defined(BIOS_LIB) */
+
+#ifndef UNUSED_ARG
+#define UNUSED_ARG(arg_name) do {break;} while (arg_name) /* Avoid an unused argument warning. No code generated. */
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -114,7 +120,7 @@ typedef unsigned int size_t;
 /* Variable arguments */
 
 typedef char *va_list;
-#define va_start(al, v) al = (char *)&v + sizeof(v)
+#define va_start(al, v) al = ((char *)&v + sizeof(v))
 #define va_arg(al, t) ( *( ((t *)(al))++ ) )
 #define va_end(al) al = (va_list)0
 
@@ -177,6 +183,8 @@ extern int BIOSLIBCCC vsprintf(char *, const char *, va_list);
 extern int BIOSLIBCCC sprintf1(char *, const char **);  /* Used internally by the library */
 extern int _cdecl _snprintf(char *pszOutput, size_t uSize, const char *pszFormat, ...);
 extern int BIOSLIBCCC _vsnprintf(char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs);
+typedef void (*PSPRINTPROC)(char *pszOutput, char c);
+extern int BIOSLIBCCC _vsnprintf1(PSPRINTPROC pSprintProc, char *pszOutput, size_t uSize, const char *pszFormat, va_list pArgs);
 
 int atoi(const char *pszString);
 long atol(const char *pszString);
