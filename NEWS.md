@@ -4,6 +4,33 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-05-19
+### New
+- Shell/pname, Shell/ppname: New scripts to display the current shell process name.
+- Shell/profile.d/pname: New initialization script for defining aliases for pname and ppname, that . include the actual scripts.
+
+## [Unreleased] 2025-05-17
+### Fixed
+- C/BiosLib/*: Removed the printf() maximum size limitation.
+
+## [Unreleased] 2025-05-13
+### New
+- configure, C/configure: New files, to allow reconfiguring a Unix build system from the base and C directory,
+
+### Changed
+- C/README.md: Document the new configure and C/configure scripts.
+- dirc.exe: Allow entering several skip patterns. Version 3.9.1.
+
+### Fixed
+- C/*/Makefile: Fixed the use of MAKEFLAGS, preventing an error with GNU make 4.4. No need for a QMAKEFLAGS variable.
+
+## [Unreleased] 2025-03-07
+### Changed
+- dirc.exe: Added option -S pattern to skip files with that pattern. Version 3.9.
+
+### Fixed
+- C/SysLib/GerCurPos.c: Fixed a build failure on Linux on a Raspberry Pi 2.
+- Tcl/cfdt.tcl: Corrected the version string.
 
 ## [Unreleased] 2024-10-22
 ### Fixed

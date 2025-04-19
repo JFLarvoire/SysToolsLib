@@ -159,6 +159,8 @@ MakeZip.bat     | -W- | Create a zip file, based on a list of files in an input 
 mountw.bat      | -W- | Mount a .wim Windows disk Image using a Unix-like command.                            | `mountw boot.wim` &:# Mounts the image at the default C:\mnt\wim
 msgbox.exe      | -W- | Display various types of message boxes, and return answers to the batch.              | `msgbox -x -c "About to erase your disk"`
 nlines.tcl      | -WL | Count lines, and non-commented source lines, in a set of files.                       | `nlines -r` &:# Count recursively in the current dir. and sub-dirs.
+pname           | --L | Display the current shell process name. Installed as an alias pname=". pname"         | `pname`
+ppname          | --L | Display the current shell parent process name. Installed as an alias ppname=". ppname" | `ppname`
 PSService.ps1   | -W- | Sample Windows Service entirely in a PowerShell script.                               | `help PSService.ps1 -detailed` &:# Comprehensive built-in usage doc.
 PySetup.bat     | -W- | Find the Python interpreter even if it's not in the PATH. Configure Windows to run *.py files as command-line scripts.        | `pysetup` &:# Test if Python is correctly configured
 subcmd.bat      | -W- | Start a sub cmd shell, changing the prompt to show the shell depth level and modes.   | `subcmd /V:on` &:# Enable delayed expansion in the sub shell

@@ -1,0 +1,26 @@
+#!/bin/sh
+###############################################################################
+#                                                                             #
+#   Filename        ppname                                                    #
+#                                                                             #
+#   Description     Show the parent process name                              #
+#                                                                             #
+#   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
+#                                                                             #
+#   Notes           Should always be run as: . ./ppname                       #
+#                   So define an alias ppname=". [path]/ppname"               #
+#                                                                             #
+#   History                                                                   #
+#    2023-01-21 JFL Created this script.                                      #
+#    2024-04-29 JFL Trim the leading '-', if any.                             #
+#                   Avoid defining a NAME variable, since we . include this.  #
+#                   Avoid outputing the null character that ends the cmdline. #
+#    2025-04-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#                                                                             #
+#                   © Copyright 2023 Jean-François Larvoire                   #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# NAME=$(cat /proc/$PPID/cmdline)
+
+tr '\0' '\n' < /proc/$PPID/cmdline | head -1 | sed 's/^-\(.*\)/\1/'

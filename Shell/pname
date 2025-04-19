@@ -1,0 +1,23 @@
+#!/bin/sh
+###############################################################################
+#                                                                             #
+#   Filename        pname                                                     #
+#                                                                             #
+#   Description     Show the process name                                     #
+#                                                                             #
+#   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
+#                                                                             #
+#   Notes           Should always be run as: . ./pname                        #
+#                   So define an alias pname=". [path]/pname"                 #
+#                                                                             #
+#   History                                                                   #
+#    2024-04-29 JFL Created this script, based on ppname.                     #
+#    2025-04-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#                                                                             #
+#                   © Copyright 2024 Jean-François Larvoire                   #
+# Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
+###############################################################################
+
+# NAME=$(cat /proc/$$/cmdline)
+
+tr '\0' '\n' < /proc/$$/cmdline | head -1 | sed 's/^-\(.*\)/\1/'
