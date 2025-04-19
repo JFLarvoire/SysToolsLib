@@ -5,6 +5,8 @@
 #                                                                             #
 #   Description     Define a routine that creates a directory, and enters it. #
 #                                                                             #
+#   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
+#                                                                             #
 #   Note            To have the routine available in every shell, put this    #
 #                   script in /etc/profile.d/.                                #
 #                                                                             #

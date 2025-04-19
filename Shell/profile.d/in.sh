@@ -5,6 +5,8 @@
 #                                                                             #
 #   Description     Create a `in` alias for SysToolsLib's `In` command        #
 #                                                                             #
+#   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
+#                                                                             #
 #   Note            Using this `in` alias allows to work around the inability #
 #                   to name that command `in`, as 'in' is a reserved keyword  #
 #                   of the Shell language.                                    #
