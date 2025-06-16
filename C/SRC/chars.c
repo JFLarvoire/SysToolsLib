@@ -85,6 +85,9 @@
 *		    Fixed character ranges which output � for all characters. *
 *		    Version 2.1.					      *
 *    2023-12-20 JFL Added the ability to decompose accented Unicode characters.
+*		    Version 2.2.					      *
+*    2025-06-11 JFL Fixed a missing line when run from the top of the console.*
+*		    Version 2.2.1.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -92,8 +95,8 @@
 
 #define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "2.2"
-#define PROGRAM_DATE    "2023-12-20"
+#define PROGRAM_VERSION "2.2.1"
+#define PROGRAM_DATE    "2025-06-11"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -593,6 +596,10 @@ UNICODE_BLOCK unicodeBlock[] = {
 
 #endif /* SUPPORTS_UTF8 */
 
+#if EXTRA_CHARS_IN_CONTROL_CODES
+  int nRows;		/* Number of rows on the console */
+#endif
+
 /* Forward references */
 void usage(void);
 
@@ -716,6 +723,10 @@ int CDECL main(int argc, char *argv[]) {
 #endif /* SUPPORTS_UTF8 */
 
   if (isTTY) iFlags |= CF_TTY;
+
+#if EXTRA_CHARS_IN_CONTROL_CODES
+  nRows = GetConRows();
+#endif
 
   /* Process the command-line arguments */
   for (i=1; i<argc; i++) {
@@ -1846,7 +1857,8 @@ failed_to_get_cursor_coord:
 	    PUTC(' ');
 	  } else if (iCol1 < iCol0) {
 	    /* Most likely this is FF or VT, and the terminal interpreted it as CRLF */
-	    SetCursorPosition(iCol0+1, iRow0-1);
+	    int iScrolled = (iRow0 == (nRows -1)) ? 1 : 0; /* The display scrolled if the cursor was on the last line */
+	    SetCursorPosition(iCol0+1, iRow0-iScrolled);
 	  }
 	}
 #endif /* EXTRA_CHARS_IN_CONTROL_CODES */
