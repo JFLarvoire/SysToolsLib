@@ -14,12 +14,12 @@
 *                   Renamed them as GetConRows() & GetConCols().	      *
 *    2023-04-19 JFL Redefined the DOS version as macros.		      *
 *                   Added the missing inclusion of <config.h>.                *
+*    2025-06-11 JFL Don't define _GNU_SOURCE for DOS/Windows, to avoid        *
+*                   pulling in references to mainU().                         *
 *                                                                             *
 *       © Copyright 2016-2018 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
-
-#define _GNU_SOURCE	/* ISO C, POSIX, BSD, and GNU extensions */
 
 #include <config.h>	/* The Unix version has multiple alternatives */
 
@@ -152,6 +152,8 @@ int GetConColumns(void) {
 #endif
 
 #ifdef _UNIX
+
+#define _GNU_SOURCE	/* ISO C, POSIX, BSD, and GNU extensions */
 
 #include <stdio.h>
 #include <unistd.h>
