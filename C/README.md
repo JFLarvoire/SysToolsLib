@@ -109,7 +109,11 @@ Quick guide for rebuilding everything in Unix (Ex: Linux, MacOS, FreeBSD)
    Clone the project from GitHub
 
        git clone --recurse-submodules https://github.com/JFLarvoire/SysToolsLib
-   
+
+   Note: If you forgot the use the --recurse-submodules option, you can then get the submodules this way:
+
+       git submodule update --init --recursive
+
 2. Rebuild everything.
 
        cd $WORKDIR
