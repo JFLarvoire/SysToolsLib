@@ -49,6 +49,7 @@
 *    2020-08-29 JFL Merged in changes from another PrintWin32Error().	      *
 *		    Removed unnecessary calls to oemprintf(). Version 2.1.3.  *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.1.4.		      *
+*    2025-07-01 JFL Fixed two warnings in CropUtf8String(). Version 2.1.5.    *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -56,8 +57,8 @@
 
 #define PROGRAM_DESCRIPTION "Manage system drivers and services"
 #define PROGRAM_NAME    "driver"
-#define PROGRAM_VERSION "2.1.4"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "2.1.5"
+#define PROGRAM_DATE    "2025-07-01"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -539,6 +540,8 @@ Switches:\n\
 |   History:								      |
 |    2015-01-09 JFL Created this routine				      |
 |    2016-03-31 JFL Bug fix: The conversion could overflow the input string.  |
+|    2025-07-01 JFL Fixed two warnings in CropUtf8String(): Just add a pragma |
+|		    as this code is only used for Windows with VC++.	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -561,8 +564,10 @@ int CropUtf8String(char *pszString, size_t n) {
     char mask = '\xC0';
     while (!(pszString[i] & 0x40)) { /* Go back to the first byte in that char */
       i -= 1;
+#pragma warning(disable:4213)	/* Ignore the "nonstandard extension used: cast on l-value" warning */
       (signed char)lead >>= 1;
       (signed char)mask >>= 1;
+#pragma warning(default:4213)	/* Restore the "nonstandard extension used: cast on l-value" warning */
     }
     if ((pszString[i] & mask) != lead) { /* Then the number of trailing bytes is incorrect */
       n = i;
