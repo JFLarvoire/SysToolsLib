@@ -4,6 +4,22 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-07-27
+### Changed
+- junction.exe: Renamed option -a as -R for Raw target, and added new option -a to display the Absolute target.
+
+### Fixed
+- junction.exe: Fixed option -a (now -R) to make it compatible with -l and -r.
+
+## [Unreleased] 2025-07-01
+### Fixed
+- C/SRC/driver.c: Fixed two warnings.
+
+## [Unreleased] 2025-06-16
+### Fixed
+- chars.exe: Fixed a couple of missing lines when run from the top of the console. Version 2.2.1.
+- C/SysLib/GetConSize.c: Don't define _GNU_SOURCE for DOS/Windows, to avoid pulling in references to mainU().
+
 ## [Unreleased] 2025-05-19
 ### New
 - Shell/pname, Shell/ppname: New scripts to display the current shell process name.
