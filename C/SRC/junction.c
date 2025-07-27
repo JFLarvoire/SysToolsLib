@@ -23,12 +23,15 @@
 *                   target was not displayed.                                 *
 *    2024-09-26 JFL Fixed a minor warning.                                    *
 *    2025-07-26 JFL Fixed option -a to make it compatible with -l and -r.     *
+*    2025-07-27 JFL Renamed -a as -R for Raw, and new -a now means Absolute.  *
+*                   Also -a and -r can now be used in any order.              *
+*                   Document the -i option in the debug version.              *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2025-07-26"
+#define PROGRAM_VERSION "2025-07-27"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -55,6 +58,7 @@
 #define JCB_ONCE      0x0002
 #define JCB_ALLTYPES  0x0004
 #define JCB_RAW       0x0008
+#define JCB_ABS       0x0010
 typedef struct { /* Reference data to pass to the WalkDirTree callback */
   int iFlags;		/* Input: A combination of JCB_xxx flags */
   long nJunction;	/* Output: The number of junctions found */
@@ -86,17 +90,23 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 \n\
   -?      Display this help and exit\n\
   -1      Make sure to list junctions only once. (Useful with -f) \n\
-  -a      Display the raw absolute target. Default: Display the relative target\n"
+  -a      Display the absolute target. Default: Display the relative target\n"
 #ifdef _DEBUG
 "\
   -D      Enable debug output. Use twice to get extra debugging information\n"
 #endif
 "\
   -d      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
-  -f      Follow junctions and symlinkds when searching recursively\n\
+  -f      Follow junctions and symlinkds when searching recursively\n"
+#ifdef _DEBUG
+"\
+  -i PATHNAME  Get the unique file ID\n"
+#endif
+"\
   -l DIR  List junctions in a directory\n\
   -o      Make sure to search linked folders only once. (slower, useful w. -f)\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
+  -R      Display the raw junction target. Default: Display the relative target\n\
   -r|-s DIR  List junctions recursively in a directory tree\n\
   -t      With -l or -r, list all types of reparse points, with their types\n\
   -V      Display this program version and exit\n\
@@ -136,8 +146,7 @@ Likewise, the -v option informs about duplicate paths that were skipped.\n\
 
 typedef enum {	/* Action to do */
   ACT_CREATE,		/* Create a new junction */
-  ACT_RAWGET,		/* Get the raw target of a junction */
-  ACT_GET,		/* Get the relatie target of a junction */
+  ACT_GET,		/* Get the target of a junction */
   ACT_GETID,		/* Get a file ID */
   ACT_DELETE,		/* Delete a junction */
   ACT_SCAN		/* Search recursively for junctions */
@@ -149,6 +158,8 @@ int main(int argc, char *argv[]) {
   char *pszJunction = NULL;
   char *pszTarget = NULL;
   char buf[PATH_MAX];
+  int iRaw = FALSE;
+  int iAbs = FALSE;
   int iVerbose = FALSE;
   action_t action = ACT_GET;
   wdt_opts opts = {0};		/* Must be cleared before use */
@@ -168,9 +179,9 @@ int main(int argc, char *argv[]) {
 	jcbRef.iFlags |= JCB_ONCE; /* Ensures duplicate paths to the same junction aren't listed twice */
 	continue;
       }
-      if (streq(opt, "a")) {
-	jcbRef.iFlags |= JCB_RAW; /* Ensures duplicate paths to the same junction aren't listed twice */
-	action = ACT_RAWGET;
+      if (streq(opt, "a")) {	/* Show the absolute target path */
+	jcbRef.iFlags |= JCB_ABS;
+      	iAbs = TRUE;
 	continue;
       }
       if (streq(opt, "accepteula")) { /* For MS compatibility. Ignore that */
@@ -181,12 +192,12 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       DEBUG_CODE(
-	if (streq(opt, "D")) {
+	if (streq(opt, "D")) {	/* Enable the debug mode */
 	  DEBUG_MORE();
 	  continue;
 	}
       )
-      if (streq(opt, "d")) {
+      if (streq(opt, "d")) {	/* Delete a junction */
 	action = ACT_DELETE;
 	continue;
       }
@@ -194,7 +205,7 @@ int main(int argc, char *argv[]) {
 	opts.iFlags |= WDT_FOLLOW;
 	continue;
       }
-      if (streq(opt, "i")) {
+      if (streq(opt, "i")) {	/* Display the unique file ID */
 	action = ACT_GETID;
 	continue;
       }
@@ -212,6 +223,11 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "q")) {	/* Quiet mode: Ignore access errors, warnings & infos */
 	opts.iFlags |= WDT_QUIET;
+	continue;
+      }
+      if (streq(opt, "R")) {	/* Show the raw junction target */
+	jcbRef.iFlags |= JCB_RAW;
+      	iRaw = TRUE;
 	continue;
       }
       if (streq(opt, "r") || streq(opt, "s")) {	/* List recursively all junctions in a directory tree */
@@ -315,36 +331,25 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  if (action == ACT_RAWGET) {
-    /* Read the raw junction target */
-    DWORD dwTag = MlxReadLinkU(pszJunction, buf, sizeof(buf));
-    if (!dwTag) {
-      pferror("Failed to read junction \"%s\"", pszJunction, strerror(errno));
-      return 1;
-    }
-    if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) {
-      pferror("\"%s\" is not a junction", pszJunction);
-      return 1;
-    }
-    if (iVerbose) {
-      printf("%s -> %s\n", pszJunction, buf);
-    } else {
-      printf("%s\n", buf);
-    }
-    return 0;
-  }
-
   if (action == ACT_GET) {
-    /* Read the link, as if it were a relative symbolic link */
-    iErr = (int)readlink(pszJunction, buf, sizeof(buf));
+    if (iRaw | iAbs) {
+      iErr = MlxReadLinkU(pszJunction, buf, sizeof(buf)) ? 0 : -1;
+    } else {
+      /* Read the link, as if it were a relative symbolic link */
+      iErr = (int)readlink(pszJunction, buf, sizeof(buf));
+    }
     if (iErr == -1) {
       pferror("Failed to read junction \"%s\". %s", pszJunction, strerror(errno));
       return 1;
     }
+    pszTarget = buf;
+    if (iAbs) {
+      if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
+    }
     if (iVerbose) {
-      printf("%s -> %s\n", pszJunction, buf);
+      printf("%s -> %s\n", pszJunction, pszTarget);
     } else {
-      printf("%s\n", buf);
+      printf("%s\n", pszTarget);
     }
     return 0;
   }
@@ -443,6 +448,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   int iOnce = pJcbRef->iFlags & JCB_ONCE;
   int iAllTypes = pJcbRef->iFlags & JCB_ALLTYPES;
   int iRaw = pJcbRef->iFlags & JCB_RAW;
+  int iAbs = pJcbRef->iFlags & JCB_ABS;
   tree *pTree = pJcbRef->pTree;
   char buf[PATH_MAX];
   char *pszTarget = buf;
@@ -503,7 +509,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   switch (dwTag) {
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
-      if (iRaw) {
+      if (iRaw | iAbs) {
 	iErr = MlxReadLinkU(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
       } else {
 	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
@@ -550,6 +556,9 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
       printf("%-10s %s\n", pszType, pszRelPath);
     }
   } else {
+    if (iAbs) {
+      if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
+    }
     if (!iAllTypes) {
       printf("%s -> %s\n", pszRelPath, pszTarget);
     } else {
