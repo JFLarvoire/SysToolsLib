@@ -22,12 +22,13 @@
 *    2023-11-15 JFL Bug fix: When listing junctions in verbose mode, the      *
 *                   target was not displayed.                                 *
 *    2024-09-26 JFL Fixed a minor warning.                                    *
+*    2025-07-26 JFL Fixed option -a to make it compatible with -l and -r.     *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2024-09-26"
+#define PROGRAM_VERSION "2025-07-26"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -53,6 +54,7 @@
 #define JCB_VERBOSE   0x0001
 #define JCB_ONCE      0x0002
 #define JCB_ALLTYPES  0x0004
+#define JCB_RAW       0x0008
 typedef struct { /* Reference data to pass to the WalkDirTree callback */
   int iFlags;		/* Input: A combination of JCB_xxx flags */
   long nJunction;	/* Output: The number of junctions found */
@@ -167,6 +169,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "a")) {
+	jcbRef.iFlags |= JCB_RAW; /* Ensures duplicate paths to the same junction aren't listed twice */
 	action = ACT_RAWGET;
 	continue;
       }
@@ -253,7 +256,7 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 
-  if (action == ACT_GETID) { /* Scan a directory tree for junctions */
+  if (action == ACT_GETID) { /* Debug: Dump the volume and file ID */
     char *pszPath = pszJunction ? pszJunction : ".";
     FILE_ID fid;
     BOOL bDone = MlxGetFileID(pszPath, &fid);
@@ -439,6 +442,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   int iVerbose = pJcbRef->iFlags & JCB_VERBOSE;
   int iOnce = pJcbRef->iFlags & JCB_ONCE;
   int iAllTypes = pJcbRef->iFlags & JCB_ALLTYPES;
+  int iRaw = pJcbRef->iFlags & JCB_RAW;
   tree *pTree = pJcbRef->pTree;
   char buf[PATH_MAX];
   char *pszTarget = buf;
@@ -499,12 +503,18 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   switch (dwTag) {
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
-      iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+      if (iRaw) {
+	iErr = MlxReadLinkU(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
+      } else {
+	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
+      }
       break;
     }
     case IO_REPARSE_TAG_SYMLINK: {
       if (!iAllTypes) break;
       pszType = "Symlink";
+      /* Using MlxReadLinkU() in iRaw mode here makes no sense, as SymLinks can
+         be relative or absolute, and the latter just have an extra \??\ prefix */
       iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
       if (iErr != -1) {
 	struct stat st;
