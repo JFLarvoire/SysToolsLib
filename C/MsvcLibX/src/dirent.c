@@ -38,6 +38,9 @@
 *    2018-03-06 JFL Fixed a warning with Visual Studio 2015.         	      *
 *    2020-12-15 JFL Added support for IO_REPARSE_TAG_APPEXECLINK.             *
 *    2021-11-10 JFL Added integer directory handles, and function dirfd().    *
+*    2025-07-29 JFL Fixed the reparse point tag analysis in readdirW().       *
+*    2025-08-03 JFL Preserve the FILE_ATTRIBUTE_REPARSE_POINT bit in all cases.
+*		    Recognize Linux socket, fifo, character, and block devices.
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -396,8 +399,6 @@ int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if 
 _dirent *readdirW(DIR *pDir) {
   int iErr = 0;
   _dirent *pDirent = &pDir->sDirent;
-  int bIsJunction = FALSE;
-  int bIsMountPoint = FALSE;
   DWORD dwTag = 0; /* Reparse points tag */
   DWORD dwAttr;
   int n;
@@ -449,14 +450,14 @@ _dirent *readdirW(DIR *pDir) {
   /* Set the standard fields */
   lstrcpyW((WCHAR *)(pDirent->d_name), pDir->wfd.cFileName);
   dwAttr = pDir->wfd.dwFileAttributes;
-check_attr_again:
+  pDirent->d_type = DT_UNKNOWN;
   if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
     /* JUNCTIONs and SYMLINKDs both have the FILE_ATTRIBUTE_DIRECTORY flag also set.
     // Test the FILE_ATTRIBUTE_REPARSE_POINT flag first, to make sure they're seen as symbolic links.
     //
     // All symlinks are reparse points, but not all reparse points are symlinks. */
     dwTag = pDir->wfd.dwReserved0;	/* No need to call GetReparseTag(), we got it already. */
-    switch (dwTag) {
+    switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
       case IO_REPARSE_TAG_MOUNT_POINT:	/* NTFS junction or mount point */
 	{ /* We must read the link to distinguish junctions from mount points. */
 	WCHAR *pwszPath = NULL;
@@ -471,7 +472,6 @@ return_ENOMEM:
 	  DEBUG_LEAVE(("return NULL; // Out of memory\n"));
 	  return NULL;
 	}
-	bIsMountPoint = TRUE;
 	lstrcpyW(pwszPath, pDir->pwszDirName);
 	if (lwszDirName && (pwszPath[lwszDirName-1] != L'\\')) pwszPath[lwszDirName++] = L'\\';
 	lstrcpyW(pwszPath+lwszDirName, pDir->wfd.cFileName);
@@ -490,32 +490,45 @@ realloc_wBuf:
 	    lwBuf *= 2;
 	    goto realloc_wBuf;
 	  }
-	  free(pwszPath);
-	  free(pwszBuf);
-	  goto this_is_not_a_symlink; /* This is not a junction. */
+	  /* pDirent->d_type = DT_UNKNOWN;	// This is not a valid junction */
+	} else {
+	  pDirent->d_type = DT_LNK; /* This is a junction. Treat it as a symlink */
 	}
-	bIsJunction = TRUE; /* Else this is a junction. Fall through to the symlink case. */
 	free(pwszPath);
 	free(pwszBuf);
+	break;
 	}
-	/* Fall through to the symlink case. */
       case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */
       case IO_REPARSE_TAG_NFS:			/* NFS symbolic link */
       case IO_REPARSE_TAG_LX_SYMLINK:		/* LinuX subsystem symlink */
       case IO_REPARSE_TAG_APPEXECLINK:		/* UWP application execution link */
 	pDirent->d_type = DT_LNK;		/* Symbolic link */
 	break;
-      default:	/* Anything else is definitely not like a Unix symlink */
-this_is_not_a_symlink:
-	dwAttr &= ~FILE_ATTRIBUTE_REPARSE_POINT;
-	goto check_attr_again;
+      case IO_REPARSE_TAG_AF_UNIX:		/* Linux Sub-System Socket */
+	pDirent->d_type = DT_SOCK;
+	break;
+      case IO_REPARSE_TAG_LX_FIFO:		/* Linux Sub-System FIFO */
+	pDirent->d_type = DT_FIFO;
+	break;
+      case IO_REPARSE_TAG_LX_CHR:		/* Linux Sub-System Character Device */
+	pDirent->d_type = DT_CHR;
+	break;
+      case IO_REPARSE_TAG_LX_BLK:		/* Linux Sub-System Block Device */
+	pDirent->d_type = DT_BLK;
+	break;
+      default: /* Unknown reparse point type. Treat it as a normal file below */
+	/* pDirent->d_type = DT_UNKNOWN;	// We don't know what this is */
+	break;
     }
-  } else if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
-    pDirent->d_type = DT_DIR;		/* Subdirectory */
-  else if (dwAttr & FILE_ATTRIBUTE_DEVICE)
-    pDirent->d_type = DT_CHR;		/* Device (we don't know if character or block) */
-  else
-    pDirent->d_type = DT_REG;		/* A normal file by default */
+  }
+  if (pDirent->d_type == DT_UNKNOWN) {
+    if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
+      pDirent->d_type = DT_DIR;		/* Subdirectory */
+    else if (dwAttr & FILE_ATTRIBUTE_DEVICE)
+      pDirent->d_type = DT_CHR;		/* Device (we don't know if character or block) */
+    else
+      pDirent->d_type = DT_REG;		/* A normal file by default */
+  }
 
   /* Set the OS-specific extensions */
   lstrcpyW((WCHAR *)(pDirent->d_shortname), pDir->wfd.cAlternateFileName);

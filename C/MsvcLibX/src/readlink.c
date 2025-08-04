@@ -31,6 +31,8 @@
 *                   Renamed MsvcLibX-specific ReadLink*() as MlxReadLink*().  *
 *                   Likewise, renamed GetReparseTag*() as MlxGetReparseTag*(),*
 *                   Resolve*Links*() as MlxResolve*Links*(), etc.             *
+*    2025-08-03 JFL Added MlxReadWci(), etc.				      *
+*		    Added MlxSetProcessPlaceholderCompatibilityMode(), etc.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -228,7 +230,7 @@ DWORD MlxReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
   pIoctlBuf = (PREPARSE_READ_BUFFER)buf;
   dwTag = pIoctlBuf->ReparseTag;
   DEBUG_CODE_IF_ON(
-    switch (dwTag) {
+    switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
     case IO_REPARSE_TAG_RESERVED_ZERO:		/* 0x00000000 */ pType = "Reserved"; break;	
     case IO_REPARSE_TAG_RESERVED_ONE:		/* 0x00000001 */ pType = "Reserved"; break;
     case IO_REPARSE_TAG_RESERVED_TWO:		/* 0x00000002 */ pType = "Reserved"; break;
@@ -271,7 +273,7 @@ DWORD MlxReadReparsePointW(const WCHAR *path, char *buf, size_t bufsize) {
     XDEBUG_PRINTF(("ReparseTag = 0x%04X; // %s\n", (unsigned)(dwTag), pType));
   )
   XDEBUG_PRINTF(("ReparseDataLength = 0x%04X\n", (unsigned)(pIoctlBuf->ReparseDataLength)));
-  
+
   /* Dump the whole payload in extra-debug mode */
   XDEBUG_CODE_IF_ON({
     unsigned int ul;
@@ -322,6 +324,7 @@ DWORD MlxReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   PSYMLINK_READ_BUFFER pSymlinkBuf;
   PLX_SYMLINK_READ_BUFFER pLxSymlinkBuf;
   PAPPEXECLINK_READ_BUFFER pAppExecLinkBuf;
+  PWCI_READ_BUFFER pWciLinkBuf; 
   WCHAR *pwStr = NULL;
   WCHAR *pwNewStr = NULL;
   unsigned short offset = 0, len = 0;
@@ -332,7 +335,7 @@ DWORD MlxReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   if (!dwTag) RETURN_CONST(0);
 
   /* Process the supported tag types */
-  switch (dwTag) {
+  switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
     case IO_REPARSE_TAG_SYMLINK:
       pSymlinkBuf = (PSYMLINK_READ_BUFFER)iobuf;
       XDEBUG_PRINTF(("SubstituteNameOffset = 0x%04X\n", (unsigned)(pSymlinkBuf->SubstituteNameOffset)));
@@ -396,6 +399,24 @@ DWORD MlxReadLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
         errno = EBADF;
 	RETURN_INT_COMMENT(0, ("Unsupported AppExecLink Version = %d\n", (int)(pAppExecLinkBuf->Version)));
       }
+      break;
+
+    case IO_REPARSE_TAG_CLOUD: /* Cloud File, ex. OneDrive */
+      /* TO DO: Reverse-engineer and decode the data structure */
+#pragma warning(disable:4428) /* Ignore Win95's "universal-character-name encountered in source" warning */
+      pwStr = L"\u2601 "; /* Unicode cloud character, followed by a space */
+#pragma warning(default:4428) /* Ignore Win95's "universal-character-name encountered in source" warning */
+      offset = 0;
+      len = 2;
+      break;
+
+    case IO_REPARSE_TAG_WCI: /* Windows Container Isolation */
+      pWciLinkBuf = (PWCI_READ_BUFFER)iobuf;
+      XDEBUG_PRINTF(("Version = 0x%04X\n", (unsigned)(pWciLinkBuf->Version)));
+
+      pwStr = pWciLinkBuf->WciName;
+      offset = 0;
+      len = pWciLinkBuf->WciNameLength / 2; /* Convert bytes to wide characters count */
       break;
 
     default:
@@ -779,7 +800,7 @@ int MlxResolveTailLinksU(const char *path, char *buf, size_t bufsize) {
 *                                                                             *
 |   Function	    MlxReadAppExecLink					      |
 |									      |
-|   Description	    Get the AppExecLink target, and return the tag            |
+|   Description	    Get the AppExecLink target, and return its size           |
 |									      |
 |   Parameters      const char *path	    The AppExecLink name              |
 |		    char *buf		    Output buffer		      |
@@ -787,55 +808,64 @@ int MlxResolveTailLinksU(const char *path, char *buf, size_t bufsize) {
 |									      |
 |   Returns	    >0 = Success, 0 = Failure and set errno		      |
 |		    							      |
-|   Notes	    TO DO: Detect circular loops?			      |
+|   Notes	    							      |
 |									      |
 |   History								      |
 |    2020-12-11 JFL Created this routine                               	      |
+|    2025-08-03 JFL Simplified to match improvements in MlxReadWci().  	      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 /* Get the AppExecLink target, and return its size. 0=failure */
 int MlxReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
-  char iobuf[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
+  char *iobuf;
   DWORD dwTag;
   PAPPEXECLINK_READ_BUFFER pAppExecLinkBuf;
   WCHAR *pwStr = NULL;
-  unsigned short offset = 0, len = 0;
+  unsigned short n, offset = 0, len = 0;
 
   DEBUG_WENTER((L"MlxReadAppExecLink(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
 
-  dwTag = MlxReadReparsePointW(path, iobuf, sizeof(iobuf));
-  if (!dwTag) RETURN_CONST(0);
+  iobuf = malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+  if (!iobuf) RETURN_CONST_COMMENT(0, ("Out of memory\n"));
 
-  /* Process the supported tag types */
-  switch (dwTag) {
-    case IO_REPARSE_TAG_APPEXECLINK: /* Ex: Empty *.exe in %LOCALAPPDATA%\Microsoft\WindowsApps */
-      pAppExecLinkBuf = (PAPPEXECLINK_READ_BUFFER)iobuf;
-      XDEBUG_PRINTF(("Version = 0x%04X\n", (unsigned)(pAppExecLinkBuf->Version)));
-      XDEBUG_CODE_IF_ON({
-      	WCHAR *pwStr0 = pwStr = pAppExecLinkBuf->StringList;
-      	while((pwStr-pwStr0) < pAppExecLinkBuf->ReparseDataLength) {
-      	  wprintf(L"%s\n", pwStr);
-      	  pwStr += lstrlenW(pwStr) + 1;
-      	}
-      })
-      
-      if (pAppExecLinkBuf->Version == 3) {
-      	unsigned short u;
-	for (u=0, pwStr = pAppExecLinkBuf->StringList; u<2; u++) pwStr += lstrlenW(pwStr) + 1;
-	offset = 0;
-	len = (unsigned short)lstrlenW(pwStr);
-      } else {
-        DEBUG_PRINTF(("# WARNING: Unexpected AppExecLink Version = %d\n", (int)(pAppExecLinkBuf->Version)));
-      }
-      break;
-
-    default:
-      errno = EINVAL;
-      RETURN_INT_COMMENT(0, ("Unsupported reparse point type\n"));
+  dwTag = MlxReadReparsePointW(path, iobuf, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+  if (!dwTag) {
+    free(iobuf);
+    RETURN_CONST_COMMENT(0, ("This is not a reparse point\n"));
   }
+
+  if (dwTag != IO_REPARSE_TAG_APPEXECLINK) {
+    free(iobuf);
+    errno = EINVAL;
+    RETURN_CONST_COMMENT(0, ("This is not an AppExecLink reparse point\n"));
+  }
+
+  /* This is an AppExecLink. Ex: Empty *.exe in %LOCALAPPDATA%\Microsoft\WindowsApps */
+  pAppExecLinkBuf = (PAPPEXECLINK_READ_BUFFER)iobuf;
+  XDEBUG_PRINTF(("Version = 0x%04X\n", (unsigned)(pAppExecLinkBuf->Version)));
+  if (pAppExecLinkBuf->Version != 3) {
+    free(iobuf);
+    RETURN_CONST_COMMENT(0, ("Unexpected AppExecLink Version = %d\n", (int)(pAppExecLinkBuf->Version)));
+  }
+
+  /* This is an AppExecLink that we partially know how to decode */
+  XDEBUG_CODE_IF_ON({
+    WCHAR *pwStr0 = pwStr = pAppExecLinkBuf->StringList;
+    while((pwStr-pwStr0) < pAppExecLinkBuf->ReparseDataLength) {
+      wprintf(L"%s\n", pwStr);
+      pwStr += lstrlenW(pwStr) + 1;
+    }
+  })
+
+  /* Skip the first two strings, the third one being the link we want */
+  for (n=0, pwStr = pAppExecLinkBuf->StringList; n<2; n++) pwStr += lstrlenW(pwStr) + 1;
+  offset = 0;
+  len = (unsigned short)lstrlenW(pwStr);
+
   if (len) {
     if (len >= bufsize) {
+      free(iobuf);
       errno = ENAMETOOLONG;
       RETURN_INT_COMMENT(0, ("The output buffer is too small. The link size is %d bytes.\n", len));
     }
@@ -843,6 +873,7 @@ int MlxReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   }
   buf[len] = L'\0';
 
+  free(iobuf);
   DEBUG_WLEAVE((L"return 0x%X; // \"%s\"\n", len, buf));
   return len;
 }
@@ -887,5 +918,182 @@ int MlxReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
   return n;
 }
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    MlxReadWci						      |
+|									      |
+|   Description	    Get the WCI target, and return its size                   |
+|									      |
+|   Parameters      const char *path	    The WCI name                      |
+|		    char *buf		    Output buffer		      |
+|		    size_t bufsize	    Output buffer size in characters  |
+|									      |
+|   Returns	    >0 = Success, 0 = Failure and set errno		      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2025-08-03 JFL Created this routine                               	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* Get the WCI target, and return its size. 0=failure */
+int MlxReadWciW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
+  char *iobuf;
+  DWORD dwTag;
+  PWCI_READ_BUFFER pWciBuf;
+  WCHAR *pwStr = NULL;
+  unsigned short len = 0;
+
+  DEBUG_WENTER((L"MlxReadWci(\"%s\", 0x%p, %d);\n", path, buf, bufsize));
+
+  iobuf = malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+  if (!iobuf) RETURN_CONST_COMMENT(0, ("Out of memory\n"));
+
+  dwTag = MlxReadReparsePointW(path, iobuf, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+  if (!dwTag) {
+    free(iobuf);
+    RETURN_CONST_COMMENT(0, ("This is not a reparse point\n"));
+  }
+
+  if (dwTag != IO_REPARSE_TAG_WCI) {
+    free(iobuf);
+    errno = EINVAL;
+    RETURN_CONST_COMMENT(0, ("This is not a WCI reparse point\n"));
+  }
+
+  /* This is a WCI place holder */
+  pWciBuf = (PWCI_READ_BUFFER)iobuf;
+  XDEBUG_PRINTF(("WCI Version = 0x%04X\n", (unsigned)(pWciBuf->Version)));
+  if (pWciBuf->Version != 1) {
+    free(iobuf);
+    errno = EBADF;
+    RETURN_CONST_COMMENT(0, ("Unexpected WCI Version = %d\n", (int)(pWciBuf->Version)));
+  }
+
+  /* This is a WCI place holder that we partially know how to decode */
+  XDEBUG_CODE_IF_ON({	/* Dump the target GUID */
+    unsigned short i;
+    char *pc = (char *)&(pWciBuf->LookupGuid);
+    DEBUG_PRINTF(("GUID = ")); /* Indents the string as needed */
+    for (i = 0; i < 16; i++) printf("%02X", pc[i] & 0xFF);
+    printf("\n");
+  })
+  XDEBUG_PRINTF(("Length = %u\n", (unsigned)(pWciBuf->WciNameLength)));
+  XDEBUG_CODE_IF_ON({	/* Display the target path */
+    unsigned short i;
+    unsigned short l = pWciBuf->WciNameLength / 2;
+    DEBUG_WPRINTF((L"Target = \"")); /* Indents the string as needed */
+    for (i = 0; i < l; i++) wprintf(L"%c", pWciBuf->WciName[i]);
+    wprintf(L"\"\n");
+  })
+
+  pwStr = pWciBuf->WciName;
+  len = (unsigned short)(pWciBuf->WciNameLength) / 2;
+  if (len) {
+    if (len >= bufsize) {
+      free(iobuf);
+      errno = ENAMETOOLONG;
+      RETURN_CONST_COMMENT(0, ("The output buffer is too small. The link size is %d bytes.\n", len));
+    }
+    CopyMemory(buf, pwStr, len*sizeof(WCHAR));
+  }
+  buf[len] = L'\0';
+
+  free(iobuf);
+  DEBUG_WLEAVE((L"return 0x%X; // \"%s\"\n", len, buf));
+  return len;
+}
+
+/* Get the WCI target, and return its size. 0 = failure */
+int MlxReadWciM(const char *path, char *buf, size_t bufsize, UINT cp) {
+  WCHAR wszPath[WIDE_PATH_MAX];
+  WCHAR wszTarget[WIDE_PATH_MAX];
+  int n;
+  char *pszDefaultChar;
+
+  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
+  n = MultiByteToWidePath(cp,			/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
+    			  path,			/* lpMultiByteStr, */
+			  wszPath,		/* lpWideCharStr, */
+			  COUNTOF(wszPath)	/* cchWideChar, */
+			  );
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    DEBUG_PRINTF(("MlxReadWciM(\"%s\", ...); // Conversion to Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+    return 0;
+  }
+
+  n = MlxReadWciW(wszPath, wszTarget, WIDE_PATH_MAX);
+  if (n <= 0) return n;
+
+  pszDefaultChar = (cp == CP_UTF8) ? NULL : "?";
+  n = WideCharToMultiByte(cp,			/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
+			  0,			/* dwFlags, */
+			  wszTarget,		/* lpWideCharStr, */
+			  n + 1,		/* cchWideChar, */
+			  buf,			/* lpMultiByteStr, */
+			  (int)bufsize,		/* cbMultiByte, */
+			  pszDefaultChar,	/* lpDefaultChar, */
+			  NULL			/* lpUsedDefaultChar */
+			  );
+  if (!n) {
+    errno = Win32ErrorToErrno();
+    DEBUG_PRINTF(("MlxReadWciM(\"%s\", ...); // Conversion back from Unicode failed. errno=%d - %s\n", path, errno, strerror(errno)));
+  }
+
+  return n;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    MlxSetProcessPlaceholderCompatibilityMode		      |
+|									      |
+|   Description     Call RtlSetProcessPlaceholderCompatibilityMode()          |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    Last PCHM state, or < 0 for error			      |
+|		    							      |
+|   Notes	    Necessary to expose cloud links. Else they're shown by    |
+|		    default as normal files or directories.		      |
+|		    							      |
+|		    https://stackoverflow.com/questions/59152220/cant-get-reparse-point-information-for-the-onedrive-folder
+|		    https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-rtlsetprocessplaceholdercompatibilitymode
+|		    							      |
+|   History	    							      |
+|    2025-07-29 JFL Created this routine.				      |
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+static CHAR MlxFailProcessPlaceholderCompatibilityMode(CHAR cMode) {
+  return (CHAR)-1;
+}
+#pragma warning(default:4100) /* Ignore the "unreferenced formal parameter" warning */
+
+int MlxSetProcessPlaceholderCompatibilityMode(int cMode) {
+  HMODULE hModule;
+  static PSPPHCMPROC pRtlSetProcessPlaceholderCompatibilityMode = NULL;
+
+  DEBUG_ENTER(("RtlSetProcessPlaceholderCompatibilityMode(%d);\n", (int)cMode));
+
+  if (!pRtlSetProcessPlaceholderCompatibilityMode) {
+    hModule = LoadLibrary("ntdll.dll");
+    if (!hModule) { /* Very unlikely to fail */
+      pRtlSetProcessPlaceholderCompatibilityMode = MlxFailProcessPlaceholderCompatibilityMode;
+      RETURN_INT_COMMENT(-3, ("Error 0x%X loading ntdll.dll\n", GetLastError()));
+    }
+
+    pRtlSetProcessPlaceholderCompatibilityMode = (PSPPHCMPROC)GetProcAddress(hModule, "RtlSetProcessPlaceholderCompatibilityMode");
+    if (!pRtlSetProcessPlaceholderCompatibilityMode) {
+      pRtlSetProcessPlaceholderCompatibilityMode = MlxFailProcessPlaceholderCompatibilityMode;
+      RETURN_INT_COMMENT(-4, ("Error 0x%X getting RtlSetProcessPlaceholderCompatibilityMode() address\n", GetLastError()));
+    }
+  }
+
+  RETURN_INT((int)(pRtlSetProcessPlaceholderCompatibilityMode((CHAR)cMode)));
+}
+	
 #endif /* _WIN32 */
 

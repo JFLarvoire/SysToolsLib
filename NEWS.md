@@ -4,6 +4,19 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-08-04
+### Fixed
+- junction.exe: Fixed the ability to list unknown reparse points that aren't junctions or symlinks.
+
+### Changed
+- junction.exe: Added the ability to list Cloud links, WCI links, and Linux fifo, char, & block devices.
+- C/MsvcLibX/include/reparsept.h: Added support for Windows Container Isolation Links.
+- C/MsvcLibX/include/unistd.h: Added definitions for MlxReadWci*() and for routines for managing the Place Holder Compatibility Mode.
+- C/MsvcLibX/src/dirent.c: Fixed the reparse point tag analysis in readdirW().  
+  Preserve the FILE_ATTRIBUTE_REPARSE_POINT bit in all cases.  
+  Recognize Linux socket, fifo, character, and block devices.
+- C/MsvcLibX/src/readlink.c: Added routines MlxReadWci*() and routines for managing the Place Holder Compatibility Mode.
+
 ## [Unreleased] 2025-07-27
 ### Changed
 - junction.exe: Renamed option -a as -R for Raw target, and added new option -a to display the Absolute target.

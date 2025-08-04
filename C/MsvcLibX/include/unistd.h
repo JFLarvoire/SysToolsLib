@@ -24,6 +24,8 @@
 *    2018-04-26 JFL Added getcwdW() and ConcatPathW() prototypes.             *
 *    2020-12-11 JFL Added ReadAppExecLink*() prototypes.                      *
 *    2021-11-29 JFL Prefix MsvcLibX-specific WIN32 public routines with Mlx.  *
+*    2025-08-03 JFL Added routines MlxReadWci*() and routines for managing    *
+*		    the Place Holder Compatibility Mode.                      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -148,7 +150,9 @@ typedef _W64 int ssize_t;
 #define MlxGetReparseTag MlxGetReparseTagU
 #define MlxResolveLinks MlxResolveLinksU
 #define MlxResolveTailLinks MlxResolveTailLinksU
+#define MlxReadLink MlxReadLinkU
 #define MlxReadAppExecLink MlxReadAppExecLinkU
+#define MlxReadWci MlxReadWciU
 #else /* _ANSI_SOURCE */
 #define readlink readlinkA
 #define symlink symlinkA
@@ -157,7 +161,9 @@ typedef _W64 int ssize_t;
 #define MlxGetReparseTag MlxGetReparseTagA
 #define MlxResolveLinks MlxResolveLinksA
 #define MlxResolveTailLinks MlxResolveTailLinksA
+#define MlxReadLink MlxReadLinkA
 #define MlxReadAppExecLink MlxReadAppExecLinkA
+#define MlxReadWci MlxReadWciA
 #endif
 ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsiz);		/* Posix routine readlink - Wide char version */
 ssize_t readlinkM(const char *path, char *buf, size_t bufsiz, UINT cp);		/* Posix routine readlink - Multibyte char version */
@@ -190,11 +196,27 @@ int MlxResolveTailLinksA(const char *path, char *buf, size_t bufsize);		/* Resol
 int MlxResolveTailLinksU(const char *path, char *buf, size_t bufsize);		/* Resolve node names with symlinks, symlinkds, and junctions */
 int MlxReadAppExecLinkW(const WCHAR *path, WCHAR *buf, size_t bufsize);		/* Get the target of an appexeclink - Wide char version */
 int MlxReadAppExecLinkM(const char *path, char *buf, size_t bufsize, UINT cp);	/* Get the target of an appexeclink - MultiByte char version */
-#define MlxReadAppExecLinkA(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_ACP);/* Get the target of an appexeclink - ANSI version */
-#define MlxReadAppExecLinkU(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_UTF8);/* Get the target of an appexeclink - UTF-8 version */
+#define MlxReadAppExecLinkA(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_ACP) /* Get the target of an appexeclink - ANSI version */
+#define MlxReadAppExecLinkU(p, buf, sz) MlxReadAppExecLinkM(p, buf, sz, CP_UTF8)/* Get the target of an appexeclink - UTF-8 version */
+int MlxReadWciW(const WCHAR *path, WCHAR *buf, size_t bufsize);			/* Get the target of a WCI place holder - Wide char version */
+int MlxReadWciM(const char *path, char *buf, size_t bufsize, UINT cp);		/* Get the target of a WCI place holder - MultiByte char version */
+#define MlxReadWciA(p, buf, sz) MlxReadWciM(p, buf, sz, CP_ACP)			/* Get the target of a WCI place holder - ANSI version */
+#define MlxReadWciU(p, buf, sz) MlxReadWciM(p, buf, sz, CP_UTF8)		/* Get the target of a WCI place holder - UTF-8 version */
 WCHAR *MlxGetShareBasePathW(const WCHAR *pwszShareUNC);				/* MsvcLibX Guess the server-side path of \\SERVER\SHARE */
 
 #define SYMLOOP_MAX 31 /* Maximum depth of symbolic name resolution, to avoid stack overflows. Windows is documented to allow 31: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365460(v=vs.85).aspx */
+
+/* Front end to the RtlSetProcessPlaceholderCompatibilityMode() procedure */
+typedef NTSYSAPI CHAR(*PSPPHCMPROC)(CHAR Mode); /* Pointer to the RtlSetProcessPlaceholderCompatibilityMode() procedure */
+#ifndef PHCM_APPLICATION_DEFAULT		/* Normally defined in ntifs.h */
+#define PHCM_APPLICATION_DEFAULT  ((CHAR)0)
+#define PHCM_DISGUISE_PLACEHOLDER ((CHAR)1)
+#define PHCM_EXPOSE_PLACEHOLDERS  ((CHAR)2)
+#endif
+int MlxSetProcessPlaceholderCompatibilityMode(int cMode);
+#define MlxShowPlaceholders() MlxSetProcessPlaceholderCompatibilityMode((int)PHCM_EXPOSE_PLACEHOLDERS)
+#define MlxHidePlaceholders() MlxSetProcessPlaceholderCompatibilityMode((int)PHCM_DISGUISE_PLACEHOLDER)
+
 #endif /* defined(_WIN32) */
 
 /* Standard file descriptor numbers, for low level I/O functions */

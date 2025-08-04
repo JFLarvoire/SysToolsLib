@@ -26,12 +26,15 @@
 *    2025-07-27 JFL Renamed -a as -R for Raw, and new -a now means Absolute.  *
 *                   Also -a and -r can now be used in any order.              *
 *                   Document the -i option in the debug version.              *
+*    2025-07-29 JFL Added the ability to expose hidden (Ex. Cloud) links.     *
+*    2025-07-30 JFL Display WCI links targets & cloud links offline mode.     *
+*    2025-08-03 JFL Restructured, and added Linux fifo, char, & block devices.*
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2025-07-27"
+#define PROGRAM_VERSION "2025-08-03"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -65,6 +68,7 @@ typedef struct { /* Reference data to pass to the WalkDirTree callback */
   void *pTree;		/* Internal: The binary tree of known junctions */
 } JCB_REF;	 /* Initialize as {0}, except for the inut flags */
 int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pJcbRef);
+int ExposeAllReparsePoints(void);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -237,6 +241,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "t")) {	/* With -l or -r, list all types of reparse points, not just junctions */
 	jcbRef.iFlags |= JCB_ALLTYPES;
+	ExposeAllReparsePoints();
 	continue;
       }
       if (streq(opt, "V")) {	/* Display version */
@@ -333,7 +338,7 @@ int main(int argc, char *argv[]) {
 
   if (action == ACT_GET) {
     if (iRaw | iAbs) {
-      iErr = MlxReadLinkU(pszJunction, buf, sizeof(buf)) ? 0 : -1;
+      iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
     } else {
       /* Read the link, as if it were a relative symbolic link */
       iErr = (int)readlink(pszJunction, buf, sizeof(buf));
@@ -456,9 +461,9 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   char szTag[16];
   int iErr;
 
-  if (pDE->d_type != DT_LNK) return 0;
+  if (!(pDE->d_attribs & FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
 
-  dwTag = MlxGetReparseTag(pszRelPath);
+  dwTag = pDE->d_ReparseTag;  /* dwTag = MlxGetReparseTag(pszRelPath); */
   if ((!iAllTypes) && (dwTag != IO_REPARSE_TAG_MOUNT_POINT)) return 0;
 
   if (iOnce) { /* Check if that same junction has been seen before */
@@ -506,20 +511,19 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   pJcbRef->nJunction += 1;
 
   iErr = -1;
-  switch (dwTag) {
+  switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
       if (iRaw | iAbs) {
-	iErr = MlxReadLinkU(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
+	iErr = MlxReadLink(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
       } else {
 	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
       }
       break;
     }
     case IO_REPARSE_TAG_SYMLINK: {
-      if (!iAllTypes) break;
       pszType = "Symlink";
-      /* Using MlxReadLinkU() in iRaw mode here makes no sense, as SymLinks can
+      /* Using MlxReadLink() in iRaw mode here makes no sense, as SymLinks can
          be relative or absolute, and the latter just have an extra \??\ prefix */
       iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
       if (iErr != -1) {
@@ -530,15 +534,54 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
       break;
     }
     case IO_REPARSE_TAG_LX_SYMLINK: {
-      if (!iAllTypes) break;
       pszType = "LinuxLink";
       break;
     }
     case IO_REPARSE_TAG_APPEXECLINK: {
-      if (!iAllTypes) break;
       pszType = "AppExecLnk";
       int iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
       iErr = (iLen <= 0) ? -1 : 0;
+      break;
+    }
+    case IO_REPARSE_TAG_CLOUD: {
+      DWORD dwAttr = pDE->d_attribs;
+      pszType = "PlaceHldr";	/* Place Holder for a file in cloud storage */
+      /* MsvcLibX does not know how to find the cloud target pathname */
+      strcpy(buf, (dwAttr & FILE_ATTRIBUTE_OFFLINE) ? "↑" : "↕"); /* ↑=Remote ↕=Both ↓=Local */ 
+      strcat(buf, "☁");
+      iErr = 0;
+      break;
+    }
+    case IO_REPARSE_TAG_WCI: {
+      pszType = "WCILink";
+      /* MsvcLibX reads WCI links targets as relative to an unknown GUID-defined base */
+      strcpy(buf, "✉ \\");	/* ✉ standing for a container base. (Docker 🐋 whale does not print) */
+      int iLen = lstrlen(buf);
+      iErr = MlxReadWci(pszRelPath, buf + iLen, sizeof(buf) - iLen) ? 0 : -1;
+      break;
+    }
+    case IO_REPARSE_TAG_AF_UNIX: {
+      pszType = "LxSocket";
+      pszTarget = NULL;
+      iErr = 0;
+      break;
+    }
+    case IO_REPARSE_TAG_LX_FIFO: {
+      pszType = "LxFifo";
+      pszTarget = NULL;
+      iErr = 0;
+      break;
+    }
+    case IO_REPARSE_TAG_LX_CHR: {
+      pszType = "LxChr";
+      pszTarget = NULL;
+      iErr = 0;
+      break;
+    }
+    case IO_REPARSE_TAG_LX_BLK: {
+      pszType = "LxBlk";
+      pszTarget = NULL;
+      iErr = 0;
       break;
     }
     default: {
@@ -549,7 +592,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   }
   if (iErr == -1) pszTarget = "?";
 
-  if (!iVerbose) {
+  if ((!iVerbose) || (!pszTarget)) {
     if (!iAllTypes) {
       printf("%s\n", pszRelPath);
     } else {
@@ -574,3 +617,41 @@ out_of_memory:
 
 #pragma warning(default:4100) /* Restore the unreferenced formal parameter warning */
 
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    ExposeAllReparsePoints				      |
+|									      |
+|   Description     Make sure the application sees all reparse points         |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    0=Success						      |
+|		    							      |
+|   Notes	    https://stackoverflow.com/questions/59152220/cant-get-reparse-point-information-for-the-onedrive-folder
+|		    https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-rtlsetprocessplaceholdercompatibilitymode
+|		    							      |
+|   History	    							      |
+|    2025-07-29 JFL Created this routine.				      |
+|    2025-08-03 JFL Moved the real action to MsvcLibX's MlxShowPlaceholders().|
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+int ExposeAllReparsePoints() {
+  int iLastPHCM;
+
+  DEBUG_ENTER(("ExposeAllReparsePoints();\n"));
+
+  /* Cloud links must be exposed, else they're visible as normal files */
+  iLastPHCM = MlxShowPlaceholders();
+  if (iLastPHCM < 0) { /* Function return negative values in case of error */
+    /* Ignore the error, as this may fail on old versions of Windows that
+       do not support the API, and this is not a problem. */
+    /* RETURN_INT_COMMENT(1, ("Failed to enable PHCM\n")); */
+    DEBUG_PRINTF(("# Ignoring failure to enable PHCM\n"));
+  }
+
+  /* Room for possible future tricks to enable more hidden reparse points */
+
+  RETURN_INT_COMMENT(0, ("Success\n"));
+}
+	

@@ -14,6 +14,7 @@
 *    2020-12-11 JFL Added read structure for tag IO_REPARSE_TAG_APPEXECLINK.  *
 *    2020-12-14 JFL Added lots of definitions from newer MS docs and others.  *
 *    2023-11-11 JFL Updated definitions and comments.                         *
+*    2025-07-29 JFL Added support for Windows Container Isolation Links.      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -54,6 +55,10 @@
    are processed on the server and are not processed by a client after transmission over the wire. */
 /* See https://github.com/prsyahmi/GpuRamDrive/blob/master/GpuRamDrive/3rdparty/inc/imdisk/ntumapi.h
    for a list of non-Microsoft reparse tags */
+   
+#define IO_REPARSE_TAG_VALID_BITS       0xF000FFFF	/* Bits 27:16 must be ignored */
+#define IO_REPARSE_TAG_TYPE_BITS        0xF0000FFF	/* Bits 15:12 flag an instance, not a type */
+
 
 #ifndef IO_REPARSE_TAG_RESERVED_ZERO
 #define IO_REPARSE_TAG_RESERVED_ZERO	0x00000000	/* Reserved reparse tag value */
@@ -286,5 +291,18 @@ typedef struct _REPARSE_LX_SYMLINK_BUFFER {
   DWORD  FileType; 	// Value is apparently always 2 for symlinks.
   char   PathBuffer[1];	// POSIX path of symlink. UTF-8. Not \0 terminated.
 } LX_SYMLINK_READ_BUFFER, *PLX_SYMLINK_READ_BUFFER;
+
+// Windows Container Isolation Links
+typedef struct _REPARSE_WCI_READ_BUFFER { // For tag IO_REPARSE_TAG_WCI
+  DWORD  ReparseTag;
+  WORD   ReparseDataLength;
+  WORD   Reserved;		
+  ULONG  Version;               // Expected to be 1 by wcifs.sys
+  ULONG  Reserved2;
+  GUID   LookupGuid;            // GUID used for lookup in wcifs!WcLookupLayer
+  USHORT WciNameLength;         // Length of the WCI subname, in bytes
+  WCHAR  WciName[1];            // The WCI subname (not zero terminated)
+} WCI_READ_BUFFER, *PWCI_READ_BUFFER;
+#define WCI_READ_BUFFER_HEADER_SIZE (sizeof(WCI_READ_BUFFER) - sizeof(WCHAR))
 
 #pragma pack()
