@@ -31,6 +31,8 @@
 *                   with an Ex suffix; And added macros with the old name     *
 *                   without the extra three arguments.                        *
 *    2021-11-25 JFL Added WideToNewMultiByteString() & similar routines.      *
+*    2025-08-04 JFL Disabled debug output by default, to avoid lots of        *
+*                   useless output when debugging other routines.             *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -62,6 +64,14 @@
 #include <io.h>         /* For _setmode() */
 #include <fcntl.h>      /* For I/O modes */
 #include "unistd.h"	/* For isatty() */
+
+#if 0
+  /* Enable only in case of work on this routine, else this generates
+     lots of useless information in other debug output. */
+  #define DEBUG_CONVERT_CODE(code) XDEBUG_CODE_IF_ON(code)
+#else
+  #define DEBUG_CONVERT_CODE(code)
+#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -105,7 +115,7 @@ int ConvertBufEx(const char *pFromBuf, size_t nFromBufSize, UINT cpFrom, char *p
   int nWBufMax;			/* Number of UTF-16 characters that fit in the UTF-16 buffer */
 
   /* DO NOT INSERT DEBUG_PRINTF ETC CALLS, AS THIS FUNCTION IS INDIRECTLY INVOKED BY DEBUG_PRINTF */
-  XDEBUG_CODE_IF_ON(
+  DEBUG_CONVERT_CODE(
     _cprintf("ConvertBufEx(*%p, %ld, %u, *%p, %ld, %u, 0x%x, *%p, *%p)\n", \
    	     pFromBuf, (long)nFromBufSize, cpFrom, pToBuf, (long)nToBufSize, cpTo, dwFlags, lpDefaultChar, lpUsedDef);
   )
@@ -177,7 +187,7 @@ bad_unicode_char:
       break;
     }
     default:	/* Anything else is a single byte or multibyte encoding, so let Windows convert it */
-      XDEBUG_CODE_IF_ON(
+      DEBUG_CONVERT_CODE(
 	_cprintf("MultiByteToWideChar(%u, 0x%x, *%p, %d, *%p, %lu)\n", \
 		 cpFrom, 0, pFromBuf, (int)nFromBufSize, pWBuf, (long)nWBufMax);
       )
@@ -228,7 +238,7 @@ bad_unicode_char:
     }
     default: {	/* Anything else is a single byte or multibyte encoding, so let Windows convert it */
       LPBOOL lpUsedDef2 = ((cpTo == CP_UTF7) || (cpTo == CP_UTF8)) ? NULL : &bUsedDef2;
-      XDEBUG_CODE_IF_ON(
+      DEBUG_CONVERT_CODE(
 	_cprintf("WideCharToMultiByte(%u, 0x%x, *%p, %d, *%p, %d, *%p, *%p)\n", \
 		 cpTo, dwFlags, pWBuf, nWide, pToBuf, (int)nToBufSize, lpDefaultChar, lpUsedDef2);
       )
@@ -259,7 +269,7 @@ int ConvertStringEx(char *buf, size_t nBufSize, UINT cpFrom, UINT cpTo,
   int n;
 
   /* DO NOT INSERT DEBUG_PRINTF ETC CALLS, AS THIS FUNCTION IS INDIRECTLY INVOKED BY DEBUG_PRINTF */
-  XDEBUG_CODE_IF_ON(
+  DEBUG_CONVERT_CODE(
     _cprintf("ConvertStringEx(*%p, %ld, %u, %u, 0x%x, *%p, *%p)\n", \
    	     buf, (long)nBufSize, cpFrom, cpTo, dwFlags, lpDefaultChar, lpUsedDef);
   )
@@ -295,7 +305,7 @@ char *DupAndConvertEx(const char *string, UINT cpFrom, UINT cpTo,
   char *pBuf;
 
   /* DO NOT INSERT DEBUG_PRINTF ETC CALLS, AS THIS FUNCTION IS INDIRECTLY INVOKED BY DEBUG_PRINTF */
-  XDEBUG_CODE_IF_ON(
+  DEBUG_CONVERT_CODE(
     _cprintf("DupAndConvertEx(*%p, %u, %u, 0x%x, *%p, *%p)\n", \
    	     string, cpFrom, cpTo, dwFlags, lpDefaultChar, lpUsedDef);
   )
