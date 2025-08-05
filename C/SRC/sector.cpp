@@ -123,6 +123,8 @@
 *		    - The input and output device type and name.	      *
 *		    - Info about sector 0 being copied last, when applies.    *
 *		    Version 5.1.1.					      *
+*    2025-08-05 JFL Improved the help screen, and fixed its output encoding.  *
+*		    Version 5.1.2.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -130,8 +132,8 @@
 
 #define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
-#define PROGRAM_VERSION "5.1.1"
-#define PROGRAM_DATE    "2025-07-02"
+#define PROGRAM_VERSION "5.1.2"
+#define PROGRAM_DATE    "2025-08-05"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -179,6 +181,10 @@ typedef int BOOL;
 
 /* SysToolsLib include files */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
+
+#if defined(_WIN32)
+#include "Windows.h"	/* For GetConsoleOutputCP() */
+#endif
 
 #define ISECT0 1
 
@@ -1261,7 +1267,11 @@ With...\n\
   printf("\
 Switches:\n\
 \n\
-  -a     Copy all sectors from source.\n\
+  -a     Copy all sectors from source."
+#if defined(_WIN32)
+" See note 2 below."
+#endif
+"\n\
   -bpb   Dump a boot sector Bios Parameter Block.\n"
 #ifdef _DEBUG
 "\
@@ -1281,7 +1291,7 @@ Switches:\n\
   -s N   Set sector size. Default: Biggest of the two. 1/files. ~512/disks.\n\
   -sb OFFSET VALUE  Set byte. Idem with -sw, -sdw, -sqw for word, dword, qword.\n\
   -sh    Set the \"Hidden\" field in a boot sector BPB equal to the BS LBA.\n\
-  -spt N [Parameters]    Set partition table N (0 to 3) entry. Details below.\n\
+  -spt N [Parameters]    Set partition table N (0 to 3). See note 2 below.\n\
   -t     Use base 10 for input and output.\n\
   -v     Display verbose information.\n\
   -V     Display this program version and exit.\n\
@@ -1289,8 +1299,10 @@ Switches:\n\
   -X|-ro Read-only mode. Simulate commands execution without any write.\n\
   -z     Append zeros to the end of input data if needed.\n\
 \n");
-    printf("\
-To update an entry in a partition table (PT): Use the -spt option.\n\
+  printf("\
+Notes:\n\
+\n\
+1) To update an entry in a legacy partition table (PT): Use the -spt option.\n\
 Can update directly a PT on a drive: Ex: {source} = 80: ; No destination.\n\
 Or updates a PT within a file. Must specify the eventual target drive.\n\
 Parameters = List of PT parameters, in the order displayed by this program:\n\
@@ -1303,8 +1315,32 @@ All are in decimal. All are optional. Default is 0. All 0 = Erase PT entry.\n\
  First  32-bits index of 1st sector. If 0, computed from BegCyl/BegHead/BegSect\n\
  Length 32-bits number of sectors. If 0, computed from EndCyl/EndHead/EndSect.\n\
 "
+#if defined(_WIN32)
+"\n\
+2) When writing a whole disk (option -a), sector.exe writes sectors 1 to last,\n\
+then finally sector 0. This is done to prevent Windows from auto-mounting the\n\
+partitions while they're being written.\n\
+To avoid write errors in partitions mounted already, first clear the MBR, then\n\
+unplug and replug the disk, before rewriting it all.\n\
+"
+#endif /* defined(_WIN32) */
+);
+
+#if defined(_WIN32)
+  {
+  int iCP0 = GetConsoleOutputCP();
+  fflush(stdout);
+  SetConsoleOutputCP(65001); /* The WIN32 footnote may use UTF-8 strings */
+#endif /* defined(_WIN32) */
+  printf(
 #include "footnote.h"
 );
+#if defined(_WIN32)
+  fflush(stdout);
+  SetConsoleOutputCP(iCP0);
+  }
+#endif /* defined(_WIN32) */
+
   exit(0);
 }
 
