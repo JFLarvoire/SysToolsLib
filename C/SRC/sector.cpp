@@ -117,6 +117,12 @@
 *		    In verbose mode, report free space between partitions.    *
 *    2021-10-20 JFL Display the correct partition size when it's 0xFFFFFFFF.  *
 *		    Version 5.1.                                              *
+*    2025-07-01 JFL Do not attempt to write the boot sector if writing the    *
+*		    rest of a disk image failed.			      *
+*    2025-07-02 JFL Display more information in verbose mode:		      *
+*		    - The input and output device type and name.	      *
+*		    - Info about sector 0 being copied last, when applies.    *
+*		    Version 5.1.1.					      *
 *		                                                              *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -124,8 +130,8 @@
 
 #define PROGRAM_DESCRIPTION "Disk sector manager"
 #define PROGRAM_NAME    "sector"
-#define PROGRAM_VERSION "5.1"
-#define PROGRAM_DATE    "2021-10-20"
+#define PROGRAM_VERSION "5.1.1"
+#define PROGRAM_DATE    "2025-07-02"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -233,6 +239,7 @@ int IsSwitch(char *pszArg);
 void DumpBuf(void FAR *fpBuf, WORD wStart, WORD wStop);
 int dump_part(MASTERBOOTSECTOR *pMbs, QWORD qwDiskSectors);
 int FormatSize(QWORD &qwSize, char *pBuf, size_t nBufSize, int iKB);
+char *BlockDeviceTypeName(int iType);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -472,7 +479,7 @@ int _cdecl main(int argc, char *argv[]) {
       if (streq(opt, "tf")) {	/* Test function FormatSize() */
 	char szBuf[20];
 	iBase = 10;
-	cBase = 'u';
+	cBase = 'u';	
 	strtoqw(argv[i+i], qw, iBase);
 	FormatSize(qw, szBuf, sizeof(szBuf), atoi(argv[i+2]));
 	printf("That is '%s'\n", szBuf);
@@ -797,7 +804,11 @@ geometry_failure:
   }
   QWORD qwMB = qwNBytes;
   qwMB /= (DWORD)0x100000;
-  if (iVerbose) oprintf("There are {%I64{%c}} bytes to transfer ({%I64d}MB).\n", cBase, qwNBytes, qwMB);
+  if (iVerbose) {
+    oprintf("There are {%I64{%c}} bytes to transfer ({%I64d}MB)", cBase, qwNBytes, qwMB);
+    printf(" from %s %s", BlockDeviceTypeName(BlockType(hFrom)), pszFrom);
+    printf(" to %s %s.\n", BlockDeviceTypeName(BlockType(hTo)), pszTo);
+  }
 
   if (qwFromSect == QWMAX) {
     qwFromSect = 0;
@@ -934,9 +945,11 @@ geometry_failure:
   QWORD qwFromSect0 = qwFromSect;
   if (hTo) iToSectPerSect = iSSize / BlockSize(hTo);
   if (hTo && (BlockSize(hTo) > 1) && (qwMB >= 1) && (qwToSect == 0)) { /* If copying a whole disk image to a disk */
+    if (iVerbose) printf("The MBR (sector 0) will be copied last.\n");
     iWriteMbrLast = TRUE;
     nPhases = 2;
   }
+  iErr = 0;
   for (int iPhase = 0; iPhase < nPhases; iPhase++) {
     if (iWriteMbrLast) {
       if (iPhase == 0) { /* Copy everything but the MBR */
@@ -944,6 +957,7 @@ geometry_failure:
       	qwFromSect += iFromSectPerSect;
       	qwToSect += iToSectPerSect;
       } else { /* Phase 1: Copy the MBR */
+      	if (iErr) break;  /* Skip that 2nd phase if the first phase failed */
       	qwNBytes = iSSize;
       	qwFromSect = qwFromSect0;
       	qwToSect = 0;
@@ -1184,6 +1198,7 @@ geometry_failure:
 	} else { // Piping to stdout
 	  if (write(1, pBuf+uDone, wTo) < 0) {
 	    fprintf(stderr, "\nError: Can't write to stdout\n");
+	    iErr = 4;
 	    break;
 	  }
 	}
@@ -1861,5 +1876,36 @@ char *GetDosErrorString(int iErr) {
 #endif
     default: return "Unknown error";
   }
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    BlockDeviceTypeName 				      |
+|									      |
+|   Description	    Get the name of a type of block device		      |
+|									      |
+|   Parameters	    int iType	    Type number BT_xxxx defined in block.h    |
+|									      |
+|   Returns	    A string with the English name 			      |
+|                                                                             |
+|   History								      |
+|    2025-07-02 JFL Created this routine				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+char *pszBlockDeviceTypeNames[] = {
+  "file",		/* BT_FILE,		0 = File */
+  "hard disk",		/* BT_HARDDISK,		1 = Hard disk */
+  "logical volume",	/* BT_LOGICALVOLUME,	2 = Logical volume */
+  "floppy disk",	/* BT_FLOPPYDISK,	3 = Floppy disk */
+  "CD/DVD/BlueRay"	/* BT_COMPACTDISK,	4 = CD/DVD/BlueRay */
+};
+#define NBLOCKDEVICETYPES (sizeof(pszBlockDeviceTypeNames)/sizeof(char *))
+
+char *BlockDeviceTypeName(int iType) {
+  if ((iType < 0) || (iType >= NBLOCKDEVICETYPES)) {
+    return "Unknown";
+  }
+  return pszBlockDeviceTypeNames[iType];
 }
 
