@@ -86,6 +86,7 @@
 *    2022-11-27 JFL Make sure lodos.h is included before BiosLib's clibdef.h. *
 *		    This way, the DOS program output can be redirected.       *
 *    2022-12-07 JFL Fix the -? option which crashed under BIOS & LODOS.       *
+*    2025-08-12 JFL Make sure DCOM definitions are included in all cases.     *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -93,11 +94,13 @@
 
 #define PROGRAM_DESCRIPTION "Identify the processor and its features"
 #define PROGRAM_NAME    "cpuid"
-#define PROGRAM_VERSION "2022-12-07"
+#define PROGRAM_VERSION "2025-08-12"
 
 /* Definitions */
 
 #pragma warning(disable:4001)       /* Ignore the // C++ comment warning */
+
+#define _WIN32_DCOM	    /* Force including DCOM definitions in windows.h */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -129,8 +132,6 @@
 #define SUPPORTED_OS 1
 
 #define _CRT_SECURE_NO_WARNINGS // Don't warn about old unsecure functions.
-
-#define _WIN32_DCOM
 
 #include <windows.h>
 

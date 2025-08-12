@@ -50,6 +50,7 @@
 *    2020-04-20 JFL Added support for MacOS. Version 3.2.                     *
 *    2023-11-16 JFL Bugfix in the debug version: Buffer used after free().    *
 *                   Version 3.2.1.                                            *
+*    2025-08-10 JFL Fixed a build error. No functional change. Version 3.2.2. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -57,8 +58,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.2.1"
-#define PROGRAM_DATE    "2023-11-16"
+#define PROGRAM_VERSION "3.2.2"
+#define PROGRAM_DATE    "2025-08-10"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -76,6 +77,7 @@
 #include <limits.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
+#include "syslib.h"		/* Force linking with SysLib dictionary routines */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
