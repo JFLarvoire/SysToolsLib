@@ -51,6 +51,7 @@
 *		    Version 2.1.                                              *
 *    2020-04-20 JFL Added support for MacOS. Version 2.2.                     *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.2.1.		      *
+*    2025-08-10 JFL Adapted to dict.h changes. Version 2.2.2.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -58,8 +59,8 @@
 
 #define PROGRAM_DESCRIPTION "Compare .ini files, section by section, and item by item"
 #define PROGRAM_NAME    "inicomp"
-#define PROGRAM_VERSION "2.2.1"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "2.2.2"
+#define PROGRAM_DATE    "2025-08-10"
 
 #define _CRT_SECURE_NO_WARNINGS /* Prevent warnings about using sprintf and sscanf */
 
@@ -78,8 +79,8 @@
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
+#define DICT_DEFINE_PROCS
 #include "dict.h"
-DICT_DEFINE_PROCS();
 
 /************************* OS/2-specific definitions *************************/
 
@@ -178,10 +179,10 @@ int compStringNB(const char *s1, const char *s2);
 int compString(const char *s1, const char *s2);
 int compare(char *name1, dict_t *tree1, char *name2, dict_t *tree2);
 void newOutState(outstate *pold, outstate new, char *name1, char *name2);
-void *printSectCB(char *pszName, void *pValue, void *pRef);
-void *printSectNameCB(char *pszName, void *pValue, void *pRef);
-void printSectName(char *name);
-void *printItemCB(char *pszName, void *pValue, void *pRef);
+void *printSectCB(const char *pszName, void *pValue, void *pRef);
+void *printSectNameCB(const char *pszName, void *pValue, void *pRef);
+void printSectName(const char *name);
+void *printItemCB(const char *pszName, void *pValue, void *pRef);
 void *printItem(dictnode *pi);
 void outOfMem(void);
 void usage(void);
@@ -921,13 +922,13 @@ void newOutState(outstate *pold, outstate new, char *name1, char *name2)
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 #endif
 
-void *printSectNameCB(char *pszName, void *pValue, void *pRef)
+void *printSectNameCB(const char *pszName, void *pValue, void *pRef)
     {
     if (pszName[0]) printf("\n[%s]\n", pszName);
     return NULL;
     }
 
-void *printSectCB(char *pszName, void *pValue, void *pRef)
+void *printSectCB(const char *pszName, void *pValue, void *pRef)
     {
     if (pszName[0]) printf("\n[%s]\n", pszName);
     ForeachDictValue(pValue, printItemCB, pRef);
@@ -938,7 +939,7 @@ void *printSectCB(char *pszName, void *pValue, void *pRef)
 #pragma warning(default:4100) /* Restore the "unreferenced formal parameter" warning */
 #endif
 
-void printSectName(char *name)
+void printSectName(const char *name)
     {
     printSectNameCB(name, NULL, NULL);
     }
@@ -961,7 +962,7 @@ void printSectName(char *name)
 #pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
 #endif
  
-void *printItemCB(char *pszName, void *pValue, void *pRef)
+void *printItemCB(const char *pszName, void *pValue, void *pRef)
     {
     char *pszValue = pValue;
     if (   *pszName				    /* If the name is not empty */
