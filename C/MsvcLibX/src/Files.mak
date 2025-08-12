@@ -38,6 +38,7 @@
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #    2024-10-14 JFL Renamed variable I as XI to avoid conflicts with the I    #
 #                   variable in DOS.mak and WIN32.mak.			      #
+#    2017-03-03 JFL Added getenv.obj.   		                      #
 #                   							      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -104,6 +105,7 @@ WIN32_OBJECTS = \
     +daswprintf.obj		\
     +fileid.obj			\
     +GetEncoding.obj		\
+    +getenv.obj			\
     +GetFileAttributes.obj	\
     +GetFileAttributesEx.obj	\
     +GetFullPathName.obj	\
@@ -224,6 +226,8 @@ fullpath.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\limits.h $(XI)\stdlib.h $(XI)\lim
 fwrite.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\iconv.h $(XI)\msvclibx.h $(XI)\stdio.h $(XI)\unistd.h $(XI)\windows.h
 
 getcwd.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\stdio.h $(XI)\unistd.h $(XI)\windows.h
+
+getenv.c: $(MI)\debugm.h $(CI)\dict.h $(XI)\errno.h $(XI)\stdlib.h $(XI)\string.h $(XI)\iconv.h
 
 getline.c: $(MI)\debugm.h $(XI)\limits.h $(XI)\errno.h $(XI)\stdio.h
 

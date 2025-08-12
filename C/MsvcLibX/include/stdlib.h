@@ -9,6 +9,8 @@
 *   History:								      *
 *    2016-09-13 JFL Created this file.					      *
 *    2020-03-29 JFL Added mkstmp() definitions.				      *
+*    2025-08-07 JFL Added getenv() definitions.				      *
+*    2025-08-07 JFL Added setenv() definitions.				      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -32,11 +34,16 @@ extern "C" {
 extern char *mkdtemp(char *pszTemplate); /* Create a temporary directory */
 extern int mkstemp(char *pszTemplate);	 /* Create a temporary file */
 
+/* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
+int setenv(const char *pszName, const char *pszValue, int iOverwrite);
+
 #endif /* defined(_MSDOS) */
 
 /************************ Win32-specific definitions *************************/
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
+
+#include <windows.h>
 
 extern char *_fullpathU(char *absPath, const char *relPath, size_t maxLength);
 
@@ -62,13 +69,35 @@ extern int mkstempU(char *pszTemplate);		   /* UTF-8 version */
 #define mkstemp mkstempA		/* For processing ANSI pathnames */
 #endif
 
+/* Code-page-specific versions of getenv() */
+char *getenvM(const char *name, UINT cp);
+#define getenvA(name) getenvM(name, CP_ACP)
+#define getenvU(name) getenvM(name, CP_UTF8)
+#undef getenv
+#if defined(_UTF8_SOURCE)
+#define getenv getenvU			/* For getting UTF-8 values */
+#else
+#define getenv getenvA			/* For getting ANSI values */
+#endif
+
+/* Code-page-specific versions of setenv() */
+/* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
+int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT cp);
+#define setenvA(name, value, rw) setenvM(name, value, rw, CP_ACP)
+#define setenvU(name, value, rw) setenvM(name, value, rw, CP_UTF8)
+#undef setenv
+#if defined(_UTF8_SOURCE)
+#define setenv setenvU			/* For getting UTF-8 values */
+#else
+#define setenv setenvA			/* For getting ANSI values */
+#endif
+
 #endif /* defined(_WIN32) */
 
 /********************** End of OS-specific definitions ***********************/
 
 /* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
 #define putenv _putenv
-int setenv(const char *pszName, const char *pszValue, int iOverwrite);
 #define unsetenv(name) setenv(name, "", 1);
 
 #ifdef __cplusplus

@@ -103,6 +103,7 @@
 *    2021-11-29 JFL Renamed MsvcLibX's GetReparseTag() as MlxGetReparseTag(). *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.16.2.		      *
 *    2023-01-10 JFL Corrected the help message for Unix. Version 1.16.3.      *
+*    2025-08-10 JFL Fix in MsvcLibX for a non-ASCII PATH. Version 1.16.4.      *
 *		    							      *
 *       © Copyright 2016-2019 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -110,8 +111,8 @@
 
 #define PROGRAM_DESCRIPTION "Find in the PATH which program will run"
 #define PROGRAM_NAME    "Which"
-#define PROGRAM_VERSION "1.16.3"
-#define PROGRAM_DATE    "2023-01-10"
+#define PROGRAM_VERSION "1.16.4"
+#define PROGRAM_DATE    "2025-08-09"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
