@@ -41,6 +41,7 @@
 *    2025-08-10 JFL Declare all keys as const.				      *
 *                   Changed the procedures definition mechanism, to minimize  *
 *                   the macro space used.                                     *
+*    2025-08-15 JFL Fixed SetDictValue() if the node already exists.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -227,18 +228,20 @@ void *dictnode_tree_callback(dictnode *node, void *ref) {
   return (s->cb)(node->pszKey, node->pData, s->ref);
 }
 
+/* For both maps and multimaps. Do not change the tree is a node already exists. */
 void *NewDictValue(dict_t *dict, const char *key, void *value) {
   dictnode *node = calloc(1, sizeof(dictnode));
   TREE_ENTRY(dictnode,("NewDictValue(%p, \"%s\", %p)\n", dict, key, value));
   if (node) {
     dictnode *oldNode;
     node->pszKey = strdup(key);
-    node->pData = value;
+    node->pData = value;   /* Necessary for both maps & multimaps */
     oldNode = get_dictnode(dict, node);
     if (oldNode) {	/* This is a duplicate of an existing node */
       free((void *)(node->pszKey));
       free(node);
       node = oldNode;		/* Refer to the old node */
+      /* The old value is preserved. So map values are NOT updated. */
     } else {
       add_dictnode(dict, node); /* Register the new node in the tree */
     }
@@ -246,20 +249,22 @@ void *NewDictValue(dict_t *dict, const char *key, void *value) {
   TREE_RETURN(dictnode,node);
 }
 
-void *SetDictValue(dict_t *dict, const char *key, void *value) { /* Simple maps only */
+/* For maps only. Change the value if a node with that key already exists. */
+void *SetDictValue(dict_t *dict, const char *key, void *value) {
   dictnode *node;
   dictnode refNode = {0};
   TREE_ENTRY(dictnode,("SetDictValue(%p, \"%s\", %p)\n", dict, key, value));
   refNode.pszKey = key;
   node = get_dictnode(dict, &refNode);
   if (node) {
-    refNode.pData = value;
+    node->pData = value;
   } else {
     node = NewDictValue(dict, key, value);
   }
   TREE_RETURN(dictnode,node);
 }
 
+/* For maps only */
 void DeleteDictValue(dict_t *dict, const char *key, void (*cb)(void *value)) {
   dictnode *pNodeFound;
   dictnode refNode = {0};
@@ -275,6 +280,7 @@ void DeleteDictValue(dict_t *dict, const char *key, void (*cb)(void *value)) {
   }
 }
 
+/* For maps only */
 void *DictValue(dict_t *dict, const char *key) {
   dictnode *pNodeFound;
   dictnode refNode = {0};
