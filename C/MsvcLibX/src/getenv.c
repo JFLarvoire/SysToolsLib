@@ -8,6 +8,8 @@
 *                                                                             *
 *   History								      *
 *    2025-08-07 JFL Created this module.				      *
+*    2025-08-13 JFL Made the dictionary public, for shared use by setenv().   *
+*                   Use the dict. for every string, not just non-ASCII ones.  *
 *                                                                             *
 *		  © Copyright 2025 Jean-François Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -42,25 +44,24 @@
 |   History								      |
 |    2025-08-07 JFL Created this routine                             	      |
 |    2025-08-10 JFL Use a dictionary to avoid a memory leak.         	      |
+|    2025-08-13 JFL Use the dict. for every string, not just non-ASCII ones.  |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-static dict_t *dict = NULL;
+dict_t *mlxEnvDict = NULL;
 
 char *getenvM(const char *pszName, UINT uCP) {
   WCHAR *pwszName = NULL;
   WCHAR *pwszValue;
-  char *pszTemp = NULL;
   char *pszValue = NULL;
-  char *pszDefValue;
 
   DEBUG_ENTER(("getenvM(\"%s\", %u)\n", pszName, uCP));
 
   /* First check if it's already in the dictionnary */
-  if (!dict) {	/* Create an empty dictionary */
-    dict = NewDict();
-  } else {	/* Search in the existing dictionary */
-    pszValue = DictValue(dict, pszName);
+  if (!mlxEnvDict) {	/* Create an empty dictionary */
+    mlxEnvDict = NewDict();
+  } else {		/* Search in the existing dictionary */
+    pszValue = DictValue(mlxEnvDict, pszName);
     if (pszValue) RETURN_STRING(pszValue);
   }
 
@@ -73,26 +74,14 @@ char *getenvM(const char *pszName, UINT uCP) {
   if (!pwszValue) goto cleanup_and_exit;
 
   /* Convert the value to a new multibyte string */
-  pszTemp = WideToNewMultiByteString(uCP, pwszValue);
-  if (!pszTemp) goto cleanup_and_exit;
+  pszValue = WideToNewMultiByteString(uCP, pwszValue);
+  if (!pszValue) goto cleanup_and_exit;
 
-  /* Compare it to the default value */
-#undef getenv /* Now on getenv() refers to Microsoft C Library's getenv() */
-  pszDefValue = getenv(pszName);
-  if (pszDefValue && !strcmp(pszDefValue, pszTemp)) {
-    /* ASCII and Multibyte are the same. Use the default environment string */
-    pszValue = pszDefValue;
-  } else {
-    /* Use the multibyte string we generated, which _is_ non ASCII */
-    DEBUG_PRINTF(("# This is a non-ASCII string! Storing it in the dictionary.\n"));
-    NewDictValue(dict, pszName, pszTemp);
-    pszValue = pszTemp;
-    pszTemp = NULL; /* Do not free the memory below */
-  }
+  /* Add it to the dictionary */
+  NewDictValue(mlxEnvDict, pszName, pszValue);
 
 cleanup_and_exit:
   free(pwszName);
-  free(pszTemp);
   RETURN_STRING(pszValue);
 }
 

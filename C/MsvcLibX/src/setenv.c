@@ -9,6 +9,7 @@
 *   History								      *
 *    2022-12-01 JFL Created this module.				      *
 *    2025-08-10 JFL Added a Windows-specific implementation.		      *
+*    2025-08-13 JFL Fixed a bug when updating an existing non-ASCII variable. *
 *                                                                             *
 *		  © Copyright 2022 Jean-François Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -78,9 +79,12 @@ int setenv(const char *pszName, const char *pszValue, int iOverwrite) {
 
 #if defined(_WIN32)
 
-#include "iconv.h"
+#include "iconv.h"	/* MsvcLibX encoding conversion routines */
+#include "dict.h"	/* SysToolsLib Manage a dictionary */
 
 #include <windows.h>
+
+extern dict_t *mlxEnvDict; /* getenv() multibyte (Ex: UTF-8) environment strings */
 
 /* Emulate the standard C library setenv(), based on Microsoft's _putenv() */
 int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP) {
@@ -111,8 +115,16 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP)
     lstrcpyW(pwszBuf, pwszName);
     pwszBuf[l] = L'=';
     lstrcpyW(pwszBuf+l+1, pwszValue);
-    /* Update the environment */
+    /* Update the Unicode environment */
     iErr = _wputenv(pwszBuf);
+    /* Update the Multibyte environment */
+    if (mlxEnvDict) {	/* Search for a previous value in the dictionary */
+      char *pszOld = DictValue(mlxEnvDict, pszName);
+      if (pszOld) free(pszOld); /* Free the old value string */
+    } else {		/* Create an empty dictionary */
+      mlxEnvDict = NewDict();
+    }
+    SetDictValue(mlxEnvDict, pszName, strdup(pszValue));
     /* Cleanup */
 cleanup:
     free(pwszName);
