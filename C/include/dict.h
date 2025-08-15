@@ -77,6 +77,7 @@ typedef struct _dict_t {
   TREE_FIELDS(struct _dict_t, struct _dictnode);
   int (*keycmp)(const char *s1, const char *s2); /* Key comparison routine */
   int (*datacmp)(void *p1, void *p2); /* Data comparison routine for multimaps */
+  void (*freedata)(void *p); /* Optional data destructor routine */
 } dict_t;
 
 /* Define types and declare functions for handling a tree of such structures */
@@ -87,10 +88,10 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2);
 void *dictnode_tree_callback(dictnode *node, void *ref);
 
 /* Declare public static routines */
-extern void *NewDictValue(dict_t *dict, const char *key, void *value);
-extern void *SetDictValue(dict_t *dict, const char *key, void *value);
-extern void DeleteDictValue(dict_t *dict, const char *key, void (*cb)(void *value));
-extern void *DictValue(dict_t *dict, const char *key);
+extern void *NewDictValue(dict_t *dict, const char *key, void *value); /* maps & multimaps. Preserves existing values */
+extern void *SetDictValue(dict_t *dict, const char *key, void *value); /* maps only. Overwrites existing values */
+extern void DeleteDictValue(dict_t *dict, const char *key); /* maps only */
+extern void *DictValue(dict_t *dict, const char *key); /* maps only */
 
 /* Define private types used by the Foreach routine */
 typedef void *DICT_CALLBACK_PROC(const char *key, void *data, void *ref);
@@ -101,32 +102,40 @@ typedef struct {
 
 /* Declare inline functions. C99 requires to provide callable alternatives.
    This is done in the DICT_INLINE_FUNCTIONS_ALTERNATIVES macro below */
-inline dict_t *NewDict(void) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) dict->keycmp = strcmp;	/* Case-dependant key comparison */
-  return dict;
-}
-
-inline dict_t *NewIDict(void) {
-  dict_t *dict = new_dictnode_tree();
-  if (dict) dict->keycmp = _stricmp;	/* Case-independant key comparison */
-  return dict;
-}
-
-inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2)) {
+inline dict_t *NewDict(void (*freedata)(void *p)) {
   dict_t *dict = new_dictnode_tree();
   if (dict) {
     dict->keycmp = strcmp;		/* Case-dependant key comparison */
-    dict->datacmp = datacmp;		/* Data comparison */
+    dict->freedata = freedata;		/* Optional data destructor routine */
   }
   return dict;
 }
 
-inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2)) {
+inline dict_t *NewIDict(void (*freedata)(void *p)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = _stricmp;		/* Case-independant key comparison */
+    dict->freedata = freedata;		/* Optional data destructor routine */
+  }
+  return dict;
+}
+
+inline dict_t *NewMMap(int (*datacmp)(void *p1, void *p2), void (*freedata)(void *p)) {
+  dict_t *dict = new_dictnode_tree();
+  if (dict) {
+    dict->keycmp = strcmp;		/* Case-dependant key comparison */
+    dict->datacmp = datacmp;		/* Data comparison */
+    dict->freedata = freedata;		/* Optional data destructor routine */
+  }
+  return dict;
+}
+
+inline dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2), void (*freedata)(void *p)) {
   dict_t *dict = new_dictnode_tree();
   if (dict) {
     dict->keycmp = _stricmp;		/* Case-independant key comparison */
     dict->datacmp = datacmp;		/* Data comparison */
+    dict->freedata = freedata;		/* Optional data destructor routine */
   }
   return dict;
 }
@@ -257,6 +266,7 @@ void *SetDictValue(dict_t *dict, const char *key, void *value) {
   refNode.pszKey = key;
   node = get_dictnode(dict, &refNode);
   if (node) {
+    if (dict->freedata) (dict->freedata)(node->pData); /* Free the old value */
     node->pData = value;
   } else {
     node = NewDictValue(dict, key, value);
@@ -265,15 +275,15 @@ void *SetDictValue(dict_t *dict, const char *key, void *value) {
 }
 
 /* For maps only */
-void DeleteDictValue(dict_t *dict, const char *key, void (*cb)(void *value)) {
+void DeleteDictValue(dict_t *dict, const char *key) {
   dictnode *pNodeFound;
   dictnode refNode = {0};
   refNode.pszKey = key;
   pNodeFound = get_dictnode(dict, &refNode);
   if (pNodeFound) {
     const char *pszKey = pNodeFound->pszKey;
-    if (cb) { /* If defined, call the destructor for the value. */
-      cb(pNodeFound->pData);
+    if (dict->freedata) { /* If defined, call the destructor for the value. */
+      (dict->freedata)(pNodeFound->pData);
     }
     remove_dictnode(dict, pNodeFound);
     free((void *)pszKey); /* Must be freed afterwards, because it's used by remove()! */

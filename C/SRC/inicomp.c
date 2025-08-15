@@ -52,6 +52,7 @@
 *    2020-04-20 JFL Added support for MacOS. Version 2.2.                     *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 2.2.1.		      *
 *    2025-08-10 JFL Adapted to dict.h changes. Version 2.2.2.		      *
+*    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -154,16 +155,16 @@ int cmpivalue(void *p1, void *p2) {
 
 dict_t *NewIniDict(void) { /* Duplicate keys not allowed */
   if (ignoreCase)
-    return NewIDict();
+    return NewIDict(NULL);
   else
-    return NewDict();
+    return NewDict(NULL);
 }
 
 dict_t *NewIniMMap(void) { /* Duplicate keys allowed */
   if (ignoreCase)
-    return NewIMMap(cmpivalue);
+    return NewIMMap(cmpivalue, NULL);
   else
-    return NewMMap(cmpvalue);
+    return NewMMap(cmpvalue, NULL);
 }
 
 #define NewIniSectionDict() NewIniDict()  /* Duplicate keys not allowed */

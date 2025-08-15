@@ -10,6 +10,7 @@
 *    2021-11-27 JFL Created this file.					      *
 *    2022-10-16 JFL Avoid errors in MacOS.				      *
 *    2024-06-21 JFL Added support for detecting already visited paths in Unix.*
+*    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
 *                                                                             *
 \*****************************************************************************/
 
@@ -256,7 +257,7 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
     root.path = pRootBuf;
     
     if (pOpts->iFlags & WDT_ONCE) { /* Check if an alias has been visited before */
-      pOpts->pOnce = dict = NewDict();
+      pOpts->pOnce = dict = NewDict(free); /* Values must be freed when nodes are deleted */
       if (!dict) goto out_of_memory;
       bCreatedDict = TRUE;
     }
@@ -420,7 +421,7 @@ cleanup_and_return:
   if (bCreatedDict) { /* We're the first folder that created the visited dictionary. Delete it before returning. */
     dictnode *pNode;
     while ((pNode = FirstDictValue(dict)) != NULL) {
-      DeleteDictValue(dict, pNode->pszKey, free); /* Pass the free() function to free the value at the same time */
+      DeleteDictValue(dict, pNode->pszKey);
     }
     free(dict);
     pOpts->pOnce = NULL;

@@ -10,6 +10,7 @@
 *    2022-12-01 JFL Created this module.				      *
 *    2025-08-10 JFL Added a Windows-specific implementation.		      *
 *    2025-08-13 JFL Fixed a bug when updating an existing non-ASCII variable. *
+*    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
 *                                                                             *
 *		  © Copyright 2022 Jean-François Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -101,7 +102,7 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP)
     WCHAR *pwszName = NULL;
     WCHAR *pwszValue = NULL;
     WCHAR *pwszBuf = NULL;
-    size_t l;
+    size_t lName, lValue;
     /* Convert the name to a unicode string */
     pwszName = MultiByteToNewWideString(uCP, pszName);
     if (!pwszName) goto cleanup;
@@ -109,20 +110,18 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP)
     pwszValue = MultiByteToNewWideString(uCP, pszValue);
     if (!pwszValue) goto cleanup;
     /* Build the "VAR=VALUE" string expected by putenv() */
-    l = lstrlenW(pwszName);
-    pwszBuf = malloc(sizeof(WCHAR)*(l+1+lstrlenW(pwszValue)+1));
+    lName = lstrlenW(pwszName);
+    lValue = lstrlenW(pwszValue);
+    pwszBuf = malloc(sizeof(WCHAR)*(lName+1+lValue+1));
     if (!pwszBuf) goto cleanup;
     lstrcpyW(pwszBuf, pwszName);
-    pwszBuf[l] = L'=';
-    lstrcpyW(pwszBuf+l+1, pwszValue);
+    pwszBuf[lName] = L'=';
+    lstrcpyW(pwszBuf+lName+1, pwszValue);
     /* Update the Unicode environment */
     iErr = _wputenv(pwszBuf);
     /* Update the Multibyte environment */
-    if (mlxEnvDict) {	/* Search for a previous value in the dictionary */
-      char *pszOld = DictValue(mlxEnvDict, pszName);
-      if (pszOld) free(pszOld); /* Free the old value string */
-    } else {		/* Create an empty dictionary */
-      mlxEnvDict = NewDict();
+    if (!mlxEnvDict) {	/* Search for a previous value in the dictionary */
+      mlxEnvDict = NewDict(free); /* Values must be freed when nodes are overwritten or deleted */
     }
     SetDictValue(mlxEnvDict, pszName, strdup(pszValue));
     /* Cleanup */

@@ -10,6 +10,7 @@
 *    2025-08-07 JFL Created this module.				      *
 *    2025-08-13 JFL Made the dictionary public, for shared use by setenv().   *
 *                   Use the dict. for every string, not just non-ASCII ones.  *
+*    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
 *                                                                             *
 *		  © Copyright 2025 Jean-François Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -59,7 +60,7 @@ char *getenvM(const char *pszName, UINT uCP) {
 
   /* First check if it's already in the dictionnary */
   if (!mlxEnvDict) {	/* Create an empty dictionary */
-    mlxEnvDict = NewDict();
+    mlxEnvDict = NewDict(free); /* Values must be freed when nodes are overwritten or deleted */
   } else {		/* Search in the existing dictionary */
     pszValue = DictValue(mlxEnvDict, pszName);
     if (pszValue) RETURN_STRING(pszValue);
