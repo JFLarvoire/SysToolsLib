@@ -10,7 +10,8 @@
 *    2016-09-13 JFL Created this file.					      *
 *    2020-03-29 JFL Added mkstmp() definitions.				      *
 *    2025-08-07 JFL Added getenv() definitions.				      *
-*    2025-08-07 JFL Added setenv() definitions.				      *
+*    2025-08-10 JFL Added setenv() definitions.				      *
+*    2025-08-15 JFL Redefine unsetenv() to a more standard definition.	      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -98,7 +99,7 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT cp);
 
 /* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
 #define putenv _putenv
-#define unsetenv(name) setenv(name, "", 1);
+#define unsetenv(name) setenv(name, NULL, 1);
 
 #ifdef __cplusplus
 }

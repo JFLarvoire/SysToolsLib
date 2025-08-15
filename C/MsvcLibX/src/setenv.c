@@ -11,6 +11,7 @@
 *    2025-08-10 JFL Added a Windows-specific implementation.		      *
 *    2025-08-13 JFL Fixed a bug when updating an existing non-ASCII variable. *
 *    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
+*                   Corrected the ability to delete a value.		      *
 *                                                                             *
 *		  © Copyright 2022 Jean-François Larvoire		      *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -31,7 +32,7 @@
 |   Description	    Redefine the standard setenv() functions	              |
 |									      |
 |   Parameters	    char *pszName	Name of the variable to set	      |
-|		    char *pszValue	Value to set			      |
+|		    char *pszValue	Value to set, or NULL to delete it    |
 |		    int iOverwrite	If TRUE, allow overwriting a previous |
 |		    			value for that variable		      |
 |		    							      |
@@ -59,6 +60,8 @@ int setenv(const char *pszName, const char *pszValue, int iOverwrite) {
     errno = EINVAL;
     RETURN_CONST(-1);
   }
+
+  if (!pszValue) pszValue = ""; /* Non standard, but will delete the value in MSDOS */
 
   if (iOverwrite || !getenv(pszName)) {
     /* Build the "VAR=VALUE" string expected by putenv() */
@@ -98,6 +101,8 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP)
     RETURN_CONST(-1);
   }
 
+  if (!pszValue) pszValue = ""; /* Non standard, but will delete the value in Windows */
+
   if (iOverwrite || !getenv(pszName)) {
     WCHAR *pwszName = NULL;
     WCHAR *pwszValue = NULL;
@@ -123,7 +128,11 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT uCP)
     if (!mlxEnvDict) {	/* Search for a previous value in the dictionary */
       mlxEnvDict = NewDict(free); /* Values must be freed when nodes are overwritten or deleted */
     }
-    SetDictValue(mlxEnvDict, pszName, strdup(pszValue));
+    if (lValue) {
+      SetDictValue(mlxEnvDict, pszName, strdup(pszValue));
+    } else {
+      DeleteDictValue(mlxEnvDict, pszName);
+    }
     /* Cleanup */
 cleanup:
     free(pwszName);
