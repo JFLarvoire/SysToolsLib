@@ -42,6 +42,7 @@
 *                   Changed the procedures definition mechanism, to minimize  *
 *                   the macro space used.                                     *
 *    2025-08-15 JFL Fixed SetDictValue() if the node already exists.	      *
+*                   Include syslib.h if HAS_SYSLIB is defined.                *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -171,7 +172,9 @@ inline int GetDictSize(dict_t *dict) {
 
 /********************** Optionally define the procedures **********************/
 
-#if defined(DICT_DEFINE_PROCS) && !defined(_DICT_PROCS_DEFINED)
+#if defined(DICT_DEFINE_PROCS)
+
+#if !defined(_DICT_PROCS_DEFINED)
 #define _DICT_PROCS_DEFINED
 
 #if __STDC_VERSION__ >= 199901L
@@ -302,5 +305,15 @@ void *DictValue(dict_t *dict, const char *key) {
   return pNodeFound->pData;
 }
 
-#endif /* defined(DICT_DEFINE_PROCS) && !defined(_DICT_PROCS_DEFINED) */
+#endif /* !defined(_DICT_PROCS_DEFINED) */
+
+#else /* !defined(DICT_DEFINE_PROCS) */
+
+#if HAS_SYSLIB
+
+#include "syslib.h"	/* Automatically link with SysLib dictionary routines */
+
+#endif /* HAS_SYSLIB */
+
+#endif /* defined(DICT_DEFINE_PROCS) */
 
