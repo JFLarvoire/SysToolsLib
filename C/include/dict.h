@@ -43,6 +43,9 @@
 *                   the macro space used.                                     *
 *    2025-08-15 JFL Fixed SetDictValue() if the node already exists.	      *
 *                   Include syslib.h if HAS_SYSLIB is defined.                *
+*    2025-08-20 JFL Fixed static alternatives for all inline functions        *
+*                   changed on 08-15.                                         *
+*                   Fixed the case of SysLib.h.                               *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -180,10 +183,10 @@ inline int GetDictSize(dict_t *dict) {
 #if __STDC_VERSION__ >= 199901L
 
 /* Provide static alternatives for all inline functions, as required by C99 */
-dict_t *NewDict(void);
-dict_t *NewIDict(void);
-dict_t *NewMMap(int (*datacmp)(void *p1, void *p2));
-dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2));
+dict_t *NewDict(void (*freedata)(void *p));
+dict_t *NewIDict(void (*freedata)(void *p));
+dict_t *NewMMap(int (*datacmp)(void *p1, void *p2), void (*freedata)(void *p));
+dict_t *NewIMMap(int (*datacmp)(void *p1, void *p2), void (*freedata)(void *p));
 void *ForeachDictValue(dict_t *dict, DICT_CALLBACK_PROC cb, void *ref);
 dictnode *FirstDictValue(dict_t *dict);
 dictnode *NextDictValue(dict_t *dict, dictnode *pn);
@@ -311,7 +314,7 @@ void *DictValue(dict_t *dict, const char *key) {
 
 #if HAS_SYSLIB
 
-#include "syslib.h"	/* Automatically link with SysLib dictionary routines */
+#include "SysLib.h"	/* Automatically link with SysLib dictionary routines */
 
 #endif /* HAS_SYSLIB */
 
