@@ -29,6 +29,7 @@
 #                   the modified objects in the library.                      #
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #    2025-04-07 JFL Fixed the use of MAKEFLAGS. No need for a QMAKEFLAGS var. #
+#    2025-08-20 JFL Add the source path to the list of include paths.         #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -224,6 +225,11 @@ ifdef STINCLUDE
 CFLAGS := $(CFLAGS) -I $(STINCLUDE)
 CXXFLAGS := $(CXXFLAGS) -I $(STINCLUDE)
 endif
+
+# Add the path to SysLib own include files.
+# Necessary because some outside include files (Ex: C/include/dict.h) do include SysLib.h here.
+CFLAGS := $(CFLAGS) -I $(SP)
+CXXFLAGS := $(CXXFLAGS) -I $(SP)
 
 # Always define the C macro HAS_SYSLIB
 CFLAGS := $(CFLAGS) -DHAS_SYSLIB=1
