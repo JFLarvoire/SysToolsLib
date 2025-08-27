@@ -7,17 +7,154 @@
 #                                                                             #
 #   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
 #                                                                             #
-#   Notes           Should always be run as: . ./pname                        #
-#                   So define an alias pname=". [path]/pname"                 #
+#   Notes                                                                     #
 #                                                                             #
 #   History                                                                   #
 #    2024-04-29 JFL Created this script, based on ppname.                     #
-#    2025-04-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#    2025-05-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#    2025-08-27 JFL Rewritten as a generic Bourne shell script, compatible    #
+#                   with any shell and non-Linux OS.                          #
+#                   Removed the need to . include the script.                 #
+#                   Added command-line options.                               #
 #                                                                             #
 #                   © Copyright 2024 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+# Global variables
+VERSION="2025-08-27"
+SCRIPT="`basename -- "$0"`" # Extract the script base name...
+
+###############################################################################
+#                                                                             #
+#                              Debugging Library                              #
+#                                                                             #
+###############################################################################
+
+VERBOSITY=1         # Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
+
+# Helper routines to test verbosity levels
+Verbose() {
+  [ $VERBOSITY -gt 1 ]
+}
+Debug() {
+  [ $VERBOSITY -gt 2 ]
+}
+
+# Display a string in verbose mode
+EchoV() { # $*=strings to display and log
+  if Verbose ; then
+    echo "$*"
+  fi
+}
+
+# Display a string in debug mode
+EchoD() { # $*=strings to display and log
+  if Debug ; then
+    echo "$*"
+  fi
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Main                                                      #
+#                                                                             #
+#   Description     Process command line arguments                            #
+#                                                                             #
+#   Arguments       $*      Command line arguments                            #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+
+Help() {
+  cat <<EOF
+$SCRIPT - Get a process name
+
+Usage: $SCRIPT [SWITCH] [PID]
+
+PID: The process ID. Default: The current shell PID, to get that shell name
+
+Switches:
+  -h|--help|-?    This help
+  -v|--verbose    Display verbose information
+  -V|--version    Display this script version
+EOF
+}
+
+#-----------------------------------------------------------------------------#
+
+# Main routine
+PID=
+
+# Process the arguments
+while [ $# -gt 0 ] ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -d|--debug)
+      VERBOSITY=`expr $VERBOSITY + 2`
+    ;;
+    -h|--help|'-?')
+      Help
+      exit 0
+    ;;
+    -v|--verbose)
+      VERBOSITY=`expr $VERBOSITY + 1`
+    ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -*)
+      echo "Unrecognized option: \"$arg\"" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
+      $exit 3 # Unimplemented feature
+    ;;
+    *)
+      if [ -z "$PID" ] ; then
+        PID="$arg"
+        continue
+      fi
+      echo "Unrecognized argument: \"$arg\"" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
+      $exit 3 # Unimplemented feature
+    ;;
+  esac
+done
+
+# If PID is not specifided, default to our parent shell process ID
+if [ -z "$PID" ] ; then
+  if [ -z "$PPID" ] ; then
+    PID=$(ps -p $$ -o ppid= | tr -d ' ')
+  else # Bash defines our parent PID as PPID
+    PID=$PPID
+  fi
+fi
+
+EchoV "The name of process $PID is:"
+
+# Bash/Linux-specific implementation
 # NAME=$(cat /proc/$$/cmdline)
 
-tr '\0' '\n' < /proc/$$/cmdline | head -1 | sed 's/^-\(.*\)/\1/'
+# /proc exists in Linux, but not in MacOS
+if [ -e /proc/$PID/cmdline ] ; then # This is Linux, and the process exists
+  EchoD "# Using /proc/$PID/cmdline"
+  tr '\0' '\n' < /proc/$PID/cmdline | head -1 | sed 's/^-\(.*\)/\1/'
+  ERR=0
+else # Not Linux, or no process with that ID
+  EchoD "# Using ps -p $PID"
+  # -o cmd= outputs the full command line, space separated
+  # -o comm= outputs the command
+  NAME=$(ps -p $PID -o comm=)
+  ERR=$?
+  # Sometimes the process name is prepended with a '-'. If so, remove it.
+  if [ -n "$NAME" ] ; then
+    echo "$NAME" | sed 's/^-\(.*\)/\1/'
+  fi
+fi
+
+exit $ERR

@@ -7,20 +7,97 @@
 #                                                                             #
 #   Properties      jEdit local buffer properties: :encoding=utf-8:tabSize=4: #
 #                                                                             #
-#   Notes           Should always be run as: . ./ppname                       #
-#                   So define an alias ppname=". [path]/ppname"               #
+#   Notes                                                                     #
 #                                                                             #
 #   History                                                                   #
 #    2023-01-21 JFL Created this script.                                      #
 #    2024-04-29 JFL Trim the leading '-', if any.                             #
 #                   Avoid defining a NAME variable, since we . include this.  #
 #                   Avoid outputing the null character that ends the cmdline. #
-#    2025-04-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#    2025-05-17 JFL Rewritten in a simpler way, reading cmdline just once.    #
+#    2025-08-27 JFL Rewritten using pname for doing the actual work.          #
+#                   Removed the need to . include the script.                 #
+#                   Added command-line options.                               #
 #                                                                             #
 #                   © Copyright 2023 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
+# Global variables
+VERSION="2025-08-27"
+SCRIPT="`basename -- "$0"`" # Extract the script base name...
+SCRIPTDIR="`dirname "$0"`"  # ... and its relative path
+
+#-----------------------------------------------------------------------------#
+
+Help() {
+  cat <<EOF
+$SCRIPT - Get the name of the parent of a process
+
+Usage: $SCRIPT [SWITCH] [PID]
+
+PID: The process ID. Default: The current shell PID, to get its parent name
+
+Switches:
+  -h|--help|-?    This help
+  -v|--verbose    Display verbose information
+  -V|--version    Display this script version
+EOF
+}
+
+#-----------------------------------------------------------------------------#
+
+# Main routine
+PID=
+OPTS=
+
+# Process the arguments
+while [ $# -gt 0 ] ; do
+  # Pop the first argument off the head of the list
+  arg="$1"
+  shift
+  case "$arg" in
+    -d|--debug)
+      OPTS="$OPTS $arg"
+    ;;
+    -h|--help|'-?')
+      Help
+      exit 0
+    ;;
+    -v|--verbose)
+      OPTS="$OPTS $arg"
+    ;;
+    -V|--version)
+      echo $VERSION
+      exit 0
+    ;;
+    -*)
+      echo "Unrecognized option: \"$arg\"" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
+      $exit 3 # Unimplemented feature
+    ;;
+    *)
+      if [ -z "$PID" ] ; then
+        PID="$arg"
+        continue
+      fi
+      echo "Unrecognized argument: \"$arg\"" >&2
+      echo "Run \`$SCRIPT -?\` to get a list of valid arguments" >&2
+      $exit 3 # Unimplemented feature
+    ;;
+  esac
+done
+
+# Bash/Linux-specific implementation
 # NAME=$(cat /proc/$PPID/cmdline)
 
-tr '\0' '\n' < /proc/$PPID/cmdline | head -1 | sed 's/^-\(.*\)/\1/'
+# If PID is not specifided, default to our parent shell process ID
+if [ -z "$PID" ] ; then
+  if [ -z "$PPID" ] ; then
+    PID=$(ps -p $$ -o ppid= | tr -d ' ')
+  else # Bash defines our parent PID as PPID
+    PID=$PPID
+  fi
+fi
+
+"$SCRIPTDIR/pname" $OPTS $(ps -p $PID -o ppid= | tr -d ' ')
