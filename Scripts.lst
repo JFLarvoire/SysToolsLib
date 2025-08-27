@@ -78,7 +78,6 @@ Shell\subsh
 Shell\truename
 Shell\profile.d\mcd.sh
 Shell\profile.d\in.sh
-Shell\profile.d\pname.sh
 Tcl\b64dec.tcl
 Tcl\b64enc.tcl
 Tcl\camel.tcl
