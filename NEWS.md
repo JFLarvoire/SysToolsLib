@@ -4,9 +4,49 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-08-27
+### Changed
+- Shell/pname, Shell/ppname:  
+  - Rewritten to add support for all Unix OSs and shells. (Not just Linux and Bash)
+  - Removed the need to . include the script.
+  - Added command-line options.
+- Makefile: Added a mechanism for removing obsolete SysToolsLibs scripts, and use it to remove /etc/profile.d/pname.sh.
+
+## [Unreleased] 2025-08-15
+### Changed
+- C/MsvcLibX/src/getenv.c, C/MsvcLibX/src/setenv.c: Use the dictionary for every environment string, not just non-ASCII ones.
+- C/MsvcLibX/src/setenv.c: Delete environment variables in a more standard way.
+- C/include/dict.h: Declare the dictionary data destructor when creating the dictionary.
+- C/MsvcLibX/src/getenv.c, C/MsvcLibX/src/setenv.c, C/SRC/inicomp.c, C/SysLib/WalkDirTree.c: Adapted to dict.h change.
+
+## [Unreleased] 2025-08-12
+### Fixed
+- which.exe: Fix in MsvcLibX for non-ASCII PATH environment variables. Version 1.16.4.
+- C/SRC/cpuid.c, C/SRC/redo.c: Fixed build errors due to changes in stdlib.h.
+
+### Changed
+- C/include/dict.h: Changed the procedures definition mechanism, to minimize the macro space used.
+- C/SysLib/dict.c, C/SRC/inicomp.c: Adapted to dict.h changes.
+
+### New
+- C/MsvcLibX/include/stdlib.h: Added getenv() and setenv() code-page-dependent routines definitions.
+- C/MsvcLibX/src/getenv.c: New getenv() code-page-dependent routines for Windows.
+- C/MsvcLibX/src/setenv.c: Added setenv() code-page-dependent routines for Windows.
+- C/MsvcLibX/src/Files.mak: Added getenv.obj to the Windows versions of the MsvcLibX library.
+
+## [Unreleased] 2025-08-05
+### Changed
+- sector.exe: Improved the help screen, and fixed its output encoding. Version 5.1.2.  
+  Display more information in verbose mode:  
+  - The input and output device type and name.  
+  - Info about sector 0 being copied last, when applies.
+
+### Fixed
+- sector.exe: Do not attempt to write the boot sector if writing the rest of a disk image failed. Version 5.1.1.
+
 ## [Unreleased] 2025-08-04
 ### Fixed
-- junction.exe: Fixed the ability to list unknown reparse points that aren't junctions or symlinks.
+- junction.exe: Fixed the ability to list unknown reparse points that aren't junctions or symlinks. Version 2025-08-03.
 
 ### Changed
 - junction.exe: Added the ability to list Cloud links, WCI links, and Linux fifo, char, & block devices.
@@ -16,6 +56,8 @@ For more details about changes in a particular area, see the README.txt and/or N
   Preserve the FILE_ATTRIBUTE_REPARSE_POINT bit in all cases.  
   Recognize Linux socket, fifo, character, and block devices.
 - C/MsvcLibX/src/readlink.c: Added routines MlxReadWci*() and routines for managing the Place Holder Compatibility Mode.
+- C/MsvcLibX/src/iconv.c: Disabled debug output by default, to avoid lots of useless output when debugging other routines.
+
 
 ## [Unreleased] 2025-07-27
 ### Changed
