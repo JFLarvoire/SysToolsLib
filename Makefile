@@ -14,6 +14,7 @@
 #                   Added an uninstall target rule, also using inferences.    #
 #    2020-04-15 JFL Updated scripts enumeration for compatibility w. MacOS.   #
 #    2021-01-17 JFL Install files from Shell/profile.d/ into /etc/profile.d/. #
+#    2025-08-27 JFL Added a mechanism for removing obsolete profile scripts.  #
 #                                                                             #
 #         © Copyright 2020 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -85,7 +86,7 @@ install_tcl_scripts: comment_tcl_scripts $(addprefix $(DESTDIR)$(bindir)/,$(TCL_
 
 comment_profile_scripts:
 	$(info # Install Shell Profile scripts)
-	
+
 # FreeBSD and MacOSX do not have a /etc/profile.d directory
 /etc/profile.d:
 	mkdir $@
@@ -104,9 +105,19 @@ comment_profile_scripts:
 
 install_profile_scripts: /etc/profile.d /etc/profile comment_profile_scripts $(addprefix /etc/profile.d/,$(PROFILE_SCRIPTS))
 
+# List of obsolete scripts that need to be removed
+OBSOLETE_SCRIPTS = /etc/profile.d/pname.sh
+
+remove_obsolete_scripts:
+	$(info # Remove obsolete scripts)
+	@for f in $(OBSOLETE_SCRIPTS) ; do if [ -f $$f ] ; then  \
+	  echo rm $$f                                           ;\
+	  rm $$f                                                ;\
+	fi ; done
+
 # How to install all SysToolsLib scripts and programs
 .PHONY: install # Do not use `make -s` to get info about the directory change
-install: $(DESTDIR)$(bindir)/ install_shell_scripts install_profile_scripts install_tcl_scripts
+install: $(DESTDIR)$(bindir)/ remove_obsolete_scripts install_shell_scripts install_profile_scripts install_tcl_scripts
 	$(info # Install C programs)
 	@$(MAKE) -C C $(MFLAGS) PWD="$(PWD)/C" install
 
