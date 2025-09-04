@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/************************ :encoding=UTF-8:tabSize=8: *************************\
 *                                                                             *
 *   File name	    MsgNames.h						      *
 *                                                                             *
@@ -9,7 +9,7 @@
 *   History:                                                                  *
 *    2001-09-24 JFL Created this file.					      *
 *                                                                             *
-*         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

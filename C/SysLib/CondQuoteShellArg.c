@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   Filename	    CondQuoteShellArg.c					      *
 *									      *
@@ -9,7 +9,7 @@
 *   History								      *
 *    2023-04-12 JFL jf.larvoire@free.fr extracted this routine from in.c.     *
 *                                                                             *
-*                   © Copyright 2023 Jean-François Larvoire                   *
+*                   Â© Copyright 2023 Jean-FranÃ§ois Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

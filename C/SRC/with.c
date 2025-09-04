@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   Filename	    with.c						      *
 *									      *
@@ -13,7 +13,7 @@
 *                   of rebuilding it. This fixes issues with the complex      *
 *                   escaping and quoting rules in DOS & Windows cmd shells.   *
 *                                                                             *
-*                   © Copyright 2023 Jean-François Larvoire                   *
+*                   Â© Copyright 2023 Jean-FranÃ§ois Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

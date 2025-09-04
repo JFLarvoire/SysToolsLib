@@ -1,4 +1,4 @@
-/*****************************************************************************\
+ï»¿/*****************************************************************************\
 *                                                                             *
 *   Filename	    dict.c						      *
 *									      *
@@ -10,7 +10,7 @@
 *    2024-06-16 JFL jf.larvoire@free.fr Created this module.                  *
 *    2025-08-10 JFL Adapted to dict.h changes.				      *
 *                                                                             *
-*                   © Copyright 2024 Jean-François Larvoire                   *
+*                   Â© Copyright 2024 Jean-FranÃ§ois Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 

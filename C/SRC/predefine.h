@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/************************ :encoding=UTF-8:tabSize=8: *************************\
 *                                                                             *
 *   File name	    predefine.h				                      *
 *                                                                             *
@@ -15,7 +15,7 @@
 *    2020-04-19 JFL Added support for MacOS.                                  *
 *    2020-11-10 JFL Added support for FreeBSD.                                  *
 *		                                                              *
-*         © Copyright 2020 Hewlett Packard Enterprise Development LP          *
+*         Â© Copyright 2020 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
