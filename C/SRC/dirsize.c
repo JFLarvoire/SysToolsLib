@@ -128,7 +128,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-/* CDECL is defined in syslib.h, which is included indirectly by SysLib *.h */
+/* CDECL is defined in SysLib.h, which is included indirectly by SysLib's *.h */
 
 #include <conio.h>	/* For _kbhit() */
 

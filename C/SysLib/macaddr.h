@@ -15,7 +15,7 @@
 
 #ifndef _MACADDR_H
 
-#include "syslib.h"
+#include "SysLib.h"
 
 #include "qword.h"	/* Defines BYTE, WORD, DWORD, QWORD, etc */
 

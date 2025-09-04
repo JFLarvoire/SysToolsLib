@@ -77,7 +77,7 @@
 #include <limits.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
-#include "syslib.h"		/* Force linking with SysLib dictionary routines */
+#include "SysLib.h"		/* Force linking with SysLib dictionary routines */
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */

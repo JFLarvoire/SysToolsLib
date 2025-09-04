@@ -23,7 +23,7 @@
 *		    This makes dict.h usable without any external dependency. *
 *		    An alternative is to link with public routines in SysLib. *
 *		    To do that, instead of predefining DICT_DEFINE_PROCS, use:*
-*		    #include "syslib.h"	      // Force linking with SysLib    *
+*		    #include "SysLib.h"	      // Force linking with SysLib    *
 *		    							      *
 *   History:								      *
 *    2010-07-09 JFL Created this module. 				      *
@@ -42,7 +42,7 @@
 *                   Changed the procedures definition mechanism, to minimize  *
 *                   the macro space used.                                     *
 *    2025-08-15 JFL Fixed SetDictValue() if the node already exists.	      *
-*                   Include syslib.h if HAS_SYSLIB is defined.                *
+*                   Include SysLib.h if HAS_SYSLIB is defined.                *
 *    2025-08-20 JFL Fixed static alternatives for all inline functions        *
 *                   changed on 08-15.                                         *
 *                   Fixed the case of SysLib.h.                               *
