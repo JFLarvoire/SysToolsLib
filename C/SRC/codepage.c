@@ -46,6 +46,7 @@
 *    2023-04-17 JFL Fixed the localized names in non-US versions of Windows.  *
 *		    Use the common footnote.h in usage().		      *
 *		    Version 1.4.					      *
+*    2025-09-24 JFL Fixed a WIN95 compilation error. No functional change.    *
 *		    							      *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -603,7 +604,12 @@ The cmd.exe raster font only supports code page 437.\n\
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-#if _MSC_VER <= 1400
+#include "ntverp.h" /* Defines the Windows SDK target OS version */
+#if VER_PRODUCTMAJORVERSION < 6 /* If the Windows kit does not contain Vista definitions */ 
+/* I don't have the whole collection of Windows SDKs, and don't know exactly in
+   which one this structure was added. It's in SDK 7.1A targeting Windows 6.1,
+   but not in the VS 8 Platform SDK targeting Windows 5.2. 
+   Assuming it's been introduced in Windows 6.0. */
 typedef struct _CONSOLE_FONT_INFOEX {
   ULONG cbSize;
   DWORD nFont;
