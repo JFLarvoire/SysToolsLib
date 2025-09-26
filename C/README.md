@@ -39,6 +39,10 @@ Quick Guide for rebuilding everything in Windows
    
        git clone --recurse-submodules https://github.com/JFLarvoire/SysToolsLib
 
+   Note: If you forgot the use the --recurse-submodules option, you can then get the submodules this way:
+
+       git submodule update --init --recursive
+
 4. Rebuild everything
 
        cd %WORKDIR%
@@ -56,6 +60,8 @@ Notes:
 - `configure.bat` must only be run again if other versions of the build tools (C compiler, etc) are installed,
   including the optional ones listed below, or if some of the build tools or libraries have been moved to another
   directory.
+- To upgrade the NMaker files to the latest version in the NMaker repository, run:  
+  `git submodule update --recursive --remote --merge`
 
 ### Individual components can be built separately if desired
 
