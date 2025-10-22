@@ -3657,6 +3657,9 @@ exit /b
 :#----------------------------------------------------------------------------#
 
 :# Convert a short or long pathname to a full long pathname
+:# 2025-10-13 MarekJ47 Limitation: This fails if the filename contains exclamation marks,
+:#                     or if the filename contains language specific characters.
+:#                     https://stackoverflow.com/questions/34473934/how-can-i-convert-a-windows-short-name-path-into-long-names-within-a-batch-scrip/64579603?noredirect=1#comment140793035_64579603
 :GetLongPathname %1=PATHNAME %2=Output variable name
 setlocal EnableDelayedExpansion
 set "FULL_SHORT=%~fs1"           &:# Make sure it really is short all the way through
