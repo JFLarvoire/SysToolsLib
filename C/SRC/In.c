@@ -15,6 +15,8 @@
 *                   escaping and quoting rules in DOS & Windows cmd shells.   *
 *    2023-04-12 JFL Moved CondQuoteShellArg() to SysLib, and some code in     *
 *                   main to new SysLib routine DupArgLineTail().              *
+*    2025-11-04 JFL Added a note in the help message for Windows, about       *
+*		    Windows limitations with long paths > 260 characters.     *
 *                                                                             *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -22,8 +24,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command in a given directory, then come back"
 #define PROGRAM_NAME    "in"
-#define PROGRAM_VERSION "1.1"
-#define PROGRAM_DATE    "2023-04-12"
+#define PROGRAM_VERSION "1.1.1"
+#define PROGRAM_DATE    "2025-11-04"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -73,6 +75,17 @@ Switches:\n\
   -V       Display the program version and exit\n\
   -X       Display the equivalent commands, but don't run them\n\
 "
+#ifdef _WIN32
+"\n\
+Known limitation with long pathnames > 260 characters: Windows versions up to 8\n\
+cannot change the current directory to such long pathnames. Windows ≥ 10 can,\n\
+but only if long file name support has been enabled in the registry. And even\n\
+in this case, it cannot run a command below that 260 characters threshold.\n\
+in.exe will appear to succeed when requested to run a command in such a deep\n\
+directory; But that command will actually be run in a parent directory of the\n\
+requested one, with the largest path that fits in 260 characters.\n\
+"
+#endif
 #include "footnote.h"
 ;
 
@@ -164,6 +177,21 @@ int main(int argc, char *argv[]) {
 
   /* Run the command */
   if (iExec) {
+    /* Using the system() command ensures that this works in all OSs, searches
+       the PATH automatically, and invokes script interpreters as needed. */
+    /* 2025-11-01 In Windows, this is known _not_ to work in directories with
+       long path names > 260 characters. After trying many alternatives, and
+       searching for explanations on the Internet, it seems that this is
+       a limitation of Windows' CreateProcess() routine. Contrary to most
+       file management routines, this one has _not_ been updated to support
+       current directories longer than PATH_MAX. Even in Windows 11 2025H2
+       with the registry entry set, the application manifest updated, the
+       \\?\ prefix used, the %=C:% environment variable set, etc. 
+       In some cases, the current directory is truncated. In other cases, the
+       execution of the command fails, with "Invalid directory name" errors.
+       See the WIN32 API long pathname support doc:
+       https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
+     */       
     iRet = system(pszCmdLine);
   } else {
     printf("%s\n", pszCmdLine);
