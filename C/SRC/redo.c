@@ -51,6 +51,11 @@
 *    2023-11-16 JFL Bugfix in the debug version: Buffer used after free().    *
 *                   Version 3.2.1.                                            *
 *    2025-08-10 JFL Fixed a build error. No functional change. Version 3.2.2. *
+*    2025-11-03 JFL Updated the help screen, and its note about limitations   *
+*                   for long paths in Windows.                                *
+*                   Added option -i as an alias to option -from.              *
+*                   Added option -m. Version 3.3.                             *
+*                                                                             *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -58,8 +63,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.2.2"
-#define PROGRAM_DATE    "2025-08-10"
+#define PROGRAM_VERSION "3.3"
+#define PROGRAM_DATE    "2025-11-03"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -78,6 +83,7 @@
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
 #include "SysLib.h"		/* Force linking with SysLib dictionary routines */
+#include "mainutil.h"
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
@@ -244,7 +250,6 @@ typedef enum {
 #define RETCODE_INACCESSIBLE 4
 #define RETCODE_EXEC_ERROR 5
 
-#define streq(string1, string2) (strcmp(string1, string2) == 0)
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
 #define OFFSET_OF(pointer) ((ushort)(ulong)(void far *)pointer)
@@ -269,6 +274,7 @@ char szInitDir[PATHNAME_SIZE];      /* Initial directory on the work drive */
 char szStartDir[PATHNAME_SIZE];	    /* Directory where recursion starts */
 int iVerbose = FALSE;		    /* If TRUE, echo commands executed */
 int iRelat;			    /* Index of a pathname relative to szInitDir */
+int iMeasure = 0;		    /* If > 0, measure the paths longer than that length */
 
 fif *firstfif = NULL;		    /* Pointer to the first allocated fif structure */
 
@@ -445,7 +451,7 @@ int main(int argc, char *argv[]) {
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
-    if ((arg[0] == '-') || (arg[0] == '/')) { /* It's a switch */
+    if (IsSwitch(arg)) { /* It's a switch */
       char *option = arg+1;
 				  /* Don't forget to add switches to...
 				      ... the Recurse list below,
@@ -460,13 +466,22 @@ int main(int argc, char *argv[]) {
 	  continue;
 	}
       )
-      if (streq(option, "from")) {
+      if (streq(option, "i") || streq(option, "from")) {
 	if ((i+1)<argc) {
 	  pszFrom = argv[++i];
 	} else {
 	  usage(1);
 	}
 	continue;
+      }
+      if (streq(option, "m")) {
+	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
+	  iMeasure = atoi(argv[++i]);
+	} else {
+	  iMeasure = 1;
+	}
+	argv[i] = "break"; /* Dummy command that does nothing */
+	break;
       }
       if (streq(option, "q")) {
 	iVerbose = FALSE;
@@ -573,11 +588,21 @@ void usage(int iErr) {
   printf(
 PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 \n\
-Usage: redo [SWITCHES] {COMMAND LINE}\n\
+Usage: redo [SWITCHES] COMMAND_LINE\n\
 \n\
 Switches:\n\
-    -from {path}  Start recursion in the given directory.\n\
-    -v	          Echo each path accessed, and the command executed.\n\
+  -?              Display this help screen and exit\n"
+DEBUG_CODE(
+"\
+  -d              Debug mode. Display how things work internally.\n\
+"
+)
+"\
+  -i PATH         Start recursion in the given directory.\n\
+  -m [MIN_LENGTH] Measure the paths length, and display them. No cmd executed.\n\
+                  Min length: Skip paths shorter than that minimum. Default: 1\n\
+  -v              Verbose mode. Display the paths, and the commands executed.\n\
+  -V              Display the program version and exit\n\
 \n\
 Command line:     Any valid command and arguments.\n\
                   The special sequence \"{}\" is replaced by the current\n\
@@ -585,16 +610,22 @@ Command line:     Any valid command and arguments.\n\
 "
 #ifdef _WIN32
 "\n\
-Known issue with long pathnames > 260 bytes: Windows versions up to 8 cannot\n\
-change the current directory to such long pathnames. Windows 10 can, but only\n\
-if it's been enabled in the registry.\n\
+Known limitation with long pathnames > 260 characters: Windows versions up to 8\n\
+cannot change the current directory to such long pathnames. Windows ≥ 10 can,\n\
+but only if long file name support has been enabled in the registry. And even\n\
+in this case, it cannot run a command below that 260 characters threshold.\n\
 On all versions of Windows, and whether or not the Windows 10 registry fix has\n\
 been enabled, redo can enumerate paths of any length, and sets the {} sequence\n\
-correctly.\n\
-If there's a chance that you might have paths longer than 260 bytes in the tree\n\
-below your current directory, do not rely on the current directory set by redo,\n\
+correctly. But it cannot execute a command below the 260 characters threshold.\n\
+Actually redo will think it has succeeded, but the command will actually run\n\
+in a parent directory of the expected one, the parent with the longest path\n\
+that fits in 260 characters.\n\
+If there's a chance that you might have paths longer than 260 chars in the tree\n\
+below the initial directory, do not rely on the current directory set by redo,\n\
 but use the {} sequence to generate commands with absolute paths arguments.\n\
-And of course, use a command that is compatible with paths > 260 bytes.\n\
+And of course, use a command that is compatible with paths > 260 characters.\n\
+To verify if this workaround is needed or not, use option -m 260 to enumerate\n\
+all paths longer than 260 characters.\n\
 "
 #endif
 #include "footnote.h"
@@ -757,6 +788,12 @@ void DoPerPath(void) {
   iDem = streq(szStartDir, ppath);
   ppath += iRelat - iDem;
 
+  if (iMeasure) {
+    int iLen = (int)strlen(pc);
+    if (iLen >= iMeasure) printf("%5d %s\n", iLen, pc);
+    goto cleanup_and_return;
+  }
+
   for (i=0; i<MAXARGS; i++) {
     char *pc2;
     char c;
@@ -800,6 +837,7 @@ void DoPerPath(void) {
 
   for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
 
+cleanup_and_return:
   FREE_PATHNAME_BUF(path);
   RETURN();
 }
