@@ -54,8 +54,8 @@
 *    2025-11-03 JFL Updated the help screen, and its note about limitations   *
 *                   for long paths in Windows.                                *
 *                   Added option -i as an alias to option -from.              *
-*                   Added option -m. Version 3.3.                             *
-*                                                                             *
+*                   Added option -l.                                          *
+*    2025-11-04 JFL Added option -m. Version 3.3.                             *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -64,7 +64,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "3.3"
-#define PROGRAM_DATE    "2025-11-03"
+#define PROGRAM_DATE    "2025-11-04"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -249,6 +249,7 @@ typedef enum {
 #define RETCODE_NO_MEMORY 3
 #define RETCODE_INACCESSIBLE 4
 #define RETCODE_EXEC_ERROR 5
+#define RETCODE_SYNTAX 6
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
@@ -275,6 +276,8 @@ char szStartDir[PATHNAME_SIZE];	    /* Directory where recursion starts */
 int iVerbose = FALSE;		    /* If TRUE, echo commands executed */
 int iRelat;			    /* Index of a pathname relative to szInitDir */
 int iMeasure = 0;		    /* If > 0, measure the paths longer than that length */
+int iMaxDepth = 0;		    /* If > 0, don't descend below that level */
+int iDepth = 0;			    /* Current depth */
 
 fif *firstfif = NULL;		    /* Pointer to the first allocated fif structure */
 
@@ -474,7 +477,7 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
-      if (streq(option, "m")) {
+      if (streq(option, "l")) { /* List directory pathnames lengths */
 	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
 	  iMeasure = atoi(argv[++i]);
 	} else {
@@ -482,6 +485,14 @@ int main(int argc, char *argv[]) {
 	}
 	argv[i] = "break"; /* Dummy command that does nothing */
 	break;
+      }
+      if (streq(option, "m")) { /* Maximum depth */
+	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
+	  iMaxDepth = atoi(argv[++i]);
+	} else {
+	  finis(RETCODE_SYNTAX, "Max depth value missing");
+	}
+	continue;
       }
       if (streq(option, "q")) {
 	iVerbose = FALSE;
@@ -599,8 +610,9 @@ DEBUG_CODE(
 )
 "\
   -i PATH         Start recursion in the given directory.\n\
-  -m [MIN_LENGTH] Measure the paths length, and display them. No cmd executed.\n\
-                  Min length: Skip paths shorter than that minimum. Default: 1\n\
+  -l [MIN_LENGTH] List all sub-directories with their paths length. No command\n\
+                  executed. Min length: List only longer paths. Default min: 1\n\
+  -m MAX_DEPTH    Limit the recursion depth to N levels. Default: 0=no limit\n\
   -v              Verbose mode. Display the paths, and the commands executed.\n\
   -V              Display the program version and exit\n\
 \n\
@@ -624,7 +636,7 @@ If there's a chance that you might have paths longer than 260 chars in the tree\
 below the initial directory, do not rely on the current directory set by redo,\n\
 but use the {} sequence to generate commands with absolute paths arguments.\n\
 And of course, use a command that is compatible with paths > 260 characters.\n\
-To verify if this workaround is needed or not, use option -m 260 to enumerate\n\
+To verify if this workaround is needed or not, use option -l 260 to list\n\
 all paths longer than 260 characters.\n\
 "
 #endif
@@ -723,6 +735,10 @@ int descend(char *from, int fif0) {
   ppfif = AllocFifArray(nfif);
   trie(ppfif, nfif);
 
+  /* In case we're at the maximum level already, don't descend any further */
+  if (iMaxDepth && (iDepth >= iMaxDepth)) goto cleanup_and_return;
+
+  iDepth += 1;
   for (i=0; i<nfif; i++) {
     NEW_PATHNAME_BUF(name1);
 
@@ -737,7 +753,9 @@ int descend(char *from, int fif0) {
 
     FREE_PATHNAME_BUF(name1);
   }
+  iDepth -= 1;
 
+cleanup_and_return:
   FreeFifArray(ppfif);
 
   RETURN_INT(0);
@@ -890,7 +908,7 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
   DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, 0x%X);\n", startdir, pattern, nfif, attrib));
 
 #if PATHNAME_BUFS_IN_HEAP
-  if ((!initdir) || (!path)) {
+  if ((!initdir) || (!path) || (!pathname)) {
       FREE_PATHNAME_BUF(initdir);
       FREE_PATHNAME_BUF(path);
       FREE_PATHNAME_BUF(pathname);
