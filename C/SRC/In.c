@@ -17,6 +17,9 @@
 *                   main to new SysLib routine DupArgLineTail().              *
 *    2025-11-04 JFL Added a note in the help message for Windows, about       *
 *		    Windows limitations with long paths > 260 characters.     *
+*    2025-11-11 JFL Added option -@ to get the target dir. name from a file.  *
+*                   Necessary for DOS, to enter directories with a name too   *
+*		    long to fit on the 128-bytes command line.		      *
 *                                                                             *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -24,8 +27,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command in a given directory, then come back"
 #define PROGRAM_NAME    "in"
-#define PROGRAM_VERSION "1.1.1"
-#define PROGRAM_DATE    "2025-11-04"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2025-11-11"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -41,6 +44,8 @@
 #include "stversion.h"	/* SysToolsLib version strings. Include last. */
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
+
+char *GetLineFromFile(const char *pszPathName);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -66,6 +71,7 @@ Usage: in [SWITCHES] DIRECTORY [do] COMMAND [ARGUMENTS]\n\
 \n\
 Switches:\n\
   -?|-h    Display this help message and exit\n\
+  -@ FILE  Get the target directory name from that file\n\
 "
 #ifdef _DEBUG
 "\
@@ -111,6 +117,19 @@ int main(int argc, char *argv[]) {
 	fputs(pszUsage, stdout);
 	return 0;
       }
+      if (streq(opt, "@")) {	    /* -@: Get target dir from an input file */
+      	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
+	  pszDir = GetLineFromFile(arg = argv[++i]);
+	  if (!pszDir) {
+	    pferror("Cannot access \"%s\". %s", arg, strerror(errno));
+	    return 1;
+	  }
+	} else {
+	  pferror("Missing input file name after -@");
+	  return 1;
+	}
+	continue;
+      }
       DEBUG_CODE(
 	if (streq(opt, "d")) {
 	  DEBUG_ON();
@@ -125,7 +144,7 @@ int main(int argc, char *argv[]) {
 	iExec = FALSE;
 	continue;
       }
-      pferror("Warning: Unrecognized switch %s ignored", arg);
+      fprintf(stderr, "Warning: Unrecognized switch %s ignored\n", arg);
       continue;
     }
     if (!pszDir) {
@@ -209,5 +228,56 @@ int main(int argc, char *argv[]) {
   }
 
   return iRet;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetLineFromFile					      |
+|									      |
+|   Description     Get one line from an input file			      |
+|									      |
+|   Parameters	    const char *pszPathName	The file pathname	      |
+|									      |
+|   Returns	    A pointer to the allocated string with the input line.    |
+|									      |
+|   Notes								      |
+|									      |
+|   History								      |
+|    2025-11-07 JFL Created this routine.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#if defined(_MSDOS)
+#define LINE_MAX 1024
+#else
+#define LINE_MAX 65536
+#endif
+
+char *GetLineFromFile(const char *pszPathName) {
+  FILE *f = NULL;
+  char *buf = NULL;
+  char *pszLine = NULL;
+  int iLen;
+
+  buf = malloc(LINE_MAX);
+  if (!buf) goto cleanup_and_return; /* Out of memory for buffer */
+
+  f = fopen(pszPathName, "r");
+  if (!f) goto cleanup_and_return; /* Failed to open the input file */
+
+  pszLine = fgets(buf, LINE_MAX, f);
+  if (!pszLine) goto cleanup_and_return; /* Failed to read input file */
+
+  iLen = (int)strlen(pszLine);
+  /* trim the trailing \n if any */
+  if (iLen && (pszLine[iLen-1] == '\n')) pszLine[--iLen] = '\0';
+
+  pszLine = realloc(buf, iLen+1);
+  if (!pszLine) pszLine = buf;
+
+cleanup_and_return:
+  if (f) fclose(f);
+  if (!pszLine) free(buf); /* Free the buffer if we don't return it */
+  return pszLine;
 }
 
