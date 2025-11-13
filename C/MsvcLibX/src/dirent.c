@@ -41,6 +41,7 @@
 *    2025-07-29 JFL Fixed the reparse point tag analysis in readdirW().       *
 *    2025-08-03 JFL Preserve the FILE_ATTRIBUTE_REPARSE_POINT bit in all cases.
 *		    Recognize Linux socket, fifo, character, and block devices.
+*    2025-11-11 JFL Prevent a "varargs matches remaining parameters" warning. *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -798,11 +799,12 @@ int scandir(const char *pszName,
   closedir(pDir);
 
 /* 2016-09-23 JFL I don't understand why this warning still fires, so leaving it enabled for now */
-#ifdef M_I86TM /* This warning appears only when compiling for the DOS tiny memory model ?!? */
-/* #pragma warning(disable:4220) /* Ignore the "varargs matches remaining parameters" warning */
+/* 2025-11-11 JFL This now fires for both the small and tiny memory models ?!? */
+#if defined(_M_I86TM) || defined(_M_I86SM)
+#pragma warning(disable:4220) /* Ignore the "varargs matches remaining parameters" warning */
 #endif
   if (cbCompare) qsort(pList, n, sizeof(_dirent *), cbCompare);
-#ifdef M_I86TM
+#if defined(_M_I86TM) || defined(_M_I86SM)
 #pragma warning(default:4220) /* Ignore the "varargs matches remaining parameters" warning */
 #endif
   *resultList = pList;
