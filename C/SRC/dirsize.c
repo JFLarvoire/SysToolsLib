@@ -88,6 +88,7 @@
 *		    by the user in the target argument.			      *
 *		    Added argument -md to set the maximum recursion depth.    *
 *		    Fixed double / or \ appearing in some error messages.     *
+*    2025-10-22 JFL Added a verbose message. Removed an unused func. prototype.
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -96,7 +97,7 @@
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
 #define PROGRAM_VERSION "3.99"
-#define PROGRAM_DATE    "2025-10-22"
+#define PROGRAM_DATE    "2025-11-10"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -280,11 +281,6 @@ int Size2StringWithUnit(char *pBuf, total_t llSize); /* Idem, appending the user
 total_t ScanFiles(scanVars *pScanVars); /* Scan the current dir */
 total_t ScanDirs(scanVars *pScanVars);  /* Scan every subdir */
 void affiche(char *path, total_t size); /* Display aligned columns */
-int scandirX(const char *pszName,
-	     struct dirent ***resultList,
-	     int (*cbSelect) (const struct dirent *, void *pRef),
-	     int (CDECL *cbCompare) (const struct dirent **, const struct dirent **),
-	     void *pRef);	    /* scandir() extension, passing a pRef to cbSelect() */
 
 long GetClusterSize(char drive);    /* Get cluster size */
 void OnControlC(int iSignal);	    /* Ctrl-C signal handler */
@@ -543,6 +539,13 @@ int main(int argc, char *argv[]) {
     if ((!sScanVars.recur) && (!iCtrlC)) { /* If Ctrl-C pressed, the computed size is incomplete */
       char szBuf[40];
       Size2StringWithUnit(szBuf, size);
+      if (iVerbose) {
+      	NEW_PATHNAME_BUF(szCurDir);
+        char *pszDir = getcwd(szCurDir, PATHNAME_SIZE);
+      	if (from) pszDir = NewJoinedPath(pszDir, from);
+      	printf("The size of \"%s\" is ", pszDir);
+      	/* Don't bother freeing the allocated strings, as we're exiting now */
+      }
       printf("%s\n", szBuf);
     }
   } else {
@@ -958,7 +961,7 @@ total_t ScanDirs(scanVars *pScanVars) {
   if ((!pScanVars->maxDepth) || (pScanVars->depth < pScanVars->maxDepth)) {
     /* Get all subdirectories */
     /* But for now, manage recursion locally, to do a breadth-first scan */
-    wdtOpts.iFlags = WDT_CONTINUE	| WDT_QUIET | WDT_NORECURSE;
+    wdtOpts.iFlags = WDT_CONTINUE | WDT_QUIET | WDT_NORECURSE;
     iResult = WalkDirTree(".", &wdtOpts, SelectDirsCB, pScanVars);
     if (iResult < 0) { /* An error occurred */
       iErr = errno;
