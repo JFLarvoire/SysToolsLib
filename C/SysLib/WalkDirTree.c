@@ -11,6 +11,7 @@
 *    2022-10-16 JFL Avoid errors in MacOS.				      *
 *    2024-06-21 JFL Added support for detecting already visited paths in Unix.*
 *    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
+*    2025-11-10 JFL Added the ability to limit the recursion depth.           *
 *                                                                             *
 \*****************************************************************************/
 
@@ -255,7 +256,7 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 #endif
     }
     root.path = pRootBuf;
-    
+
     if (pOpts->iFlags & WDT_ONCE) { /* Check if an alias has been visited before */
       pOpts->pOnce = dict = NewDict(free); /* Values must be freed when nodes are deleted */
       if (!dict) goto out_of_memory;
@@ -370,11 +371,13 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 	  }
 	}
 #endif /* OS_HAS_LINKS */
-      	if (!list.path) list.path = pPathname;
-      	if (!(pOpts->iFlags & WDT_NORECURSE)) {
-	  if (!list.path) list.path = pPathname;
-      	  iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
-      	}
+	if (!(pOpts->iFlags & WDT_NORECURSE)) {
+	  if ((!pOpts->iMaxDepth) || (iDepth < pOpts->iMaxDepth)) {
+	    if (!list.path) list.path = pPathname;
+	    iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
+	  }
+	}
+	DEBUG_PRINTF(("// End of processing the dir \"%s\"\n", pPathname));
       	break;
       default:
       	break;

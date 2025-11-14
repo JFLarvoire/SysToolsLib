@@ -8,6 +8,7 @@
 *		    							      *
 *   History:								      *
 *    2021-12-15 JFL Created this file.					      *
+*    2025-11-10 JFL Added the ability to limit WalkDirTree() recursion depth. *
 *									      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -81,6 +82,48 @@ extern "C" {
 
 /********************** End of OS-specific definitions ***********************/
 
+/*****************************************************************************/
+
+/* Helper macros for managing temporary buffers for file pathnames */
+
+#define PATHNAME_BUF_SIZE PATH_MAX	/* Buffer size for holding pathnames, including NUL */
+#define NODENAME_BUF_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
+
+#define PATHNAME_DO_NOTHING() do {} while (0)
+#define PATHNAME_DO(code) do {code} while (0)
+
+#define NEW_PATHNAME_BUF() malloc(PATHNAME_BUF_SIZE)
+#if PATHNAME_BUF_SIZE < 256 /* Simplified implementation for MSDOS */
+  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
+  #define PATHNAME_BUF(var) char var[PATHNAME_BUF_SIZE]
+  #define IF_PATHNAME_BUFS_IN_HEAP(code) PATHNAME_DO_NOTHING();
+#else	/* Avoid stack overflows by storing large names in the heap */
+  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
+  #define PATHNAME_BUF(var) char *var = NEW_PATHNAME_BUF()
+  #define IF_PATHNAME_BUFS_IN_HEAP(code) PATHNAME_DO(code);
+#endif
+#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;)
+#define FREE_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(free(var);)
+
+#define NEW_NODENAME_BUF() malloc(NODENAME_BUF_SIZE)
+#if NODENAME_BUF_SIZE < 16 /* Simplified implementation for MSDOS */
+  #define NODENAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
+  #define NODENAME_BUF(var) char var[NODENAME_BUF_SIZE]
+  #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO_NOTHING();
+#else	/* Avoid stack overflows by storing large names in the heap */
+  #define NODENAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
+  #define NODENAME_BUF(var) char *var = NEW_NODENAME_BUF()
+  #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO(code);
+#endif
+#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0))
+#define FREE_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(free(var);)
+
+/* End of helper macros for managing temporary buffers for file pathnames */
+
+/*****************************************************************************/
+
+/* Public routines */
+
 char *NewJoinedPath(const char *pszPart1, const char *pszPart2);	/* Join 2 paths, and return the new string */
 char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem, removing all useless ./ parts */
 
@@ -95,6 +138,7 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   int iFlags;			/* [IN] Options */
+  int iMaxDepth;		/* [IN] Maximum recursion depth. 0=No limit */
   ino_t nDir;			/* [OUT] Number of directories scanned */
   ino_t nFile;			/* [OUT] Number of directory entries processed */
   int nErr;			/* [OUT] Number of errors */
