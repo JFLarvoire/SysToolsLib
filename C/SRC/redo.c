@@ -55,7 +55,9 @@
 *                   for long paths in Windows.                                *
 *                   Added option -i as an alias to option -from.              *
 *                   Added option -l.                                          *
-*    2025-11-04 JFL Added option -m. Version 3.3.                             *
+*    2025-11-04 JFL Added option -m.					      *
+*    2025-11-12 JFL Improved a couple of error messages.		      *
+*		    Version 3.3.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -64,7 +66,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "3.3"
-#define PROGRAM_DATE    "2025-11-04"
+#define PROGRAM_DATE    "2025-11-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -941,7 +943,7 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
 #endif
 
   pcd = getdir(initdir, PATHNAME_SIZE);
-  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
 
   if (startdir[0] == DIRSEPARATOR) {
     strncpyz(path, startdir, PATHNAME_SIZE);
@@ -996,7 +998,7 @@ int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
   }
 
   pcd = getcwd(path, PATHNAME_SIZE);
-  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
 
   /* Execute the routine once for this path */
   DoPerPath();
