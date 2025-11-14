@@ -26,7 +26,9 @@
 *    2021-11-29 JFL Prefix MsvcLibX-specific WIN32 public routines with Mlx.  *
 *    2025-08-03 JFL Added routines MlxReadWci*() and routines for managing    *
 *		    the Place Holder Compatibility Mode.                      *
-*									      *
+*    2025-11-11 JFL For DOS, redefine the getcwd() macro as our getcwdX(),    *
+*		    and added a chdir() macro defined as the new chdirX().    *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -56,8 +58,12 @@
 /* #define chdir	 _chdir */
 /* Actually use the improved versions in MsvcLibX */
 #undef getcwd /* MSVC _does_ define a getcwd macro, in addition to the getcwd function! */
+#undef chdir
 #if defined(_MSDOS)
-#define getcwd(path, size) _getcwd(path, (int)(size)) /* Use MSVC LIB's own, changing argument 2 type */
+char *getcwdX(char *pszBuf, int iBufLen);	/* MsvcLibX' modified getcwd */
+#define getcwd(path, size) getcwdX(path, (int)(size)) /* Either _getcwd = MSVC's version, or getcwdX = ours */
+int chdirX(const char *path);			/* MsvcLibX' modified chdir */
+#define chdir(path) chdirX(path) /* Either _chdir = MSVC's version, or chdirX = ours */
 #elif defined(_WIN32)
 #if defined(_UTF8_SOURCE)
 #define getcwd getcwdU
@@ -77,12 +83,15 @@ char *_getdcwdA(int iDrive, char *buf, int iBuflen);
 char *getcwdU(char *buf, size_t bufSize); /* Can't use the getcwd name, as MSVC has an incompatible prototype for it */
 char *_getdcwdU(int iDrive, char *buf, int iBuflen);
 WCHAR *getcwdW(WCHAR *pwBuf, size_t bufSize);
+int chdirA(const char *path);
+int chdirU(const char *path);
+int chdirM(const char *path, UINT cp);
+int chdirW(const WCHAR *pwszPath);
 int rmdirA(const char *path);
 int rmdirU(const char *path);
 int unlinkA(const char *path);
 int unlinkU(const char *path);
 #endif /* defined(_WIN32) */
-int chdir(const char *path);
 
 /* These are non standard indeed, but the leading _ is annoying */ 
 #define getdrive _getdrive

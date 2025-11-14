@@ -2,11 +2,11 @@
 *                                                                             *
 *   Filename	    chdir.c						      *
 *									      *
-*   Description:    WIN32 port of standard C library's chdir()		      *
+*   Description     WIN32 port of standard C library's chdir()		      *
 *                                                                             *
-*   Notes:	    							      *
+*   Notes	    							      *
 *		    							      *
-*   History:								      *
+*   History								      *
 *    2014-02-28 JFL Created this module.				      *
 *    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      *
 *    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
@@ -14,6 +14,10 @@
 *    2018-04-28 JFL Split chdirW off of chdirM.				      *
 *    2018-04-29 JFL Make sure chdirW always enters the deepest possible dir.  *
 *                   Improved the error handling.                              *
+*    2025-11-06 JFL Renamed the DOS version of chdir() as chdirX(), to avoid  *
+*		    conflicts with the homonym in oldNames.lib.		      *
+*    2025-11-11 JFL Added dos_chdir(), and use it in chdirX().		      *
+*    2025-11-12 JFL Simplified chdirX(), and added debugging directives.      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,61 +38,95 @@
 
 /*---------------------------------------------------------------------------*\
 |									      *
-|   Function:	    chdir						      |
+|   Function	    chdir						      |
 |									      |
-|   Description:    Change directory, overcoming the 64-character DOS limit   |
+|   Description     Change directory, overcoming the 64-character DOS limit   |
 |									      |
-|   Parameters:     char *pszDir	Target directory pathname	      |
+|   Parameters      char *pszDir	Target directory pathname	      |
 |									      |
-|   Returns:	    0=Done; Else OS error code.		 		      |
+|   Returns	    0=Done; Else OS error code.		 		      |
 |									      |
-|   Notes:	    Unfortunately this works only in a DOS box within Win9X.  |
-|									      |
-|   History:								      |
-|     2000-12-04 JFL Initial implementation.				      |
+|   Notes	    Unfortunately this works only in a DOS box within Win9X.  |
+|		    							      |
+|		    MSVC's _chdir() works with paths up to 255 characters.    |
+|		    							      |
+|   History								      |
+|    2000-12-04 JFL Initial implementation.				      |
 |    2017-10-03 JFL Removed the dependency on PATH_MAX and fixed size buffers.|
+|    2025-11-06 JFL Renamed as chdirX to avoid homonymy with the chdir in     |
+|		    oldNames.lib. Added debug output.                         |
+|    2025-11-11 JFL Added dos_chdir(), and use it in chdirX().		      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int chdir(const char *pszDir)
-    {
-    char szBuf[64];
-    char *pszBuf = szBuf;
-    char *pc;
-    int iDirLen;
-    int iStrLen;
-    int iErr = 0;
-    
-    iDirLen = strlen(pszDir);
-    /* Copy the drive letter if specified, and leave it ahead of the buffer. */
-    if ((iDirLen>2) && (pszDir[1]==':'))
-	{
-	szBuf[0] = pszDir[0];
-	szBuf[1] = ':';
-	pszDir += 2;
-	pszBuf += 2;
-	}
-    /* Repeat relative moves down the directory tree */
-    while (iDirLen > 60)
-	{
-	pc = strchr(pszDir+45, '\\');		/* There has to be one in segment [45:60]. */
-	iStrLen = pc-pszDir;			/* Segment length */
-	strncpy(pszBuf, pszDir, iStrLen);       /* Copy until the \ found */
-	pszBuf[iStrLen] = '\0';
-	iErr = chdir(szBuf);
-	if (iErr) return iErr;
-	pszDir += iStrLen+1;
-	iDirLen -= iStrLen+1;
-	} ;
+#include <dos.h>
 
-    if (iDirLen) 
-        {
-        strcpy(pszBuf, pszDir);
-        iErr = chdir(szBuf);
-        }
-        
-    return iErr;
+#define OFFSET_OF(pointer) ((uint16_t)(uint32_t)(void far *)pointer)
+#define SEGMENT_OF(pointer) ((uint16_t)(((uint32_t)(void far *)pointer) >> 16))
+
+#define CF 0x0001            /* Carry flag bit mask */
+
+int dos_chdir(const char *pszDir) { /* Limited to 64-byte paths */
+  union REGS inreg;
+  union REGS outreg;
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  struct SREGS sregs;
+#endif
+
+  inreg.h.ah = 0x3B;
+  inreg.x.dx = OFFSET_OF(pszDir);
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  sregs.ds = SEGMENT_OF(pszDir);
+  intdosx(&inreg, &outreg, &sregs);
+#else /* DATA_PTR_WIDTH == 16 - Memory models with short data pointers */
+  intdos(&inreg, &outreg);
+#endif
+
+  if (CF & outreg.x.cflag) return outreg.x.ax; /* errno set by intdos() */
+
+  return 0;
+}
+
+/* Make it easy to change the low-level chdir routine used in chdirX below */
+#define CHDIR dos_chdir /* Either dos_chdir or _chdir */
+
+int chdirX(const char *pszDir) {
+  char szBuf[64];
+  char *pszBuf = szBuf;
+  char *pc;
+  int iDirLen;
+  int iStrLen;
+  int iErr = 0;
+
+  DEBUG_ENTER(("chdir(\"%s\");\n", pszDir));
+
+  iDirLen = strlen(pszDir);
+  /* Copy the drive letter if specified, and leave it ahead of the buffer. */
+  if ((iDirLen>2) && (pszDir[1]==':')) {
+    szBuf[0] = pszDir[0];
+    szBuf[1] = ':';
+    pszDir += 2;
+    pszBuf += 2;
+  }
+  /* Repeat relative moves down the directory tree */
+  while (iDirLen > 0) {
+    if (iDirLen > 60) {
+      pc = strchr(pszDir+45, '\\');	/* There has to be one in segment [45:60]. */
+      iStrLen = pc-pszDir;		/* Segment length */
+      strncpy(pszBuf, pszDir, iStrLen); /* Copy until the \ found */
+      pszBuf[iStrLen] = '\0';
+    } else {
+      iStrLen = iDirLen;
+      strcpy(pszBuf, pszDir);		/* Copy the whole remaining string */
     }
+    DEBUG_PRINTF((VALUEIZE(CHDIR) "(\"%s\");\n", szBuf));
+    iErr = CHDIR(szBuf);
+    if (iErr) RETURN_INT_COMMENT(-1, ("%s\n", strerror(errno)));
+    pszDir += iStrLen+1;
+    iDirLen -= iStrLen+1;
+  }
+  RETURN_INT_COMMENT(0, ("Success\n"));
+}
 
 #endif /* defined(_MSDOS) */
 
@@ -99,15 +137,15 @@ int chdir(const char *pszDir)
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    chdir						      |
+|   Function	    chdir						      |
 |									      |
-|   Description:    Set the current directory, encoded in UTF-8               |
+|   Description     Set the current directory, encoded in UTF-8               |
 |									      |
-|   Parameters:     const char *pszDir	   Target directory pathname	      |
+|   Parameters      const char *pszDir	   Target directory pathname	      |
 |									      |
-|   Returns:	    0=Done; -1=Failed.			 		      |
+|   Returns 	    0=Done; -1=Failed.			 		      |
 |									      |
-|   Notes:	    Contrary to most other WIN32 APIs, SetCurrentDirectoryW() |
+|   Notes	    Contrary to most other WIN32 APIs, SetCurrentDirectoryW() |
 |		    does NOT allow extending the path length beyond 260 bytes |
 |		    by prepending a \\?\ prefix.			      |
 |		    https://stackoverflow.com/a/44519069/2215591	      |
@@ -128,7 +166,7 @@ int chdir(const char *pszDir)
 |		    current directories, as the goal is Unix-compatibility,   |
 |		    not Windows compatibility.				      |
 |		    							      |
-|   History:								      |
+|   History								      |
 |    2014-02-28 JFL Created this routine                               	      |
 |    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      |
 |                   Added common routine chdirM, called by chdirA and chdirU. |
@@ -195,6 +233,7 @@ int chdirW(const WCHAR *pwszDir) {
     errno = Win32ErrorToErrno();
     goto chdirW_failed;
   }
+  /* SetCurrentDirectoryW() succeeded. No need to cache the CD locally */
   if (pwszLongCurrentDir) {
     free(pwszLongCurrentDir);
     pwszLongCurrentDir = NULL;

@@ -12,6 +12,7 @@
 *    2017-10-04 JFL Fixed support for pathnames >= 260 characters. 	      *
 *    2018-04-25 JFL Added routine getcwdW().                       	      *
 *		    Use the locally managed cur. dir. for paths > 260 bytes.  *
+*    2025-11-11 JFL Added routines dos_getcwd() and getcwdX() for DOS. 	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -29,7 +30,174 @@
 
 #if defined(_MSDOS)
 
-/* DOS own getcwd() is OK. */
+/*---------------------------------------------------------------------------*\
+|									      *
+|   Function	    getcwdX						      |
+|									      |
+|   Description     Get the current directory, overcoming the 64-char limit   |
+|									      |
+|   Parameters      char *pszDir	Target directory pathname	      |
+|									      |
+|   Returns	    char *buf	    Buffer for the output                     |
+|		    size_t bufSize  Buffer size				      |
+|		    							      |
+|   Notes	    MSVC's _getcwd() works with paths up to 255 characters.   |
+|		    This one works with path up to 260 characters.	      |
+|		    							      |
+|   History								      |
+|    2025-11-11 JFL Initial implementation.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#include <dos.h>
+
+#define OFFSET_OF(pointer) ((uint16_t)(uint32_t)(void far *)pointer)
+#define SEGMENT_OF(pointer) ((uint16_t)(((uint32_t)(void far *)pointer) >> 16))
+
+#define CF 0x0001            /* Carry flag bit mask */
+
+/* Raw call to MS-DOS' function 47H "Get Current Directory" */
+/* Args & return value compatible with those of MSVC's _getdcwd() */
+int dos_getcwd(int iDrive, char *pszBuf, int iBufLen) { /* Limited to 64-byte paths */
+  union REGS inreg;
+  union REGS outreg;
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  struct SREGS sregs;
+#endif
+  UNUSED_ARG(iBufLen);
+
+  inreg.h.ah = 0x47;
+  inreg.h.dl = (uint8_t)iDrive; /* 0=default 1=A 2=B 3=C ... */
+  inreg.x.si = OFFSET_OF(pszBuf);
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  sregs.ds = SEGMENT_OF(pszBuf);
+  intdosx(&inreg, &outreg, &sregs);
+#else /* DATA_PTR_WIDTH == 16 - Memory models with short data pointers */
+  intdos(&inreg, &outreg);
+#endif
+
+  if (CF & outreg.x.cflag) { /* errno set by intdos() */
+    DEBUG_PRINTF(("dos_getcwd() -> return %d; // AX=%d %s\n", errno, _doserrno, strerror(errno)));
+    return outreg.x.ax;	/* Return the DOS error code, not the same as errno */
+  }
+
+  return 0;
+}
+
+typedef struct _dos_fs_info {
+  int iFlags;		/* File system flags */
+  int iNameLength;	/* Maximum length of file name [usually 255 for LFN] */
+  int iPathLength;	/* Maximum length of path [usually 260] */
+  char szFsType[32];	/* ASCIZ, e.g. "FAT","NTFS","CDFS" */
+} dos_fs_info;
+
+/* File system flags */
+#define DOS_FS_CASE_SENSITIVE	0x0001	/* Searches are case sensitive */
+#define DOS_FS_CASE_PRESERVED	0x0002	/* Preserves case in directory entries */
+#define DOS_FS_UNICODE_NAMES	0x0004	/* Uses Unicode characters in file and directory names */
+#define DOS_FS_DOS_LFN		0x4000	/* Supports DOS long filename functions */
+#define DOS_FS_COMPRESSED	0x8000	/* Volume is compressed */
+
+int dos_get_volume_info(char *pszRoot, dos_fs_info *pDosFsInfo) {
+  union REGS inreg;
+  union REGS outreg;
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  struct SREGS sregs;
+#endif
+
+  inreg.x.ax = 0x71A0;
+  inreg.x.dx = OFFSET_OF(pszRoot);
+  inreg.x.di = OFFSET_OF(pDosFsInfo->szFsType);
+  inreg.x.cflag |= CF; /* For catching the error in DOS < 7 */
+#if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
+  sregs.ds = SEGMENT_OF(pszRoot);
+  sregs.es = SEGMENT_OF(pDosFsInfo->szFsType);
+  intdosx(&inreg, &outreg, &sregs);
+#else /* DATA_PTR_WIDTH == 16 - Memory models with short data pointers */
+  intdos(&inreg, &outreg);
+#endif
+
+  if (CF & outreg.x.cflag) { /* Function failed */
+    if (outreg.x.ax == 0x7100) { /* DOS < 7, function not supported */
+      /* Pretend it did succeed, using the values for FAT16 in DOS without LFN support */
+      outreg.x.bx = 0;		/* Flags */
+      outreg.x.cx = 12;		/* 8.3 File names */
+      outreg.x.dx = 260;	/* Max paths */
+      strcpy(pDosFsInfo->szFsType, "FAT");
+    } else { /* errno set by intdos() */
+      DEBUG_PRINTF(("dos_get_volume_info() -> return %d; // AX=%d %s\n", errno, _doserrno, strerror(errno)));
+      return outreg.x.ax; /* Return the DOS error code, not the same as errno */
+    }
+  }
+
+  /* Correct a known bug in Win95 SP1 for CD-ROMs */
+  if (!outreg.x.dx) outreg.x.dx = 260;
+
+  /* Store results in the caller's structure */
+  pDosFsInfo->iFlags = outreg.x.bx;
+  pDosFsInfo->iNameLength = outreg.x.cx;
+  pDosFsInfo->iPathLength = outreg.x.dx;
+
+  DEBUG_PRINTF(("dos_get_volume_info() -> FS=%s; Flags=0x%04X; NAME_MAX=%d; PATH_MAX=%d;\n",
+    pDosFsInfo->szFsType, pDosFsInfo->iFlags, pDosFsInfo->iNameLength, pDosFsInfo->iPathLength));
+
+  return 0;
+}
+
+/* Make it easy to change the low-level getcwd routine used in getcwdX below */
+#define GETDCWD dos_getcwd /* Either dos_getcwd or _getdcwd */
+
+/* Reimplement getcwd() for DOS, in a way compatible with Posix */
+char *getcwdX(char *pszBuf, int iBufLen) {
+  char *pc = pszBuf;
+  int iErr = 0;
+  int iDrive = (char)bdos(0x19, 0, 0);	/* Get the current drive. 0=A 1=B ... */
+  dos_fs_info dosFsInfo;
+  char *pszLocalBuf = NULL;
+
+  DEBUG_ENTER(("getcwd(%p, %d);\n", pszBuf, iBufLen));
+
+  if (iBufLen < 4) {
+    iErr = errno = ENOMEM;
+    goto cleanup_and_return;
+  }
+
+  *(pc++) = (char)('A' + iDrive);
+  *(pc++) = ':';
+  *(pc++) = '\\';
+  *pc = '\0';
+
+  iErr = dos_get_volume_info(pszBuf, &dosFsInfo);
+  if (iErr) goto cleanup_and_return;
+
+  /* If the output buffer provided is potentially too small, 
+     allocate one large enough for the worst case */
+  if (iBufLen < dosFsInfo.iPathLength) {
+    pszLocalBuf = malloc(dosFsInfo.iPathLength);
+    if (!pszLocalBuf) goto cleanup_and_return;
+    strcpy(pszLocalBuf, pszBuf);
+    pc = pszLocalBuf + 3;
+  }
+
+  iBufLen -= 3;
+  iDrive += 1;		/* 1=A 2=B 3=C ... */
+
+  DEBUG_PRINTF((VALUEIZE(GETDCWD) "(%d, %p, %d);\n", iDrive, pc, iBufLen));
+  iErr = GETDCWD(iDrive, pc, iBufLen);
+
+  if (pszLocalBuf) {
+    if ((int)strlen(pc-3) >= iBufLen) {
+      iErr = errno = ERANGE;
+      goto cleanup_and_return;
+    }
+    strcpy(pszBuf, pszLocalBuf);
+  }
+
+cleanup_and_return:
+  if (pszLocalBuf) free(pszLocalBuf);
+  if (iErr) RETURN_STRING_COMMENT(NULL, ("%s\n", strerror(errno)));
+  RETURN_STRING(pszBuf);
+}
 
 #endif /* defined(_MSDOS) */
 
