@@ -9,6 +9,7 @@
 *   History:								      *
 *    2021-12-15 JFL Created this file.					      *
 *    2025-11-10 JFL Added the ability to limit WalkDirTree() recursion depth. *
+*    2025-11-11 JFL Added macros for managing file (path)names buffers.	      *
 *									      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -134,6 +135,7 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_QUIET	0x0002		/* Do not display warnings & infos */
 #define WDT_NORECURSE	0x0004		/* Do not recurse into subdirectories */
 #define WDT_FOLLOW	0x0008		/* Recurse into junctions & symlinkds */
+#define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
 #define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
 
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
