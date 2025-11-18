@@ -10,6 +10,8 @@
 *    2021-12-15 JFL Created this file.					      *
 *    2025-11-10 JFL Added the ability to limit WalkDirTree() recursion depth. *
 *    2025-11-11 JFL Added macros for managing file (path)names buffers.	      *
+*    2025-11-15 JFL Added WalkDirTree flag WDT_CBINOUT.			      *
+*    2025-11-17 JFL Added WalkDirTree flags WDT_DIRONLY and WDT_CD.	      *
 *									      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -136,7 +138,9 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_NORECURSE	0x0004		/* Do not recurse into subdirectories */
 #define WDT_FOLLOW	0x0008		/* Recurse into junctions & symlinkds */
 #define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
-#define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
+#define WDT_CBINOUT	0x0020		/* Callback when entering (".") and exiting (NULL) a directory */
+#define WDT_DIRONLY	0x0040		/* Callback only for effective directories (ie. links too if WDT_FOLLOW) */
+#define WDT_CD		0x0080		/* Change current directory to the directories scanned */
 
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   int iFlags;			/* [IN] Options */
@@ -149,7 +153,7 @@ typedef struct {		/* WalkDirTree options. Must be cleared before use. */
 
 typedef int (*pWalkDirTreeCB_t)(const char *pszRelPath, const struct dirent *pDE, void *pRef);
 
-extern int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
+extern int WalkDirTree(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
 
 #ifdef __cplusplus
 }

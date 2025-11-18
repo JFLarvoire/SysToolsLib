@@ -12,6 +12,9 @@
 *    2024-06-21 JFL Added support for detecting already visited paths in Unix.*
 *    2025-08-15 JFL Declare the dict. data destructor when creating the dict. *
 *    2025-11-10 JFL Added the ability to limit the recursion depth.           *
+*    2025-11-15 JFL Optionally callback on directory entry and exit.	      *
+*    2025-11-17 JFL Optionally callback on effective directories only.	      *
+*                   Optionally change the current directory to the one scanned.
 *                                                                             *
 \*****************************************************************************/
 
@@ -28,6 +31,10 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <limits.h>
+
+#ifdef _MSC_VER			/* DOS and Windows */
+#include <direct.h>		/* For _getdrive() */
+#endif
 
 /* SysToolsLib include files */
 #include "debugm.h"		/* SysToolsLib debugging macros */
@@ -116,7 +123,7 @@ int isEffectiveDir(const char *pszPath) {
 #if OS_HAS_LINKS
 
 #if HAS_MSVCLIBX
-char *GetRealName(char *pathname) {
+char *GetRealName(const char *pathname) {
   int iRet;
   char *pTrueName = malloc(PATH_MAX);
   if (!pTrueName) return NULL;
@@ -212,9 +219,14 @@ typedef struct _NAMELIST {
 } NAMELIST;
 
 /* Internal subroutine, used to avoid infinite loops on link back loops */
-static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef, NAMELIST *prev, int iDepth) {
-  char *pPath;
+static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef, NAMELIST *prev, int iDepth) {
+  const char *pPath;
   char *pPathname = NULL;
+  char *pPath0 = NULL;
+#if HAS_DRIVES
+  int iDrive0 = 0;
+#endif
+  int iErr;
   int iRet = 0;
   DIR *pDir = NULL;
   struct dirent *pDE;
@@ -226,12 +238,43 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 #endif /* OS_HAS_LINKS */
   NAMELIST root = {0};
   NAMELIST list = {0};
+  int iPrintErrors = !((pOpts->iFlags & WDT_CONTINUE) && (pOpts->iFlags & WDT_QUIET));
 
   DEBUG_ENTER(("WalkDirTree(\"%s\", ...);\n", path));
 
-  if ((!path) || !strlen(path)) RETURN_INT_COMMENT(-1, ("path is empty\n"));
+  if ((!path) || !path[0]) RETURN_INT_COMMENT(-1, ("path is empty\n"));
 
-  pDir = opendirx(path);
+  if (pOpts->iFlags & WDT_CD) { /* Change CD to the directory to scan */
+    const char *pNewCD = path;
+    if (iDepth == 0) {		/* The first time only, record the return path */
+      pPath0 = NEW_PATHNAME_BUF();
+      if (!pPath0) goto out_of_memory;
+#if HAS_DRIVES
+      if (path[1] == ':') {
+	int iDrive = path[0] - 'A';
+	if (path[0] >= 'a') iDrive -= 'a' - 'A';
+	iDrive0 = _getdrive();
+	iErr = _chdrive(iDrive);
+	if (iErr) {
+	  pferror("Can't change to drive %c: %s", iDrive + '@', strerror(errno));
+	  goto silent_fail;
+	}
+      }
+#endif
+      if (!getcwd(pPath0, PATHNAME_BUF_SIZE)) {
+	if (iPrintErrors) pferror("Can't get the current directory: %s", strerror(errno));
+	goto cancel_this_operation;
+      }
+    } else {
+      pNewCD = strrchr(path, DIRSEPARATOR_CHAR) + 1;
+    }
+    iErr = chdir(pNewCD);
+    if (iErr) goto fail_entry;
+    pDir = opendirx(".");
+  } else {
+    pDir = opendirx(path);
+  }
+
   if (!pDir) {
     if (errno == EACCES) goto access_denied;
     goto fail_entry;
@@ -279,8 +322,13 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
     char *pszBadLinkMsg; /* Flag bad links, pointing at a description of the problem */
 #endif /* OS_HAS_LINKS */
 
-    DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
-    if (streq(pDE->d_name, ".")) continue;	/* Skip the . directory */
+    DEBUG_PRINTF(("// Entering dir \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
+    if (streq(pDE->d_name, ".")) {
+      if (pOpts->iFlags & WDT_CBINOUT) {
+	iRet = pWalkDirTreeCB(path, pDE, pRef); /* Notify the callback of the directory entry */
+      }
+      continue;	/* Skip the . directory */
+    }
     if (streq(pDE->d_name, "..")) continue;	/* Skip the .. directory */
 
     pOpts->nFile += 1;	/* One more file scanned */
@@ -328,15 +376,17 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 #endif /* OS_HAS_LINKS */
 
     /* Report the valid directory entry to the callback */
-    iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
-    if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+    if (!(pOpts->iFlags & WDT_DIRONLY)) {
+      iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
+      if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+    }
 
     switch (pDE->d_type) {
 #if OS_HAS_LINKS
       case DT_LNK:
 	if (pszBadLinkMsg) {
 	  if (pOpts->iFlags & WDT_FOLLOW) { /* When following links, it's an error */
-	    if (!((pOpts->iFlags & WDT_CONTINUE) && (pOpts->iFlags & WDT_QUIET))) {
+	    if (iPrintErrors) {
 	      pferror("%s: \"%s\"", pszBadLinkMsg, pPathname);
 	    }
 	    if (!(pOpts->iFlags & WDT_CONTINUE)) goto silent_fail;
@@ -371,13 +421,17 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 	  }
 	}
 #endif /* OS_HAS_LINKS */
+	if (pOpts->iFlags & WDT_DIRONLY) {
+	  iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
+	  if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+	}
 	if (!(pOpts->iFlags & WDT_NORECURSE)) {
 	  if ((!pOpts->iMaxDepth) || (iDepth < pOpts->iMaxDepth)) {
 	    if (!list.path) list.path = pPathname;
 	    iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
 	  }
 	}
-	DEBUG_PRINTF(("// End of processing the dir \"%s\"\n", pPathname));
+	DEBUG_PRINTF(("// Leaving dir \"%s\"\n", pPathname));
       	break;
       default:
       	break;
@@ -392,18 +446,25 @@ static int WalkDirTree1(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTr
 #endif /* OS_HAS_LINKS */
   }
   if (iRet) goto cleanup_and_return;;	/* -1 = Error, abort; 1 = Success, stop */
-  if (errno == 0) goto cleanup_and_return;	/* There are no more files (Unix) */
+  if (errno == 0) goto dir_scan_complete;	/* There are no more files (Unix) */
   /* Else it's readdir() that failed. Check errno to see the reason */
-  if (errno == ENOENT) goto cleanup_and_return;	/* There are no more files (MsvcLibX) */
+  if (errno == ENOENT) goto dir_scan_complete;	/* There are no more files (MsvcLibX) */
   if (errno == EACCES) {
 access_denied:
-    if (!((pOpts->iFlags & WDT_CONTINUE) && (pOpts->iFlags & WDT_QUIET))) {
+    if (iPrintErrors) {
       pferror("Can't enter \"%s\": %s", path, strerror(errno));
     }
+cancel_this_operation:
     if (pOpts->iFlags & WDT_CONTINUE) goto count_err_and_return;
     goto silent_fail;
   }
   goto fail_entry; /* Anything else is an unexpected error we can't handle */
+
+dir_scan_complete:
+  if (pOpts->iFlags & WDT_CBINOUT) {
+    iRet = pWalkDirTreeCB(path, NULL, pRef); /* Notify the callback of the directory exit */
+  }
+  goto cleanup_and_return;
 
 out_of_memory:
   pferror("Out of memory");
@@ -430,10 +491,27 @@ cleanup_and_return:
     pOpts->pOnce = NULL;
   }
 #endif /* OS_HAS_LINKS */
+  if (pOpts->iFlags & WDT_CD) {
+    if (!pPath0) pPath0 = "..";
+    iErr = chdir(pPath0);
+    if (iErr) {
+      pferror("Can't return to \"%s\": %s", pPath0, strerror(errno));
+      iRet = -1;
+    }
+#if HAS_DRIVES
+    if (iDrive0) {
+      iErr = _chdrive(iDrive0);
+      if (iErr) {
+      	pferror("Can't return to drive %c: %s", iDrive0 + '@', strerror(errno));
+      	iRet = -1;
+      }
+    }
+#endif
+  }
   RETURN_INT_COMMENT(iRet, ((iRet == -1) ? "Error, stop walk\n" : (iRet ? "Success, stop Walk\n" : "Success, continue walk\n")));
 }
 
 /* Public routine. Do not instrument with debug macros, to avoid call depth alignment issues. */
-int WalkDirTree(char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef) {
+int WalkDirTree(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef) {
   return WalkDirTree1(path, pOpts, pWalkDirTreeCB, pRef, NULL, 0);
 }
