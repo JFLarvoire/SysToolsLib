@@ -171,6 +171,7 @@ int chdirX(const char *pszDir) {
 |    2014-07-02 JFL Added support for pathnames >= 260 characters. 	      |
 |                   Added common routine chdirM, called by chdirA and chdirU. |
 |    2018-04-25 JFL Manage the current directory locally for paths > 260 ch.  |
+|    2025-11-17 JFL No need to getcwd in the beginning for absolute targets.  |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -189,8 +190,15 @@ int chdirW(const WCHAR *pwszDir) {
   DEBUG_WENTER((L"chdir(\"%s\");\n", pwszDir));
 
   /* Make sure every path is an absolute path with a drive letter or UNC prefix */
-  pwszCD = getcwdW(NULL, 0);
-  if (!pwszCD) goto chdirW_failed;
+  if ((pwszDir[0] == L'\\') && (pwszDir[1] != L'\\')) {
+    pwszCD = malloc(3 * sizeof(WCHAR));
+    if (!pwszCD) goto chdirW_failed;
+    lstrcpyW(pwszCD, L"@:");
+    pwszCD[0] += (WCHAR)_getdrive();
+  } else if (!((pwszDir[0] == L'\\') || (pwszDir[0] && (pwszDir[1] == L':') && (pwszDir[2] == L'\\')))) {
+    pwszCD = getcwdW(NULL, 0);
+    if (!pwszCD) goto chdirW_failed;
+  }
   pwszAbsDir = ConcatPathW(pwszCD, pwszDir, NULL, 0);
   if (!pwszAbsDir) goto chdirW_failed;
 
