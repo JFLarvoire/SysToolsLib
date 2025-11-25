@@ -282,6 +282,7 @@ this_is_not_a_symlink:
 |    2017-03-22 JFL No need to fully resolve all links in the pathname.       |
 |		    Resolving the tail links is sufficient, and much faster.  |
 |    2017-03-24 JFL Only resolve links if it's a link.                        |
+|    2023-11-23 JFL In debug mode, don't print errno if there's no error.     |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -308,7 +309,7 @@ int stat(const char *path, struct stat *pStat) {
 
   if (!iErr) iErr = lstat(path, pStat);
 
-  RETURN_INT_COMMENT(iErr, ("errno = %d; // %s\n", errno, strerror(errno)));
+  RETURN_INT_COMMENT(iErr, (iErr ? "errno = %d; // %s\n" : "Success\n", errno, strerror(errno)));
 }
 #endif /* !USE_MSVC_STAT */
 
