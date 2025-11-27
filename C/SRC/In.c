@@ -20,6 +20,8 @@
 *    2025-11-11 JFL Added option -@ to get the target dir. name from a file.  *
 *                   Necessary for DOS, to enter directories with a name too   *
 *		    long to fit on the 128-bytes command line.		      *
+*    2025-11-27 JFL In the Unix version, update the PWD environment variable  *
+*                   with the new logical directory.                           *
 *                                                                             *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -27,8 +29,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command in a given directory, then come back"
 #define PROGRAM_NAME    "in"
-#define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2025-11-11"
+#define PROGRAM_VERSION "1.2.1"
+#define PROGRAM_DATE    "2025-11-27"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -37,6 +39,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+/* SysLib include files */
+#include "pathnames.h"
 /* SysToolsLib include files */
 #include "mainutil.h"	/* SysLib goodies for the main routine */
 #include "CmdLine.h"	/* SysLib routines managing command-line arguments */
@@ -187,6 +191,19 @@ int main(int argc, char *argv[]) {
     free(pszQuoted);
   }
 
+#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+  /* Update the PWD environment variable with the new logical current directory. */
+  /* This is necessary, so that the invoked command knows the logical CD,
+     and not just the physical CD returned by getcwd().
+     The two are different if there's a link in the logical CD pathname. */
+  char *pszPWD;
+  pszPWD = getenv("PWD");
+  pszPWD = NewCompactJoinedPath(pszPWD, pszDir); /* The new logical directory */
+  DEBUG_PRINTF(("setenv(\"PWD\", \"%s\", 1);\n", pszPWD));
+  iErr = setenv("PWD", pszPWD, TRUE);
+  if (iErr) pferror("Can't set the PWD environment variable: %s", strerror(errno));
+#endif
+
   /* Build the child command line */
   pszCmdLine = DupArgLineTail(argc, argv, iArg0);
   if (!pszCmdLine) {
@@ -247,11 +264,8 @@ int main(int argc, char *argv[]) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#if defined(_MSDOS)
-#define LINE_MAX 1024
-#else
-#define LINE_MAX 65536
-#endif
+/* We want to be able to test paths up to and beyond the OS' PATH_MAX */
+#define PATH_LINE_MAX (PATH_MAX + 256)
 
 char *GetLineFromFile(const char *pszPathName) {
   FILE *f = NULL;
@@ -259,13 +273,13 @@ char *GetLineFromFile(const char *pszPathName) {
   char *pszLine = NULL;
   int iLen;
 
-  buf = malloc(LINE_MAX);
+  buf = malloc(PATH_LINE_MAX);
   if (!buf) goto cleanup_and_return; /* Out of memory for buffer */
 
   f = fopen(pszPathName, "r");
   if (!f) goto cleanup_and_return; /* Failed to open the input file */
 
-  pszLine = fgets(buf, LINE_MAX, f);
+  pszLine = fgets(buf, PATH_LINE_MAX, f);
   if (!pszLine) goto cleanup_and_return; /* Failed to read input file */
 
   iLen = (int)strlen(pszLine);
