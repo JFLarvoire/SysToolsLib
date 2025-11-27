@@ -13,6 +13,7 @@
 *    2018-04-25 JFL Added routine getcwdW().                       	      *
 *		    Use the locally managed cur. dir. for paths > 260 bytes.  *
 *    2025-11-11 JFL Added routines dos_getcwd() and getcwdX() for DOS. 	      *
+*    2025-11-19 JFL Changed dos_getcwd() return value to be same as getcwd's. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -56,9 +57,10 @@
 
 #define CF 0x0001            /* Carry flag bit mask */
 
-/* Raw call to MS-DOS' function 47H "Get Current Directory" */
+/* Call MS-DOS function 47H "Get Current Directory" */
 /* Args & return value compatible with those of MSVC's _getdcwd() */
-int dos_getcwd(int iDrive, char *pszBuf, int iBufLen) { /* Limited to 64-byte paths */
+/* The DOS error code is returned in _doserrno, and the C error code in errno */
+char *dos_getcwd(int iDrive, char *pszBuf, int iBufLen) { /* Limited to 64-byte paths */
   union REGS inreg;
   union REGS outreg;
 #if DATA_PTR_WIDTH == 32  /* Memory models with long data pointers */
@@ -76,12 +78,12 @@ int dos_getcwd(int iDrive, char *pszBuf, int iBufLen) { /* Limited to 64-byte pa
   intdos(&inreg, &outreg);
 #endif
 
-  if (CF & outreg.x.cflag) { /* errno set by intdos() */
-    DEBUG_PRINTF(("dos_getcwd() -> return %d; // AX=%d %s\n", errno, _doserrno, strerror(errno)));
-    return outreg.x.ax;	/* Return the DOS error code, not the same as errno */
+  if (CF & outreg.x.cflag) { /* errno and _doserrno set by intdos() */
+    DEBUG_PRINTF(("dos_getcwd() -> return %d; // _doserrno=%d; errno=%d = %s\n", outreg.x.ax, _doserrno, errno, strerror(errno)));
+    return NULL;	/* The DOS error code is available in _doserrno */
   }
 
-  return 0;
+  return pszBuf;
 }
 
 typedef struct _dos_fs_info {
@@ -98,6 +100,10 @@ typedef struct _dos_fs_info {
 #define DOS_FS_DOS_LFN		0x4000	/* Supports DOS long filename functions */
 #define DOS_FS_COMPRESSED	0x8000	/* Volume is compressed */
 
+/* Call MS-DOS function 71A0H "Get Volume Information" */
+/* Assumes the volume is FAT on old DOS versions <= 6 */
+/* Returns the DOS error code, or 0 for success */
+/* The DOS error code is returned in _doserrno, and the C error code in errno */
 int dos_get_volume_info(char *pszRoot, dos_fs_info *pDosFsInfo) {
   union REGS inreg;
   union REGS outreg;
@@ -106,6 +112,7 @@ int dos_get_volume_info(char *pszRoot, dos_fs_info *pDosFsInfo) {
 #endif
 
   inreg.x.ax = 0x71A0;
+  inreg.x.cx = sizeof(pDosFsInfo->szFsType);
   inreg.x.dx = OFFSET_OF(pszRoot);
   inreg.x.di = OFFSET_OF(pDosFsInfo->szFsType);
   inreg.x.cflag |= CF; /* For catching the error in DOS < 7 */
@@ -125,7 +132,7 @@ int dos_get_volume_info(char *pszRoot, dos_fs_info *pDosFsInfo) {
       outreg.x.dx = 260;	/* Max paths */
       strcpy(pDosFsInfo->szFsType, "FAT");
     } else { /* errno set by intdos() */
-      DEBUG_PRINTF(("dos_get_volume_info() -> return %d; // AX=%d %s\n", errno, _doserrno, strerror(errno)));
+      DEBUG_PRINTF(("dos_get_volume_info() -> return %d; // _doserrno=%d; errno=%d = %s\n", outreg.x.ax, _doserrno, errno, strerror(errno)));
       return outreg.x.ax; /* Return the DOS error code, not the same as errno */
     }
   }
@@ -183,7 +190,7 @@ char *getcwdX(char *pszBuf, int iBufLen) {
   iDrive += 1;		/* 1=A 2=B 3=C ... */
 
   DEBUG_PRINTF((VALUEIZE(GETDCWD) "(%d, %p, %d);\n", iDrive, pc, iBufLen));
-  iErr = GETDCWD(iDrive, pc, iBufLen);
+  iErr = (GETDCWD(iDrive, pc, iBufLen) == NULL);
 
   if (pszLocalBuf) {
     if ((int)strlen(pc-3) >= iBufLen) {
