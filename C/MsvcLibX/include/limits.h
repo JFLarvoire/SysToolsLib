@@ -11,8 +11,9 @@
 *    2018-04-24 JFL Define PATH_MAX and NAME_MAX for all OSs.		      *
 *    2021-11-07 JFL Added TS 18661-1:2014 integer types widths macros.        *
 *    2022-12-11 JFL Define SIZE_MAX & SSIZE_MAX if needed.                    *
-*    2023-11-11 JFL Changed DOS PATH_MAX from 255 to 1024 bytes.              *
+*    2023-11-11 JFL Changed DOS PATH_MAX from 255 to 1024 bytes for testing.  *
 *		    Added CODE_PTR_WIDTH and DATA_PTR_WIDTH macros.	      *
+*    2025-11-25 JFL Changed DOS PATH_MAX from 1024 to 260 bytes. It's enough. *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -36,7 +37,8 @@
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-#define PATH_MAX 1024	/* Many APIs actually limit it to 64 or 128 bytes, but longer paths are legal, and do occur */
+#define PATH_MAX 260	/* Many APIs actually limit it to 64 or 128 bytes, but longer paths are legal, and do occur */
+			/* In DOS 7, Get Volume Information returns PATH_MAX <= 260 for all FS types I tested */
 #define NAME_MAX 12	/* MsvcLibX currently only supports 8.3 file names. */
 
 #define FILESIZEBITS 32
