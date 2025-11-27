@@ -42,6 +42,8 @@
 *    2025-08-03 JFL Preserve the FILE_ATTRIBUTE_REPARSE_POINT bit in all cases.
 *		    Recognize Linux socket, fifo, character, and block devices.
 *    2025-11-11 JFL Prevent a "varargs matches remaining parameters" warning. *
+*    2025-11-23 JFL Make sure the debug output prints unsigned sizes.         *
+*    2025-11-25 JFL Fixed the MSDOS readdir() errno handling.                 *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -134,6 +136,8 @@ void put_dta(char *p_dta) {	/* Set the MS-DOS Disk Transfer Address */
 
 #define CF 0x0001            /* Carry flag bit mask */
 
+/* Call MS-DOS function 43H "Get File Attributes" */
+/* The DOS error code is returned in _doserrno, and the C error code in errno */
 int get_file_attributes(const char *name, unsigned *pAttr) {	/* Get File Attributes */
   union REGS inreg;
   union REGS outreg;
@@ -167,6 +171,8 @@ static int report_workaround(char *s) {
 #define REPORT_WORKAROUND(args) 1
 #endif
 
+/* Call MS-DOS function 4EH "Find First Matching File" */
+/* The DOS error code is returned in _doserrno, and the C error code in errno */
 int srch1st(char *pszFile, uint16_t wAttr, fileinfo *pInfo) { /* Search first matching file */
   union REGS inreg;
   union REGS outreg;
@@ -185,7 +191,7 @@ int srch1st(char *pszFile, uint16_t wAttr, fileinfo *pInfo) { /* Search first ma
   intdosx(&inreg, &outreg, &sregs);
 
   if (CF & outreg.x.cflag) {
-    DEBUG_LEAVE(("return %d; // DOS error code\n", outreg.x.ax));
+    DEBUG_LEAVE(("return %d; // _doserrno=%d; errno=%d - %s\n", outreg.x.ax, _doserrno, errno, strerror(errno)));
     return (int)(outreg.x.ax);
   }
 
@@ -195,6 +201,8 @@ int srch1st(char *pszFile, uint16_t wAttr, fileinfo *pInfo) { /* Search first ma
   return 0;
 }
 
+/* Call MS-DOS function 4FH "Find Next Matching File" */
+/* The DOS error code is returned in _doserrno, and the C error code in errno */
 int srchnext(fileinfo *pInfo) { /* Search next matching file */
   union REGS inreg;
   union REGS outreg;
@@ -210,7 +218,7 @@ int srchnext(fileinfo *pInfo) { /* Search next matching file */
     intdos(&inreg, &outreg);
 
     if (CF & outreg.x.cflag) {
-      DEBUG_LEAVE(("return %d; // DOS error code\n", outreg.x.ax));
+      DEBUG_LEAVE(("return %d; // _doserrno=%d; errno=%d - %s\n", outreg.x.ax, _doserrno, errno, strerror(errno)));
       return(outreg.x.ax);
     }
   } while ((!strncmp(previousFI.fiFileName, pInfo->fiFileName, sizeof(previousFI)))
@@ -222,6 +230,7 @@ int srchnext(fileinfo *pInfo) { /* Search next matching file */
   return 0;
 }
 
+/* Standard C library opendir() */
 DIR *opendir(const char *name) { /* Open a directory */
   DIR *pDir = NULL;
   size_t lName;
@@ -259,6 +268,7 @@ opendir_failed:
   return pDir;
 }
 
+/* Standard C library closedir() */
 int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if not. */
   DEBUG_PRINTF(("closedir(0x%p);\n", pDir));
   if (pDir) {
@@ -268,6 +278,7 @@ int closedir(DIR *pDir) { /* Close the directory. Return 0 if successful, -1 if 
   return 0;
 }
 
+/* Standard C library readdir() */
 _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL for EOF or error. */
   int iErr;
   _dirent *pDirent = &pDir->sDirent;
@@ -287,7 +298,7 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
     pDirent->d_type = DT_REG;			/* A normal file by default */
     if (pDirent->d_attribs & _A_SUBDIR) pDirent->d_type = DT_DIR;  /* Subdirectory */
     if (pDirent->d_attribs & _A_VOLID) pDirent->d_type = DT_VOLID; /* Volume ID file */
-    DEBUG_LEAVE(("return 0x%p; // %s %02X %10ld %s\n",
+    DEBUG_LEAVE(("return 0x%p; // %s %02X %10lu %s\n",
 		  pDirent,
 		  Filetime2String(pDirent->d_date, pDirent->d_time, szTime, sizeof(szTime)),
 		  pDirent->d_attribs,
@@ -295,16 +306,10 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
 		  pDirent->d_name));
     return &pDir->sDirent;
   }
-  switch (iErr) { /* Correct a few errors that do not map well to C library errors */
-    case ESRCH: iErr = ENOTDIR; break;
-    case EXDEV: iErr = 0; break;	/* End of files is NOT an error */
+  switch (errno) { /* Correct DOS errors that do not map well to standard C library errors */
+    case ENOENT: iErr = errno = 0; break; /* End of files is NOT an error according to Unix spec */
   }
-  if (iErr) {
-    errno = iErr; /* MS-DOS' errno.h maps C-library errnos to DOS' errors */
-    DEBUG_LEAVE(("return NULL; // errno=%d - %s\n", errno, strerror(errno)));
-  } else {
-    DEBUG_LEAVE(("return NULL; // End of directory\n"));
-  }
+  DEBUG_LEAVE(("return NULL; // errno=%d - %s\n", errno, errno ? strerror(errno) : "End of directory"));
   return NULL;
 }
 
@@ -542,7 +547,7 @@ realloc_wBuf:
   (*(ULARGE_INTEGER *)&(pDirent->d_filesize)).HighPart = pDir->wfd.nFileSizeHigh;
 
   DEBUG_WSTR2NEWUTF8((WCHAR *)(pDirent->d_name), pszUtf8);
-  DEBUG_LEAVE(("return 0x%p; // %s 0x%05X %10lld %s\n",
+  DEBUG_LEAVE(("return 0x%p; // %s 0x%05X %10llu %s\n",
 		pDirent,
 		Filetime2String(&pDirent->d_LastWriteTime, szTime, sizeof(szTime)),
 		(int)(pDirent->d_attribs),
@@ -717,7 +722,7 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
     return NULL;
   }
 
-  DEBUG_LEAVE(("return 0x%p; // OS/2 found: %04X %04X %02X %10lld %s\n",
+  DEBUG_LEAVE(("return 0x%p; // OS/2 found: %04X %04X %02X %10llu %s\n",
 		&pDir->sDirent
 		(int)(pDirent->time),
 		(int)(pDirent->date),
