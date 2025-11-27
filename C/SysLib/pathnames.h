@@ -12,7 +12,9 @@
 *    2025-11-11 JFL Added macros for managing file (path)names buffers.	      *
 *    2025-11-15 JFL Added WalkDirTree flag WDT_CBINOUT.			      *
 *    2025-11-17 JFL Added WalkDirTree flags WDT_DIRONLY and WDT_CD.	      *
-*									      *
+*    2025-11-27 JFL Added routine NormalizePath().			      *
+*		    Fixed macro TRIM_NODENAME_BUF().			      *
+*		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -118,7 +120,7 @@ extern "C" {
   #define NODENAME_BUF(var) char *var = NEW_NODENAME_BUF()
   #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0))
+#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;)
 #define FREE_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(free(var);)
 
 /* End of helper macros for managing temporary buffers for file pathnames */
@@ -127,8 +129,9 @@ extern "C" {
 
 /* Public routines */
 
+int NormalizePath(char *path);	/* Remove unnecessaty / . .. parts in a path. Return 0=success */
 char *NewJoinedPath(const char *pszPart1, const char *pszPart2);	/* Join 2 paths, and return the new string */
-char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem, removing all useless ./ parts */
+char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem, normalizing it after joining it */
 
 /* WalkDirTree definitions */
 
