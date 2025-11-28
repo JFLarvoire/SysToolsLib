@@ -61,10 +61,10 @@ typedef struct _pathNode {
 #define streq(s1, s2) (!strcmp(s1, s2))
 #endif
 
-#if 1 /* Change to 1 to generate debug output in the debug version */
+#if 0 /* Change to 1 to generate debug output in the debug version */
 #define DPRINTF DEBUG_PRINTF
 #else
-#define DPRINTF()
+#define DPRINTF(args)
 #endif
 
 int NormalizePath(char *path) { /* Remove //, . and .. parts in the path */
