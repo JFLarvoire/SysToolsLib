@@ -194,7 +194,9 @@ int chdirW(const WCHAR *pwszDir) {
     pwszCD = malloc(3 * sizeof(WCHAR));
     if (!pwszCD) goto chdirW_failed;
     lstrcpyW(pwszCD, L"@:");
-    pwszCD[0] += (WCHAR)_getdrive();
+#pragma warning(disable:4244) /* Avoid WIN95 warning "conversion from 'int' to 'WCHAR', possible loss of data" */
+   pwszCD[0] += (char)_getdrive();
+#pragma warning(default:4244)
   } else if (!((pwszDir[0] == L'\\') || (pwszDir[0] && (pwszDir[1] == L':') && (pwszDir[2] == L'\\')))) {
     pwszCD = getcwdW(NULL, 0);
     if (!pwszCD) goto chdirW_failed;
