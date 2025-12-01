@@ -30,6 +30,7 @@
 #    2024-01-07 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #    2025-04-07 JFL Fixed the use of MAKEFLAGS. No need for a QMAKEFLAGS var. #
 #    2025-08-20 JFL Add the source path to the list of include paths.         #
+#    2025-11-27 JFL Fixed the NMaker/include files location detection.        #
 #                                                                             #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
@@ -201,8 +202,8 @@ ifdef NMINCLUDE
   endif
 endif
 ifndef NMINCLUDE
-  ifneq '$(shell ls -1 "../include/debugm.h" 2>/dev/null)' ''
-    NMINCLUDE := ../include
+  ifneq '$(shell ls -1 "../../NMaker/include/debugm.h" 2>/dev/null)' ''
+    NMINCLUDE := ../../NMaker/include
   endif
 endif
 ifdef NMINCLUDE

@@ -11,13 +11,14 @@
 #    2023-01-18 JFL Created this script.                                      #
 #    2024-01-09 JFL Define both NMINCLUDE and STINCLUDE.		      #
 #    2024-06-21 JFL Define macro UNUSED_ARG() in config.h.		      #
+#    2025-11-27 JFL Fixed the NMaker/include files location detection.        #
 #                                                                             #
 #                   © Copyright 2023 Jean-François Larvoire                   #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 #*****************************************************************************#
 
 # Global variables
-VERSION="2024-01-09"
+VERSION="2025-11-27"
 
 VERBOSITY=1			# Verbosity. 0=Quiet 1=Normal 2=Verbose 3=Debug
 
@@ -94,8 +95,9 @@ CPATH=$NMINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
 int main(int argc, char *argv[]) {return 0;}
 EOF
 if [ $? -ne 0 ] ; then # It's not accessible
-  if [ -r ../../NMaker/include/debugm.h ] ; then
-    NMINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
+  REFFILE=../../NMaker/include/debugm.h
+  if [ -r $REFFILE ] ; then
+    NMINCLUDE=$(pushd $(dirname $REFFILE) >/dev/null; pwd -L; popd >/dev/null)
   else
     >&2 echo "Error: Please set NMINCLUDE with the pathname of NMaker include directory"
     exit 1
@@ -110,8 +112,9 @@ CPATH=$STINCLUDE cc -o /dev/null -xc - >&6 2>&1 <<EOF
 int main(int argc, char *argv[]) {return 0;}
 EOF
 if [ $? -ne 0 ] ; then # It's not accessible
-  if [ -r ../include/stversion.h ] ; then
-    STINCLUDE=$(pushd ../include >/dev/null; pwd; popd >/dev/null)
+  REFFILE=../include/stversion.h
+  if [ -r $REFFILE ] ; then
+    STINCLUDE=$(pushd $(dirname $REFFILE) >/dev/null; pwd -L; popd >/dev/null)
   else
     >&2 echo "Error: Please set STINCLUDE with the pathname of SysToolsLib's global include directory"
     exit 1
