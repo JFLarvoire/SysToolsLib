@@ -74,6 +74,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <errno.h>
 #include <sys/stat.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use JFL's MsvcLibX library extensions if needed */
