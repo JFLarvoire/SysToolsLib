@@ -4,6 +4,88 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-11-30
+### Changed
+- In.exe: Version 1.2.1
+  - Added a note in the help screen for Windows, about Windows limitations with long paths > 260 characters.
+  - Added option -@ to get the target dir. name from a file.
+    Necessary for DOS, to enter directories with a name too long to fit on the 128-bytes command line.
+- redo.exe: Version 3.3.
+  - Updated the help screen, and its note about limitations for long paths in Windows.
+  - Added option -i as an alias to option -from.
+  - Added option -l for listing directory lengths.
+  - Added option -m for setting a max recursion depth.
+  - Improved two error messages.
+- C/SRC/dirsize.exe: Version 4.0
+  - Added a verbose message. Removed an unused function prototype.
+  - Restructured to use SysToolsLib's WalkDirTree() recursive features, instead of duplicating them.
+  - All recursive calls now output pathnames that consistently begin with the requested path.
+  - Restructured the error management.
+
+- C/MsvcLibX/src/chdir.c:
+  - Renamed the DOS version of chdir() as chdirX(); Added dos_chdir(), and use it in chdirX().
+  - In the WIN32 version, no need to get cwd in the beginning for absolute targets.
+- C/MsvcLibX/src/getcwd.c: Added routines dos_getcwd() and getcwdX() for DOS. 
+- C/MsvcLibX/src/dirent.c: Fixed the MSDOS readdir() errno handling.
+- C/MsvcLibX/include/unistd.h: For DOS, redefine the getcwd() macro as getcwdX(), and added a chdir() macro defined as chdirX().
+- C/MsvcLibX/include/limits.h: Changed MS-DOS PATH_MAX from 255 to 260 bytes
+- C/MsvcLibX/src/lstat.c: In debug mode, don't print errno if there's no error.
+- C/MsvcLibX/include/limits.h:
+  - Changed DOS PATH_MAX from 255 to 1024 bytes, for testing the actual limit.
+  - Added CODE_PTR_WIDTH and DATA_PTR_WIDTH macros.
+- C/SysLib/WalkDirTree.c: Lots of new features for managing WalkDirTree() recursion:
+  - Added the ability to limit the recursion depth.
+  - Added flag WDT_CBINOUT: Optionally callback on directory entry and exit.
+  - Added flag WDT_DIRONLY: Optionally callback on effective directories only.
+  - Added flag WDT_CD: Optionally change the current directory to the one scanned.
+- C/SysLib/JoinPaths.c:
+  - Generalized NewJoinedPath() to allow joining two paths, as if two successive CDs were made, each part being optional.
+  - Rewrote TrimDotParts() as a more general NormalizePath().
+- C/SysLib/pathnames.h:
+  - Added *NODENAME_BUF* and *PATHNAME_BUF* macros for managing buffers for file names and pathnames.
+  - Added a public prototype for the new NormalizePath().
+  - Added constants definitions for the new WalkDirTree() features.
+
+### Fixed
+- C/SRC/dirsize.exe: Version 4.0
+  - Fixed the operation of the -f option.
+- In.exe: Version 1.2.1
+  - In the Unix version, update the PWD environment variable with the new logical directory.
+    This makes sure that the invoked command, for example a sub-shell, knows and reports the correct logical directory.
+
+- C/MsvcLibX/src/dirent.c: Prevent a "varargs matches remaining parameters" warning in the DOS builds.
+- C/SysLib/JoinPaths.c: Fixed a bug in TrimDotParts() for OSs that have drives.
+- C/SysLib/configure, C/SysLib/Makefile, C/SRC/configure, C/SRC/Makefile: Fixed the NMaker/include files location detection.
+
+### New
+- C/MsvcLibX/include/doserr.h: New include file with MS-DOS error constants definitions.
+
+## [Unreleased] 2025-10-22
+### Changed
+- dirsize.exe: Version 3.99
+  - Simplified the code by merging all scan structures into one.
+  - Count files and directories, and display these counts in verbose mode.
+  - Preserve the links in the output pathnames, as specified by the user in the target argument.
+  - Added argument -md to set the maximum recursion depth.
+  - Fixed double / or \ appearing in some error messages.
+- Batch/Library.bat: Document some :GetLongPathname limitations.
+
+## [Unreleased] 2025-09-26
+### Changed
+- C/README.md: Document how to upgrade NMaker subproject files to the latest version.
+
+### Fixed
+- C/SRC/codepage.c: Fixed a WIN95 compilation error.
+- C/SysLib/configure.outdir.bat: Make sure the SysLib object files don't overlap with those in SRC.
+
+## [Unreleased] 2025-09-04
+### Changed
+- C/SRC/msgnames.h, predefine.h, with.c, C/SysLib/CmdLine.h, CondQuoteShellArg.c, DupArgLineTail.c, C/SysLib/dict.c:
+  Changed the source encoding to UTF-8.
+
+### Fixed
+- C/SRC/dirsize.c, C/SRC/redo.c, C/SysLib/macaddr.h, C/include/dict.h: Fixed SysLib.h case in #include directives.
+
 ## [Unreleased] 2025-08-27
 ### Changed
 - Shell/pname, Shell/ppname:  
