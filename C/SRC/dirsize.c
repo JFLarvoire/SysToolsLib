@@ -89,6 +89,13 @@
 *		    Added argument -md to set the maximum recursion depth.    *
 *		    Fixed double / or \ appearing in some error messages.     *
 *    2025-10-22 JFL Added a verbose message. Removed an unused func. prototype.
+*    2025-11-17 JFL Restructured to use WalkDirTree() recursive features,     *
+*		    instead of duplicating them here.			      *
+*    2025-11-24 JFL Fixed the operation of the -f option.		      *
+*    2025-11-25 JFL All output pathnames now begin with the requested path.   *
+*    2025-11-28 JFL No need for fixing the output paths in Unix anymore.      *
+*    2025-11-30 JFL Restructured the error management.			      *
+*                   Version 4.0.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -96,8 +103,8 @@
 
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
-#define PROGRAM_VERSION "3.99"
-#define PROGRAM_DATE    "2025-11-10"
+#define PROGRAM_VERSION "4.0"
+#define PROGRAM_DATE    "2025-11-30"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -182,32 +189,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
   #define OS_HAS_LINKS 0
 #endif
 
-/* Define whether to work around the standard getcwd() links resolution */
-#if defined(_MSC_VER)
-  #define FIX_OUTPUT_PATH 0	/* Microsoft's getcdw() does not resolve links */
-#else
-  #define FIX_OUTPUT_PATH 1	/* Undo standard getcwd() links resolution */
-#endif
-
 /* Local definitions */
-
-#define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
-#define NODENAME_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
-
-#if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
-  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
-  #define NEW_PATHNAME_BUF(var) char var[PATHNAME_SIZE]
-#else	/* Avoid stack overflows by storing too large variables on stack */
-  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
-  #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
-#endif
-#if !PATHNAME_BUFS_IN_HEAP
-  #define TRIM_PATHNAME_BUF(var) do {} while (0)
-  #define FREE_PATHNAME_BUF(var) do {} while (0)
-#else
-  #define TRIM_PATHNAME_BUF(var) do {char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0)
-  #define FREE_PATHNAME_BUF(var) free(var);
-#endif
 
 /* Define a type for the total size. Must be at least 48bits for large disk sizes. */
 /* Note: constant _INTEGRAL_MAX_BITS >= 64 is not defined on some Unix systems. */
@@ -215,14 +197,14 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define total_t uint64_t		/* Large enough for even very large disks */
 #define TOTAL_T_IS_INT 1
 #define TOTAL_FMT PRIu64
+#define SIZE_ERROR ((total_t)(-1LL))	/* An invalid size to flag errors */
 #else
 #define total_t double			/* DOS does not support 64-bits int */
 #define TOTAL_T_IS_INT 0
 #define TOTAL_FMT ".0f"
 #include <math.h>			/* We use floor() and fmod() */
+#define SIZE_ERROR ((total_t)(-1.))	/* An invalid size to flag errors */
 #endif
-
-#define MISMATCH (-32767)
 
 #define RETCODE_SUCCESS 0               /* Return codes processed by finis() */
 #define RETCODE_NO_MEMORY 1
@@ -231,6 +213,15 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
+typedef struct _scanResults {
+  struct _scanResults *prevResults;
+  int nErrors;			    /* Number of errors that were ignored */
+  total_t size;			    /* Total size of all files */
+  total_t nFiles;		    /* Number of files found */
+  total_t dirSize;		    /* Total size of all subdirectories */
+  long nDirs;			    /* Number of directories scanned */
+} scanResults;
+  
 typedef struct _scanVars {	/* Scan options, variables, and results */
   /* Options for selecting files (RO) */
   char *pattern;		    /* Wildcards pattern. NULL = select all */
@@ -240,35 +231,27 @@ typedef struct _scanVars {	/* Scan options, variables, and results */
   int recur;			    /* If TRUE, list subdirectories recursively */
   int total;			    /* If TRUE, totalize size of all subdirs */
   int subdirs;			    /* If TRUE, start scanning in each subdirectory */
+  int cd;			    /* If TRUE, force changing directories along the tree */
 #if OS_HAS_LINKS
   int follow;			    /* If TRUE, follow links to subdirectories */
 #endif /* OS_HAS_LINKS */
   int maxDepth;			    /* Maximum depth to search in the scan tree */
-  /* Work variables (RW) */
-  int depth;			    /* Current depth in the scan tree */
   /* Results (RW) */
-  int nErrors;			    /* Number of errors that were ignored */
-  total_t size;			    /* Total size of all files */
-  total_t nFiles;		    /* Number of files found */
-  long nDirs;			    /* Number of directories scanned */
+  struct _scanResults *psr;
 } scanVars;
 
 /* Global variables */
 
-char init_dir[PATHNAME_SIZE];       /* Initial directory */
+char init_dir[PATHNAME_BUF_SIZE];   /* Initial directory */
 char init_drive;                    /* Initial drive */
 long csz=0;			    /* Cluster size. 0=Unknown. */
 int band = FALSE;		    /* If TRUE, skip a line every 5 lines */
-int iContinue = -1;                 /* If TRUE, continue after directory access errors */
+int iContinue = TRUE;               /* If TRUE, continue after directory access errors */
 int iQuiet = FALSE;		    /* If TRUE, only display major errors */
 int iVerbose = FALSE;		    /* If TRUE, display additional information */
 int iHuman = TRUE;		    /* If TRUE, display human-friendly values with a comma every 3 digits */
 char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
 volatile int iCtrlC = FALSE;	    /* If TRUE, a Ctrl-C has been detected */
-#if FIX_OUTPUT_PATH /* Work around the standard getcwd() links resolution */
-char *pszTargetDir;		    /* User-defined name for the target directory */
-int lNewCD = 0;			    /* Length of the full resolved name of the target dir */
-#endif
 
 /* Function prototypes */
 
@@ -278,9 +261,9 @@ int parse_date(char *token, time_t *pdate); /* Convert the argument to a time_t 
 int Size2String(char *pBuf, total_t ll); /* Convert size to a decimal, with a comma every 3 digits */
 int Size2StringWithUnit(char *pBuf, total_t llSize); /* Idem, appending the user-specified unit */
 
-total_t ScanFiles(scanVars *pScanVars); /* Scan the current dir */
-total_t ScanDirs(scanVars *pScanVars);  /* Scan every subdir */
-void affiche(char *path, total_t size); /* Display aligned columns */
+total_t DirSize(const char *pszDir, scanVars *pScanVars); /* Scan directory, and report its size */
+total_t SubDirsSizes(const char *pszDir, scanVars *pScanVars);  /* Scan every subdir */
+void affiche(const char *path, total_t size); /* Display aligned columns */
 
 long GetClusterSize(char drive);    /* Get cluster size */
 void OnControlC(int iSignal);	    /* Ctrl-C signal handler */
@@ -294,13 +277,24 @@ void OnControlC(int iSignal);	    /* Ctrl-C signal handler */
 int main(int argc, char *argv[]) {
   char *from = NULL;		/* What directory to list */
   int i;
-  scanVars sScanVars = {0};	/* Scanning options, variables and results */
+  scanVars sScanVars = {0};	/* Directory tree scan options */
+  scanResults sr = {0};		/* Directory tree scan results */
   char *dateminarg = NULL;	/* Minimum date argument */
   char *datemaxarg = NULL;	/* Maximum date argument */
   int iUseCsz = FALSE;		/* If TRUE, use the cluster size */
   int err;
   char *pc;
   total_t size;			/* Total size */
+
+  sScanVars.psr = &sr;
+
+  /* Set OS-dependent defaults */
+#if OS_HAS_LINKS
+  sScanVars.follow = TRUE;
+#endif
+#ifdef _MSDOS
+  sScanVars.cd = TRUE;		/* This is more efficient this way in DOS */
+#endif
 
   /* Parse command line arguments */
   for (i=1; i<argc; i++) {
@@ -320,6 +314,16 @@ int main(int argc, char *argv[]) {
 	}
       continue;
       }
+#ifdef _DEBUG
+      if (streq(opt, "cd")) {
+	sScanVars.cd = TRUE;
+	continue;
+      }
+      if (streq(opt, "CD")) {
+	sScanVars.cd = FALSE;
+	continue;
+      }
+#endif
       if (streq(opt, "D")) {
 	sScanVars.subdirs = TRUE;
 	continue;
@@ -333,6 +337,10 @@ int main(int argc, char *argv[]) {
 #if OS_HAS_LINKS
       if (streq(opt, "f")) {
 	sScanVars.follow = TRUE;
+	continue;
+      }
+      if (streq(opt, "F")) {
+	sScanVars.follow = FALSE;
 	continue;
       }
 #endif
@@ -423,10 +431,6 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Warning: Unexpected argument \"%s\" ignored.", arg);
   }
 
-  /* If not explicitely defined, set iContinue based on context */
-  if ((iContinue == -1) && (sScanVars.total || sScanVars.recur)) iContinue = TRUE; /* For all recursive operations, default to TRUE */
-  if (iContinue == -1) iContinue = FALSE; /* Fon non-recusive operations, default to FALSE */
-
   /* Extract the search pattern if provided as part of the target pathname */
   if (from) {
     struct stat st;
@@ -441,12 +445,11 @@ int main(int argc, char *argv[]) {
 	sScanVars.pattern = pc+1;
       }
     }
-#if FIX_OUTPUT_PATH /* Work around the standard getcwd() links resolution */
-    pszTargetDir = from;
-#endif
+  } else {
+    from = ".";
   }
 
-#if defined(_OS2) 
+#if defined(_OS2)
 /* Make sure to include os2.h at the beginning of this file, and before that
   to define the INCL_DOSMISC constant to enable the necessary section */
   DEBUG_IF_IS_ON(
@@ -485,45 +488,24 @@ int main(int argc, char *argv[]) {
   /* Get the initial drive, and change to the target drive if provided */
 #if HAS_DRIVES
   init_drive = (char)getdrive();
-  if (from && (from[1] == ':')) {
+  if (from[0] && (from[1] == ':')) {
     if (from[0] >= 'a') from[0] -= 'a' - 'A';
-    DEBUG_PRINTF(("chdrv(%d); // Drive %c:'\n", from[0] - '@', from[0]));
+    DEBUG_PRINTF(("chdrv(%d); // Drive %c:\n", from[0] - '@', from[0]));
     err = chdrive(from[0] - '@');
     if (err) {
       finis(RETCODE_INACCESSIBLE, "Cannot access drive %c", from[0]);
     }
-    from += 2;
   }
 #endif
 
   /* Current directory on the target drive */
-  pc = getcwd(init_dir, PATHNAME_SIZE);
+  pc = getcwd(init_dir, PATHNAME_BUF_SIZE);
   if (!pc) {
     finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
   }
 
   /* Make sure to restore the initial drive/directory in case of a Ctrl-C */
   signal(SIGINT, OnControlC);
-
-  /* Go to the target directory */
-  if (from && from[0]) {
-#if !HAS_MSVCLIBX
-    DEBUG_PRINTF(("chdir(\"%s\");\n", from));
-#endif
-    err = chdir(from);
-    if (err) {
-      finis(RETCODE_INACCESSIBLE, "Cannot access directory %s", from);
-    }
-  }
-
-#if FIX_OUTPUT_PATH /* Work around the standard getcwd() links resolution */
-  {
-    char newCD[PATH_MAX+1];
-    char *pNewCD = getcwd(newCD, sizeof(newCD));
-    if (pNewCD) lNewCD = (int)strlen(pNewCD);
-    if (lNewCD > 1) lNewCD += 1; /* Except for the root, skip the following '/' */
-  }
-#endif
 
   /* Check the cluster size on the target drive (and directory for Linux) */
   if (iUseCsz) {
@@ -535,27 +517,28 @@ int main(int argc, char *argv[]) {
 
   /* Compute the files sizes */
   if (!sScanVars.subdirs) {
-    size = ScanFiles(&sScanVars);
-    if ((!sScanVars.recur) && (!iCtrlC)) { /* If Ctrl-C pressed, the computed size is incomplete */
+    size = DirSize(from, &sScanVars);
+    if (   (!sScanVars.recur) && (!iCtrlC) /* If Ctrl-C pressed, the computed size is incomplete */
+        && (size != SIZE_ERROR)) {
       char szBuf[40];
       Size2StringWithUnit(szBuf, size);
       if (iVerbose) {
-      	NEW_PATHNAME_BUF(szCurDir);
-        char *pszDir = getcwd(szCurDir, PATHNAME_SIZE);
-      	if (from) pszDir = NewJoinedPath(pszDir, from);
-      	printf("The size of \"%s\" is ", pszDir);
+      	PATHNAME_BUF(szCurDir);
+        char *pszDir = getcwd(szCurDir, PATHNAME_BUF_SIZE);
+      	if (from && pszDir) pszDir = NewCompactJoinedPath(pszDir, from);
+      	if (pszDir) printf("The size of \"%s\" is ", pszDir);
       	/* Don't bother freeing the allocated strings, as we're exiting now */
       }
       printf("%s\n", szBuf);
     }
   } else {
-    size = ScanDirs(&sScanVars);
+    size = SubDirsSizes(from, &sScanVars);
   }
-  if (iVerbose) printf("# Scanned %ld dirs and %" TOTAL_FMT " files\n", sScanVars.nDirs, sScanVars.nFiles);
+  if (iVerbose) printf("# Scanned %ld dirs and %" TOTAL_FMT " files\n", sr.nDirs, sr.nFiles);
 
   /* Report if some errors were ignored */
-  if (sScanVars.nErrors) {
-    finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d directories", sScanVars.nErrors);
+  if (sr.nErrors && (size != SIZE_ERROR)) {
+    finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d files or directories", sr.nErrors);
   }
 
   /* Restores the initial drive and directory and exit */
@@ -573,28 +556,32 @@ Switches:\n\
   -?|-h       Display this help message and exit.\n\
   -b          Skip a line every 5 lines, to improve readability.\n\
   -c          Use the actual cluster size to compute the total size.\n\
-  -c size     Use the specified cluster size to compute the total size.\n\
-  -D          Measure every subdirectory of the target directory.\n"
+  -c size     Use the specified cluster size to compute the total size.\n"
 #ifdef _DEBUG
 "\
+  -cd         Change directories while recursing. (Default for DOS)\n\
+  -CD         Do not change dirs while recursing. (Default for Windows & Unix)\n\
   -d          Output debug information.\n"
 #endif
+"\
+  -D          Measure every subdirectory of the target directory.\n"
 #if OS_HAS_LINKS
 "\
-  -f          Follow links to directories.\n"
+  -f          Follow links to directories while recursing. (Dflt)\n\
+  -F          Do not follow links to directories while recursing.\n"
 #endif
 "\
   -from Y-M-D List only files starting from that date.\n\
   -g          Display sizes in Giga bytes.\n\
   -H          Display sizes without the human-friendly commas.\n\
-  -i          Report only the number of access errors (Dflt for recursive ops.)\n\
-  -I          Stop in case of directory access error (Default for other ops.)\n\
+  -i          Ignore errors and continue scanning files. (Default)\n\
+  -I          Stop scanning files in case of error.\n\
   -k          Display sizes in Kilo bytes.\n\
   -m          Display sizes in Mega bytes.\n\
-  -md N       Maximum Depth of recursion: N levels. Default: 0 = illimited.\n\
+  -md N       Maximum Depth of recursion: N levels. Default: 0 = no limit\n\
   -q          Quiet mode: Do not display minor errors.\n\
-  -r|-s       Display the sizes of all subdirectories too.\n\
-  -t          Count the total size of all files plus that of all subdirs.\n\
+  -r|-s       Recursively display the size of every subdirectory.\n\
+  -t          Recursively compute the total subdirectory tree size.\n\
   -T          Do not count the size of subdirs. (Default)\n\
   -to Y-M-D   List only files up to that date.\n\
   -v          Display verbose information.\n\
@@ -631,8 +618,10 @@ Pattern:      Wildcards pattern. Default: " PATTERN_ALL "\n\
 \*---------------------------------------------------------------------------*/
 
 void finis(int retcode, ...) {
+  DEBUG_ENTER(("finis(%d)\n", retcode));
+
   if (iCtrlC && (retcode != RETCODE_CTRL_C)) OnControlC(0); /* Report a soft Ctrl-C stop */
-    
+
   if (retcode) { /* There might be an error message to report */
     va_list vl;
     char *pszFormat;
@@ -643,17 +632,20 @@ void finis(int retcode, ...) {
       fputs("dirsize: ", stderr);
       if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
       vfprintf(stderr, pszFormat, vl);
-      fputs(".\n", stderr);
+      fputs("\n", stderr);
     }
     va_end(vl);
   }
 
-  DEBUG_PRINTF(("finis(): Returning to the initial directory.\n"));
+#if !HAS_MSVCLIBX
+  DEBUG_PRINTF(("chdir(\"%s\");\n", init_dir));
+#endif
   chdir(init_dir);	/* Don't test errors, as we're likely to be here due to another error */
 #if HAS_DRIVES
   chdrive(init_drive);
 #endif
 
+  DEBUG_LEAVE(("exit(%d);\n", retcode));
   exit(retcode);
 }
 
@@ -686,13 +678,14 @@ void OnControlC(int iSignal) {
   }
 }
 
-/******************************************************************************
+/*****************************************************************************\
 *                                                                             *
-*       Function:       ScanFiles                                             *
+*       Function:       DirSize                                               *
 *                                                                             *
-*       Description:    Scan the current directory, and add-up file sizes     *
+*       Description:    Scan a directory, and add-up file sizes		      *
 *                                                                             *
 *       Arguments:                                                            *
+*         const char *pszDir	The directory to scan                         *
 *         void *pScanVars	File selection constraints                    *
 *                                                                             *
 *       Return value:   Total size of all files                               *
@@ -701,11 +694,13 @@ void OnControlC(int iSignal) {
 *                                                                             *
 *       History:                                                              *
 *                                                                             *
-******************************************************************************/
+\*****************************************************************************/
 
 int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
   scanVars *pScanVars = p;
-  struct stat sStat;                         
+  scanResults *psr = pScanVars->psr;
+  scanResults *psr2;
+  struct stat sStat;
   uintmax_t fsize;		/* File size */
   int iErr;
 
@@ -716,115 +711,131 @@ int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 #endif
   if (iCtrlC) return TRUE;	/* Abort scan */
 
-  /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
-  if (pDE->d_type != DT_REG) return FALSE;	/* We want only files */
-
-#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
-  iErr = dirent2stat(pDE, &sStat);
-#else /* Unix has to query it separately */
-  iErr = lstat(pDE->d_name, &sStat);
-#endif
-  if (iErr) return FALSE;	/* Ignore suspect entries */
-
-  /* Skip files outside date range */
-  if (pScanVars->datemin && (sStat.st_mtime < pScanVars->datemin)) return FALSE;
-  if (pScanVars->datemax && (sStat.st_mtime > pScanVars->datemax)) return FALSE;
-
-  /* Skip files which don't match the wildcard pattern */
-  if (pScanVars->pattern) {
-    if (fnmatch(pScanVars->pattern, pDE->d_name, FNM_CASEFOLD) == FNM_NOMATCH) {
+  switch (pDE->d_type) { /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
+    case DT_ENTER: { /* If entering a directory */
+      DEBUG_PRINTF(("// CB Enter \"%s\"; size=%"TOTAL_FMT"; nFiles=%d;\n", pszPathname, psr->size, psr->nFiles));
+      psr2 = calloc(sizeof(scanResults), 1);
+      if (!psr2) finis(RETCODE_NO_MEMORY, "Out of memory");
+      psr2->prevResults = psr;
+      psr = pScanVars->psr = psr2; /* Insert psr2 ahead of the linked list of results */
       return FALSE;
     }
-  }
+    case DT_REG: { /* We count only files sizes */
+#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
+      iErr = dirent2stat(pDE, &sStat);
+#else /* Unix has to query it separately */
+      iErr = lstat(pScanVars->cd ? pDE->d_name : pszPathname, &sStat);
+#endif
+      if (iErr) { /* Ex: This happens in WSL (Windows Subsystem for Linux) for reserved system files */
+      	if (!iQuiet) pferror("Can't get file \"%s\" stats: %s", pszPathname, strerror(errno));
+      	psr->nErrors += 1;
+      	return FALSE;	/* Ignore suspect entries */
+      }
 
-  /* OK, all criteria pass. */
-  DEBUG_PRINTF(("// Counting %10"PRIuMAX" bytes for %-32s\n", (uintmax_t)(sStat.st_size), pDE->d_name));
-  fsize = sStat.st_size; /* Get the actual file size */
-  if (csz) {	/* If the cluster size is provided */
-	      /* Round it to the next cluster multiple */
-    fsize += csz-1;
-    fsize -= fsize % csz;
+      /* Skip files outside date range */
+      if (pScanVars->datemin && (sStat.st_mtime < pScanVars->datemin)) return FALSE;
+      if (pScanVars->datemax && (sStat.st_mtime > pScanVars->datemax)) return FALSE;
+
+      /* Skip files which don't match the wildcard pattern */
+      if (pScanVars->pattern) {
+	if (fnmatch(pScanVars->pattern, pDE->d_name, FNM_CASEFOLD) == FNM_NOMATCH) {
+	  return FALSE;
+	}
+      }
+
+      /* OK, all criteria pass. */
+      DEBUG_PRINTF(("// Counting %"PRIuMAX" bytes for %-32s\n", (uintmax_t)(sStat.st_size), pDE->d_name));
+      fsize = sStat.st_size; /* Get the actual file size */
+      if (csz) {	/* If the cluster size is provided */
+		  /* Round it to the next cluster multiple */
+	fsize += csz-1;
+	fsize -= fsize % csz;
+      }
+      psr->nFiles += 1;    /* Count files */
+      psr->size += fsize;  /* Totalize sizes */
+      break;
+    }
+    case DT_LEAVE: { /* Exiting a directory */
+      total_t size = psr->size;
+      if (!(pScanVars->total)) size -= psr->dirSize;
+      affiche(pszPathname, size);
+      if (psr->prevResults) { /* If we started from the root, there was no entry recorded */
+	/* Pop one temp result off the head of the linked list of results */
+	psr2 = psr;
+	psr = pScanVars->psr = psr2->prevResults;
+	/* Add up its results to the parent's results */
+	psr->size += psr2->size;
+	psr->dirSize += psr2->size; /* Add the full size of this subdirectory */
+	psr->nFiles += psr2->nFiles;
+	psr->nErrors += psr2->nErrors;
+      }
+      DEBUG_PRINTF(("// CB Leave \"%s\"; size=%"TOTAL_FMT"; nFiles=%d;\n", pszPathname, psr->size, psr->nFiles));
+    }
+    default: {
+      break;
+    }
   }
-  pScanVars->nFiles += 1;    /* Count files */
-  pScanVars->size += fsize;  /* Totalize sizes */
 
   return FALSE; /* Continue scanning */
 }
 
-total_t ScanFiles(scanVars *pScanVars) {
+#if _DEBUG
+char *DumpScanVars(scanVars *psv) {
+  static char szBuf[16];
+  int i = 0;
+  szBuf[i++] = (char)(psv->recur ? 'R' : 'r');	/* List subdirectories recursively */
+  szBuf[i++] = (char)(psv->total ? 'T' : 't');	/* Totalize size of all subdirs */
+  szBuf[i++] = (char)(psv->subdirs ? 'D' : 'd');/* Start scanning in each subdirectory */
+#if OS_HAS_LINKS
+  szBuf[i++] = (char)(psv->follow ? 'F' : 'f');	/* Follow links to subdirectories */
+#endif /* OS_HAS_LINKS */
+  i += sprintf(szBuf+i, "%d", psv->maxDepth);	/* Maximum depth to search in the scan tree */
+  szBuf[i++] = '\0';
+  return szBuf;
+}
+#endif /* _DEBUG */
+
+total_t DirSize(const char *pszDir, scanVars *pScanVars) {
+  scanResults *psr = pScanVars->psr;
   total_t size = 0;
-  total_t dSize;		/* Total size of subdirectories */
-  NEW_PATHNAME_BUF(szCurDir);
-  int iErr;
   wdt_opts wdtOpts = {0};
-  total_t initialSize = pScanVars->size;
+  total_t initialSize = psr->size;
   int iResult;
 
-  DEBUG_ENTER(("ScanFiles(%p);\n", pScanVars));
-
-#if PATHNAME_BUFS_IN_HEAP
-  if (!szCurDir) {
-    finis(RETCODE_NO_MEMORY, "Out of memory");
-  }                                                        
-#endif
-
-  pScanVars->nDirs += 1;    /* Count directories scanned */
-
-  DEBUG_PRINTF(("size=%"TOTAL_FMT"; pScanVars->size=%"TOTAL_FMT";\n", size, pScanVars->size));
+  DEBUG_ENTER(("DirSize(\"%s\", {%s});\n", pszDir, DumpScanVars(pScanVars)));
 
   /* Scan all files */
-  wdtOpts.iFlags = WDT_CONTINUE	| WDT_QUIET | WDT_NORECURSE;
-  iResult = WalkDirTree(".", &wdtOpts, SelectFilesCB, pScanVars);
-  if (iResult < 0) { /* An error occurred */
-    iErr = errno;
-    if (iVerbose || !iContinue) {
-      char *pszSeverity = iContinue ? "Warning" : "Error";
-      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-      if (!pcd) {
-	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-      }
-      fprintf(stderr, "%s: Failed to scan files in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
-    }
-    if ((iErr == EACCES) && iContinue) {
-      pScanVars->nErrors += 1;
-      goto exit_ScanFiles; /* return 0; */
-    }
-    iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
-    finis(iErr, NULL); /* The error message has already been displayed */
+  wdtOpts.iFlags = 0;
+  if (iContinue) wdtOpts.iFlags |= WDT_CONTINUE;
+  if (iQuiet) wdtOpts.iFlags |= WDT_QUIET;
+  if (!(pScanVars->recur || pScanVars->total)) wdtOpts.iFlags |= WDT_NORECURSE;
+  if (pScanVars->recur) wdtOpts.iFlags |= WDT_CBINOUT;
+#if OS_HAS_LINKS
+  if (pScanVars->follow) wdtOpts.iFlags |= WDT_FOLLOW;
+#endif /* OS_HAS_LINKS */
+  if (pScanVars->cd) wdtOpts.iFlags |= WDT_CD;
+  wdtOpts.iMaxDepth |= pScanVars->maxDepth;
+  iResult = WalkDirTree(pszDir, &wdtOpts, SelectFilesCB, pScanVars);
+  psr->nDirs += (long)wdtOpts.nDir;
+  psr->nErrors += wdtOpts.nErr;
+  if (iResult < 0) {	/* An error occurred */
+    size = SIZE_ERROR;
+    DEBUG_LEAVE(("return -1; psr->size=%"TOTAL_FMT";\n", psr->size));
+  } else {		/* The walk succeeded */
+    size = psr->size - initialSize;
+    DEBUG_LEAVE(("return %"TOTAL_FMT"; psr->size=%"TOTAL_FMT";\n", size, psr->size));
   }
-  size = pScanVars->size - initialSize;
-
-  DEBUG_PRINTF(("size=%"TOTAL_FMT"; pScanVars->size=%"TOTAL_FMT"; // All files, no subdirs\n", size, pScanVars->size));
-
-  /* Optionally scan all subdirectories, unless aborting with iResult = 1 */
-  if ((pScanVars->recur || pScanVars->total) && (iResult < 1)) {
-    pScanVars->depth += 1;
-    dSize = ScanDirs(pScanVars);
-    pScanVars->depth -= 1;
-    if (pScanVars->total) size += dSize; /* Return the local files size + subdirectories size */
-    if (pScanVars->recur) {
-      char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-      if (!pcd) {
-	finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-      }
-      TRIM_PATHNAME_BUF(szCurDir);
-      affiche(szCurDir, size);
-    }
-  }
-
-exit_ScanFiles:
-  FREE_PATHNAME_BUF(szCurDir);
-  DEBUG_LEAVE(("return %"TOTAL_FMT"; pScanVars->size=%"TOTAL_FMT";\n", size, pScanVars->size));
   return size;
 }
 
-/******************************************************************************
+/*****************************************************************************\
 *                                                                             *
-*       Function:       ScanDirs                                              *
+*       Function:       SubDirsSizes                                          *
 *                                                                             *
-*       Description:    Scan subdirectories, and add-up file sizes            *
+*       Description:    Scan 1st level subdirectories, and add-up file sizes  *
 *                                                                             *
 *       Arguments:                                                            *
+*         const char *pszDir	The directory to scan                         *
 *         void *pScanVars	File selection constraints                    *
 *                                                                             *
 *       Return value:   Total size of all files                               *
@@ -833,159 +844,54 @@ exit_ScanFiles:
 *                                                                             *
 *       History:                                                              *
 *                                                                             *
-******************************************************************************/
+\*****************************************************************************/
 
 int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
   scanVars *pScanVars = p;
-  int isDir = FALSE;
   total_t dSize = 0;
-  struct stat sStat;
-  int iErr;
-  NEW_PATHNAME_BUF(szCurDir);
-  int iRet;
 
-  UNUSED_ARG(pszPathname);
+  UNUSED_ARG(pDE);
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
   _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
 #endif
-  if (iCtrlC) {
-    iRet = TRUE;
-    goto exit_SelectDirsCB;	/* Abort scan */
-  }
+  if (iCtrlC) return TRUE;	/* Abort scan */
 
-  /* WalkDirTree() uses readdirx(), so d_type always valid, even under Unix */
-  if (   (pDE->d_type == DT_DIR)	/* We want only directories */
-      && (!streq(pDE->d_name, "."))	/* Except . */
-      && (!streq(pDE->d_name, ".."))) { /* and .. */
-    isDir = TRUE;
-#if OS_HAS_LINKS
-  } else if (pDE->d_type == DT_LNK) {
-    if (pScanVars->follow) {
-      struct stat s;
-      iErr = stat(pDE->d_name, &s);
-      if (iErr) {
-	char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
-	if (iVerbose || !iContinue) {
-	  char *pszPathname2 = NewJoinedPath(pszPathname, pDE->d_name);
-	  if (!pszPathname2) {
-	    fprintf(stderr, "%s: Invalid link \"%s" DIRSEPARATOR_STRING "%s\". %s\n", pszSeverity, pszPathname, pDE->d_name, strerror(errno));
-	  } else {
-	    fprintf(stderr, "%s: Invalid link \"%s\". %s\n", pszSeverity, pszPathname2, strerror(errno));
-	  }
-	  free(pszPathname2);
-	}
-	if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
-	pScanVars->nErrors += 1;
-	isDir = FALSE;
-      }
-      isDir = S_ISDIR(s.st_mode);
-    } else {
-      isDir = FALSE;
-    }
-#endif /* OS_HAS_LINKS */
-  } else {
-    isDir = FALSE;
-  }
+  dSize = DirSize(pszPathname, pScanVars);
+  if (dSize != SIZE_ERROR) affiche(pszPathname, dSize);
 
-  if (isDir && !iCtrlC) {
-#if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
-    iErr = dirent2stat(pDE, &sStat);
-#else /* Unix has to query it separately */
-    iErr = lstat(pDE->d_name, &sStat);
-#endif
-
-#if !HAS_MSVCLIBX
-    DEBUG_PRINTF(("chdir(\"%s\");\n", pDE->d_name));
-#endif
-    iErr = chdir(pDE->d_name);
-    if (iErr) {
-      char *pszSeverity = iContinue ? "Warning" : "dirsize: Error";
-      if (iVerbose || !iContinue) {
-	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-	char *pPathName = pcd ? NewJoinedPath(pcd, pDE->d_name) : NULL;
-	if (!pcd || (!pPathName)) {
-	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory, nor access %s. %s", pDE->d_name, strerror(errno));
-	}
-      	fprintf(stderr, "%s: Cannot access directory %s. %s\n", pszSeverity, pPathName, strerror(errno));
-      	free(pPathName);
-      }
-      if (!iContinue) finis(RETCODE_INACCESSIBLE, NULL); /* The error message has already been displayed */
-      pScanVars->nErrors += 1;
-    } else {
-      dSize = ScanFiles(pScanVars);
-      if (!pScanVars->depth) {
-	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-	if (!pcd) {
-	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-	}
-	/* Don't trim the pathname here, as we're in a loop, and subsequent paths might be longer */
-	affiche(szCurDir, dSize);
-      }
-#if !HAS_MSVCLIBX
-      DEBUG_PRINTF(("chdir(\"..\");\n"));
-#endif
-      iErr = chdir("..");
-      if (iErr) {
-	finis(RETCODE_INACCESSIBLE, "Cannot return to \"%s\" parent directory. %s", szCurDir, strerror(errno));
-      }
-      /* Do not add dSize to pScanVars->size now, as it's already been done in ScanFiles() already */
-    }
-  }
-
-  iRet = FALSE; /* Continue scanning */
-exit_SelectDirsCB:
-  FREE_PATHNAME_BUF(szCurDir);
-  return iRet;
+  return FALSE;			/* Continue scanning */
 }
 
 /* Scan all subdirectories */
-total_t ScanDirs(scanVars *pScanVars) {
+total_t SubDirsSizes(const char *pszDir, scanVars *pScanVars) {
+  scanResults *psr = pScanVars->psr;
   total_t size = 0;
-  int iErr;
   wdt_opts wdtOpts = {0};
-  total_t initialSize = pScanVars->size;
   int iResult;
-  NEW_PATHNAME_BUF(szCurDir);
 
-  DEBUG_ENTER(("ScanDirs(%p);\n", pScanVars));
+  DEBUG_ENTER(("SubDirsSizes(\"%s\", {%s});\n", pszDir, DumpScanVars(pScanVars)));
 
-#if PATHNAME_BUFS_IN_HEAP
-  if (!szCurDir) {
-    finis(RETCODE_NO_MEMORY, "Out of memory");
+  DEBUG_PRINTF(("size=%"TOTAL_FMT"; psr->size=%"TOTAL_FMT";\n", size, psr->size));
+
+  /* Get all subdirectories */
+  wdtOpts.iFlags = WDT_NORECURSE | WDT_DIRONLY
+#if OS_HAS_LINKS
+		 | WDT_FOLLOW /* Always follow links when listing first level dirs here */
+#endif /* OS_HAS_LINKS */
+  ;
+  if (iContinue) wdtOpts.iFlags |= WDT_CONTINUE;
+  if (iQuiet) wdtOpts.iFlags |= WDT_QUIET;
+  iResult = WalkDirTree(pszDir, &wdtOpts, SelectDirsCB, pScanVars);
+  psr->nDirs += (long)wdtOpts.nDir;
+  psr->nErrors += wdtOpts.nErr;
+  if (iResult < 0) {	/* An error occurred */
+    size = SIZE_ERROR;
+    DEBUG_LEAVE(("return -1; psr->size=%"TOTAL_FMT";\n", psr->size));
+  } else {		/* The walk succeeded */
+    size = psr->size;
+    DEBUG_LEAVE(("return %"TOTAL_FMT"; psr->size=%"TOTAL_FMT";\n", size, psr->size));
   }
-#endif
-
-  DEBUG_PRINTF(("size=%"TOTAL_FMT"; pScanVars->size=%"TOTAL_FMT";\n", size, pScanVars->size));
-
-  if ((!pScanVars->maxDepth) || (pScanVars->depth < pScanVars->maxDepth)) {
-    /* Get all subdirectories */
-    /* But for now, manage recursion locally, to do a breadth-first scan */
-    wdtOpts.iFlags = WDT_CONTINUE | WDT_QUIET | WDT_NORECURSE;
-    iResult = WalkDirTree(".", &wdtOpts, SelectDirsCB, pScanVars);
-    if (iResult < 0) { /* An error occurred */
-      iErr = errno;
-      if (iVerbose || !iContinue) {
-	char *pszSeverity = iContinue ? "Warning" : "Error";
-	char *pcd = getcwd(szCurDir, PATHNAME_SIZE); /* Canonic name of the target directory */
-	if (!pcd) {
-	  finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-	}
-	fprintf(stderr, "%s: Failed to scan directories in %s. %s\n", pszSeverity, szCurDir, strerror(iErr));
-      }
-      if ((iErr == EACCES) && iContinue) {
-	pScanVars->nErrors += 1;
-	goto exit_ScanDirs;
-      }
-      iErr = (iErr == EACCES) ? RETCODE_INACCESSIBLE : RETCODE_NO_MEMORY;
-      finis(iErr, NULL); /* The error message has already been displayed */
-    }
-    size = pScanVars->size - initialSize;
-  }
-
-exit_ScanDirs:
-  FREE_PATHNAME_BUF(szCurDir);
-  DEBUG_LEAVE(("return %"TOTAL_FMT"; pScanVars->size=%"TOTAL_FMT";\n", size, pScanVars->size));
   return size;
 }
 
@@ -997,8 +903,8 @@ exit_ScanDirs:
 *                                                                             *
 *   Arguments:                                                                *
 *                                                                             *
-*      char *path	Name of the directory				      *
-*      total_t size	Size found					      *
+*      const char *path		Name of the directory			      *
+*      total_t size		Size found				      *
 *                                                                             *
 *   Return value:   0=Success; !0=Failure                                     *
 *                                                                             *
@@ -1066,7 +972,7 @@ int Size2StringWithUnit(char *pBuf, total_t llSize) {
   return n;
 }
 
-void affiche(char *path, total_t llSize) {
+void affiche(const char *path, total_t llSize) {
   static int group=0;
   char szSize[40];
 
@@ -1075,24 +981,12 @@ void affiche(char *path, total_t llSize) {
 #endif
   if (iCtrlC) return;	/* Scan aborted, so the size is invalid */
 
+  /* Don't display the initial "./", if any */ 
+  if ((path[0] == '.') && (path[1] == DIRSEPARATOR_CHAR)) path += 2;
+
   /* Display the size and path name */
   Size2StringWithUnit(szSize, llSize);
-#if FIX_OUTPUT_PATH /* Work around the standard getcwd() links resolution */
-  path = NewJoinedPath(pszTargetDir, path + lNewCD);
-  if (path) {
-    if (!path[0]) {
-      path = realloc(path, 2);
-      if (path) strcpy(path, ".");
-    } else if ((path[0] != '/') || path[1]) /* if path != "/" */ {
-      size_t l = strlen(path);
-      if (path[l-1] == '/') path[l-1] = '\0';
-    }
-  }
-#endif
   printf("%15s  %s\n", szSize, path);
-#if FIX_OUTPUT_PATH /* Work around the standard getcwd() links resolution */
-  free(path);
-#endif
 
   if (band && (++group == 5)) {
     group = 0;
@@ -1361,7 +1255,7 @@ long GetClusterSize(char drive)	       /* Get cluster size */
 #ifdef _UNIX
 
 long GetClusterSize(char drive)	{       /* Get cluster size */
-  NEW_PATHNAME_BUF(path);
+  PATHNAME_BUF(path);
   struct stat st;
   int iErr;
 
@@ -1372,7 +1266,7 @@ long GetClusterSize(char drive)	{       /* Get cluster size */
 #endif
 
   if (drive != 0) return 0;		/* No such thing under Unix */
-  if (!getcwd(path, PATHNAME_SIZE)) return 0;
+  if (!getcwd(path, PATHNAME_BUF_SIZE)) return 0;
   if (strcmp(path, "/")) strcpy(path, ".");
   iErr = stat(path, &st);
   if (iErr) st.st_blksize = 0;
