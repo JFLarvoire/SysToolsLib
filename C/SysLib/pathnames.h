@@ -12,6 +12,8 @@
 *    2025-11-11 JFL Added macros for managing file (path)names buffers.	      *
 *    2025-11-15 JFL Added WalkDirTree flag WDT_CBINOUT.			      *
 *    2025-11-17 JFL Added WalkDirTree flags WDT_DIRONLY and WDT_CD.	      *
+*    2025-11-25 JFL WalkDirTree() now uses DT_ENTER & DT_LEAVE to report      *
+*		    directory entry and exit.				      *
 *    2025-11-27 JFL Added routine NormalizePath().			      *
 *		    Fixed macro TRIM_NODENAME_BUF().			      *
 *		    							      *
@@ -107,7 +109,8 @@ extern "C" {
   #define PATHNAME_BUF(var) char *var = NEW_PATHNAME_BUF()
   #define IF_PATHNAME_BUFS_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;)
+#define TRIM_STRING_BUF(s) int e=errno; char *p=realloc(s, strlen(s)+1); if (p) s=p; else errno=e
+#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(TRIM_STRING_BUF(var);)
 #define FREE_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(free(var);)
 
 #define NEW_NODENAME_BUF() malloc(NODENAME_BUF_SIZE)
@@ -120,7 +123,7 @@ extern "C" {
   #define NODENAME_BUF(var) char *var = NEW_NODENAME_BUF()
   #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(char *p = realloc(var, strlen(var)+1); if (p) var = p;)
+#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(TRIM_STRING_BUF(var);)
 #define FREE_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(free(var);)
 
 /* End of helper macros for managing temporary buffers for file pathnames */
@@ -141,9 +144,17 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_NORECURSE	0x0004		/* Do not recurse into subdirectories */
 #define WDT_FOLLOW	0x0008		/* Recurse into junctions & symlinkds */
 #define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
-#define WDT_CBINOUT	0x0020		/* Callback when entering (".") and exiting (NULL) a directory */
+#define WDT_CBINOUT	0x0020		/* Callback when entering and leaving a directory */
 #define WDT_DIRONLY	0x0040		/* Callback only for effective directories (ie. links too if WDT_FOLLOW) */
 #define WDT_CD		0x0080		/* Change current directory to the directories scanned */
+
+/* Dummy dirent dir types, giving special infos to the callback.
+   DT_XXX dir types defined in dirent.h typically are in the 0-14 range */
+/* Known risk: These two constants might collide with existing types in exotic OSs.
+   TO DO, at the cost of compatibility with older SysToolsLib C/SRC code:
+   Rewrite WalkDirTree() to pass an additional callback argument: CB_DIRENT | CB_ENTRY | CB_LEAVE */
+#define DT_ENTER	0xF0		/* Inform the callback that we're entering a directory */
+#define DT_LEAVE	0xF1		/* Inform the callback that we're leaving a directory */
 
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   int iFlags;			/* [IN] Options */
