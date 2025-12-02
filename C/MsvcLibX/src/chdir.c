@@ -51,10 +51,12 @@
 |		    MSVC's _chdir() works with paths up to 255 characters.    |
 |		    							      |
 |   History								      |
-|    2000-12-04 JFL Initial implementation.				      |
+|    2000-12-04 JFL Initial implementation as chdirx() in dirc.c.	      |
+|   <2016	JFL Renamed as chdir().					      |
 |    2017-10-03 JFL Removed the dependency on PATH_MAX and fixed size buffers.|
-|    2025-11-06 JFL Renamed as chdirX to avoid homonymy with the chdir in     |
-|		    oldNames.lib. Added debug output.                         |
+|    2025-11-06 JFL Renamed as chdirX() to avoid homonymy with the chdir() in |
+|		    oldNames.lib. Now define chdir() as chdirX() in unistd.h. |
+|		    Added debug output.					      |
 |    2025-11-11 JFL Added dos_chdir(), and use it in chdirX().		      |
 *									      *
 \*---------------------------------------------------------------------------*/
