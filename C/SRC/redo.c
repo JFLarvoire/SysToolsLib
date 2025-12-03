@@ -58,15 +58,18 @@
 *    2025-11-04 JFL Added option -m.					      *
 *    2025-11-12 JFL Improved a couple of error messages.		      *
 *		    Version 3.3.					      *
+*    2025-12-03 JFL Rewritten using SysLib's WalkDirTree().		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
 
-#define PROGRAM_DESCRIPTION "Execute a command recursively"
+#define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.3"
-#define PROGRAM_DATE    "2025-11-12"
+#define PROGRAM_VERSION "3.99"
+#define PROGRAM_DATE    "2025-12-03"
+
+#include <config.h>	/* OS and compiler-specific definitions */
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -76,6 +79,7 @@
 #include <memory.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <signal.h>
 /* The following include files are not available in the Microsoft C libraries */
 /* Use JFL's MsvcLibX library extensions if needed */
 #include <unistd.h>
@@ -85,7 +89,7 @@
 #include <limits.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
-#include "SysLib.h"		/* Force linking with SysLib dictionary routines */
+#include "pathnames.h"		/* Pathname management functions */
 #include "mainutil.h"
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros */
@@ -93,7 +97,7 @@
 
 DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary for Unix builds) */
 
-/* These are non standard routines, but the leading _ is annoying */ 
+/* These are non standard routines, but the leading _ is annoying */
 #define strlwr _strlwr
 #define stricmp _stricmp
 #define spawnvp _spawnvp
@@ -102,18 +106,17 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS		/* Automatically defined when targeting an MS-DOS app. */
 
-#define DIRSEPARATOR '\\'
-#define PATTERN_ALL "*.*"     		/* Pattern matching all files */
-#define HAS_DRIVES TRUE
-
-#define CDECL _cdecl
-
-/* These are non standard routines, but the leading _ is annoying */ 
+/* These are non standard routines, but the leading _ is annoying */
 #define strdup _strdup
 
 #include <process.h>
+#include <conio.h>	/* For _kbhit() */
 
 #pragma warning(disable:4001) /* Ignore the "nonstandard extension 'single line comment' was used" warning */
+
+#define NOOP_CMD "break"
+
+#define COMMAND_LINE_MAX 128
 
 #endif /* _MSDOS */
 
@@ -124,48 +127,37 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define INCL_DOSFILEMGR
 #define INCL_DOSMISC
 #define INCL_VIO
-#include "os2.h" 
+#include "os2.h"
 
-
-#define DIRSEPARATOR '\\'
-#define PATTERN_ALL "*.*"     		/* Pattern matching all files */
-#define HAS_DRIVES TRUE
-
-#define CDECL
-
-/* These are non standard routines, but the leading _ is annoying */ 
+/* These are non standard routines, but the leading _ is annoying */
 #define strdup _strdup
 
 #include <process.h>
+
+#define NOOP_CMD "break"
+
+#define COMMAND_LINE_MAX 128
 
 #endif /* _OS2 */
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32			/* Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
-#define DIRSEPARATOR '\\'
-#define PATTERN_ALL "*"     		/* Pattern matching all files */
-#define HAS_DRIVES TRUE
-
-#define CDECL
-
-/* These are non standard routines, but the leading _ is annoying */ 
+/* These are non standard routines, but the leading _ is annoying */
 #define strdup _strdup
 
 #include <process.h>
+
+#define NOOP_CMD "break"
+
+#define COMMAND_LINE_MAX 32768
 
 #endif /* _WIN32 */
 
 /************************* Unix-specific definitions *************************/
 
-#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-
-#define _UNIX
-
-#define DIRSEPARATOR '/'
-#define PATTERN_ALL "*"     		/* Pattern matching all files */
-#define HAS_DRIVES FALSE
+#ifdef _UNIX		/* Defined in NMaker versions.h for Unix flavors we support */
 
 #include <ctype.h>
 
@@ -181,70 +173,31 @@ static char *strlwr(char *pString) {
 #define _strnicmp strncasecmp
 
 #ifndef FNM_MATCH
-#define FNM_MATCH	0	/* Simpler than testing != FNM_NO_MATCH */ 
+#define FNM_MATCH	0	/* Simpler than testing != FNM_NO_MATCH */
 #endif
 
-/* DOS File attribute constants */
-
-#define _A_NORMAL   0x00    /* Normal file - No read/write restrictions */
-#define _A_RDONLY   0x01    /* Read only file */
-#define _A_HIDDEN   0x02    /* Hidden file */
-#define _A_SYSTEM   0x04    /* System file */
-#define _A_VOLID    0x08    /* Volume ID file */
-#define _A_SUBDIR   0x10    /* Subdirectory */
-#define _A_ARCH     0x20    /* Archive file */
-
-#define _getdrive() ':'
-#define _chdrive(d) 0
-
-#define CDECL
+#define NOOP_CMD "true"
 
 #define max(x,y) (((x)>(y))?(x):(y))
-
-#define _flushall() do {fflush(stdout); fflush(stderr);} while (0)
 
 /* Unix port of Microsoft's spawn* functions */
 intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv);
 #define P_WAIT         0	/* Spawn mode: Wait for program termination */
 #define P_NOWAIT       1	/* Spawn mode: Do not wait for program termination */
 
-#endif /* __unix__ */
+#define COMMAND_LINE_MAX 32768
+
+#endif /* _UNIX */
 
 /*********************************** Other ***********************************/
 
-#if (!defined(DIRSEPARATOR)) || (!defined(EXE_OS_NAME))
+#if (!defined(DIRSEPARATOR_CHAR)) || (!defined(EXE_OS_NAME))
 #error "Unidentified OS. Please define OS-specific settings for it."
 #endif
 
 /********************** End of OS-specific definitions ***********************/
 
 /* Local definitions */
-
-#define PATHNAME_SIZE PATH_MAX		/* Buffer size for holding pathnames, including NUL */
-#define NODENAME_SIZE (NAME_MAX+1)	/* Buffer size for holding file names, including NUL */
-
-#if PATHNAME_SIZE < 1000 /* Simplified implementation for MSDOS */
-  #define PATHNAME_BUFS_IN_HEAP 0	/* Alloc them on the stack */
-  #define NEW_PATHNAME_BUF(var) char var[PATHNAME_SIZE]
-#else	/* Avoid stack overflows by storing too large variables on stack */
-  #define PATHNAME_BUFS_IN_HEAP 1	/* Alloc them in the memory heap */
-  #define NEW_PATHNAME_BUF(var) char *var = malloc(PATHNAME_SIZE)
-#endif
-#if !PATHNAME_BUFS_IN_HEAP
-  #define TRIM_PATHNAME_BUF(var) do {} while (0)
-  #define FREE_PATHNAME_BUF(var) do {} while (0)
-#else
-  #define TRIM_PATHNAME_BUF(var) do {char *p = realloc(var, strlen(var)+1); if (p) var = p;} while (0)
-  #define FREE_PATHNAME_BUF(var) free(var);
-#endif
-
-#undef FALSE
-#undef TRUE
-
-typedef enum {
-  FALSE = 0,
-  TRUE = 1
-} bool;
 
 #define RETCODE_SUCCESS 0	    /* Return codes processed by finis() */
 #define RETCODE_NO_FILE 1	    /* Note: Value 1 required by HP Preload -env option */
@@ -253,6 +206,7 @@ typedef enum {
 #define RETCODE_INACCESSIBLE 4
 #define RETCODE_EXEC_ERROR 5
 #define RETCODE_SYNTAX 6
+#define RETCODE_CTRL_C 7
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
@@ -274,13 +228,10 @@ typedef struct fif {	    /* OS-independant FInd File structure */
 #if HAS_DRIVES
 int iInitDrive;                     /* Initial drive. 1=A, 2=B, 3=C, etc. */
 #endif
-char szInitDir[PATHNAME_SIZE];      /* Initial directory on the work drive */
-char szStartDir[PATHNAME_SIZE];	    /* Directory where recursion starts */
+char *pszInitDir;		    /* Initial directory on the work drive */
 int iVerbose = FALSE;		    /* If TRUE, echo commands executed */
-int iRelat;			    /* Index of a pathname relative to szInitDir */
 int iMeasure = 0;		    /* If > 0, measure the paths longer than that length */
-int iMaxDepth = 0;		    /* If > 0, don't descend below that level */
-int iDepth = 0;			    /* Current depth */
+volatile int iCtrlC = FALSE;	    /* If TRUE, a Ctrl-C has been detected */
 
 fif *firstfif = NULL;		    /* Pointer to the first allocated fif structure */
 
@@ -341,7 +292,9 @@ char *internes[] = {            /* Internal commands */
     "start",			// NT 3.51
     "time",
     "title",			// NT 3.51
+#if defined(_MSDOS)
     "truename",
+#endif
     "type",
     "unlock",			// Win95
     "ver",
@@ -405,53 +358,45 @@ char *internes[] = {            /* Internal commands. (Only those not duplicated
 
 /* Forward references */
 
-bool interne(char *);		    /* Is a command internal? */
+int interne(char *);		    /* Is a command internal? */
 void finis(int retcode, ...);	    /* Return to the initial drive & exit */
+void OnControlC(int iSignal);
 void usage(int iErr);               /* Display a brief help and exit */
+void DoPerPath(const char *pszPath);
 
-int descend(char *from, int fif0);  /* Recurse the directory tree */
-int lis(char *, char *, int, ushort); /* Scan a directory */
+int redo(char *from, wdt_opts *);   /* Recurse the directory tree */
 int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2); /* Compare 2 names */
 void trie(fif **ppfif, int nfif);   /* Sort file names */
 fif **AllocFifArray(size_t nfif);   /* Allocate an array of fif pointers */
 void FreeFifArray(fif **fiflist);
 
-int makepathname(char *, char *, char *);
-
-char *getdir(char *, int);          /* Get the current drive directory */
-
-/******************************************************************************
+/*---------------------------------------------------------------------------*\
 *                                                                             *
-*	Function:	main						      *
-*                                                                             *
-*	Description:	Main procedure					      *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*	  int argc	Number of command line arguments, including program.  *
-*	  char *argv[]	Array of pointers to the arguments. argv[0]=program.  *
-*                                                                             *
-*       Return value:   0=Success; !0=Failure                                 *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*	 1986-09-03 JFL	Initial implementation				      *
-*	 1994-05-26 JFL	Merged with main routine of DIRC.		      *
-*                                                                             *
-******************************************************************************/
+|   Function	    main						      |
+|                                                                             |
+|   Description	    Main procedure					      |
+|		    							      |
+|   Arguments	                                                              |
+|     int argc	    Number of command line arguments, including program.      |
+|     char *argv[]  Array of pointers to the arguments. argv[0]=program.      |
+|		    							      |
+|   Return value    0=Success; !0=Failure                                     |
+|		    							      |
+|   Notes                                                                     |
+|		    							      |
+|   History                                                                   |
+|    1986-09-03 JFL	Initial implementation				      |
+|    1994-05-26 JFL	Merged with main routine of DIRC.		      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
 int main(int argc, char *argv[]) {
-  int arg1;   /* First meaningfull argument */
+  int arg1;	/* First meaningfull argument */
   int cmd1;	/* First offset in command array */
   int i;
   char *pszConclusion = "Redo done";
   char *pszFrom = NULL;
-  int iErr;
-  char *pcd;
-
-  _flushall(); /* Make sure the above line went to a file if the output is
-		  redirected */
+  wdt_opts wdtOpts = {0};
 
   /* Parse the command line */
 
@@ -459,10 +404,7 @@ int main(int argc, char *argv[]) {
     char *arg = argv[i];
     if (IsSwitch(arg)) { /* It's a switch */
       char *option = arg+1;
-				  /* Don't forget to add switches to...
-				      ... the Recurse list below,
-				      ... the Usage display further down.
-				  */
+
       if (streq(option, "?")) {
 	usage(0);
       }
@@ -486,12 +428,12 @@ int main(int argc, char *argv[]) {
 	} else {
 	  iMeasure = 1;
 	}
-	argv[i] = "break"; /* Dummy command that does nothing */
+	argv[i] = NOOP_CMD; /* Dummy command that does nothing */
 	break;
       }
       if (streq(option, "m")) { /* Maximum depth */
 	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
-	  iMaxDepth = atoi(argv[++i]);
+	  wdtOpts.iMaxDepth = atoi(argv[++i]);
 	} else {
 	  finis(RETCODE_SYNTAX, "Max depth value missing");
 	}
@@ -499,6 +441,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(option, "q")) {
 	iVerbose = FALSE;
+	wdtOpts.iFlags |= WDT_QUIET;
 	pszConclusion = NULL;
 	continue;
       }
@@ -545,7 +488,7 @@ int main(int argc, char *argv[]) {
   }
   command[cmd1+i] = NULL;
 
-  /* Save the initial state, and change to the start directory. */
+  /* Save the initial drive and directory */
 
 #if HAS_DRIVES
   iInitDrive = _getdrive();
@@ -556,28 +499,19 @@ int main(int argc, char *argv[]) {
   }
   DEBUG_PRINTF(("Work drive = %c:\n", _getdrive() + '@'));
 #endif
-  
-  pcd = getdir(szInitDir, PATHNAME_SIZE);
-  if (!pcd) {
-    finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
+
+  pszInitDir = getcwd0();
+  if (!pszInitDir) {
+    finis(RETCODE_INACCESSIBLE, "Can't get CWD. %s", strerror(errno));
   }
-  DEBUG_PRINTF(("Init directory = %s\n", szInitDir));
-  if (!pszFrom) 
-      pszFrom = szInitDir;
-  iErr = chdir(pszFrom);
-  if (iErr) {
-    finis(RETCODE_INACCESSIBLE, "Cannot access directory \"%s\"", pszFrom);
-  }
-  pcd = getdir(szStartDir, PATHNAME_SIZE);	// Get the canonic name for the start directory.
-  if (!pcd) {
-    finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
-  }
-  DEBUG_PRINTF(("Work directory = %s\n", szStartDir));
-  iRelat = (int)strlen(szStartDir);
-  if (iRelat > 1) iRelat += 1;	// If not the root, account for the
-				      //  trailing backslash.
+
+  /* Make sure to restore the initial drive/directory in case of a Ctrl-C */
+  signal(SIGINT, OnControlC);
+
+  if (!pszFrom) pszFrom = ".";
+
   /* Recurse */
-  descend(szStartDir, 0);
+  redo(pszFrom, &wdtOpts);
 
   if (iVerbose) printf("%s\n", pszConclusion);
   finis(0);
@@ -593,7 +527,7 @@ int main(int argc, char *argv[]) {
 |   Parameters:     None						      |
 |									      |
 |   Returns:	    Does not return					      |
-|									      |
+|		    							      |
 |   History:								      |
 *									      *
 \*---------------------------------------------------------------------------*/
@@ -650,25 +584,29 @@ all paths longer than 260 characters.\n\
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    finis						      |
+|   Function	    finis						      |
 |									      |
-|   Description:    Display opt. msgs; Restore current path and drv, and exit.|
+|   Description	    Display opt. msgs; Restore current path and drv, and exit.|
 |									      |
-|   Parameters:     retcode	The exit code				      |
+|   Parameters	    retcode	The exit code				      |
 |		    pszFormat	Optional format string to pass to printf      |
 |		    ...		Optional printf arguments		      |
 |		    							      |
-|   Notes:	    If retcode is not 0, but no error message is needed, it   |
+|   Notes	    If retcode is not 0, but no error message is needed, it   |
 |		    is necessary to pass a NULL for pszFormat.		      |
 |		    							      |
-|   Returns:	    Does not return					      |
+|   Returns	    Does not return					      |
 |									      |
-|   History:								      |
+|   History								      |
 |    2018-04-30 JFL Redesigned with optional error messages to display.       |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 void finis(int retcode, ...) {
+  DEBUG_ENTER(("finis(%d)\n", retcode));
+
+  if (iCtrlC && (retcode != RETCODE_CTRL_C)) OnControlC(0); /* Report a soft Ctrl-C stop */
+
   if (retcode) { /* There might be an error message to report */
     va_list vl;
     char *pszFormat;
@@ -676,21 +614,50 @@ void finis(int retcode, ...) {
     va_start(vl, retcode);
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
-      fprintf(stderr, "redo: Error: ");
+      fputs(PROGRAM_NAME ": ", stderr);
+      if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
       vfprintf(stderr, pszFormat, vl);
-      fputs(".\n", stderr);
+      fputs("\n", stderr);
     }
     va_end(vl);
   }
 
-  chdir(szInitDir);	/* Don't test errors, as we're likely to be here due to another error */
+  chdir(pszInitDir);	/* Don't test errors, as we're likely to be here due to another error */
 #if HAS_DRIVES
   _chdrive(iInitDrive);
 #endif
+
+  DEBUG_LEAVE(("exit(%d);\n", retcode));
   exit(retcode);
 }
 
-bool interne(char *com) {  /* Is com an internal command? */
+void OnControlC(int iSignal) {
+  UNUSED_ARG(iSignal);
+  if (!iCtrlC) {	/* The first time, try aborting the walk softly */
+    iCtrlC = TRUE;
+  } else {		/* The following times, do a hard stop now */
+    fflush(stdout); /* Unsuccessful attempt at preventing the mixing of the foreground output */
+    finis(RETCODE_CTRL_C, "Ctrl-C detected, aborting");
+  }
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    interne						      |
+|									      |
+|   Description	    Check if a command is an internal shell command           |
+|									      |
+|   Parameters	    char *pszCommand	The command name		      |
+|		    							      |
+|   Returns	    TRUE or FALSE					      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History	    							      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int interne(char *com) {  /* Is com an internal command? */
   char nom[15];
   int i;
 
@@ -703,65 +670,56 @@ bool interne(char *com) {  /* Is com an internal command? */
   return(FALSE);
 }
 
-/******************************************************************************
+/*---------------------------------------------------------------------------*\
 *                                                                             *
-*       Function:       descend                                               *
-*                                                                             *
-*       Description:    Go down the directory trees recursively               *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         char *from    First directory to list.                              *
-*         int fif0      Index of the first free file structure                *
-*                                                                             *
-*       Return value:   0=Success; !0=Failure                                 *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*        1993-10-15 JFL  Initial implementation                               *
-*        1994-03-17 JFL  Rewritten to recurse within the same appli. instance.*
-*	 1994-05-27 JFL	Updated for REDO.				      *
-*                                                                             *
-******************************************************************************/
+|   Function        redo						      |
+|                                                                             |
+|   Description     Execute a command in every dir & all its subdirectories   |
+|                                                                             |
+|   Arguments	                                                              |
+|     char *from    First directory to list.                                  |
+|		    							      |
+|   Return value    0=Success; !0=Failure                                     |
+|		    							      |
+|   Notes                                                                     |
+|		    							      |
+|   History                                                                   |
+|    1993-10-15 JFL Initial implementation                                    |
+|    1994-03-17 JFL Rewritten to recurse within the same appli. instance.     |
+|    1994-05-27 JFL Updated for REDO.				              |
+|    2025-12-02 JFL Rewritten using SysLib's WalkDirTree().		      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
-int descend(char *from, int fif0) {
-  int fif1;
-  int nfif;
-  int i;
-  fif **ppfif;
+int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
+  UNUSED_ARG(p);
+
+#ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
+  _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
+#endif
+  if (iCtrlC) return TRUE;	/* Abort scan */
+
+  /* Execute the routine once for this path */
+  if (pDE->d_type == DT_ENTER) DoPerPath(pszPathname);
+
+  return FALSE;			/* Continue scanning */
+}
+
+int redo(char *from, wdt_opts *pwd) {
+  void *pScanVars = NULL;
+  int iResult;
+
+  DEBUG_ENTER(("descend(\"%s\", {%s});\n", from, ""));
 
   /* Get all subdirectories */
-  DEBUG_ENTER(("descend(\"%s\", %d);\n", from, fif0));
-  fif1 = lis(from, PATTERN_ALL, fif0, 0x8016);
-  nfif = fif1 - fif0;
-  ppfif = AllocFifArray(nfif);
-  trie(ppfif, nfif);
-
-  /* In case we're at the maximum level already, don't descend any further */
-  if (iMaxDepth && (iDepth >= iMaxDepth)) goto cleanup_and_return;
-
-  iDepth += 1;
-  for (i=0; i<nfif; i++) {
-    NEW_PATHNAME_BUF(name1);
-
-#if PATHNAME_BUFS_IN_HEAP
-    if (!name1) break;
-#endif
-
-    makepathname(name1, from, ppfif[i]->name);
-    TRIM_PATHNAME_BUF(name1);
-
-    descend(name1, fif1);
-
-    FREE_PATHNAME_BUF(name1);
+  pwd->iFlags |= WDT_DIRONLY | WDT_CD | WDT_CBINOUT | WDT_CONTINUE;
+  iResult = WalkDirTree(from, pwd, SelectDirsCB, pScanVars);
+  if (iResult < 0) {	/* An error occurred */
+    DEBUG_LEAVE(("return -1;\n"));
+  } else {		/* The walk succeeded */
+    DEBUG_LEAVE(("return 0;\n"));
   }
-  iDepth -= 1;
-
-cleanup_and_return:
-  FreeFifArray(ppfif);
-
-  RETURN_INT(0);
+  return iResult;
 }
 
 /******************************************************************************
@@ -781,36 +739,19 @@ cleanup_and_return:
 *                                                                             *
 ******************************************************************************/
 
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
-void DoPerPath(void) {
+void DoPerPath(const char *path) {
   int err;
   int i;
-  NEW_PATHNAME_BUF(path);
   char *pc;
   char *command2[MAXARGS+1];	/* Command and argument list secondary copy */
-  int iDem;
-  char *ppath;
 
-  DEBUG_ENTER(("DoPerPath();\n"));
-
-#if PATHNAME_BUFS_IN_HEAP
-  if (!path) finis(RETCODE_NO_MEMORY, "Not enough memory for execution");
-#endif
-
-  pc = getcwd(path, PATHNAME_SIZE);
-  if (!pc) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory");
-  ppath = path;
-#if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
-  ppath += 2;	/* Skip the drive letter */
-#endif
-  iDem = streq(szStartDir, ppath);
-  ppath += iRelat - iDem;
+  DEBUG_ENTER(("DoPerPath(\"%s\");\n", path));
 
   if (iMeasure) {
-    int iLen = (int)strlen(pc);
+    int iLen;
+    pc = getcwd0();
+    if (!pc) finis(RETCODE_NO_MEMORY, "Can't get abs path for %s. %s", path, strerror(errno));
+    iLen = (int)strlen(pc);
     if (iLen >= iMeasure) printf("%5d %s\n", iLen, pc);
     goto cleanup_and_return;
   }
@@ -823,7 +764,7 @@ void DoPerPath(void) {
     if (!pc) break;
     // ~~jfl 1995-09-25 Removed: if (streq(pc, "%.")) command2[i] = path;
     //		    Instead expand string with RELATIVE path
-    pc2 = malloc(max(PATHNAME_SIZE, 128));
+    pc2 = malloc(COMMAND_LINE_MAX);
     if (!pc2) finis(RETCODE_NO_MEMORY, "Not enough memory for command");
     command2[i] = pc2;
     do {
@@ -833,23 +774,20 @@ void DoPerPath(void) {
 	  || ((c == '{') && (*pc == '}'))) { /* New find-specific tag */
 	pc2 -= 1;   /* Back up over the % sign */
 	/* Copy the part of the path relative to the initial path */
-	if (!iDem)
-	    strcpy(pc2, ppath);
-	else	    /* ~~jfl 1996-07-19 */
-	    strcpy(pc2, ".");
+	strcpy(pc2, path);
 	pc2 += strlen(pc2);	// Move to the end of string
 	pc += 1;		// Skip the period
       }
     } while (c);
     // Free the end of string
-    command2[i] = realloc(command2[i], ++pc2 - command2[i]);
+    command2[i] = ShrinkBuf(command2[i], ++pc2 - command2[i]);
     DEBUG_PRINTF(("arg[%d] = \"%s\";\n", i, command2[i]));
   }
   command2[i] = NULL;
 
   if (iVerbose) {
     printf("[%s]", path);
-    for (i=0; (pc=command2[i]); i++) printf("%s ", pc);
+    for (i=0; ((pc=command2[i]) != NULL); i++) printf("%s ", pc);
     printf("\n");
   }
   err = (int)spawnvp(P_WAIT, command2[0], command2);
@@ -859,233 +797,8 @@ void DoPerPath(void) {
   for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
 
 cleanup_and_return:
-  FREE_PATHNAME_BUF(path);
   RETURN();
 }
-
-#ifdef _MSC_VER
-#pragma warning(default:4706) /* Restore the "assignment within conditional expression" warning */
-#endif
-
-/******************************************************************************
-*                                                                             *
-*       Function:       lis                                                   *
-*                                                                             *
-*       Description:    Scan the directory, and fill the fif table            *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         char *startdir Directory to scan. If "NUL", don't scan.             *
-*         char *pattern Wildcard pattern.                                     *
-*         int nfif      Number of files/directories found so far.             *
-*         int attrib    Bit 15: List directories exclusively.                 *
-*                       Bits 7-0: File/directory attribute.                   *
-*                                                                             *
-*       Return value:   Total number of files/directories in fif array.       *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*	 1994-05-27 JFL	Updated for REDO.				      *
-*                                                                             *
-******************************************************************************/
-
-#ifdef _MSC_VER
-#pragma warning(disable:4706) /* Ignore the "assignment within conditional expression" warning */
-#endif
-
-int lis(char *startdir, char *pattern, int nfif, ushort attrib) {
-#if HAS_DRIVES
-  char initdrive;                 /* Initial drive. Restored when done. */
-#endif
-  NEW_PATHNAME_BUF(initdir);	    /* Initial directory. Restored when done. */
-  NEW_PATHNAME_BUF(path);	    /* Temporary pathname */
-  NEW_PATHNAME_BUF(pathname);
-  int err;
-  char pattern2[NODENAME_SIZE];
-  char *pname;
-  DIR *pDir;
-  struct dirent *pDirent;
-  char *pcd;
-
-  DEBUG_ENTER(("lis(\"%s\", \"%s\", %d, 0x%X);\n", startdir, pattern, nfif, attrib));
-
-#if PATHNAME_BUFS_IN_HEAP
-  if ((!initdir) || (!path) || (!pathname)) {
-      FREE_PATHNAME_BUF(initdir);
-      FREE_PATHNAME_BUF(path);
-      FREE_PATHNAME_BUF(pathname);
-      RETURN_INT_COMMENT(nfif, ("Out of memory\n"));
-  }
-#endif
-
-  if (!stricmp(startdir, "nul")) {  /* Dummy name, used as place holder */
-      FREE_PATHNAME_BUF(initdir);
-      FREE_PATHNAME_BUF(path);
-      FREE_PATHNAME_BUF(pathname);
-    RETURN_INT_COMMENT(nfif, ("NUL\n"));
-  }
-
-  if (nfif == 0) firstfif = NULL; /* Make sure the linked list ends there */
-
-  if (!pattern) pattern = PATTERN_ALL;
-  strncpyz(pattern2, pattern, NODENAME_SIZE);
-
-#if HAS_DRIVES
-  initdrive = (char)_getdrive();
-
-  if (startdir[1] == ':') {
-    if (startdir[0] >= 'a') startdir[0] -= 'a' - 'A';
-    DEBUG_PRINTF(("chdrive(%c);\n", startdir[0]));
-    err = _chdrive(startdir[0] - '@');
-    if (err) finis(RETCODE_INACCESSIBLE, "Cannot access drive %c\n:", startdir[0]);
-    startdir += 2;
-  }
-#endif
-
-  pcd = getdir(initdir, PATHNAME_SIZE);
-  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-
-  if (startdir[0] == DIRSEPARATOR) {
-    strncpyz(path, startdir, PATHNAME_SIZE);
-  } else {
-    char szSeparator[2];
-    szSeparator[0] = DIRSEPARATOR;
-    szSeparator[1] = '\0';
-    /* Make the path absolute */
-    strncpyz(path, initdir, PATHNAME_SIZE);
-    if (path[1]) strcat(path, szSeparator);
-    strcat(path, startdir);
-  }
-
-  err = FALSE;                        /* Assume success */
-  if (startdir[0]) {
-#if !HAS_MSVCLIBX
-    DEBUG_PRINTF(("chdir(\"%s\");\n", path));
-#endif
-    err = chdir(path);
-  }
-
-  if (err) {
-    char *pc;
-
-    /* Directory not found. See if this is because of a file name pattern */
-    pc = strrchr(path, DIRSEPARATOR);   /* Search for the trailing backslash */
-    if (pc) {
-      /* If found, assume a pattern follows */
-      strncpyz(pattern2, pc+1, NODENAME_SIZE);
-
-      if (pc > path) {		/* Remove the pattern. General case */
-	  *pc = '\0';		/* Remove the backslash and wildcards */
-      } else {			/* Special case of the root directory */
-	  path[1] = '\0';	/* Same thing but leave the backslash */
-      }
-
-      DEBUG_PRINTF(("// Backtrack 1 level and split pattern\n"));
-#if !HAS_MSVCLIBX
-      DEBUG_PRINTF(("chdir(\"%s\");\n", path));
-#endif
-      err = chdir(path);
-    }
-
-    if (!pc || err) {
-      fprintf(stderr, "redo: Error: Cannot access directory %s.\n", path);
-      FREE_PATHNAME_BUF(initdir);
-      DEBUG_PRINTF(("// Cannot access directory %s\n", path));
-      FREE_PATHNAME_BUF(path);
-      FREE_PATHNAME_BUF(pathname);
-      RETURN_INT(nfif);
-    }
-  }
-
-  pcd = getcwd(path, PATHNAME_SIZE);
-  if (!pcd) finis(RETCODE_INACCESSIBLE, "Cannot get the current directory. %s", strerror(errno));
-
-  /* Execute the routine once for this path */
-  DoPerPath();
-
-  /* start looking for all files */
-  pDir = opendirx(path);
-  if (pDir) {
-    while (pDir && (pDirent = readdirx(pDir))) { /* readdirx() ensures d_type is set */
-      struct stat st;
-      DEBUG_CODE(
-	char *reason;
-      )
-
-      makepathname(pathname, path, pDirent->d_name);
-#if !_DIRENT2STAT_DEFINED
-      lstat(pathname, &st);
-#else
-      dirent2stat(pDirent, &st);
-#endif
-      DEBUG_PRINTF(("// Found %10s %12s\n",
-	    (pDirent->d_type == DT_DIR) ? "Directory" :
-	    (pDirent->d_type == DT_LNK) ? "Link" :
-	    (pDirent->d_type == DT_REG) ? "File" :
-	    "Other",
-	    pDirent->d_name));
-      DEBUG_CODE(reason = "it's .";)
-      if (    !streq(pDirent->d_name, ".")  /* skip . and .. */
-	      DEBUG_CODE(&& (reason = "it's .."))
-	   && !streq(pDirent->d_name, "..")
-	      DEBUG_CODE(&& (reason = "it's not a directory"))
-	   && (   !(attrib & 0x8000)	  /* Skip files if dirs only */
-		|| (pDirent->d_type == DT_DIR))
-	      DEBUG_CODE(&& (reason = "it's a directory"))
-	   && (   (attrib & _A_SUBDIR)	  /* Skip dirs if files only */
-		|| (pDirent->d_type != DT_DIR))
-	      DEBUG_CODE(&& (reason = "the pattern does not match"))
-	   && (fnmatch(pattern2, pDirent->d_name, FNM_CASEFOLD) == FNM_MATCH)
-	 ) {
-	fif *pfif;
-
-	DEBUG_PRINTF(("// OK\n"));
-	pfif = (fif *)malloc(sizeof(fif));
-	pname = strdup(pDirent->d_name);
-	if (!pfif || !pname) {
-	  closedirx(pDir);
-	  finis(RETCODE_NO_MEMORY, "Out of memory for directory access");
-	}
-	pfif->name = pname;
-	pfif->st = st;
-#if _MSVCLIBX_STAT_DEFINED
-	DEBUG_PRINTF(("st.st_Win32Attrs = 0x%08X\n", pfif->st.st_Win32Attrs));
-	DEBUG_PRINTF(("st.st_ReparseTag = 0x%08X\n", pfif->st.st_ReparseTag));
-#endif /* _MSVCLIBX_STAT_DEFINED */
-	// Note: The pointer to the name is copied as well.
-	pfif->next = firstfif;
-	firstfif = pfif;
-	nfif += 1;
-      } else {
-	DEBUG_PRINTF(("// Ignored because %s\n", reason));
-      }
-    }
-
-    closedirx(pDir);
-  }
-#if !HAS_MSVCLIBX
-  DEBUG_PRINTF(("chdir(\"%s\");\n", initdir));
-#endif
-  err = chdir(initdir);         /* Restore the initial directory */
-  if (err) {
-    finis(RETCODE_INACCESSIBLE, "Cannot return to directory \"%s\"\n:", initdir);
-  }
-
-#if HAS_DRIVES
-  DEBUG_PRINTF(("chdrive(%c);\n", initdrive + '@'));
-  _chdrive(initdrive);
-#endif
-
-  FREE_PATHNAME_BUF(initdir);
-  FREE_PATHNAME_BUF(path);
-  FREE_PATHNAME_BUF(pathname);
-  RETURN_INT(nfif);
-}
-
-#ifdef _MSC_VER
-#pragma warning(default:4706)
-#endif
 
 /******************************************************************************
 *                                                                             *
@@ -1117,11 +830,11 @@ int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2) {
   if (ret) return ret;
 
   /* If both files, or both directories, list names alphabetically */
-  ret = _strnicmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
+  ret = _strnicmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_BUF_SIZE);
   if (ret) return ret;
 
   /* Finally do a case dependant comparison */
-  return strncmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_SIZE);
+  return strncmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_BUF_SIZE);
 }
 
 /******************************************************************************
@@ -1221,82 +934,6 @@ void FreeFifArray(fif **ppfif) {
   free(ppfif);
 
   return;
-}
-
-/******************************************************************************
-*                                                                             *
-*       Function:       makepathname                                          *
-*                                                                             *
-*       Description:    Build a full pathname from a directory & node names   *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         char *buf     Buffer where to store the full name                   *
-*         char *path    Pathname                                              *
-*         char *node    Node name                                             *
-*                                                                             *
-*       Return value:   0=Success; !0=Failure                                 *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*	1994-03-18 JFL Do not append a \ after ':', such as in "C:".	      *
-*                                                                             *
-******************************************************************************/
-
-int makepathname(char *buf, char *path, char *node) {
-  int l;
-
-  strncpyz(buf, path, PATHNAME_SIZE - 1);
-  l = (int)strlen(buf);
-  if (l && (buf[l-1] != DIRSEPARATOR) && (buf[l-1] != ':')) {
-    buf[l++] = DIRSEPARATOR;
-    buf[l] = 0;
-  }
-  strncpyz(buf+l, node, PATHNAME_SIZE - l);
-  return 0;
-}
-
-/*****************************************************************************\
-*                                                                             *
-*   Function:       getdir                                                    *
-*                                                                             *
-*   Description:    Get the current directory, without the DOS/Windows drive. *
-*                                                                             *
-*   Arguments:                                                                *
-*                                                                             *
-*     char *buf     Buffer for the directory name                             *
-*     int len       Size of the above buffer                                  *
-*                                                                             *
-*   Return value:   The buffer address if success, or NULL if failure.        *
-*                                                                             *
-*   Notes:                                                                    *
-*                                                                             *
-*   History:                                                                  *
-*    2005-05-03 JFL Added support for Unix.                                   *
-*                                                                             *
-\*****************************************************************************/
-
-char *getdir(char *buf, int len) { /* Get current directory without the drive */
-  NEW_PATHNAME_BUF(line);
-  char *pszRoot = line;
-
-#if PATHNAME_BUFS_IN_HEAP
-  if (!line) return NULL;
-#endif
-
-  if (!getcwd(line, PATHNAME_SIZE)) {
-    FREE_PATHNAME_BUF(line);
-    return NULL;
-  }
-
-  if (len > PATHNAME_SIZE) len = PATHNAME_SIZE;
-
-  if (line[1] == ':') pszRoot = line+2;
-  strncpyz(buf, pszRoot, len);  /* Copy path without the drive letter */
-
-  FREE_PATHNAME_BUF(line);
-  return buf;
 }
 
 /*---------------------------------------------------------------------------*\
