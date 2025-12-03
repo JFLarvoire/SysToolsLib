@@ -142,37 +142,13 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
 
-/* CDECL is defined in SysLib.h, which is included indirectly by SysLib's *.h */
-
 #include <conio.h>	/* For _kbhit() */
 
 #endif /* defined(_MSDOS) */
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
-
-/* CDECL is defined in WinDef.h, which is already included by MsvcLibX */
-
-#endif /* defined(_WIN32) */
-
-/************************* OS/2-specific definitions *************************/
-
-#ifdef _OS2	/* Automatically defined when targeting an OS/2 application? */
-
-#define CDECL __cdecl
-
-#endif /* defined(_OS2) */
-
 /************************* Unix-specific definitions *************************/
-
-#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-
-#define _UNIX
-
-#define CDECL				/* No such thing needed for Linux builds */
-
-#endif /* defined(__unix__) */
 
 /*********************************** Other ***********************************/
 
@@ -294,6 +270,8 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef _MSDOS
   sScanVars.cd = TRUE;		/* This is more efficient this way in DOS */
+  /* In Windows, it's better not to change dirs, to avoid using complex code dealing with paths possibly > 260 bytes */
+  /* In Unix, it's better not to change dirs, to avoid having to synchronize the logical & physical dirs */
 #endif
 
   /* Parse command line arguments */
@@ -629,7 +607,7 @@ void finis(int retcode, ...) {
     va_start(vl, retcode);
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
-      fputs("dirsize: ", stderr);
+      fputs(PROGRAM_NAME ": ", stderr);
       if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
       vfprintf(stderr, pszFormat, vl);
       fputs("\n", stderr);
@@ -637,9 +615,6 @@ void finis(int retcode, ...) {
     va_end(vl);
   }
 
-#if !HAS_MSVCLIBX
-  DEBUG_PRINTF(("chdir(\"%s\");\n", init_dir));
-#endif
   chdir(init_dir);	/* Don't test errors, as we're likely to be here due to another error */
 #if HAS_DRIVES
   chdrive(init_drive);
@@ -814,7 +789,7 @@ total_t DirSize(const char *pszDir, scanVars *pScanVars) {
   if (pScanVars->follow) wdtOpts.iFlags |= WDT_FOLLOW;
 #endif /* OS_HAS_LINKS */
   if (pScanVars->cd) wdtOpts.iFlags |= WDT_CD;
-  wdtOpts.iMaxDepth |= pScanVars->maxDepth;
+  wdtOpts.iMaxDepth = pScanVars->maxDepth;
   iResult = WalkDirTree(pszDir, &wdtOpts, SelectFilesCB, pScanVars);
   psr->nDirs += (long)wdtOpts.nDir;
   psr->nErrors += wdtOpts.nErr;
