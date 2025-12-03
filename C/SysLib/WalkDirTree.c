@@ -4,7 +4,7 @@
 *                                                                             *
 *   Description	    Call a function for every dir entry in a directory tree   *
 *                                                                             *
-*   Notes	    TODO: Implement Unix & MacOS version of WalkDirTree().    *
+*   Notes	                                                              *
 *                                                                             *
 *   History                                                                   *
 *    2021-11-27 JFL Created this file.					      *
@@ -20,6 +20,7 @@
 *		    directory entry and exit.				      *
 *    2025-11-25 JFL Fixed a bug when using WDT_CD.			      *
 *    2025-11-30 JFL Restructured the error management.			      *
+*    2025-12-02 JFL Using SysLib's new chdir for Unix, with its own debug msgs.
 *                                                                             *
 \*****************************************************************************/
 
@@ -301,9 +302,6 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
       pNewCD = strrchr(path, DIRSEPARATOR_CHAR);
       pNewCD = pNewCD ? (pNewCD + 1) : path;
     }
-#if !HAS_MSVCLIBX
-    DEBUG_PRINTF(("chdir(\"%s\");\n", pNewCD));
-#endif
     iErr = chdir(pNewCD);
     if (iErr) {
       pszFailingOpVerb = "enter";
@@ -538,9 +536,6 @@ cleanup_and_return:
   free(pFakeInOutDE);
   if (pOpts->iFlags & WDT_CD) {
     char *pPath1 = pPath0 ? pPath0 : "..";
-#if !HAS_MSVCLIBX
-    DEBUG_PRINTF(("chdir(\"%s\");\n", pPath1));
-#endif
     iErr = chdir(pPath1);
     if (iErr) {
       if (iPrintErrors) pferror("Can't return to \"%s\": %s", pPath1, strerror(errno));
