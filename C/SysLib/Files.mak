@@ -65,6 +65,7 @@ COMMON_OBJECTS = \
 
 # Unix-specific objects
 UNIX_OBJECTS = \
+    $(O)/cwd-pwd.o		\
     $(O)/dirx.o			\
 
 # Objects usable in Unix
@@ -92,6 +93,8 @@ $(S)/crc32.cpp: $(S)/crc32.h \
 		$(GNUEFI)/inc/efi.h $(GNUEFI)/inc/efilib.h
 
 $(S)/crc32.h: $(S)/SysLib.h
+
+$(S)/cwd-pwd.c: $(MI)/debugm.h $(S)/SysLib.h $(S)/dirx.h $(S)/pathnames.h
 
 $(S)/dict.c: $(CI)/dict.h $(CI)/tree.h
 

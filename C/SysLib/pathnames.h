@@ -16,6 +16,7 @@
 *		    directory entry and exit.				      *
 *    2025-11-27 JFL Added routine NormalizePath().			      *
 *		    Fixed macro TRIM_NODENAME_BUF().			      *
+*    2025-12-02 JFL Added cwd-pwd.c definitions.			      *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -28,6 +29,8 @@
 
 #include <dirent.h>
 #include <sys/types.h>
+
+#include "debugm.h"		/* For ShrinkBuf() */
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +62,7 @@ extern "C" {
 
 /************************ Win32-specific definitions *************************/
 
-#ifdef _WIN32			/* Automatically defined when targeting a Win32 applic. */
+#ifdef _WIN32		/* Automatically defined when targeting a Win32 applic. */
 
 #define DIRSEPARATOR_CHAR '\\'
 #define DIRSEPARATOR_STRING "\\"
@@ -71,7 +74,7 @@ extern "C" {
 
 /************************* Unix-specific definitions *************************/
 
-#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
+#ifdef _UNIX		/* Defined in NMaker versions.h for Unix flavors we support */
 
 #define DIRSEPARATOR_CHAR '/'
 #define DIRSEPARATOR_STRING "/"
@@ -109,8 +112,7 @@ extern "C" {
   #define PATHNAME_BUF(var) char *var = NEW_PATHNAME_BUF()
   #define IF_PATHNAME_BUFS_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_STRING_BUF(s) int e=errno; char *p=realloc(s, strlen(s)+1); if (p) s=p; else errno=e
-#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(TRIM_STRING_BUF(var);)
+#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(ShrinkBuf(var, strlen(var)+1);)
 #define FREE_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(free(var);)
 
 #define NEW_NODENAME_BUF() malloc(NODENAME_BUF_SIZE)
@@ -123,7 +125,7 @@ extern "C" {
   #define NODENAME_BUF(var) char *var = NEW_NODENAME_BUF()
   #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(TRIM_STRING_BUF(var);)
+#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(ShrinkBuf(var, strlen(var)+1);)
 #define FREE_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(free(var);)
 
 /* End of helper macros for managing temporary buffers for file pathnames */
@@ -136,7 +138,7 @@ int NormalizePath(char *path);	/* Remove unnecessaty / . .. parts in a path. Ret
 char *NewJoinedPath(const char *pszPart1, const char *pszPart2);	/* Join 2 paths, and return the new string */
 char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem, normalizing it after joining it */
 
-/* WalkDirTree definitions */
+/* ------------------------ WalkDirTree definitions ------------------------ */
 
 /* WalkDirTree option flags */
 #define WDT_CONTINUE	0x0001		/* Handle recoverable errors as warnings, and continue */
@@ -168,6 +170,26 @@ typedef struct {		/* WalkDirTree options. Must be cleared before use. */
 typedef int (*pWalkDirTreeCB_t)(const char *pszRelPath, const struct dirent *pDE, void *pRef);
 
 extern int WalkDirTree(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
+
+/* ------------------------- cwd-pwd.c definitions ------------------------- */
+
+#ifdef _UNIX	/* In Unix, redefine chdir & getcwd as our extended routines */
+
+char *GetCWD(char *buf, size_t len);	/* Get the logical current directory = PWD env var */
+char *NewCWDString(void);		/* Get a new string with the logical current directory */
+int ChDir(const char *pszPath);		/* Set the logical and physical current directory */
+
+#undef chdir
+#define chdir ChDir
+
+#undef getcwd       
+#define getcwd GetCWD
+
+#define getcwd0 NewCWDString
+
+#endif /* defined(_UNIX) */
+
+/* ------------------------------------------------------------------------- */
 
 #ifdef __cplusplus
 }
