@@ -14,6 +14,7 @@
 *		    Use the locally managed cur. dir. for paths > 260 bytes.  *
 *    2025-11-11 JFL Added routines dos_getcwd() and getcwdX() for DOS. 	      *
 *    2025-11-19 JFL Changed dos_getcwd() return value to be same as getcwd's. *
+*    2025-12-03 JFL Added routine getcwd0().                       	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -29,6 +30,37 @@
 #include <unistd.h>
 #include "debugm.h"
 
+/*---------------------------------------------------------------------------*\
+|									      *
+|   Function	    getcwd0						      |
+|									      |
+|   Description     Front end to getcwd, dynamically allocating the string    |
+|									      |
+|   Parameters      None						      |
+|		    							      |
+|   Returns	    A pointer to the allocated CWD string, or NULL if error   |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History								      |
+|    2025-12-03 JFL Initial implementation.				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* Allocate a new string containing the current directory */
+char *getcwd0(void) {
+  char *pszBuf = malloc(PATH_MAX);
+  char *pszRet;
+  if (!pszBuf) return NULL;
+  pszRet = getcwd(pszBuf, PATH_MAX);
+  if (pszRet) {	/* Valid CWD in pszRet = pszBuf */
+    return ShrinkBuf(pszBuf, strlen(pszBuf)+1); /* Trim the buffer */
+  } else {	/* Invalid CWD */
+    free(pszBuf);
+    return NULL;
+  }
+}
+
 #if defined(_MSDOS)
 
 /*---------------------------------------------------------------------------*\
@@ -37,13 +69,13 @@
 |									      |
 |   Description     Get the current directory, overcoming the 64-char limit   |
 |									      |
-|   Parameters      char *pszDir	Target directory pathname	      |
-|									      |
-|   Returns	    char *buf	    Buffer for the output                     |
+|   Parameters      char *buf	    Buffer for the output                     |
 |		    size_t bufSize  Buffer size				      |
 |		    							      |
+|   Returns	    buf if success, or NULL if error, and errno set	      |
+|		    							      |
 |   Notes	    MSVC's _getcwd() works with paths up to 255 characters.   |
-|		    This one works with path up to 260 characters.	      |
+|		    This one works with paths up to 260 characters.	      |
 |		    							      |
 |   History								      |
 |    2025-11-11 JFL Initial implementation.				      |
@@ -222,7 +254,7 @@ cleanup_and_return:
 |   Parameters:     char *buf	    Buffer for the output                     |
 |		    size_t bufSize  Buffer size				      |
 |		    							      |
-|   Returns:	    The converted string size. -1=error, and errno set.	      |
+|   Returns:	    The converted string size. NULL=error, and errno set.     |
 |		    							      |
 |   Notes:	    The getcwd macro references either getcwdA or getcwdU.    |
 |		    							      |
@@ -319,10 +351,7 @@ getcwdW_failed:
   if (pwDir > pwBuf) memmove(pwBuf, pwDir, (dwSize+1) * sizeof(WCHAR));
 
   /* Cleanup and return */
-  if (iReAlloc) {
-    WCHAR *pwBuf2 = realloc(pwBuf, (dwSize + 1) * sizeof(WCHAR));
-    if (pwBuf2) pwBuf = pwBuf2;
-  }
+  if (iReAlloc) pwBuf = ShrinkBuf(pwBuf, (dwSize + 1) * sizeof(WCHAR));
   DEBUG_WLEAVE((L"return \"%s\"; // [%s]\n", pwBuf, pwszWhere));
   return pwBuf;
 }

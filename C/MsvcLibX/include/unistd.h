@@ -28,6 +28,7 @@
 *		    the Place Holder Compatibility Mode.                      *
 *    2025-11-11 JFL For DOS, redefine the getcwd() macro as our getcwdX(),    *
 *		    and added a chdir() macro defined as the new chdirX().    *
+*    2025-12-03 JFL Added routine getcwd0().                       	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -92,6 +93,7 @@ int rmdirU(const char *path);
 int unlinkA(const char *path);
 int unlinkU(const char *path);
 #endif /* defined(_WIN32) */
+char *getcwd0(void);	/* Allocate a new string containing the current directory */
 
 /* These are non standard indeed, but the leading _ is annoying */ 
 #define getdrive _getdrive
