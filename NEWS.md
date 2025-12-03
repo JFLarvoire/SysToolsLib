@@ -4,6 +4,24 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2025-12-03
+### New
+- C/MsvcLibX/src/getcwd.c: Added routine getcwd0().
+- C/SysLib/cwd-pwd.c: New file with routines for Unix managing the logical path in the PWD env var.
+- C/SysLib/cwd-pwd.c: New routine getcwd0() for Unix.
+- C/MsvcLibX/src/getcwd.c: New routine getcwd0() for DOS and Windows.
+
+### Changed
+- redo.exe: Version 3.99: Rewritten using SysLib's WalkDirTree().
+- C/SysLib/pathnames.h: Added definitions for extended getcwd() and chdir() routines for Unix.
+- C/SRC/In.c: Moved the PWD env var fix to SysLib's new ChDir() routine, defined as chdir() for Unix.
+- C/SRC/dirc.c: Use SysLib's PATHNAME_BUF macros in pathnames.h, etc.
+
+### Fixed
+- dirc.exe: Version 3.9.2: Bug fixes in Unix, thanks to SysLib's improvements:
+  - Display logical paths based on cwd + the PWD env var.
+  - Display normalized paths.
+
 ## [Unreleased] 2025-11-30
 ### Changed
 - In.exe: Version 1.2.1
