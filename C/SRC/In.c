@@ -22,6 +22,7 @@
 *		    long to fit on the 128-bytes command line.		      *
 *    2025-11-27 JFL In the Unix version, update the PWD environment variable  *
 *                   with the new logical directory.                           *
+*    2025-12-02 JFL Moved that fix to SysLib's new ChDir() routine.	      *
 *                                                                             *
 *                   © Copyright 2023 Jean-François Larvoire                   *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -30,7 +31,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command in a given directory, then come back"
 #define PROGRAM_NAME    "in"
 #define PROGRAM_VERSION "1.2.1"
-#define PROGRAM_DATE    "2025-11-27"
+#define PROGRAM_DATE    "2025-12-02"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -176,6 +177,7 @@ int main(int argc, char *argv[]) {
 
   /* Enter the requested directory */
   if (iExec) {
+    /* In Unix, chdir()=SysLib's ChDir(), which also updates the PWD env var */
     iErr = chdir(pszDir);
     if (iErr) {
       pferror("Cannot enter %s: %s", pszDir, strerror(errno));
@@ -190,19 +192,6 @@ int main(int argc, char *argv[]) {
     printf("pushd %s\n", pszQuoted);
     free(pszQuoted);
   }
-
-#if defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-  /* Update the PWD environment variable with the new logical current directory. */
-  /* This is necessary, so that the invoked command knows the logical CD,
-     and not just the physical CD returned by getcwd().
-     The two are different if there's a link in the logical CD pathname. */
-  char *pszPWD;
-  pszPWD = getenv("PWD");
-  pszPWD = NewCompactJoinedPath(pszPWD, pszDir); /* The new logical directory */
-  DEBUG_PRINTF(("setenv(\"PWD\", \"%s\", 1);\n", pszPWD));
-  iErr = setenv("PWD", pszPWD, TRUE);
-  if (iErr) pferror("Can't set the PWD environment variable: %s", strerror(errno));
-#endif
 
   /* Build the child command line */
   pszCmdLine = DupArgLineTail(argc, argv, iArg0);
