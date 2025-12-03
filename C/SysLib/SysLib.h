@@ -11,6 +11,7 @@
 *    2016-04-12 JFL Created this file.					      *
 *    2016-04-22 JFL Renamed the MULTIOS library as SYSLIB.		      *
 *    2022-11-29 JFL Tweaks and fixes for BIOS/LODOS/DOS builds compatibility. *
+*    2025-12-03 JFL Define the _UNIX constant for supported flavors of Unix.  *
 *		    							      *
 *       (C) Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -53,6 +54,13 @@
 #endif
 #ifndef FASTCALL
 #define FASTCALL
+#endif
+
+/* This is also defined in NMaker's versions.h. Keep them in sync. */
+#if defined(__unix__) /* Ex: Linux */ || defined(__MACH__) /* Ex: Apple OS */
+#  if !defined(_UNIX)
+#    define _UNIX /* Tells that we support this flavor of Unix */
+#  endif
 #endif
 
 #endif
