@@ -59,6 +59,8 @@
 *    2025-11-12 JFL Improved a couple of error messages.		      *
 *		    Version 3.3.					      *
 *    2025-12-03 JFL Rewritten using SysLib's WalkDirTree().		      *
+*    2025-12-07 JFL Added options -c, -C, -f, -F, -X.			      *
+*                   In verbose mode, display statistics in the end.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -67,7 +69,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "3.99"
-#define PROGRAM_DATE    "2025-12-03"
+#define PROGRAM_DATE    "2025-12-07"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -231,6 +233,7 @@ int iInitDrive;                     /* Initial drive. 1=A, 2=B, 3=C, etc. */
 char *pszInitDir;		    /* Initial directory on the work drive */
 int iVerbose = FALSE;		    /* If TRUE, echo commands executed */
 int iMeasure = 0;		    /* If > 0, measure the paths longer than that length */
+int iNoExec = FALSE;		    /* If TRUE, echo the commands, but dont run them */
 volatile int iCtrlC = FALSE;	    /* If TRUE, a Ctrl-C has been detected */
 
 fif *firstfif = NULL;		    /* Pointer to the first allocated fif structure */
@@ -362,7 +365,7 @@ int interne(char *);		    /* Is a command internal? */
 void finis(int retcode, ...);	    /* Return to the initial drive & exit */
 void OnControlC(int iSignal);
 void usage(int iErr);               /* Display a brief help and exit */
-void DoPerPath(const char *pszPath);
+void DoPerPath(const char *pszPath, void *pRef);
 
 int redo(char *from, wdt_opts *);   /* Recurse the directory tree */
 int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2); /* Compare 2 names */
@@ -398,6 +401,11 @@ int main(int argc, char *argv[]) {
   char *pszFrom = NULL;
   wdt_opts wdtOpts = {0};
 
+  wdtOpts.iFlags |= WDT_CD;	/* Change directories by default */
+#if OS_HAS_LINKS
+  wdtOpts.iFlags |= WDT_FOLLOW;	/* Follow links by default */
+#endif
+
   /* Parse the command line */
 
   for (i=1; i<argc; i++) {
@@ -408,12 +416,30 @@ int main(int argc, char *argv[]) {
       if (streq(option, "?")) {
 	usage(0);
       }
+      if (streq(option, "c")) {
+	wdtOpts.iFlags |= WDT_CD;
+	continue;
+      }
+      if (streq(option, "C")) {
+	wdtOpts.iFlags &= ~WDT_CD;
+	continue;
+      }
       DEBUG_CODE(
 	if (streq(option, "d")) {
 	  DEBUG_ON();
 	  continue;
 	}
       )
+#if OS_HAS_LINKS
+      if (streq(option, "f")) {
+	wdtOpts.iFlags |= WDT_FOLLOW;
+	continue;
+      }
+      if (streq(option, "F")) {
+	wdtOpts.iFlags &= ~WDT_FOLLOW;
+	continue;
+      }
+#endif
       if (streq(option, "i") || streq(option, "from")) {
 	if ((i+1)<argc) {
 	  pszFrom = argv[++i];
@@ -452,6 +478,10 @@ int main(int argc, char *argv[]) {
       if (streq(option, "V")) {	    /* -V: Display the version */
 	puts(DETAILED_VERSION);
 	exit(0);
+      }
+      if (streq(option, "X")) {
+	iNoExec = TRUE;
+	continue;
       }
       printf("Unrecognized switch %s. Ignored.\n", arg);
       continue;
@@ -495,7 +525,6 @@ int main(int argc, char *argv[]) {
   DEBUG_PRINTF(("Init drive = %c:\n", iInitDrive + '@'));
   if (pszFrom && pszFrom[0] && (pszFrom[1]==':')) {
     _chdrive(toupper(pszFrom[0])-'@');  // Change to the requested drive
-    pszFrom += 2;			    // Skip the drive
   }
   DEBUG_PRINTF(("Work drive = %c:\n", _getdrive() + '@'));
 #endif
@@ -512,6 +541,13 @@ int main(int argc, char *argv[]) {
 
   /* Recurse */
   redo(pszFrom, &wdtOpts);
+
+  if (iVerbose) printf("# Scanned %ld directories\n", wdtOpts.nDir);
+
+  /* Report if some errors were ignored */
+  if (wdtOpts.nErr) {
+    finis(RETCODE_INACCESSIBLE, "Failed to run in %d directories", wdtOpts.nErr);
+  }
 
   if (iVerbose) printf("%s\n", pszConclusion);
   finis(0);
@@ -539,17 +575,27 @@ PROGRAM_NAME_AND_VERSION " - " PROGRAM_DESCRIPTION "\n\
 Usage: redo [SWITCHES] COMMAND_LINE\n\
 \n\
 Switches:\n\
-  -?              Display this help screen and exit\n"
+  -?              Display this help screen and exit\n\
+  -c              Change directories while recursing. (Default)\n\
+  -C              Do not change directories while recursing.\n\
+"
 DEBUG_CODE(
 "\
   -d              Debug mode. Display how things work internally.\n\
 "
 )
+#if OS_HAS_LINKS
 "\
-  -i PATH         Start recursion in the given directory.\n\
+  -f              Follow links to directories while recursing. (Default)\n\
+  -F              Do not follow links to directories while recursing.\n\
+"
+#endif
+"\
+  -i PATH         Start recursion in the given directory. Default: \".\"\n\
   -l [MIN_LENGTH] List all sub-directories with their paths length. No command\n\
                   executed. Min length: List only longer paths. Default min: 1\n\
   -m MAX_DEPTH    Limit the recursion depth to N levels. Default: 0=no limit\n\
+  -X              Display the commands to be executed, but don't run them.\n\
   -v              Verbose mode. Display the paths, and the commands executed.\n\
   -V              Display the program version and exit\n\
 \n\
@@ -557,24 +603,32 @@ Command line:     Any valid command and arguments.\n\
                   The special sequence \"{}\" is replaced by the current\n\
                   directory name, relative to the initial directory.\n\
 "
+#ifdef _MSDOS
+"\n\
+Known limitation: MS-DOS only supports pathnames shorter than 260 characters.\n\
+It will silently ignore directories with longer pathnames when scanning NTFS\n\
+volumes on VM hosts or network servers.\n\
+"
+#endif
 #ifdef _WIN32
 "\n\
-Known limitation with long pathnames > 260 characters: Windows versions up to 8\n\
+Known limitation with long pathnames ≥ 260 characters: Windows versions up to 8\n\
 cannot change the current directory to such long pathnames. Windows ≥ 10 can,\n\
 but only if long file name support has been enabled in the registry. And even\n\
-in this case, it cannot run a command below that 260 characters threshold.\n\
+in this case, it cannot run a command beyond that 260 characters threshold.\n\
 On all versions of Windows, and whether or not the Windows 10 registry fix has\n\
 been enabled, redo can enumerate paths of any length, and sets the {} sequence\n\
-correctly. But it cannot execute a command below the 260 characters threshold.\n\
+correctly. But it cannot execute a command beyond the 260 characters threshold.\n\
 Actually redo will think it has succeeded, but the command will actually run\n\
-in a parent directory of the expected one, the parent with the longest path\n\
-that fits in 260 characters.\n\
+in a parent directory of the expected one: The parent with the longest path\n\
+that fits in less than 260 characters.\n\
 If there's a chance that you might have paths longer than 260 chars in the tree\n\
 below the initial directory, do not rely on the current directory set by redo,\n\
-but use the {} sequence to generate commands with absolute paths arguments.\n\
-And of course, use a command that is compatible with paths > 260 characters.\n\
+but use the -C option, and the {} sequence in arguments, to generate commands\n\
+with absolute paths arguments.\n\
+And of course, use a command that is compatible with paths ≥ 260 characters.\n\
 To verify if this workaround is needed or not, use option -l 260 to list\n\
-all paths longer than 260 characters.\n\
+all paths ≥ 260 characters.\n\
 "
 #endif
 #include "footnote.h"
@@ -692,28 +746,26 @@ int interne(char *com) {  /* Is com an internal command? */
 \*---------------------------------------------------------------------------*/
 
 int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
-  UNUSED_ARG(p);
-
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
   _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
 #endif
   if (iCtrlC) return TRUE;	/* Abort scan */
 
-  /* Execute the routine once for this path */
-  if (pDE->d_type == DT_ENTER) DoPerPath(pszPathname);
+  /* Execute the routine once for this path, after entering it */
+  if (pDE->d_type == DT_ENTER) DoPerPath(pszPathname, p);
 
   return FALSE;			/* Continue scanning */
 }
 
-int redo(char *from, wdt_opts *pwd) {
-  void *pScanVars = NULL;
+int redo(char *from, wdt_opts *pwo) {
+  void *pScanVars = pwo;
   int iResult;
 
   DEBUG_ENTER(("descend(\"%s\", {%s});\n", from, ""));
 
   /* Get all subdirectories */
-  pwd->iFlags |= WDT_DIRONLY | WDT_CD | WDT_CBINOUT | WDT_CONTINUE;
-  iResult = WalkDirTree(from, pwd, SelectDirsCB, pScanVars);
+  pwo->iFlags |= WDT_DIRONLY | WDT_CBINOUT | WDT_CONTINUE;
+  iResult = WalkDirTree(from, pwo, SelectDirsCB, pScanVars);
   if (iResult < 0) {	/* An error occurred */
     DEBUG_LEAVE(("return -1;\n"));
   } else {		/* The walk succeeded */
@@ -739,7 +791,8 @@ int redo(char *from, wdt_opts *pwd) {
 *                                                                             *
 ******************************************************************************/
 
-void DoPerPath(const char *path) {
+void DoPerPath(const char *path, void *pRef) {
+  wdt_opts *pwo = (wdt_opts *)pRef;
   int err;
   int i;
   char *pc;
@@ -762,8 +815,6 @@ void DoPerPath(const char *path) {
 
     pc = command[i];
     if (!pc) break;
-    // ~~jfl 1995-09-25 Removed: if (streq(pc, "%.")) command2[i] = path;
-    //		    Instead expand string with RELATIVE path
     pc2 = malloc(COMMAND_LINE_MAX);
     if (!pc2) finis(RETCODE_NO_MEMORY, "Not enough memory for command");
     command2[i] = pc2;
@@ -785,14 +836,16 @@ void DoPerPath(const char *path) {
   }
   command2[i] = NULL;
 
-  if (iVerbose) {
-    printf("[%s]", path);
+  if (iVerbose || iNoExec) {
+    if (pwo->iFlags & WDT_CD) printf("[%s] ", path);
     for (i=0; ((pc=command2[i]) != NULL); i++) printf("%s ", pc);
     printf("\n");
   }
-  err = (int)spawnvp(P_WAIT, command2[0], command2);
-  if (err == -1) finis(RETCODE_EXEC_ERROR, "Cannot execute the command");
-  if (err) printf("\nredo: %s returns error # %d.\n", command2[0], err);
+  if (!iNoExec) {
+    err = (int)spawnvp(P_WAIT, command2[0], command2);
+    if (err == -1) finis(RETCODE_EXEC_ERROR, "Cannot execute the command");
+    if (err) printf("\nredo: %s returns error # %d.\n", command2[0], err);
+  }
 
   for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
 
