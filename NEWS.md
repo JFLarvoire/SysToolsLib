@@ -4,7 +4,7 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2025-12-03
+## [Unreleased] 2025-12-07
 ### New
 - C/MsvcLibX/src/getcwd.c: Added routine getcwd0().
 - C/SysLib/cwd-pwd.c: New file with routines for Unix managing the logical path in the PWD env var.
@@ -13,7 +13,17 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ### Changed
 - redo.exe: Version 3.99: Rewritten using SysLib's WalkDirTree().
-- C/SysLib/pathnames.h: Added definitions for extended getcwd() and chdir() routines for Unix.
+- C/MsvcLibX/src/fileid.c: Extend MlxGetFileID() as MlxGetFileAttributesAndID(), adding arguments, and redefining the
+  old name as a macro. This allows collecting WIN32_FILE_ATTRIBUTE_DATA at the same time as the device and file IDs,
+  and also to select if we want the information for a link or its target.
+- C/MsvcLibX/src/lstat.c: stat() and lstat() are now front ends to the new lstatX(), extending the old lstat() with
+  a call to the new MlxGetFileAttributesAndID(). This makes stat() considerably faster for links.
+- C/SysLib/WalkDirTree.c:
+  - Use the device ID and inode number in Windows too.
+  - Moved the OS_HAS_LINKS constant definition to pathnames.h.
+- C/SysLib/pathnames.h:
+  - Added definitions for extended getcwd() and chdir() routines for Unix.
+  - Moved the OS_HAS_LINKS constant definition from WalkDirTree.c.
 - C/SRC/In.c: Moved the PWD env var fix to SysLib's new ChDir() routine, defined as chdir() for Unix.
 - C/SRC/dirc.c: Use SysLib's PATHNAME_BUF macros in pathnames.h, etc.
 
@@ -21,6 +31,8 @@ For more details about changes in a particular area, see the README.txt and/or N
 - dirc.exe: Version 3.9.2: Bug fixes in Unix, thanks to SysLib's improvements:
   - Display logical paths based on cwd + the PWD env var.
   - Display normalized paths.
+- C/SysLib/WalkDirTree.c:
+  - Only change the dir back if the dir entry change worked.
 
 ## [Unreleased] 2025-11-30
 ### Changed
