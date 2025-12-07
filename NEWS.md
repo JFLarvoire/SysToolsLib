@@ -12,7 +12,10 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/MsvcLibX/src/getcwd.c: New routine getcwd0() for DOS and Windows.
 
 ### Changed
-- redo.exe: Version 3.99: Rewritten using SysLib's WalkDirTree().
+- redo.exe: Version 3.99:
+  - Rewritten using SysLib's WalkDirTree().
+  - Added options -c, -C, -f, -F, -X.		
+  - In verbose mode, display statistics in the end.
 - C/MsvcLibX/src/fileid.c: Extend MlxGetFileID() as MlxGetFileAttributesAndID(), adding arguments, and redefining the
   old name as a macro. This allows collecting WIN32_FILE_ATTRIBUTE_DATA at the same time as the device and file IDs,
   and also to select if we want the information for a link or its target.
