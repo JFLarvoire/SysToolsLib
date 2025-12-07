@@ -22,7 +22,9 @@
 *    2017-09-01 JFL Bug fix: Sockets and Fifos ARE supported in WIN32. Enable *
 *		    macros S_ISSOCK and S_ISFIFO.			      *
 *    2018-05-31 JFL Changed dirent2stat() first arg to (const _dirent *).     *
-*									      *
+*    2025-12-06 JFL Renamed GetFileID() as GetFileIDEx(), adding a third      *
+*		    argument, and redefining the old name as a macro.	      *
+*		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -278,8 +280,12 @@ typedef struct { /* Equivalent to the FILE_ID_INFO structure defined in winbase.
 } FILE_ID;
 
 extern BOOL bMlxStatSetInode; /* Control whether lstat() & stat() do set st_dev & st_ino, which slows it noticeably */
-extern BOOL MlxGetFileIDW(const WCHAR *pwszName, FILE_ID *pFID);
-extern BOOL MlxGetFileID(const char *pszName, FILE_ID *pFID);
+extern BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA *pAttr, FILE_ID *pFID, BOOL bLink);
+extern BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_DATA *pAttr, FILE_ID *pFID, BOOL bLink);
+#define MlxGetFileIDW(pwszName, pFID) MlxGetFileAttributesAndIDW(pwszName, NULL, pFID, 0) /* If it's a link, get the ID of the target file or dir */
+#define MlxGetLinkIDW(pwszName, pFID) MlxGetFileAttributesAndIDW(pwszName, NULL, pFID, 1) /* If it's a link, get the ID of the link itself */
+#define MlxGetFileID(pszName, pFID) MlxGetFileAttributesAndID(pszName, NULL, pFID, 0) /* If it's a link, get the ID of the target file or dir */
+#define MlxGetLinkID(pszName, pFID) MlxGetFileAttributesAndID(pszName, NULL, pFID, 1) /* If it's a link, get the ID of the link itself */
 
 #endif /* defined(_WIN32) */
 

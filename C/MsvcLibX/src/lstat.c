@@ -20,6 +20,9 @@
 *    2018-05-31 JFL Changed dirent2stat() first arg to (const _dirent *).     *
 *    2020-12-15 JFL Added support for IO_REPARSE_TAG_APPEXECLINK.             *
 *    2021-11-29 JFL Prefixed MsvcLibX-specific WIN32 public routines with Mlx.*
+*    2025-12-06 JFL stat() and lstat() are now front ends to the new lstatX(),*
+*                   extending the old lstat() with MlxGetFileAttributesAndID()*
+*                   instead of GetFileAttributesEx() and MlxGetFileID().      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -125,7 +128,13 @@ int dirent2stat(const _dirent *pDirent, struct _stat *pStat) {
 *									      *
 \*---------------------------------------------------------------------------*/
 
-int lstat(const char *path, struct stat *pStat) {
+#define CONCAT_TOKENS(a, b) a##b
+
+#define CONCAT_TOKENS_VALUE(a, b) CONCAT_TOKENS(a, b)
+
+#define lstatX CONCAT_TOKENS_VALUE(lstat, X)
+
+int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   BOOL bDone;
   DWORD dwAttr;
   WIN32_FILE_ATTRIBUTE_DATA fileData;
@@ -137,8 +146,10 @@ int lstat(const char *path, struct stat *pStat) {
   char szTime[100];
   )
   WCHAR *pwszName = NULL;
+  FILE_ID fid;
 
-  DEBUG_ENTER((STRINGIZE(lstat) "(\"%s\", 0x%p);\n", path, pStat));
+  /* If (bLink is TRUE), the function name is "lstatXXX", else it's "statXXX" */
+  DEBUG_ENTER(("%s(\"%s\", 0x%p);\n", (STRINGIZE(lstat) + !bLink), path, pStat));
 
 #if USE_MSVC_STAT
   dwAttr = GetFileAttributes(path);
@@ -158,13 +169,12 @@ int lstat(const char *path, struct stat *pStat) {
   pwszName = MultiByteToNewWidePath(CP_UTF8, path);
   if (!pwszName) RETURN_INT_COMMENT(-1, ("errno=%d - %s\n", errno, strerror(errno)));
 
-  bDone = GetFileAttributesExW(pwszName, GetFileExInfoStandard, &fileData);
+  bDone = MlxGetFileAttributesAndIDW(pwszName, &fileData, &fid, bLink); /* Superset of GetFileAttributesEx() */
   if (!bDone) {
     errno = Win32ErrorToErrno();
     free(pwszName);
-    RETURN_INT_COMMENT(-1, ("GetFileAttributesEx(); // Failed\n"));
+    RETURN_INT_COMMENT(-1, ("MlxGetFileAttributesAndID(); // Failed\n"));
   }
-  XDEBUG_PRINTF(("GetFileAttributesEx(); // Success\n"));
   dwAttr = fileData.dwFileAttributes;
   XDEBUG_PRINTF(("dwFileAttributes = 0x%lX\n", dwAttr));
   DEBUG_CODE_IF_ON(Filetime2String(&fileData.ftLastWriteTime, szTime, sizeof(szTime)););
@@ -248,18 +258,17 @@ this_is_not_a_symlink:
   pStat->st_ReparseTag = dwTag;
 #endif
 
-  if (bMlxStatSetInode) { /* Control whether to set st_dev & st_ino, which slows lstat() noticeably */
-    FILE_ID fid;
-    bDone = MlxGetFileIDW(pwszName, &fid);
-    if (bDone) {
-      pStat->st_dev = *(dev_t *)(&fid.dwIDVol0);
-      pStat->st_ino = *(ino_t *)(&fid.dwIDFil0);
-      if (*(ino_t *)(&fid.dwIDFil2)) *(ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
-    }
-  }
+  /* Finally set st_dev & st_ino fields from the volume and file IDs */
+  pStat->st_dev = *(dev_t *)(&fid.dwIDVol0);
+  pStat->st_ino = *(ino_t *)(&fid.dwIDFil0);
+  if (*(ino_t *)(&fid.dwIDFil2)) *(ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
 
   free(pwszName);
   RETURN_INT_COMMENT(0, ("%s  mode = 0x%04X  size = %I64d bytes\n", szTime, pStat->st_mode, qwSize));
+}
+
+int lstat(const char *path, struct stat *pStat) {
+  return lstatX(path, pStat, TRUE);
 }
 
 /*---------------------------------------------------------------------------*\
@@ -288,28 +297,7 @@ this_is_not_a_symlink:
 
 #if !USE_MSVC_STAT
 int stat(const char *path, struct stat *pStat) {
-  char buf[UTF8_PATH_MAX];
-  int iErr;
-  DWORD dwAttr;
-
-  DEBUG_ENTER((STRINGIZE(stat) "(\"%s\", 0x%p);\n", path, pStat));
-
-  dwAttr = GetFileAttributes(path);
-  if (dwAttr == INVALID_FILE_ATTRIBUTES) {
-    errno = ENOENT;
-    RETURN_INT_COMMENT(-1, ("errno = %d; // %s\n", errno, strerror(errno)));
-  }
-
-  if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
-    iErr = MlxResolveTailLinks(path, buf, sizeof(buf));
-    path = buf;
-  } else {
-    iErr = 0;
-  }
-
-  if (!iErr) iErr = lstat(path, pStat);
-
-  RETURN_INT_COMMENT(iErr, (iErr ? "errno = %d; // %s\n" : "Success\n", errno, strerror(errno)));
+  return lstatX(path, pStat, FALSE);
 }
 #endif /* !USE_MSVC_STAT */
 

@@ -8,6 +8,7 @@
 *		    							      *
 *   History								      *
 *    2022-01-05 JFL Created this module.				      *
+*    2025-12-06 JFL Extend MlxGetFileID() as MlxGetFileAttributesAndID().     *
 *                                                                             *
 *         © Copyright 2022 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -27,16 +28,21 @@
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    GetFileID						      |
+|   Function	    MlxGetFileAttributesAndID				      |
 |									      |
-|   Description     Get the unique ID for a file or directory		      |
+|   Description     Get the attributes and unique ID for a file or directory  |
 |									      |
-|   Parameters      const char *path		The file name		      |
-|		    FILE_ID *pFID		Where to store the ID	      |
+|   Parameters      const char *path	The file name			      |
+|		    WIN32_FILE_ATTRIBUTE_DATA *pAttr  Where to store attribs. |
+|		    			Optional. See GetFileAttributesEx().  |
+|		    FILE_ID *pFID	Where to store the ID. Optional.      |
+|		    			See GetFileInformationByHandle().     |
+|		    BOOL bLink		1 = Open links; 0 = Open their targets|
 |		    							      |
 |   Returns	    BOOL bDone, and errno set if not done		      |
 |		    							      |
-|   Notes	    Similar in concept to the Unix inode number		      |
+|   Notes	    The ID is similar in concept to the Unix inode number:    |
+|		    A number uniquely identifying a file or directory.	      |
 |		    							      |
 |		    To get a file ID at the Windows cmd prompt, run:	      |
 |		    fsutil file queryfileid <filename>			      |
@@ -52,6 +58,11 @@
 |		    							      |
 |   History								      |
 |    2021-12-27 JFL Created this routine				      |
+|    2025-12-06 JFL Renamed GetFileID() as MlxGetFileAttributesAndID(),	      |
+|		    adding arguments, and redefining the old name as a macro. |
+|		    This allows collecting WIN32_FILE_ATTRIBUTE_DATA at the   |
+|		    same time as the device and file IDs, and also to select  |
+|		    if we want the information for a link or its target.      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -75,19 +86,18 @@ typedef BOOL (*PGETFILEINFORMATIONBYHANDLEEX)(HANDLE, int, LPVOID, DWORD);
 PGETFILEINFORMATIONBYHANDLEEX pGetFileInformationByHandleEx; /* Pointer to GetFileInformationByHandleEx() */
 #if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_WIN8)
 #define FileIdInfo 18 /* Defined in WinBase.h, starting in the Windows 8 SDK */
-#define FileIdExtdDirectoryInfo 19 /* Should we need it too */
 #endif
 
 #pragma warning(disable:4996)       /* Ignore the deprecated name warning */
 
 #endif /* USE_EXTENDED_FUNCTION */
 
-BOOL MlxGetFileIDW(const WCHAR *pwszName, FILE_ID *pFID) {
+BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA *pAttr, FILE_ID *pFID, BOOL bLink) {
   HANDLE hFile;
   BOOL bDone;
   BY_HANDLE_FILE_INFORMATION fi;
 
-  DEBUG_WENTER((L"GetFileID(\"%s\", %p);\n", pwszName, pFID));
+  DEBUG_WENTER((L"MlxGetFileAttributesAndIDW(\"%s\", %p, %d);\n", pwszName, pFID, bLink));
 
 #if USE_EXTENDED_FUNCTION
 
@@ -108,11 +118,11 @@ BOOL MlxGetFileIDW(const WCHAR *pwszName, FILE_ID *pFID) {
 #endif /* USE_EXTENDED_FUNCTION */
 
   hFile = CreateFileW(pwszName,
-		      GENERIC_READ,
+		      0, /* 0 = Neither read or write. Was GENERIC_READ. */
 		      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		      NULL,
 		      OPEN_EXISTING,
-		      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+		      FILE_FLAG_BACKUP_SEMANTICS | (bLink ? FILE_FLAG_OPEN_REPARSE_POINT : 0),
 		      NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
     errno = Win32ErrorToErrno();
@@ -120,57 +130,62 @@ BOOL MlxGetFileIDW(const WCHAR *pwszName, FILE_ID *pFID) {
     return 0;
   }
 
-#if USE_EXTENDED_FUNCTION
-  if (bHasFileIdInfo) {
-    DEBUG_PRINTF(("GetFileInformationByHandleEx(%p, FileIdInfo, %p, %d);\n", hFile, pFID, sizeof(FILE_ID)));
-    bDone = pGetFileInformationByHandleEx(hFile, FileIdInfo, pFID, sizeof(FILE_ID));
+  XDEBUG_PRINTF(("GetFileInformationByHandle(%p, %p);\n", hFile, &fi));
+  bDone = GetFileInformationByHandle(hFile, &fi);
+  if (!bDone) {
+    errno = Win32ErrorToErrno();
     CloseHandle(hFile);
-    if (!bDone) {
-      errno = Win32ErrorToErrno();
-      RETURN_BOOL_COMMENT(0, ("Failed to get extended file information\n"));
-    }
-
-    RETURN_BOOL_COMMENT(1, ("Volume SN %08.8lX%08.8lX, File ID %08.8lX%08.8lX%08.8lX%08.8lX\n",
-			    pFID->dwIDVol1, pFID->dwIDVol0, pFID->dwIDFil3, pFID->dwIDFil2, pFID->dwIDFil1, pFID->dwIDFil0));
-  } else {
-#endif /* USE_EXTENDED_FUNCTION */
-    DEBUG_PRINTF(("GetFileInformationByHandle(%p, %p);\n", hFile, &fi));
-    bDone = GetFileInformationByHandle(hFile, &fi);
-    CloseHandle(hFile);
-    if (!bDone) {
-      errno = Win32ErrorToErrno();
-      RETURN_BOOL_COMMENT(0, ("Failed to get file information\n"));
-    }
-
-    if (pFID) {
-      pFID->dwIDVol0 = fi.dwVolumeSerialNumber;
-      pFID->dwIDVol1 = 0;
-      pFID->dwIDFil0 = fi.nFileIndexLow;
-      pFID->dwIDFil1 = fi.nFileIndexHigh;
-      pFID->dwIDFil2 = 0;
-      pFID->dwIDFil3 = 0;
-    }
-
-    RETURN_BOOL_COMMENT(1, ("Volume ID %08.8lX, File ID %08.8lX%08.8lX\n",
-			    pFID->dwIDVol0, pFID->dwIDFil1, pFID->dwIDFil0));
-#if USE_EXTENDED_FUNCTION
+    RETURN_BOOL_COMMENT(0, ("GetFileInformationByHandle() failed.\n", GetLastError()));
   }
+
+  if (pAttr) {  
+    pAttr->dwFileAttributes = fi.dwFileAttributes;
+    pAttr->ftCreationTime   = fi.ftCreationTime;
+    pAttr->ftLastAccessTime = fi.ftLastAccessTime;
+    pAttr->ftLastWriteTime  = fi.ftLastWriteTime;
+    pAttr->nFileSizeHigh    = fi.nFileSizeHigh;
+    pAttr->nFileSizeLow     = fi.nFileSizeLow;
+  }
+
+  if (pFID) {
+#if USE_EXTENDED_FUNCTION
+    if (bHasFileIdInfo) {
+      XDEBUG_PRINTF(("GetFileInformationByHandleEx(%p, FileIdInfo, %p, %d);\n", hFile, pFID, sizeof(FILE_ID)));
+      bDone = pGetFileInformationByHandleEx(hFile, FileIdInfo, pFID, sizeof(FILE_ID));
+      if (bDone) goto cleanup_and_return_done;
+      DEBUG_PRINTF(("  // GetFileInformationByHandleEx() failed. Win32 error 0x%lX. Using the base ID infos.\n", GetLastError()));
+    }
 #endif /* USE_EXTENDED_FUNCTION */
+    pFID->dwIDVol0 = fi.dwVolumeSerialNumber;
+    pFID->dwIDVol1 = 0;
+    pFID->dwIDFil0 = fi.nFileIndexLow;
+    pFID->dwIDFil1 = fi.nFileIndexHigh;
+    pFID->dwIDFil2 = 0;
+    pFID->dwIDFil3 = 0;
+  }
+
+#if USE_EXTENDED_FUNCTION
+cleanup_and_return_done:
+#endif /* USE_EXTENDED_FUNCTION */
+  CloseHandle(hFile);
+  RETURN_BOOL_COMMENT(1, ("Volume ID 0x%08lX, File ID 0x%lX%07lX, Attributes 0x%04lX\n",
+			  pFID->dwIDVol0, pFID->dwIDFil1, pFID->dwIDFil0, pAttr->dwFileAttributes));
 }
 
-BOOL MlxGetFileID(const char *pszName, FILE_ID *pFID) {
+BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_DATA *pAttr, FILE_ID *pFID, BOOL bLink) {
   WCHAR *pwszName;
   BOOL bDone;
 
+  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
   pwszName = MultiByteToNewWidePath(CP_UTF8, pszName);
   if (!pwszName) { /* errno set already */
     RETURN_BOOL_COMMENT(0, ("Not enough memory\n"));
   }
 
-  bDone = MlxGetFileIDW(pwszName, pFID);
+  bDone = MlxGetFileAttributesAndIDW(pwszName, pAttr, pFID, bLink);
 
   free(pwszName);
-  
+
   return bDone;
 }
 
