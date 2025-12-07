@@ -29,6 +29,7 @@
 
 #include <dirent.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include "debugm.h"		/* For ShrinkBuf() */
 
@@ -92,6 +93,13 @@ extern "C" {
 
 /********************** End of OS-specific definitions ***********************/
 
+/* Flag OSs that have links (For some OSs which don't, macros are defined, but S_ISLNK always returns 0) */
+#if defined(S_ISLNK) && S_ISLNK(S_IFLNK)
+  #define OS_HAS_LINKS 1
+#else
+  #define OS_HAS_LINKS 0
+#endif
+
 /*****************************************************************************/
 
 /* Helper macros for managing temporary buffers for file pathnames */
@@ -149,6 +157,8 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_CBINOUT	0x0020		/* Callback when entering and leaving a directory */
 #define WDT_DIRONLY	0x0040		/* Callback only for effective directories (ie. links too if WDT_FOLLOW) */
 #define WDT_CD		0x0080		/* Change current directory to the directories scanned */
+/* The following flag must be last, with the highest defined bit */
+#define WDT_USER_FLAG   0x0100		/* Allow adding user-defined flags, for use in the callbacks */
 
 /* Dummy dirent dir types, giving special infos to the callback.
    DT_XXX dir types defined in dirent.h typically are in the 0-14 range */

@@ -21,6 +21,10 @@
 *    2025-11-25 JFL Fixed a bug when using WDT_CD.			      *
 *    2025-11-30 JFL Restructured the error management.			      *
 *    2025-12-02 JFL Using SysLib's new chdir for Unix, with its own debug msgs.
+*    2025-12-06 JFL Use the device ID and inode number in Windows too.        *
+*    2025-12-07 JFL Only change the dir back if the dir entry change worked.  *
+*		    Moved the OS_HAS_LINKS constant definition to pathnames.h.*
+*                                                                             *
 *                                                                             *
 \*****************************************************************************/
 
@@ -50,13 +54,6 @@
 #include "dirx.h"		/* Directory access functions eXtensions */
 #include "pathnames.h"		/* Pathname management definitions and functions */
 #include "mainutil.h"		/* Print errors, streq, etc */
-
-/* Flag OSs that have links (For some OSs which don't, macros are defined, but S_ISLNK always returns 0) */
-#if defined(S_ISLNK) && S_ISLNK(S_IFLNK)
-  #define OS_HAS_LINKS 1
-#else
-  #define OS_HAS_LINKS 0
-#endif
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -115,10 +112,14 @@ int isEffectiveDir(const char *pszPath) {
 #error "Links resolution only implemented for this OS using MSVC + MsvcLibX library"
 #endif /* defined(_MSC_VER) */
 
-#elif defined(__unix__) || defined(__MACH__) /* Automatically defined when targeting Unix or Mach apps. */
-#define _UNIX
+#if defined(_WIN32)
 
-#define KEY_SIZE (2*(sizeof(dev_t) + sizeof(ino_t)))
+#define HAS_DEV_AND_FILE_ID 1 /* If the OS doesn't have them, there will be an error when using KEY_SIZE */
+
+#endif
+
+#elif defined(_UNIX)	/* Defined in SysLib.h for Unix flavors we support */
+
 #define HAS_DEV_AND_FILE_ID 1 /* If the OS doesn't have them, there will be an error when using KEY_SIZE */
 
 #else /* None of MS-DOS, Windows, Unix, Mach */
@@ -131,7 +132,7 @@ int isEffectiveDir(const char *pszPath) {
 
 #if OS_HAS_LINKS
 
-#if HAS_MSVCLIBX
+#if HAS_MSVCLIBX && !HAS_DEV_AND_FILE_ID
 char *GetUniqueIdString(const char *pathname) {
   int iRet;
   char *pTrueName = malloc(PATH_MAX);
@@ -143,6 +144,7 @@ char *GetUniqueIdString(const char *pathname) {
   return pTrueName;
 }
 #elif HAS_DEV_AND_FILE_ID
+#define KEY_SIZE (2*(sizeof(dev_t) + 1 + sizeof(ino_t)))
 /* Convert a devID/fileID pair into a new hexadecimal string */
 char *MakeDevIdKey(char *pszKey, dev_t devID, ino_t fileID) {
   int i, o=0;
@@ -154,6 +156,7 @@ char *MakeDevIdKey(char *pszKey, dev_t devID, ino_t fileID) {
     pszKey[o++] = hex[c>>4];
     pszKey[o++] = hex[c&0x0F];
   }
+  pszKey[o++] = ':'; /* Make it easy to recognize the two IDs in debug output */
   for (i=sizeof(ino_t)-1; i>=0; i--) {
     unsigned char c = ((unsigned char *)&fileID)[i];
     char hex[] = "0123456789ABCDEF";
@@ -270,6 +273,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
   char *pRelatName;
   struct dirent *pFakeInOutDE = NULL;
   char *pszFailingOpVerb;
+  int iChdirDone = FALSE;
 
   DEBUG_ENTER(("WalkDirTree(\"%s\", {%s}, ..., %d);\n", path, DumpOpts(pOpts), iDepth));
 
@@ -307,6 +311,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
       pszFailingOpVerb = "enter";
       goto print_dir_op_error;
     }
+    iChdirDone = TRUE;
     path_to_read = ".";
   } else {
     path_to_read = path;
@@ -387,7 +392,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     if (   ((pDE->d_type == DT_DIR) || (pDE->d_type == DT_LNK))
         && ((pOpts->iFlags & WDT_FOLLOW) || (pOpts->iFlags & WDT_ONCE))) {
       errno = 0;
-      bIsDir = isEffectiveDir(pRelatName); /* In Windows+MsvcLibX, this may fail, despite d_type == DT_DIR above */
+      bIsDir = (pDE->d_type == DT_DIR) || isEffectiveDir(pRelatName); /* In Windows+MsvcLibX, this may fail, despite d_type == DT_DIR above */
       if (bIsDir && ((pUniqueID = GetUniqueIdString(pRelatName)) != NULL) && pUniqueID[0]) {
 	if (pOpts->iFlags & WDT_FOLLOW) {
 	  NAMELIST *pList;
@@ -403,16 +408,18 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
       } else { /* pPathname is a symlink pointing to a file, or a link looping to itself */
 	if (bIsDir && !pUniqueID) goto out_of_memory;
 	if (errno) switch (errno) {
-	case ELOOP:	/* There's a link looping to itself */
-	  pszBadLinkMsg = "Link loops to itself"; break;
-	case ENOENT:	/* There's a dangling link */
-	  pszBadLinkMsg = "Dangling link"; break;
-	case EBADF:	/* Unsupported link type, ex: Linux symlink */
-	case EINVAL:	/* Unsupported reparse point type */
-	  pszBadLinkMsg = "Unsupported link type"; break;
-	default: /* There's a real error we don't know how to handle */
-	  if (iPrintErrors) pferror("Can't resolve \"%s\": %s", pPathname, strerror(errno));
-	  goto check_whether_to_continue; /* Don't report this link to the callback */
+	  case ELOOP:	/* There's a link looping to itself */
+	    pszBadLinkMsg = "Link loops to itself"; break;
+	  case ENOENT:	/* There's a dangling link */
+	    pszBadLinkMsg = "Dangling link"; break;
+	  case EBADF:	/* Unsupported link type, ex: Linux symlink */
+	  case EINVAL:	/* Unsupported reparse point type */
+	    pszBadLinkMsg = "Unsupported link type"; break;
+	  default: { /* There's a real error we don't know how to handle */
+	    char *pszVerb = (pDE->d_type == DT_LNK) ? "resolve" : "access";
+	    if (iPrintErrors) pferror("Can't %s \"%s\": %s", pszVerb, pPathname, strerror(errno));
+	    goto check_whether_to_continue; /* Don't report this link to the callback */
+	  }
 	}
       }
     }
@@ -535,11 +542,13 @@ cleanup_and_return:
 #endif /* OS_HAS_LINKS */
   free(pFakeInOutDE);
   if (pOpts->iFlags & WDT_CD) {
-    char *pPath1 = pPath0 ? pPath0 : "..";
-    iErr = chdir(pPath1);
-    if (iErr) {
-      if (iPrintErrors) pferror("Can't return to \"%s\": %s", pPath1, strerror(errno));
-      iRet = -1;
+    if (iChdirDone) {
+      char *pPath1 = pPath0 ? pPath0 : "..";
+      iErr = chdir(pPath1);
+      if (iErr) {
+	if (iPrintErrors) pferror("Can't return to \"%s\": %s", pPath1, strerror(errno));
+	iRet = -1;
+      }
     }
     FREE_PATHNAME_BUF(pPath0);
 #if HAS_DRIVES
