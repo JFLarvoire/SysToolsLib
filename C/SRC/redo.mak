@@ -16,13 +16,14 @@
 #									      #
 #    2003-06-16 JFL Created this file.					      #
 #    2014-03-05 JFL Changed the memory model name to match 2010's dos.mak.    #
+#    2025-12-18 JFL In DOS, this now works fine using the small memory model. #
 #									      #
 #         © Copyright 2016 Hewlett Packard Enterprise Development LP          #
 # Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 #
 ###############################################################################
 
 # Memory model for 16-bit C compilation and misc macros
-MEM=L			# Memory model for C compilation
+MEM=S			# Memory model for C compilation
 
 !IF "$(T)"=="DOS"
 SOURCES=redo.c

@@ -61,6 +61,11 @@
 *    2025-12-03 JFL Rewritten using SysLib's WalkDirTree().		      *
 *    2025-12-07 JFL Added options -c, -C, -f, -F, -X.			      *
 *                   In verbose mode, display statistics in the end.	      *
+*    2025-12-08 JFL Detect when a child process exits with Ctrl-C in Windows. *
+*    2025-12-10 JFL Removed all unused remaining code for sorting files.      *
+*    2025-12-16 JFL Removed the limitation of the number of arguments.        *
+*    2025-12-18 JFL Minor fixes to the above changes.			      *
+*		    Version 4.0.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -68,8 +73,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "3.99"
-#define PROGRAM_DATE    "2025-12-07"
+#define PROGRAM_VERSION "4.0"
+#define PROGRAM_DATE    "2025-12-18"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -89,6 +94,7 @@
 #include <fnmatch.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <sys/wait.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
 #include "pathnames.h"		/* Pathname management functions */
@@ -101,7 +107,6 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 /* These are non standard routines, but the leading _ is annoying */
 #define strlwr _strlwr
-#define stricmp _stricmp
 #define spawnvp _spawnvp
 
 /************************ MS-DOS-specific definitions ************************/
@@ -170,8 +175,6 @@ static char *strlwr(char *pString) {
   return pString;
 }
 
-#undef stricmp
-#define stricmp strcasecmp
 #define _strnicmp strncasecmp
 
 #ifndef FNM_MATCH
@@ -204,26 +207,13 @@ intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv);
 #define RETCODE_SUCCESS 0	    /* Return codes processed by finis() */
 #define RETCODE_NO_FILE 1	    /* Note: Value 1 required by HP Preload -env option */
 #define RETCODE_TOO_MANY_FILES 2    /* Note: Value 2 required by HP Preload -env option */
-#define RETCODE_NO_MEMORY 3
+#define RETCODE_ABORT 3		    /* MSVC default when raising any signal */
 #define RETCODE_INACCESSIBLE 4
 #define RETCODE_EXEC_ERROR 5
 #define RETCODE_SYNTAX 6
-#define RETCODE_CTRL_C 7
+#define RETCODE_NO_MEMORY 7
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
-
-#define OFFSET_OF(pointer) ((ushort)(ulong)(void far *)pointer)
-#define SEGMENT_OF(pointer) ((ushort)(((ulong)(void far *)pointer) >> 16))
-
-typedef unsigned char uchar;
-typedef unsigned short ushort;
-typedef unsigned long ulong;
-
-typedef struct fif {	    /* OS-independant FInd File structure */
-    char *name; 		/* File node name, ending with a NUL */
-    struct stat st;		/* File size, time, etc */
-    struct fif *next;
-} fif;
 
 /* Global variables */
 
@@ -236,14 +226,8 @@ int iMeasure = 0;		    /* If > 0, measure the paths longer than that length */
 int iNoExec = FALSE;		    /* If TRUE, echo the commands, but dont run them */
 volatile int iCtrlC = FALSE;	    /* If TRUE, a Ctrl-C has been detected */
 
-fif *firstfif = NULL;		    /* Pointer to the first allocated fif structure */
-
-#ifdef _MSDOS
-#define MAXARGS 25
-#else
-#define MAXARGS 1024
-#endif
-char *command[MAXARGS]; 	/* Command and argument list main copy */
+char **argvCmd = NULL;		    /* Child command and argument list main copy */
+int argcCmd = 0;		    /* Number of items in the command array */
 
 #if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
 
@@ -368,10 +352,6 @@ void usage(int iErr);               /* Display a brief help and exit */
 void DoPerPath(const char *pszPath, void *pRef);
 
 int redo(char *from, wdt_opts *);   /* Recurse the directory tree */
-int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2); /* Compare 2 names */
-void trie(fif **ppfif, int nfif);   /* Sort file names */
-fif **AllocFifArray(size_t nfif);   /* Allocate an array of fif pointers */
-void FreeFifArray(fif **fiflist);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -498,25 +478,26 @@ int main(int argc, char *argv[]) {
 
   /* Build the sub command line to execute recursively */
 
+  argcCmd = argc - arg1;
+  argvCmd = (char **)malloc((argcCmd+3) * sizeof(char *));
+  if (!argvCmd) finis(RETCODE_NO_MEMORY, "Not enough memory for command");
+
   cmd1 = 0;
   if (interne(argv[arg1])) {      /* Is it an internal command? */
 #if defined(_MSDOS) || defined(_WIN32) || defined(_OS2)
-    command[0] = getenv("COMSPEC"); /* If yes, run a secondary command  */
-    command[1] = "/C";		/* processor.			    */
+    argvCmd[0] = getenv("COMSPEC"); /* If yes, run a secondary command  */
+    argvCmd[1] = "/C";		/* processor.			    */
 #elif defined(_UNIX)
-    command[0] = getenv("SHELL");  /* If yes, run a secondary command  */
-    command[1] = "-c";		/* processor.			    */
+    argvCmd[0] = getenv("SHELL");  /* If yes, run a secondary command  */
+    argvCmd[1] = "-c";		/* processor.			    */
 #endif
     cmd1 = 2;
+    argcCmd += 2;
   }
   for (i=0; (arg1+i)<argc; i++) {  /* Copy the arguments */
-    if ((cmd1+i)==(MAXARGS-1)) {	/* If destination array full */
-      printf("Warning: Arguments beyond the %dth ignored.\n", i);
-      break;
-    }
-    command[cmd1+i] = argv[arg1+i];
+    argvCmd[cmd1+i] = argv[arg1+i];
   }
-  command[cmd1+i] = NULL;
+  argvCmd[cmd1+i] = NULL;
 
   /* Save the initial drive and directory */
 
@@ -541,6 +522,8 @@ int main(int argc, char *argv[]) {
 
   /* Recurse */
   redo(pszFrom, &wdtOpts);
+
+  if (iCtrlC) finis(RETCODE_ABORT, "Ctrl-C detected, exiting");
 
   if (iVerbose) printf("# Scanned %ld directories\n", wdtOpts.nDir);
 
@@ -659,8 +642,6 @@ all paths ≥ 260 characters.\n\
 void finis(int retcode, ...) {
   DEBUG_ENTER(("finis(%d)\n", retcode));
 
-  if (iCtrlC && (retcode != RETCODE_CTRL_C)) OnControlC(0); /* Report a soft Ctrl-C stop */
-
   if (retcode) { /* There might be an error message to report */
     va_list vl;
     char *pszFormat;
@@ -669,7 +650,7 @@ void finis(int retcode, ...) {
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
       fputs(PROGRAM_NAME ": ", stderr);
-      if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
+      if (retcode != RETCODE_ABORT) fputs("Error: ", stderr);
       vfprintf(stderr, pszFormat, vl);
       fputs("\n", stderr);
     }
@@ -687,12 +668,8 @@ void finis(int retcode, ...) {
 
 void OnControlC(int iSignal) {
   UNUSED_ARG(iSignal);
-  if (!iCtrlC) {	/* The first time, try aborting the walk softly */
-    iCtrlC = TRUE;
-  } else {		/* The following times, do a hard stop now */
-    fflush(stdout); /* Unsuccessful attempt at preventing the mixing of the foreground output */
-    finis(RETCODE_CTRL_C, "Ctrl-C detected, aborting");
-  }
+  signal(SIGINT, SIG_DFL); /* Terminate the program with a 2nd Ctrl+C in case proper cleanup hangs */
+  iCtrlC = TRUE;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -747,12 +724,17 @@ int interne(char *com) {  /* Is com an internal command? */
 
 int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 #ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
-  _kbhit();		/* Side effect: Forces DOS to check for Ctrl-C */
+  _kbhit();	/* Forces DOS to check for Ctrl-C, even if extended break is off */
 #endif
   if (iCtrlC) return TRUE;	/* Abort scan */
 
   /* Execute the routine once for this path, after entering it */
   if (pDE->d_type == DT_ENTER) DoPerPath(pszPathname, p);
+
+#ifdef _MSDOS	/* Automatically defined when targeting an MS-DOS application */
+  _kbhit();	/* Forces DOS to check for Ctrl-C, even if extended break is off */
+#endif
+  if (iCtrlC) return TRUE;	/* Abort scan */
 
   return FALSE;			/* Continue scanning */
 }
@@ -764,7 +746,7 @@ int redo(char *from, wdt_opts *pwo) {
   DEBUG_ENTER(("descend(\"%s\", {%s});\n", from, ""));
 
   /* Get all subdirectories */
-  pwo->iFlags |= WDT_DIRONLY | WDT_CBINOUT | WDT_CONTINUE;
+  pwo->iFlags |= WDT_DIRONLY | WDT_INONLY | WDT_CONTINUE;
   iResult = WalkDirTree(from, pwo, SelectDirsCB, pScanVars);
   if (iResult < 0) {	/* An error occurred */
     DEBUG_LEAVE(("return -1;\n"));
@@ -774,29 +756,32 @@ int redo(char *from, wdt_opts *pwo) {
   return iResult;
 }
 
-/******************************************************************************
+/*---------------------------------------------------------------------------*\
 *                                                                             *
-*	Function:	DoPerPath					      *
-*                                                                             *
-*	Description:	Routine to be executed once for each subdirectory     *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*	Return value:	None						      *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*	History:							      *
-*	 1994-05-27 JFL	Updated for REDO.				      *
-*                                                                             *
-******************************************************************************/
+|   Function	    DoPerPath						      |
+|		    							      |
+|   Description	    Routine to be executed once for each subdirectory	      |
+|		    							      |
+|   Arguments	                                                              |
+|		    							      |
+|   Return value    None						      |
+|		    							      |
+|   Notes	                                                              |
+|		    							      |
+|   History								      |
+|    1994-05-27 JFL Updated for REDO.					      |
+*									      *
+\*---------------------------------------------------------------------------*/
 
 void DoPerPath(const char *path, void *pRef) {
   wdt_opts *pwo = (wdt_opts *)pRef;
   int err;
   int i;
   char *pc;
-  char *command2[MAXARGS+1];	/* Command and argument list secondary copy */
+  char **command2 = NULL;	/* Command and argument list secondary copy */
+#ifdef _MSDOS
+  int iTailSize = 1;		/* The command-line tail size */
+#endif				/* DOS limits it to 128 bytes, including the final NUL */
 
   DEBUG_ENTER(("DoPerPath(\"%s\");\n", path));
 
@@ -809,11 +794,14 @@ void DoPerPath(const char *path, void *pRef) {
     goto cleanup_and_return;
   }
 
-  for (i=0; i<MAXARGS; i++) {
+  command2 = malloc((argcCmd+1) * sizeof(char *));
+  if (!command2) finis(RETCODE_NO_MEMORY, "Not enough memory for expanded command list");
+
+  for (i=0; i<argcCmd; i++) {
     char *pc2;
     char c;
 
-    pc = command[i];
+    pc = argvCmd[i];
     if (!pc) break;
     pc2 = malloc(COMMAND_LINE_MAX);
     if (!pc2) finis(RETCODE_NO_MEMORY, "Not enough memory for command");
@@ -823,170 +811,72 @@ void DoPerPath(const char *path, void *pRef) {
       *(pc2++) = c;
       if (   ((c == '%') && (*pc == '.'))    /* Initial redo-specific tag */
 	  || ((c == '{') && (*pc == '}'))) { /* New find-specific tag */
+        const char *pc3 = path;
 	pc2 -= 1;   /* Back up over the % sign */
 	/* Copy the part of the path relative to the initial path */
-	strcpy(pc2, path);
+	if ((pc3[0] == '.') && (pc3[1] == DIRSEPARATOR_CHAR)) pc3 += 2; /* Skip the initial ./ */
+	strcpy(pc2, pc3);
 	pc2 += strlen(pc2);	// Move to the end of string
-	pc += 1;		// Skip the period
+	pc += 1;		// Skip the end of the tag ('.' or '}')
       }
     } while (c);
     // Free the end of string
     command2[i] = ShrinkBuf(command2[i], ++pc2 - command2[i]);
     DEBUG_PRINTF(("arg[%d] = \"%s\";\n", i, command2[i]));
+#ifdef _MSDOS
+    if (i > 0) iTailSize += strlen(command2[i]) + 1;
+#endif
   }
   command2[i] = NULL;
 
   if (iVerbose || iNoExec) {
-    if (pwo->iFlags & WDT_CD) printf("[%s] ", path);
+    if (pwo->iFlags & WDT_CD) {
+      const char *pcc = path;
+      if ((pcc[0] == '.') && (pcc[1] == DIRSEPARATOR_CHAR)) pcc += 2;
+      printf("[%s] ", pcc);
+    }
     for (i=0; ((pc=command2[i]) != NULL); i++) printf("%s ", pc);
     printf("\n");
   }
+#ifdef _MSDOS
+  if (iTailSize > 128) finis(RETCODE_EXEC_ERROR, "Command too long"); /* else spawnv() crashes below! */
+#endif
   if (!iNoExec) {
+    pc = strrchr(command2[0], DIRSEPARATOR_CHAR);
+    if (pc) pc += 1; else pc = command2[0]; /* The node name of the child command */
+#if HAS_DRIVES
+    if (pc[0] && (pc[1] == ':')) pc += 2;
+#endif
     err = (int)spawnvp(P_WAIT, command2[0], command2);
-    if (err == -1) finis(RETCODE_EXEC_ERROR, "Cannot execute the command");
-    if (err) printf("\nredo: %s returns error # %d.\n", command2[0], err);
+    DEBUG_PRINTF(("Child exit code 0x%02X\n", err));
+    if (err == -1) finis(RETCODE_EXEC_ERROR, "Cannot execute %s. %s", command2[0], strerror(errno));
+    if (WIFEXITED(err)) {
+      err = WEXITSTATUS(err); /* Pass-on the actual child exit code */
+    } else if (WIFSIGNALED(err) && (WTERMSIG(err) == SIGINT)) {
+      /* This happens if the child does _not_ intercept the SIGINT signal.
+	 In this case, the child is terminated by the system */
+      fputs("\n", stderr); /* The child output ends with a "^C" string with no \n */
+      DEBUG_CODE(
+	if (getenv("NOCTRLC2")) {
+	  /* Experimental code: See what happens if not calling finis() now */
+	  printf("redo: NOCTRLC2, %s interrupted by a Ctrl-C, continuing\n", pc);
+	} else
+      )
+      finis(RETCODE_ABORT, "%s interrupted by a Ctrl-C, exiting", pc);
+    } else {
+      /* The child got killed for various other reasons */
+      finis(RETCODE_ABORT, "%s aborted, exiting", pc);
+    }
+    if (err) {
+      fprintf(stderr, "redo: %s exited with error # %d.\n", pc, err);
+    }
   }
 
   for (i=0; command2[i]; i++) free(command2[i]); // Free the copy of the command.
+  free(command2); /* Free the array of pointers */
 
 cleanup_and_return:
   RETURN();
-}
-
-/******************************************************************************
-*                                                                             *
-*       Function:       cmpfif                                                *
-*                                                                             *
-*       Description:    Compare two files, for sorting the file list          *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*	  fif **ppfif1	First file structure				      *
-*	  fif **ppfif2	Second file structure				      *
-*                                                                             *
-*       Return value:    0 : Equal                                            *
-*                       <0 : file1<file2                                      *
-*                       >0 : file1>file2                                      *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*	 1994-05-27 JFL	Updated for REDO.				      *
-*                                                                             *
-******************************************************************************/
-
-int CDECL cmpfif(const fif **ppfif1, const fif **ppfif2) {
-  int ret;
-
-  /* List directories before files */
-  ret = S_ISDIR((*ppfif2)->st.st_mode) - S_ISDIR((*ppfif1)->st.st_mode);
-  if (ret) return ret;
-
-  /* If both files, or both directories, list names alphabetically */
-  ret = _strnicmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_BUF_SIZE);
-  if (ret) return ret;
-
-  /* Finally do a case dependant comparison */
-  return strncmp((*ppfif1)->name, (*ppfif2)->name, NODENAME_BUF_SIZE);
-}
-
-/******************************************************************************
-*                                                                             *
-*	Function:	trie						      *
-*                                                                             *
-*	Description:	Sort re two files, for sorting the file list	      *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         fif *fif1     First file structure                                  *
-*         fif *fif2     Second file structure                                 *
-*                                                                             *
-*       Return value:    0 : Equal                                            *
-*                       <0 : file1<file2                                      *
-*                       >0 : file1>file2                                      *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*	 1994-05-27 JFL Updated for REDO.				      *
-*                                                                             *
-******************************************************************************/
-
-typedef int (CDECL *pCompareProc)(const void *item1, const void *item2);
-
-void trie(fif **ppfif, int nfif) {
-  qsort(ppfif, nfif, sizeof(fif *), (pCompareProc)cmpfif);
-}
-
-/******************************************************************************
-*                                                                             *
-*       Function:       AllocFifArray                                         *
-*                                                                             *
-*       Description:    Allocate an array of fif pointers, to be sorted.      *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         int nfif      Number of fif structures.                             *
-*                                                                             *
-*       Return value:   The array address. Aborts the program if failure.     *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*                                                                             *
-******************************************************************************/
-
-fif **AllocFifArray(size_t nfif) {
-  fif **ppfif;
-  fif *pfif;
-  size_t i;
-
-  /* Allocate an array for sorting */
-  ppfif = (fif **)malloc((nfif+1) * sizeof(fif *));
-  if (!ppfif) finis(RETCODE_NO_MEMORY, "Out of memory for fif array");
-  /* Fill the array with pointers to the list of structures */
-  pfif = firstfif;
-  for (i=0; i<nfif; i++) {
-    ppfif[i] = pfif;
-    pfif = pfif->next;
-  }
-  /* Make sure following the linked list ends with the array */
-  if (nfif) ppfif[nfif-1]->next = NULL;
-  /* Make sure FreeFifArray works in all cases. */
-  ppfif[nfif] = NULL;
-
-  return ppfif;
-}
-
-/******************************************************************************
-*                                                                             *
-*       Function:       FreeFifArray                                          *
-*                                                                             *
-*       Description:    Free an array of fif pointers, and the fifs too.      *
-*                                                                             *
-*       Arguments:                                                            *
-*                                                                             *
-*         fif **pfif    Pointer to the fif array.                             *
-*                                                                             *
-*       Return value:   None                                                  *
-*                                                                             *
-*       Notes:                                                                *
-*                                                                             *
-*       Updates:                                                              *
-*                                                                             *
-******************************************************************************/
-
-void FreeFifArray(fif **ppfif) {
-  fif **ppf;
-
-  for (ppf=ppfif; *ppf; ppf++) {
-    free((*ppf)->name);
-    free(*ppf);
-  }
-
-  free(ppfif);
-
-  return;
 }
 
 /*---------------------------------------------------------------------------*\
@@ -1005,12 +895,12 @@ void FreeFifArray(fif **ppfif) {
 |									      |
 |   History:								      |
 |    2014-03-27 JFL Created this routine				      |
+|    2025-12-16 JFL Do not display an error message here.		      |
+|    2025-12-18 JFL Specify the pid number to wait for.			      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 #ifdef _UNIX
-
-#include <sys/wait.h>
 
 intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv) {
   pid_t pid = fork();
@@ -1028,12 +918,11 @@ intptr_t spawnvp(int iMode, const char *pszCommand, char *const *argv) {
   } else if (pid == 0) {	// We're the child instance
     execvp(pszCommand, argv);
     // We only get here if the exec fails
-    fprintf(stderr, "Error: Failed to run %s\n", pszCommand);
-    exit(255);
+    return -1;
   } else {			// We're the parent instance
     switch(iMode) {
       case P_WAIT:
-      	wait(&iRet);
+      	waitpid(pid, &iRet, 0);
 	break;
       case P_NOWAIT:
       default:
