@@ -24,7 +24,7 @@
 *    2025-12-06 JFL Use the device ID and inode number in Windows too.        *
 *    2025-12-07 JFL Only change the dir back if the dir entry change worked.  *
 *		    Moved the OS_HAS_LINKS constant definition to pathnames.h.*
-*                                                                             *
+*    2025-12-17 JFL Added support for WDT_INONLY.                             *
 *                                                                             *
 \*****************************************************************************/
 
@@ -357,7 +357,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     prev = &root;
   }
 
-  if (pOpts->iFlags & WDT_CBINOUT) {
+  if (pOpts->iFlags & (WDT_CBINOUT | WDT_INONLY)) {
     pFakeInOutDE = (struct dirent *)calloc(offsetof(struct dirent, d_name) + 2, 1);
     if (!pFakeInOutDE) goto out_of_memory;
     pFakeInOutDE->d_type = DT_ENTER;
@@ -366,6 +366,9 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
   }
 
   list.prev = prev;
+
+  if (  (pOpts->iFlags & WDT_INONLY)
+      && pOpts->iMaxDepth && (iDepth >= pOpts->iMaxDepth)) goto cleanup_and_return;
 
   while ((pDE = readdirx(pDir)) != NULL) { /* readdirx() ensures d_type is set */
 #if OS_HAS_LINKS
@@ -484,7 +487,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
       	break;
     }
     if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
- 
+
 #if OS_HAS_LINKS /* Right now, we jump to this label only while treating links */
     if (0) { /* Skip this block when coming from immediately above */
 check_whether_to_continue:
@@ -524,8 +527,10 @@ count_err_and_return:	/* Count an error, cleanup and return */
 cleanup_and_return:
   if (pDir) closedirx(pDir);
   if (pFakeInOutDE) { /* Only notify the exit if the entry notification was sent */
-    pFakeInOutDE->d_type = DT_LEAVE;
-    iRet = pWalkDirTreeCB(path, pFakeInOutDE, pRef); /* Notify the callback of the directory exit */
+    if (!(pOpts->iFlags & WDT_INONLY)) {
+      pFakeInOutDE->d_type = DT_LEAVE;
+      iRet = pWalkDirTreeCB(path, pFakeInOutDE, pRef); /* Notify the callback of the directory exit */
+    }
   }
   free(pPathname);
 #if OS_HAS_LINKS

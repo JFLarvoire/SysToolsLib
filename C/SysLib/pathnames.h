@@ -6,7 +6,7 @@
 *                                                                             *
 *   Notes	    							      *
 *		    							      *
-*   History:								      *
+*   History								      *
 *    2021-12-15 JFL Created this file.					      *
 *    2025-11-10 JFL Added the ability to limit WalkDirTree() recursion depth. *
 *    2025-11-11 JFL Added macros for managing file (path)names buffers.	      *
@@ -17,6 +17,7 @@
 *    2025-11-27 JFL Added routine NormalizePath().			      *
 *		    Fixed macro TRIM_NODENAME_BUF().			      *
 *    2025-12-02 JFL Added cwd-pwd.c definitions.			      *
+*    2025-12-17 JFL Added support for WDT_INONLY.                             *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -155,10 +156,11 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_FOLLOW	0x0008		/* Recurse into junctions & symlinkds */
 #define WDT_ONCE	0x0010		/* Scan multi-linked directories only once */
 #define WDT_CBINOUT	0x0020		/* Callback when entering and leaving a directory */
-#define WDT_DIRONLY	0x0040		/* Callback only for effective directories (ie. links too if WDT_FOLLOW) */
+#define WDT_DIRONLY	0x0040		/* Callback for effective directories (ie. links too if WDT_FOLLOW), but not for effective files */
 #define WDT_CD		0x0080		/* Change current directory to the directories scanned */
+#define WDT_INONLY	0x0100		/* Callback only when entering directories, but not for their content */
 /* The following flag must be last, with the highest defined bit */
-#define WDT_USER_FLAG   0x0100		/* Allow adding user-defined flags, for use in the callbacks */
+#define WDT_USER_FLAG   0x0200		/* Allow adding user-defined flags, for use in the callbacks */
 
 /* Dummy dirent dir types, giving special infos to the callback.
    DT_XXX dir types defined in dirent.h typically are in the 0-14 range */
