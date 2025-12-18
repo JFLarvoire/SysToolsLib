@@ -4,18 +4,23 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
-## [Unreleased] 2025-12-07
+## [Unreleased] 2025-12-18
 ### New
 - C/MsvcLibX/src/getcwd.c: Added routine getcwd0().
 - C/SysLib/cwd-pwd.c: New file with routines for Unix managing the logical path in the PWD env var.
 - C/SysLib/cwd-pwd.c: New routine getcwd0() for Unix.
 - C/MsvcLibX/src/getcwd.c: New routine getcwd0() for DOS and Windows.
+- C/MsvcLibX/include/sys/wait.h: DOS/WIN32 port of standard C library's sys/wait.h.
 
 ### Changed
-- redo.exe: Version 3.99:
+- redo.exe: Version 4.0
   - Rewritten using SysLib's WalkDirTree().
   - Added options -c, -C, -f, -F, -X.		
   - In verbose mode, display statistics in the end.
+  - Detect when a child process exits with Ctrl-C in Windows.
+  - Removed all unused remaining code for sorting files. This was only weakly useful for DOS, and slowed things
+    unnecessarily in Windows and Unix. Worse still, this caused redo to crash in directories with huge numbers of files.
+  - Removed the limitation of the number of arguments to the child command.
 - C/MsvcLibX/src/fileid.c: Extend MlxGetFileID() as MlxGetFileAttributesAndID(), adding arguments, and redefining the
   old name as a macro. This allows collecting WIN32_FILE_ATTRIBUTE_DATA at the same time as the device and file IDs,
   and also to select if we want the information for a link or its target.
@@ -24,9 +29,11 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SysLib/WalkDirTree.c:
   - Use the device ID and inode number in Windows too.
   - Moved the OS_HAS_LINKS constant definition to pathnames.h.
+  - Added support for WDT_INONLY.
 - C/SysLib/pathnames.h:
   - Added definitions for extended getcwd() and chdir() routines for Unix.
   - Moved the OS_HAS_LINKS constant definition from WalkDirTree.c.
+  - Added support for WDT_INONLY.
 - C/SRC/In.c: Moved the PWD env var fix to SysLib's new ChDir() routine, defined as chdir() for Unix.
 - C/SRC/dirc.c: Use SysLib's PATHNAME_BUF macros in pathnames.h, etc.
 
