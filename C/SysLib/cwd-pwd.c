@@ -20,6 +20,7 @@
 *                                                                             *
 *   History                                                                   *
 *    2025-11-27 JFL Created this file.					      *
+*    2025-12-19 JFL Fixed ChDir() which may have failed without setting iErr. *
 *                                                                             *
 \*****************************************************************************/
 
@@ -31,6 +32,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -147,12 +149,12 @@ char *NewCWDString(void) {
 int ChDir(const char *pszPath) {
   char *pszPWD = NULL;		/* The initial logical dir */
   char *pszPWD2 = NULL;		/* The new logical dir to change to */
-  int iErr;
+  int iErr = -1;
 
   DEBUG_ENTER(("ChDir(\"%s\");\n", pszPath));
 
   if (!pszPath || !pszPath[0]) {
-    errno = ENOENT; iErr = -1;
+    errno = ENOENT;
 fail:
     RETURN_INT_COMMENT(iErr, ("%s\n", strerror(errno)));
   }
