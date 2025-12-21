@@ -18,6 +18,7 @@
 *		    Fixed macro TRIM_NODENAME_BUF().			      *
 *    2025-12-02 JFL Added cwd-pwd.c definitions.			      *
 *    2025-12-17 JFL Added support for WDT_INONLY.                             *
+*    2025-12-21 JFL Fixed TRIM_PATHNAME_BUF() and TRIM_NODENAME_BUF().        *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -121,7 +122,7 @@ extern "C" {
   #define PATHNAME_BUF(var) char *var = NEW_PATHNAME_BUF()
   #define IF_PATHNAME_BUFS_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(ShrinkBuf(var, strlen(var)+1);)
+#define TRIM_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(var = ShrinkBuf(var, strlen(var)+1);)
 #define FREE_PATHNAME_BUF(var) IF_PATHNAME_BUFS_IN_HEAP(free(var);)
 
 #define NEW_NODENAME_BUF() malloc(NODENAME_BUF_SIZE)
@@ -134,7 +135,7 @@ extern "C" {
   #define NODENAME_BUF(var) char *var = NEW_NODENAME_BUF()
   #define IF_NODENAME_BUF_IN_HEAP(code) PATHNAME_DO(code);
 #endif
-#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(ShrinkBuf(var, strlen(var)+1);)
+#define TRIM_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(var = ShrinkBuf(var, strlen(var)+1);)
 #define FREE_NODENAME_BUF(var) IF_NODENAME_BUF_IN_HEAP(free(var);)
 
 /* End of helper macros for managing temporary buffers for file pathnames */
