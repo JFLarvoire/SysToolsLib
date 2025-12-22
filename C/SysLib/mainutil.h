@@ -10,6 +10,7 @@
 *    2021-12-15 JFL Created this file.					      *
 *    2022-10-19 JFL Added definitions for IsSwitch() and for streqi().	      *
 *    2022-11-29 JFL Moved the CDECL declaration to SysLib.h.                  *
+*    2025-12-20 JFL Added new error output routines.			      *
 *                                                                             *
 \*****************************************************************************/
 
@@ -17,6 +18,9 @@
 #define _SYSLIB_MAINUTIL_H_
 
 #include "SysLib.h"		/* SysLib Library core definitions */
+
+#include <string.h>
+#include <stdarg.h>		/* For va_list definition */
 
 #ifndef TRUE
 #define TRUE 1
@@ -41,6 +45,13 @@
 
 /* Main C modules utility routines */
 int CDECL IsSwitch(char *pszArg);	 /* Test if a command-line argument is a switch */
-int CDECL pferror(char *pszFormat, ...); /* Print error messages on stderr, in a standardized format */
+
+/* Print error messages on stderr, in a standardized format */
+int pGenError(char *pszType, char *pszFormat, va_list vl, char *pszTailMsg); /* Common subroutine of the following routines */
+int CDECL pferror(char *pszFormat, ...); /* Print a formatted error string and arguments */
+int CDECL pfcerror(char *pszFormat, ...); /* Idem, appending the LibC error string for errno */
+int CDECL pfwarning(char *pszFormat, ...); /* Print a formatted warning string and arguments */
+int CDECL pfcwarning(char *pszFormat, ...); /* Idem, appending the LibC error string for errno */
+int CDECL pfnotice(char *pszType, char *pszFormat, ...); /* Print a formatted notice. pszType="Notice", "Info", etc */
 
 #endif /* _SYSLIB_MAINUTIL_H_ */
