@@ -65,6 +65,8 @@
 *    2025-12-10 JFL Removed all unused remaining code for sorting files.      *
 *    2025-12-16 JFL Removed the limitation of the number of arguments.        *
 *    2025-12-18 JFL Minor fixes to the above changes.			      *
+*    2025-12-20 JFL Use the new error message routines.                       *
+*    2025-12-21 JFL Added options -o & -O, and default to mode Once.          *
 *		    Version 4.0.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -74,7 +76,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2025-12-18"
+#define PROGRAM_DATE    "2025-12-21"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -383,7 +385,7 @@ int main(int argc, char *argv[]) {
 
   wdtOpts.iFlags |= WDT_CD;	/* Change directories by default */
 #if OS_HAS_LINKS
-  wdtOpts.iFlags |= WDT_FOLLOW;	/* Follow links by default */
+  wdtOpts.iFlags |= WDT_ONCE | WDT_FOLLOW;	/* Follow links by default */
 #endif
 
   /* Parse the command line */
@@ -443,6 +445,14 @@ int main(int argc, char *argv[]) {
 	} else {
 	  finis(RETCODE_SYNTAX, "Max depth value missing");
 	}
+	continue;
+      }
+      if (streq(option, "o")) {
+	wdtOpts.iFlags |= WDT_ONCE;
+	continue;
+      }
+      if (streq(option, "O")) {
+	wdtOpts.iFlags &= ~WDT_ONCE;
 	continue;
       }
       if (streq(option, "q")) {
@@ -523,9 +533,9 @@ int main(int argc, char *argv[]) {
   /* Recurse */
   redo(pszFrom, &wdtOpts);
 
-  if (iCtrlC) finis(RETCODE_ABORT, "Ctrl-C detected, exiting");
+  if (iCtrlC) finis(RETCODE_ABORT, "Ctrl-C detected");
 
-  if (iVerbose) printf("# Scanned %ld directories\n", wdtOpts.nDir);
+  if (iVerbose) printf("# Scanned %lu directories\n", (unsigned long)wdtOpts.nDir);
 
   /* Report if some errors were ignored */
   if (wdtOpts.nErr) {
@@ -578,6 +588,14 @@ DEBUG_CODE(
   -l [MIN_LENGTH] List all sub-directories with their paths length. No command\n\
                   executed. Min length: List only longer paths. Default min: 1\n\
   -m MAX_DEPTH    Limit the recursion depth to N levels. Default: 0=no limit\n\
+"
+#if OS_HAS_LINKS
+"\
+  -o              Run only once in directories linked multiple times. (Default)\n\
+  -O              Run again even it's been in the same directory before.\n\
+"
+#endif
+"\
   -X              Display the commands to be executed, but don't run them.\n\
   -v              Verbose mode. Display the paths, and the commands executed.\n\
   -V              Display the program version and exit\n\
@@ -649,10 +667,7 @@ void finis(int retcode, ...) {
     va_start(vl, retcode);
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
-      fputs(PROGRAM_NAME ": ", stderr);
-      if (retcode != RETCODE_ABORT) fputs("Error: ", stderr);
-      vfprintf(stderr, pszFormat, vl);
-      fputs("\n", stderr);
+      pGenError(((retcode == RETCODE_ABORT) ? "Abort" : "Error"), pszFormat, vl, NULL);
     }
     va_end(vl);
   }
@@ -862,13 +877,13 @@ void DoPerPath(const char *path, void *pRef) {
 	  printf("redo: NOCTRLC2, %s interrupted by a Ctrl-C, continuing\n", pc);
 	} else
       )
-      finis(RETCODE_ABORT, "%s interrupted by a Ctrl-C, exiting", pc);
+      finis(RETCODE_ABORT, "%s interrupted by a Ctrl-C", pc);
     } else {
       /* The child got killed for various other reasons */
-      finis(RETCODE_ABORT, "%s aborted, exiting", pc);
+      finis(RETCODE_ABORT, "%s aborted", pc);
     }
     if (err) {
-      fprintf(stderr, "redo: %s exited with error # %d.\n", pc, err);
+      pfnotice(NULL, "%s exited with error # %d", pc, err);
     }
   }
 
