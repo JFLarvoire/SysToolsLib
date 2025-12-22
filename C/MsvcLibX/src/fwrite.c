@@ -10,6 +10,7 @@
 *    2017-03-03 JFL Created this module.				      *
 *    2017-03-05 JFL Rewrote fwriteU() to write UTF16 to the console.	      *
 *    2017-03-12 JFL Restructured the UTF16 writing mechanism.		      *
+*    2025-12-22 JFL Fixed fwrite, which wrote garbage for 0-size input.       *
 *                                                                             *
 *         © Copyright 2017 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -83,7 +84,10 @@ size_t fwriteM(const void *buf, size_t itemSize, size_t nItems, FILE *f, UINT cp
   UINT cpOut;
   int iFile = fileno(f);
 
-  if (isWideFile(iFile)) {
+  if (!nToWrite) {
+    /* Nothing to do. Also prevents random output when MultiByteToWideChar() has 0-length input */
+    nWritten = 0;
+  } elseif (isWideFile(iFile)) {
     /* Output a wide string to guaranty every Unicode character is displayed correctly */
     wchar_t *pwBuf = (wchar_t *)malloc(nToWrite * 4);
     int iRet;

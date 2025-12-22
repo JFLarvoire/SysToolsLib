@@ -33,6 +33,7 @@
 *    2021-11-25 JFL Added WideToNewMultiByteString() & similar routines.      *
 *    2025-08-04 JFL Disabled debug output by default, to avoid lots of        *
 *                   useless output when debugging other routines.             *
+*    2025-12-22 JFL Fixed fputsM, which output garbage for empty "" input.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -706,6 +707,7 @@ int fputcM(int c, FILE *f, UINT cp) {
     nInBuf = 2;
   }
 
+  /* nInBuf cannot be 0, so MultiByteToWideChar() will not misbehave due to 0-length input */
   if (isWideFile(iFile)) {
     /* Output a wide character to guaranty every Unicode character is displayed */
     n = MultiByteToWideChar(cp, 0, buf, (int)nInBuf, wBuf, sizeof(wBuf)/sizeof(WCHAR));
@@ -766,14 +768,17 @@ int fputsM(const char *buf, FILE *f, UINT cp) {
   char *pBuf = NULL;
   UINT cpOut;
   int iFile = fileno(f);
+  size_t l = lstrlen(buf);
 
   if (iFile >= FOPEN_MAX) {
     DEBUG_PRINTF(("ERROR: File index too high: fputs(..., %d)\n", iFile));
   }
 
-  if (isWideFile(iFile)) {
+  if (!l) {
+    /* Nothing to do. Also prevents random output when MultiByteToWideChar() has 0-length input */
+    iRet = 0;
+  } else if (isWideFile(iFile)) {
     /* Output a wide string to guaranty every Unicode character is displayed */
-    size_t l = strlen(buf);
     int n;
     WCHAR *pwBuf = (WCHAR *)malloc(l * 4);
     if (!pwBuf) return -1;
