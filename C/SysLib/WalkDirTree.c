@@ -25,6 +25,7 @@
 *    2025-12-07 JFL Only change the dir back if the dir entry change worked.  *
 *		    Moved the OS_HAS_LINKS constant definition to pathnames.h.*
 *    2025-12-17 JFL Added support for WDT_INONLY.                             *
+*    2025-12-20 JFL Use the new error message routines.                       *
 *                                                                             *
 \*****************************************************************************/
 
@@ -291,13 +292,13 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	iDrive0 = _getdrive();
 	iErr = _chdrive(iDrive);
 	if (iErr) {
-	  if (iPrintErrors) pferror("Can't change to drive %c: %s", iDrive + '@', strerror(errno));
+	  if (iPrintErrors) pfcerror("Can't change to drive %c", iDrive + '@');
 	  goto unrecoverable_error; /* Unrecoverable because other branches of the same tree will be on the same inaccessible drive */
 	}
       }
 #endif
       if (!getcwd(pPath0, PATHNAME_BUF_SIZE)) {
-	if (iPrintErrors) pferror("Can't get the current directory: %s", strerror(errno));
+	if (iPrintErrors) pfcerror("Can't get the current directory");
 	goto unrecoverable_error;
       }
       TRIM_PATHNAME_BUF(pPath0);
@@ -420,7 +421,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	    pszBadLinkMsg = "Unsupported link type"; break;
 	  default: { /* There's a real error we don't know how to handle */
 	    char *pszVerb = (pDE->d_type == DT_LNK) ? "resolve" : "access";
-	    if (iPrintErrors) pferror("Can't %s \"%s\": %s", pszVerb, pPathname, strerror(errno));
+	    if (iPrintErrors) pfcerror("Can't %s \"%s\"", pszVerb, pPathname);
 	    goto check_whether_to_continue; /* Don't report this link to the callback */
 	  }
 	}
@@ -443,7 +444,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	    goto check_whether_to_continue;
 	  } else { /* When not following links, it's just a warning */
 	    if (!(pOpts->iFlags & WDT_QUIET)) {
-	      fprintf(stderr, "Warning: %s: \"%s\"\n", pszBadLinkMsg, pPathname);
+	      pfwarning("%s: \"%s\"", pszBadLinkMsg, pPathname);
 	    }
 	  }
 	  break; /* Don't follow the bad or looping link, and keep searching */
@@ -461,7 +462,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	  pszPrevious = DictValue(dict, pUniqueID);
 	  if (pszPrevious) { /* The same directory has been visited before under another alias name */
 	    if (!(pOpts->iFlags & WDT_QUIET)) {
-	      fprintf(stderr, "Notice: Already visited \"%s\" as \"%s\"\n", pPathname, pszPrevious);
+	      pfnotice("Notice", "Already visited \"%s\" as \"%s\"", pPathname, pszPrevious);
 	    }
 	    break;
 	  } else { /* OK, we've not visited this directory before. Record its name in the dictionary */
@@ -510,7 +511,7 @@ check_whether_to_continue:
   if (errno == ENOENT) goto cleanup_and_return;	/* There are no more files (MsvcLibX) */
   pszFailingOpVerb = "read"; /* Anything else is an unexpected error we can't handle */
 print_dir_op_error:
-  if (iPrintErrors) pferror("Can't %s dir \"%s\": %s", pszFailingOpVerb, path, strerror(errno));
+  if (iPrintErrors) pfcerror("Can't %s dir \"%s\"", pszFailingOpVerb, path);
   if (iDepth > 0) goto recoverable_error; /* Maybe walking in a parallel branch will be possible */
   goto unrecoverable_error; /* The failure is at the base of the tree */
 
@@ -551,7 +552,7 @@ cleanup_and_return:
       char *pPath1 = pPath0 ? pPath0 : "..";
       iErr = chdir(pPath1);
       if (iErr) {
-	if (iPrintErrors) pferror("Can't return to \"%s\": %s", pPath1, strerror(errno));
+	if (iPrintErrors) pfcerror("Can't return to \"%s\"", pPath1);
 	iRet = -1;
       }
     }
@@ -560,7 +561,7 @@ cleanup_and_return:
     if (iDrive0) {
       iErr = _chdrive(iDrive0);
       if (iErr) {
-      	if (iPrintErrors) pferror("Can't return to drive %c: %s", iDrive0 + '@', strerror(errno));
+      	if (iPrintErrors) pfcerror("Can't return to drive %c", iDrive0 + '@');
       	iRet = -1;
       }
     }
