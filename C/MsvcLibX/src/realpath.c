@@ -28,6 +28,7 @@
 *    2018-04-24 JFL Use less memory in ResolveLinksU().			      *
 *    2018-04-26 JFL Added routine ConcatPathW().       			      *
 *    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
+*    2025-12-22 JFL Tiny simplification in MlxResolveLinksA().                *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -837,7 +838,7 @@ int MlxResolveLinksA(const char *path, char *buf, size_t bufsize) {
   int iErr;
 
   /* Convert the pathname to a unicode string */
-  n = MultiByteToWideChar(CP_ACP, 0, path, (int)strlen(path) + 1, wszPath, PATH_MAX);
+  n = MultiByteToWideChar(CP_ACP, 0, path, -1, wszPath, PATH_MAX);
   /* Convert it back to UTF-8 characters */
   if (n) n = WideCharToMultiByte(CP_UTF8, 0, wszPath, n, pathU, UTF8_PATH_MAX, NULL, NULL);
   /* Check (unlikely) conversion errors */
@@ -851,7 +852,7 @@ int MlxResolveLinksA(const char *path, char *buf, size_t bufsize) {
 
   /* Convert the result back to ANSI */
   if (!iErr) {
-    n = MultiByteToWideChar(CP_UTF8, 0, pathU2, (int)strlen(pathU2) + 1, wszPath, PATH_MAX);
+    n = MultiByteToWideChar(CP_UTF8, 0, pathU2, -1, wszPath, PATH_MAX);
     if (n) n = WideCharToMultiByte(CP_ACP, 0, wszPath, n, buf, (int)bufsize, NULL, NULL);
     if (!n) {
       errno = Win32ErrorToErrno();
