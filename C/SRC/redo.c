@@ -1,14 +1,21 @@
 ﻿/*****************************************************************************\
 *                                                                             *
-*   Filename:	    redo.c						      *
+*   Filename	    redo.c						      *
 *									      *
-*   Description:    Run a command recursively in the current directory	      *
+*   Description	    Run a command recursively in the current directory	      *
 *		     and all subdirectories				      *
 *									      *
-*   Notes:	    The DOS version must be compiled using the large memory   *
-*		    model, and linked with at least a 16 KB stack.            *
-*									      *
-*   History:								      *
+*   Notes	    The DOS version had to be compiled using the large memory *
+*		    model, and linked with at least a 16 KB stack. This was   *
+*		    due to the sorting of the directory names, which required *
+*		    building (possibly) large tables of names.		      *
+*		    As of 2025-12, the new version based on SysLib's	      *
+*		    WalkDirTree() does not need as much	memory anymore, and   *
+*		    can be built using the small memory model. But if a	      *
+*		    sorting option is added to WalkDirTree(), it'll be	      *
+*		    necessary to use the large memory model again.	      *
+*		    							      *
+*   History								      *
 *    1986-09-03 JFL jf.larvoire@hp.com created this program.		      *
 *    1987-05-12 JFL Corrected bug with directories which have a name with     *
 *		     have a name with an extension.			      *
@@ -67,6 +74,7 @@
 *    2025-12-18 JFL Minor fixes to the above changes.			      *
 *    2025-12-20 JFL Use the new error message routines.                       *
 *    2025-12-21 JFL Added options -o & -O, and default to mode Once.          *
+*    2025-12-23 JFL Do not compile options -o & -O in the DOS version.	      *
 *		    Version 4.0.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -76,7 +84,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2025-12-21"
+#define PROGRAM_DATE    "2025-12-23"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -447,6 +455,7 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
+#if OS_HAS_LINKS
       if (streq(option, "o")) {
 	wdtOpts.iFlags |= WDT_ONCE;
 	continue;
@@ -455,6 +464,7 @@ int main(int argc, char *argv[]) {
 	wdtOpts.iFlags &= ~WDT_ONCE;
 	continue;
       }
+#endif
       if (streq(option, "q")) {
 	iVerbose = FALSE;
 	wdtOpts.iFlags |= WDT_QUIET;
