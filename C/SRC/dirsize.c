@@ -95,6 +95,10 @@
 *    2025-11-25 JFL All output pathnames now begin with the requested path.   *
 *    2025-11-28 JFL No need for fixing the output paths in Unix anymore.      *
 *    2025-11-30 JFL Restructured the error management.			      *
+*    2025-12-23 JFL Updated the Ctrl-C detection.			      *
+*		    Use the new error message routines.			      *
+*		    Removed global variables that had equivalent WDT_* flags. *
+*		    Changed options -k, -m, -g to -K, -M, -G, and -md -to -m. *
 *                   Version 4.0.					      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -104,7 +108,7 @@
 #define PROGRAM_DESCRIPTION "Display the total size used by a directory"
 #define PROGRAM_NAME    "dirsize"
 #define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2025-11-30"
+#define PROGRAM_DATE    "2025-12-23"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -185,7 +189,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 #define RETCODE_SUCCESS 0               /* Return codes processed by finis() */
 #define RETCODE_NO_MEMORY 1
 #define RETCODE_INACCESSIBLE 2
-#define RETCODE_CTRL_C 3
+#define RETCODE_CTRL_C 3	    	/* MSVC default when raising any signal */
 
 #define strncpyz(to, from, l) {strncpy(to, from, l); (to)[(l)-1] = '\0';}
 
@@ -203,15 +207,12 @@ typedef struct _scanVars {	/* Scan options, variables, and results */
   char *pattern;		    /* Wildcards pattern. NULL = select all */
   time_t datemin;		    /* Minimum timestamp. 0 = no minimum */
   time_t datemax;		    /* Maximum timestamp. 0 = no maximum */
-  /* Options for scanning the directory tree (RO) */
+  /* Options defining what totals to compute and display (RO) */
   int recur;			    /* If TRUE, list subdirectories recursively */
   int total;			    /* If TRUE, totalize size of all subdirs */
   int subdirs;			    /* If TRUE, start scanning in each subdirectory */
-  int cd;			    /* If TRUE, force changing directories along the tree */
-#if OS_HAS_LINKS
-  int follow;			    /* If TRUE, follow links to subdirectories */
-#endif /* OS_HAS_LINKS */
-  int maxDepth;			    /* Maximum depth to search in the scan tree */
+  /* Options defining how to walk through the directory tree (RO) */
+  wdt_opts wdtOpts;		    /* WalkDirTree() options */
   /* Results (RW) */
   struct _scanResults *psr;
 } scanVars;
@@ -222,8 +223,6 @@ char init_dir[PATHNAME_BUF_SIZE];   /* Initial directory */
 char init_drive;                    /* Initial drive */
 long csz=0;			    /* Cluster size. 0=Unknown. */
 int band = FALSE;		    /* If TRUE, skip a line every 5 lines */
-int iContinue = TRUE;               /* If TRUE, continue after directory access errors */
-int iQuiet = FALSE;		    /* If TRUE, only display major errors */
 int iVerbose = FALSE;		    /* If TRUE, display additional information */
 int iHuman = TRUE;		    /* If TRUE, display human-friendly values with a comma every 3 digits */
 char *pszUnit = "B";		    /* "B"=bytes; "KB"=Kilo-Bytes; "MB"; GB" */
@@ -254,6 +253,7 @@ int main(int argc, char *argv[]) {
   char *from = NULL;		/* What directory to list */
   int i;
   scanVars sScanVars = {0};	/* Directory tree scan options */
+  wdt_opts *pwt = &sScanVars.wdtOpts;
   scanResults sr = {0};		/* Directory tree scan results */
   char *dateminarg = NULL;	/* Minimum date argument */
   char *datemaxarg = NULL;	/* Maximum date argument */
@@ -265,11 +265,12 @@ int main(int argc, char *argv[]) {
   sScanVars.psr = &sr;
 
   /* Set OS-dependent defaults */
+  pwt->iFlags |= WDT_CONTINUE | WDT_NORECURSE;
 #if OS_HAS_LINKS
-  sScanVars.follow = TRUE;
+  pwt->iFlags |= WDT_ONCE | WDT_FOLLOW;
 #endif
 #ifdef _MSDOS
-  sScanVars.cd = TRUE;		/* This is more efficient this way in DOS */
+  pwt->iFlags |= WDT_CD;		/* This is more efficient this way in DOS */
   /* In Windows, it's better not to change dirs, to avoid using complex code dealing with paths possibly > 260 bytes */
   /* In Unix, it's better not to change dirs, to avoid having to synchronize the logical & physical dirs */
 #endif
@@ -294,11 +295,11 @@ int main(int argc, char *argv[]) {
       }
 #ifdef _DEBUG
       if (streq(opt, "cd")) {
-	sScanVars.cd = TRUE;
+	pwt->iFlags |= WDT_CD;
 	continue;
       }
       if (streq(opt, "CD")) {
-	sScanVars.cd = FALSE;
+	pwt->iFlags &= ~WDT_CD;
 	continue;
       }
 #endif
@@ -314,18 +315,18 @@ int main(int argc, char *argv[]) {
 #endif
 #if OS_HAS_LINKS
       if (streq(opt, "f")) {
-	sScanVars.follow = TRUE;
+	pwt->iFlags |= WDT_FOLLOW;
 	continue;
       }
       if (streq(opt, "F")) {
-	sScanVars.follow = FALSE;
+	pwt->iFlags &= ~WDT_FOLLOW;
 	continue;
       }
 #endif
       if (streq(opt, "from")) {
 	dateminarg = argv[++i];
 	if (!parse_date(dateminarg, &sScanVars.datemin)) {
-	  fprintf(stderr, "Error: Invalid date format: -from %s\n", dateminarg);
+	  pferror("Invalid date format: -from %s", dateminarg);
 	  dateminarg = NULL;
 	}
 	continue;
@@ -335,7 +336,7 @@ int main(int argc, char *argv[]) {
 	  || streq(opt, "?")) {
 	usage();
       }
-      if (streq(opt, "g")) {
+      if (streq(opt, "G")) {
 	pszUnit = "GB";
 	continue;
       }
@@ -344,47 +345,60 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "i")) {
-	iContinue = TRUE;
+      	pwt->iFlags |= WDT_CONTINUE;
 	continue;
       }
       if (streq(opt, "I")) {
-	iContinue = FALSE;
+      	pwt->iFlags &= ~WDT_CONTINUE;
 	continue;
       }
-      if (streq(opt, "k")) {
+      if (streq(opt, "K")) {
 	pszUnit = "KB";
 	continue;
       }
       if (streq(opt, "m")) {
-	pszUnit = "MB";
+      	pwt->iMaxDepth = atoi(argv[++i]);
 	continue;
       }
-      if (streq(opt, "md")) {
-	sScanVars.maxDepth = atoi(argv[++i]);
+      if (streq(opt, "M")) {
+	pszUnit = "MB";
 	continue;
       }
       if (streq(opt, "nologo")) continue; /* Old option retired */
       if (streq(opt, "q")) {
-	iQuiet = TRUE;
+        pwt->iFlags |= WDT_QUIET;
 	continue;
       }
+#if OS_HAS_LINKS
+      if (streq(opt, "o")) {
+	pwt->iFlags |= WDT_ONCE;
+	continue;
+      }
+      if (streq(opt, "O")) {
+	pwt->iFlags &= ~WDT_ONCE;
+	continue;
+      }
+#endif
       if (   streq(opt, "r")
       	  || streq(opt, "s")) {
 	sScanVars.recur = TRUE;
+      	pwt->iFlags &= ~WDT_NORECURSE;
 	continue;
       }
       if (streq(opt, "t")) {
 	sScanVars.total = TRUE;
+      	pwt->iFlags &= ~WDT_NORECURSE;
 	continue;
       }
       if (streq(opt, "T")) {
 	sScanVars.total = FALSE;
+      	if (!sScanVars.total) pwt->iFlags |= WDT_NORECURSE;
 	continue;
       }
       if (streq(opt, "to")) {
 	datemaxarg = argv[++i];
 	if (!parse_date(datemaxarg, &sScanVars.datemax)) {
-	  fprintf(stderr, "Error: Invalid date format: -to %s\n", datemaxarg);
+	  pferror("Invalid date format: -to %s", datemaxarg);
 	  datemaxarg = NULL;
 	}
 	continue;
@@ -397,7 +411,7 @@ int main(int argc, char *argv[]) {
 	puts(DETAILED_VERSION);
 	exit (0);
       }
-      fprintf(stderr, "Warning: Unrecognized switch %s. Ignored.\n", arg);
+      pfwarning("Unrecognized switch %s. Ignored.", arg);
       continue;
     } /* End if it's a switch */
 
@@ -406,7 +420,7 @@ int main(int argc, char *argv[]) {
       from = arg;
       continue;
     }
-    fprintf(stderr, "Warning: Unexpected argument \"%s\" ignored.", arg);
+    pfwarning("Unexpected argument \"%s\" ignored.", arg);
   }
 
   /* Extract the search pattern if provided as part of the target pathname */
@@ -514,6 +528,8 @@ int main(int argc, char *argv[]) {
   }
   if (iVerbose) printf("# Scanned %ld dirs and %" TOTAL_FMT " files\n", sr.nDirs, sr.nFiles);
 
+  if (iCtrlC) finis(RETCODE_CTRL_C, "Ctrl-C detected");
+
   /* Report if some errors were ignored */
   if (sr.nErrors && (size != SIZE_ERROR)) {
     finis(RETCODE_INACCESSIBLE, "Incomplete results: Missing data for %d files or directories", sr.nErrors);
@@ -542,21 +558,30 @@ Switches:\n\
   -d          Output debug information.\n"
 #endif
 "\
-  -D          Measure every subdirectory of the target directory.\n"
+  -D          Measure every subdirectory of the target directory.\n\
+"
 #if OS_HAS_LINKS
 "\
-  -f          Follow links to directories while recursing. (Dflt)\n\
+  -f          Follow links to directories while recursing. (Default)\n\
   -F          Do not follow links to directories while recursing.\n"
 #endif
 "\
   -from Y-M-D List only files starting from that date.\n\
-  -g          Display sizes in Giga bytes.\n\
+  -G          Display sizes in Giga bytes.\n\
   -H          Display sizes without the human-friendly commas.\n\
   -i          Ignore errors and continue scanning files. (Default)\n\
   -I          Stop scanning files in case of error.\n\
-  -k          Display sizes in Kilo bytes.\n\
-  -m          Display sizes in Mega bytes.\n\
-  -md N       Maximum Depth of recursion: N levels. Default: 0 = no limit\n\
+  -K          Display sizes in Kilo bytes.\n\
+  -m          Maximum Depth of recursion: N levels. Default: 0 = no limit\n\
+  -M          Display sizes in Mega bytes.\n\
+"
+#if OS_HAS_LINKS
+"\
+  -o          Count sizes only once in dirs linked multiple times. (Default)\n\
+  -O          Count again even it's been in the same directory before.\n\
+"
+#endif
+"\
   -q          Quiet mode: Do not display minor errors.\n\
   -r|-s       Recursively display the size of every subdirectory.\n\
   -t          Recursively compute the total subdirectory tree size.\n\
@@ -598,8 +623,6 @@ Pattern:      Wildcards pattern. Default: " PATTERN_ALL "\n\
 void finis(int retcode, ...) {
   DEBUG_ENTER(("finis(%d)\n", retcode));
 
-  if (iCtrlC && (retcode != RETCODE_CTRL_C)) OnControlC(0); /* Report a soft Ctrl-C stop */
-
   if (retcode) { /* There might be an error message to report */
     va_list vl;
     char *pszFormat;
@@ -607,10 +630,7 @@ void finis(int retcode, ...) {
     va_start(vl, retcode);
     pszFormat = va_arg(vl, char *);
     if (pszFormat) { /* There is an error message to report */
-      fputs(PROGRAM_NAME ": ", stderr);
-      if (retcode != RETCODE_CTRL_C) fputs("Error: ", stderr);
-      vfprintf(stderr, pszFormat, vl);
-      fputs("\n", stderr);
+      pGenError(((retcode == RETCODE_CTRL_C) ? "Abort" : "Error"), pszFormat, vl, NULL);
     }
     va_end(vl);
   }
@@ -645,12 +665,8 @@ void finis(int retcode, ...) {
 
 void OnControlC(int iSignal) {
   UNUSED_ARG(iSignal);
-  if (!iCtrlC) {	/* The first time, try aborting the walk softly */
-    iCtrlC = TRUE;
-  } else {		/* The following times, do a hard stop now */
-    fflush(stdout); /* Unsuccessful attempt at preventing the mixing of the foreground output */
-    finis(RETCODE_CTRL_C, "Ctrl-C detected, aborting");
-  }
+  signal(SIGINT, SIG_DFL); /* Terminate the program with a 2nd Ctrl+C in case proper cleanup hangs */
+  iCtrlC = TRUE;
 }
 
 /*****************************************************************************\
@@ -673,6 +689,7 @@ void OnControlC(int iSignal) {
 
 int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
   scanVars *pScanVars = p;
+  wdt_opts *pwt = &pScanVars->wdtOpts;
   scanResults *psr = pScanVars->psr;
   scanResults *psr2;
   struct stat sStat;
@@ -699,10 +716,10 @@ int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 #if _DIRENT2STAT_DEFINED /* DOS/Windows return stat info in the dirent structure */
       iErr = dirent2stat(pDE, &sStat);
 #else /* Unix has to query it separately */
-      iErr = lstat(pScanVars->cd ? pDE->d_name : pszPathname, &sStat);
+      iErr = lstat((pwt->iFlags & WDT_CD) ? pDE->d_name : pszPathname, &sStat);
 #endif
       if (iErr) { /* Ex: This happens in WSL (Windows Subsystem for Linux) for reserved system files */
-      	if (!iQuiet) pferror("Can't get file \"%s\" stats: %s", pszPathname, strerror(errno));
+      	if (!(pwt->iFlags & WDT_QUIET)) pferror("Can't get file \"%s\" stats: %s", pszPathname, strerror(errno));
       	psr->nErrors += 1;
       	return FALSE;	/* Ignore suspect entries */
       }
@@ -757,14 +774,16 @@ int SelectFilesCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 #if _DEBUG
 char *DumpScanVars(scanVars *psv) {
   static char szBuf[16];
+  wdt_opts *pwt = &psv->wdtOpts;
   int i = 0;
+  szBuf[i++] = (char)((pwt->iFlags & WDT_CONTINUE) ? 'C' : 'c'); /* Continue after minor errors */
   szBuf[i++] = (char)(psv->recur ? 'R' : 'r');	/* List subdirectories recursively */
   szBuf[i++] = (char)(psv->total ? 'T' : 't');	/* Totalize size of all subdirs */
   szBuf[i++] = (char)(psv->subdirs ? 'D' : 'd');/* Start scanning in each subdirectory */
 #if OS_HAS_LINKS
-  szBuf[i++] = (char)(psv->follow ? 'F' : 'f');	/* Follow links to subdirectories */
+  szBuf[i++] = (char)((pwt->iFlags & WDT_FOLLOW) ? 'F' : 'f');	/* Follow links to subdirectories */
 #endif /* OS_HAS_LINKS */
-  i += sprintf(szBuf+i, "%d", psv->maxDepth);	/* Maximum depth to search in the scan tree */
+  i += sprintf(szBuf+i, "%d", pwt->iMaxDepth);	/* Maximum depth to search in the scan tree */
   szBuf[i++] = '\0';
   return szBuf;
 }
@@ -773,23 +792,14 @@ char *DumpScanVars(scanVars *psv) {
 total_t DirSize(const char *pszDir, scanVars *pScanVars) {
   scanResults *psr = pScanVars->psr;
   total_t size = 0;
-  wdt_opts wdtOpts = {0};
+  wdt_opts wdtOpts = pScanVars->wdtOpts;
   total_t initialSize = psr->size;
   int iResult;
 
   DEBUG_ENTER(("DirSize(\"%s\", {%s});\n", pszDir, DumpScanVars(pScanVars)));
 
   /* Scan all files */
-  wdtOpts.iFlags = 0;
-  if (iContinue) wdtOpts.iFlags |= WDT_CONTINUE;
-  if (iQuiet) wdtOpts.iFlags |= WDT_QUIET;
-  if (!(pScanVars->recur || pScanVars->total)) wdtOpts.iFlags |= WDT_NORECURSE;
   if (pScanVars->recur) wdtOpts.iFlags |= WDT_CBINOUT;
-#if OS_HAS_LINKS
-  if (pScanVars->follow) wdtOpts.iFlags |= WDT_FOLLOW;
-#endif /* OS_HAS_LINKS */
-  if (pScanVars->cd) wdtOpts.iFlags |= WDT_CD;
-  wdtOpts.iMaxDepth = pScanVars->maxDepth;
   iResult = WalkDirTree(pszDir, &wdtOpts, SelectFilesCB, pScanVars);
   psr->nDirs += (long)wdtOpts.nDir;
   psr->nErrors += wdtOpts.nErr;
@@ -841,6 +851,7 @@ int SelectDirsCB(const char *pszPathname, const struct dirent *pDE, void *p) {
 /* Scan all subdirectories */
 total_t SubDirsSizes(const char *pszDir, scanVars *pScanVars) {
   scanResults *psr = pScanVars->psr;
+  wdt_opts *pwt = &pScanVars->wdtOpts;
   total_t size = 0;
   wdt_opts wdtOpts = {0};
   int iResult;
@@ -855,8 +866,7 @@ total_t SubDirsSizes(const char *pszDir, scanVars *pScanVars) {
 		 | WDT_FOLLOW /* Always follow links when listing first level dirs here */
 #endif /* OS_HAS_LINKS */
   ;
-  if (iContinue) wdtOpts.iFlags |= WDT_CONTINUE;
-  if (iQuiet) wdtOpts.iFlags |= WDT_QUIET;
+  wdtOpts.iFlags |= (pwt->iFlags & (WDT_CONTINUE | WDT_QUIET));
   iResult = WalkDirTree(pszDir, &wdtOpts, SelectDirsCB, pScanVars);
   psr->nDirs += (long)wdtOpts.nDir;
   psr->nErrors += wdtOpts.nErr;
