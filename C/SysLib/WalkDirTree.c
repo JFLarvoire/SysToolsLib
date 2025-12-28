@@ -26,6 +26,7 @@
 *		    Moved the OS_HAS_LINKS constant definition to pathnames.h.*
 *    2025-12-17 JFL Added support for WDT_INONLY.                             *
 *    2025-12-20 JFL Use the new error message routines.                       *
+*    2025-12-28 JFL Avoid calling stat() multiple times for links and dirs.   *
 *                                                                             *
 \*****************************************************************************/
 
@@ -55,31 +56,6 @@
 #include "dirx.h"		/* Directory access functions eXtensions */
 #include "pathnames.h"		/* Pathname management definitions and functions */
 #include "mainutil.h"		/* Print errors, streq, etc */
-
-/*---------------------------------------------------------------------------*\
-*                                                                             *
-|   Function	    isEffectiveDir					      |
-|									      |
-|   Description     Check if pathname refers to an existing directory	      |
-|									      |
-|   Parameters      const char *path		The directory name	      |
-|		    							      |
-|   Returns	    TRUE or FALSE					      |
-|		    							      |
-|   Notes	    Resolves links to see what they point to		      |
-|		    							      |
-|   History								      |
-|    2017-10-05 JFL Created this routine				      |
-|    2020-03-16 JFL Use stat instead of lstat, it's faster and simpler!       |
-*									      *
-\*---------------------------------------------------------------------------*/
-
-int isEffectiveDir(const char *pszPath) {
-  struct stat sStat;
-  int iErr = stat(pszPath, &sStat);
-  if (iErr) return 0;
-  return S_ISDIR(sStat.st_mode);
-}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -134,6 +110,7 @@ int isEffectiveDir(const char *pszPath) {
 #if OS_HAS_LINKS
 
 #if HAS_MSVCLIBX && !HAS_DEV_AND_FILE_ID
+/* Initial implementation for Windows, now obsolete since MsvcLibX implements device & file IDs for Windows */
 char *GetUniqueIdString(const char *pathname) {
   int iRet;
   char *pTrueName = malloc(PATH_MAX);
@@ -167,17 +144,13 @@ char *MakeDevIdKey(char *pszKey, dev_t devID, ino_t fileID) {
   pszKey[o] = '\0';
   return pszKey;
 }
-char *GetUniqueIdString(const char *pathname) {
-  struct stat st;
-  int iErr;
-  char *pszKey = malloc(KEY_SIZE + 1);
-  if (!pszKey) return NULL;
-  pszKey[0] = '\0';
-  iErr = stat(pathname, &st); /* Let the OS resolve all links */
-  if (iErr) return pszKey; /* if GetUniqueIdString()=="", check errno */
-  MakeDevIdKey(pszKey, st.st_dev, st.st_ino);
+char *GetUniqueIdString(struct stat *pst) {
+  char *pszKey = NULL;
+  pszKey = MakeDevIdKey(pszKey, pst->st_dev, pst->st_ino);
   return pszKey;
 }
+#else
+#error "No supported method for setting a unique ID string */
 #endif /* HAS_DEV_AND_FILE_ID */
 
 #endif /* OS_HAS_LINKS */
@@ -267,6 +240,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
   char *pUniqueID = NULL;
   dict_t *dict = NULL;
   int bCreatedDict = FALSE;
+  struct stat sStat;
 #endif /* OS_HAS_LINKS */
   NAMELIST root = {0};
   NAMELIST list = {0};
@@ -328,9 +302,8 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 
   if (!prev) { /* Record the true name of the directory tree root to search from */
 #if OS_HAS_LINKS
-    pRootBuf = GetUniqueIdString(path_to_read);
-    if (!pRootBuf) goto out_of_memory;
-    if (!pRootBuf[0]) {
+    iErr = stat(path_to_read, &sStat);
+    if (iErr) {
       pszFailingOpVerb = "identify";
 #if HAS_MSVCLIBX
       if ((errno == EBADF) || (errno == EINVAL)) { /* Unsupported link type, ex: Windows Container Isolation filter */
@@ -345,6 +318,8 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
       goto print_dir_op_error; /* Unlikely to happen, since opendir() did work */
 #endif
     }
+    pRootBuf = GetUniqueIdString(&sStat);
+    if (!pRootBuf) goto out_of_memory;
     root.path = pRootBuf;
 
     if (pOpts->iFlags & WDT_ONCE) { /* Check if an alias has been visited before */
@@ -396,8 +371,9 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     if (   ((pDE->d_type == DT_DIR) || (pDE->d_type == DT_LNK))
         && ((pOpts->iFlags & WDT_FOLLOW) || (pOpts->iFlags & WDT_ONCE))) {
       errno = 0;
-      bIsDir = (pDE->d_type == DT_DIR) || isEffectiveDir(pRelatName); /* In Windows+MsvcLibX, this may fail, despite d_type == DT_DIR above */
-      if (bIsDir && ((pUniqueID = GetUniqueIdString(pRelatName)) != NULL) && pUniqueID[0]) {
+      iErr = stat(pRelatName, &sStat); /* This may fail, even if d_type == DT_DIR */
+      if (!iErr) bIsDir = S_ISDIR(sStat.st_mode);
+      if (bIsDir && ((pUniqueID = GetUniqueIdString(&sStat)) != NULL)) {
 	if (pOpts->iFlags & WDT_FOLLOW) {
 	  NAMELIST *pList;
 	  list.path = pUniqueID; /* Record this path for next time */
