@@ -87,7 +87,7 @@ size_t fwriteM(const void *buf, size_t itemSize, size_t nItems, FILE *f, UINT cp
   if (!nToWrite) {
     /* Nothing to do. Also prevents random output when MultiByteToWideChar() has 0-length input */
     nWritten = 0;
-  } elseif (isWideFile(iFile)) {
+  } else if (isWideFile(iFile)) {
     /* Output a wide string to guaranty every Unicode character is displayed correctly */
     wchar_t *pwBuf = (wchar_t *)malloc(nToWrite * 4);
     int iRet;
