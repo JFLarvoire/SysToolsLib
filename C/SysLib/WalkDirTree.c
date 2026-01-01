@@ -27,6 +27,7 @@
 *    2025-12-17 JFL Added support for WDT_INONLY.                             *
 *    2025-12-20 JFL Use the new error message routines.                       *
 *    2025-12-28 JFL Avoid calling stat() multiple times for links and dirs.   *
+*    2026-01-01 JFL Added the ability to optionally sort directories.	      *
 *                                                                             *
 \*****************************************************************************/
 
@@ -44,6 +45,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <limits.h>
+#include <strings.h>
 
 #ifdef _MSC_VER			/* DOS and Windows */
 #include <direct.h>		/* For _getdrive() */
@@ -150,7 +152,7 @@ char *GetUniqueIdString(struct stat *pst) {
   return pszKey;
 }
 #else
-#error "No supported method for setting a unique ID string */
+#error "No supported method for setting a unique ID string"
 #endif /* HAS_DEV_AND_FILE_ID */
 
 #endif /* OS_HAS_LINKS */
@@ -204,6 +206,39 @@ typedef struct _NAMELIST {
   const char *path;
 } NAMELIST;
 
+/* For the sorting list, we allocate an extra int flags behind the dirent copy */
+int *DirentExtraFlags(struct dirent *pDE) {
+  return AfterDirent(pDE);
+}
+
+struct dirent *DupDirent(struct dirent *pDE, int iExtra) {
+  int lDE = DirentRecLen(pDE);
+  char *pDE2 = malloc(lDE + iExtra);
+  if (pDE2) {
+    memcpy(pDE2, pDE, lDE);
+    memset(pDE2+lDE, 0, iExtra); /* Clear the extra bytes */
+  }
+  return (struct dirent *)pDE2;
+}
+
+struct dirent **AppendDirentList(struct dirent **pDEList, struct dirent *pDE, int *pnDEListSize, int *pnDE) {
+  int nDE = *pnDE;
+  int nDEListSize = *pnDEListSize;
+  struct dirent *pDE2 = DupDirent(pDE, sizeof(int)); /* Allocate an extended structure with an extra tail int */
+  if (!pDE2) return NULL;
+  if (nDE >= nDEListSize) { /* Overcautious, as == should be sufficient */
+    pDEList = (struct dirent **)realloc(pDEList, (nDEListSize += 16) * sizeof(struct dirent *));
+    if (!pDEList) {
+      free(pDE2);
+      return NULL;
+    }
+    *pnDEListSize = nDEListSize;
+  }
+  pDEList[nDE] = pDE2;
+  *pnDE += 1;
+  return pDEList;
+}
+
 #if _DEBUG
 char *DumpOpts(wdt_opts *po) {
   static char szBuf[16];
@@ -249,6 +284,10 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
   struct dirent *pFakeInOutDE = NULL;
   char *pszFailingOpVerb;
   int iChdirDone = FALSE;
+  struct dirent **pDEList = NULL;
+  int nDEListSize = 0;
+  int nDE = 0;
+  int i;
 
   DEBUG_ENTER(("WalkDirTree(\"%s\", {%s}, ..., %d);\n", path, DumpOpts(pOpts), iDepth));
 
@@ -351,6 +390,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     int bIsDir;		 /* TRUE if this is a link pointing to a directory */
     char *pszBadLinkMsg; /* Flag bad links, pointing at a description of the problem */
 #endif /* OS_HAS_LINKS */
+    int *piFlags = NULL;
 
     DEBUG_PRINTF(("// Dir Entry \"%s\" d_type=%d\n", pDE->d_name, (int)(pDE->d_type)));
 
@@ -407,8 +447,13 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 
     /* Report the valid directory entry to the callback */
     if (!(pOpts->iFlags & WDT_DIRONLY)) {
-      iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
-      if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+      if (!(pOpts->pSortProc)) {
+	iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
+	if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+      } else { /* Sorted list requested */
+      	pDEList = AppendDirentList(pDEList, pDE, &nDEListSize, &nDE);
+      	if (!pDEList) goto out_of_memory;
+      }
     }
 
     switch (pDE->d_type) {
@@ -448,15 +493,24 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	  }
 	}
 #endif /* OS_HAS_LINKS */
-	if (pOpts->iFlags & WDT_DIRONLY) {
+	if (!(pOpts->pSortProc)) {
 	  iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
 	  if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+	} else { /* Sorted list requested */
+	  pDEList = AppendDirentList(pDEList, pDE, &nDEListSize, &nDE);
+	  if (!pDEList) goto out_of_memory;
+	  piFlags = DirentExtraFlags(pDEList[nDE-1]);
+	  *piFlags = DEF_ISDIR;
 	}
 	if (!(pOpts->iFlags & WDT_NORECURSE)) {
 	  if ((!pOpts->iMaxDepth) || (iDepth < pOpts->iMaxDepth)) {
-	    if (!list.path) list.path = pPathname;
-	    iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
-	    DEBUG_PRINTF(("// Back walking in \"%s\"\n", path));
+	    if (!(pOpts->pSortProc)) {
+	      /* if (!list.path) list.path = pPathname; */
+	      iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
+	      DEBUG_PRINTF(("// Back walking in \"%s\"\n", path));
+	    } else { /* Sorted list requested */
+	      *piFlags |= DEF_RECURSE; /* Flag that a recursive call to WalkDirTree1() is to be done */
+	    }
 	  }
 	}
       	break;
@@ -481,15 +535,38 @@ check_whether_to_continue:
     pUniqueID = NULL;
 #endif /* OS_HAS_LINKS */
   }
-  if (iRet) goto cleanup_and_return;;	/* -1 = Error, abort; 1 = Success, stop */
+  if (iRet) goto cleanup_and_return;	/* -1 = Error, abort; 1 = Success, stop */
   /* Else it's readdir() that failed. Check errno to see the reason */
-  if (errno == 0) goto cleanup_and_return;	/* There are no more files (Unix) */
-  if (errno == ENOENT) goto cleanup_and_return;	/* There are no more files (MsvcLibX) */
-  pszFailingOpVerb = "read"; /* Anything else is an unexpected error we can't handle */
+  if (    errno			/* errno == 0 => There are no more files (Unix) */
+      && (errno != ENOENT)) {	/* errno == ENOENT => There are no more files (MsvcLibX) */
+    pszFailingOpVerb = "read"; /* Anything else is an unexpected error we can't handle */
 print_dir_op_error:
-  if (iPrintErrors) pfcerror("Can't %s dir \"%s\"", pszFailingOpVerb, path);
-  if (iDepth > 0) goto recoverable_error; /* Maybe walking in a parallel branch will be possible */
-  goto unrecoverable_error; /* The failure is at the base of the tree */
+    if (iPrintErrors) pfcerror("Can't %s dir \"%s\"", pszFailingOpVerb, path);
+    if (iDepth > 0) goto recoverable_error; /* Maybe walking in a parallel branch will be possible */
+    goto unrecoverable_error; /* The failure is at the base of the tree */
+  }
+  /* There are no more files */
+  if (pOpts->pSortProc) { /* Sorted list requested */
+    for (i=0; i<nDE; i++) DEBUG_PRINTF(("Before: %s\n", pDEList[i]->d_name));
+    pOpts->pSortProc(pDEList, nDE);
+    for (i=0; i<nDE; i++) DEBUG_PRINTF(("After: %s\n", pDEList[i]->d_name));
+    for (i=0; i<nDE; i++) {
+      pDE = pDEList[i];
+      pPathname = NewJoinedPath(path, pDE->d_name);
+      if (!pPathname) goto out_of_memory;
+      iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
+      if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+      if (*DirentExtraFlags(pDE) & DEF_RECURSE) { /* A recursive call to WalkDirTree1() is requested */
+	/* if (!list.path) list.path = pPathname; */
+	iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
+	DEBUG_PRINTF(("// Back walking in \"%s\"\n", path));
+      }
+      if (iRet) break;
+      free(pPathname);
+      pPathname = NULL;
+    }
+  }
+  goto cleanup_and_return;
 
 out_of_memory:
   if (iPrintErrors) pferror("Out of memory");
@@ -522,6 +599,7 @@ cleanup_and_return:
     pOpts->pOnce = NULL;
   }
 #endif /* OS_HAS_LINKS */
+  if (pDEList) for (i=0; i<nDE; i++) free(pDEList[i]);
   free(pFakeInOutDE);
   if (pOpts->iFlags & WDT_CD) {
     if (iChdirDone) {

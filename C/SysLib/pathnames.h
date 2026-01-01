@@ -19,6 +19,7 @@
 *    2025-12-02 JFL Added cwd-pwd.c definitions.			      *
 *    2025-12-17 JFL Added support for WDT_INONLY.                             *
 *    2025-12-21 JFL Fixed TRIM_PATHNAME_BUF() and TRIM_NODENAME_BUF().        *
+*    2025-12-30 JFL WalkDirTree() can now optionally sort directories.        *
 *		    							      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -164,16 +165,19 @@ char *NewCompactJoinedPath(const char *pszPart1, const char *pszPart2);	/* Idem,
 #define WDT_USER_FLAG   0x0200		/* Allow adding user-defined flags, for use in the callbacks */
 
 /* Dummy dirent dir types, giving special infos to the callback.
-   DT_XXX dir types defined in dirent.h typically are in the 0-14 range */
+   DT_XXX dir types defined in dirent.h typically are in the 0-15 range */
 /* Known risk: These two constants might collide with existing types in exotic OSs.
    TO DO, at the cost of compatibility with older SysToolsLib C/SRC code:
    Rewrite WalkDirTree() to pass an additional callback argument: CB_DIRENT | CB_ENTRY | CB_LEAVE */
 #define DT_ENTER	0xF0		/* Inform the callback that we're entering a directory */
 #define DT_LEAVE	0xF1		/* Inform the callback that we're leaving a directory */
 
+typedef void (*pSortDEListProc)(struct dirent **pDEList, int nDE);
+
 typedef struct {		/* WalkDirTree options. Must be cleared before use. */
   int iFlags;			/* [IN] Options */
   int iMaxDepth;		/* [IN] Maximum recursion depth. 0=No limit */
+  pSortDEListProc pSortProc;	/* [IN] Optional routine for sorting dir. entries (Most OSs return entries sorted already) */
   ino_t nDir;			/* [OUT] Number of directories scanned */
   ino_t nFile;			/* [OUT] Number of directory entries processed */
   int nErr;			/* [OUT] Number of errors */
@@ -183,6 +187,10 @@ typedef struct {		/* WalkDirTree options. Must be cleared before use. */
 typedef int (*pWalkDirTreeCB_t)(const char *pszRelPath, const struct dirent *pDE, void *pRef);
 
 extern int WalkDirTree(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWalkDirTreeCB, void *pRef);
+
+extern int *DirentExtraFlags(struct dirent *pDE); /* WalkDirTree() appends extra flags to the dirent structures to be sorted */
+#define DEF_ISDIR	0x0001	/* If set, the entry is a directory, or a link to a dir. */
+#define DEF_RECURSE	0x0002	/* If set, WalkDirTree() will recurse in this dir */
 
 /* ------------------------- cwd-pwd.c definitions ------------------------- */
 
