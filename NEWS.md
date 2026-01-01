@@ -4,6 +4,49 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2026-01-01
+### New
+- C/MsvcLibX/include/dos.h: New dos.h front end to MSVC's dos.h.
+- C/SysLib/dirx.h: Added macros for accessing non-standard parts of the dirent structure.
+- C/SysLib/WalkDirTree.c, pathnames.h: Added to WalkDirTree() the ability to optionally sort directories.
+
+### Changed
+- C/MsvcLibX/... include/dos.h, src/getcwd.c, src/Files.mak:
+  Moved DOS FS Info structures and definitions from getcwd.c to the new dos.h front end to MSVC's dos.h.
+- redo.exe: Version 4.0  
+  Added back the ability to sort directories, and options -s & -S to control that sorting.  
+  This brings the feature set on a par with version 3.3, plus all the safety and performance improvements that the
+  new implementation provides.
+
+## [Unreleased] 2025-12-28
+### Changed
+- C/SysLib/WalkDirTree.c: Avoid calling stat() multiple times for links and dirs.
+
+## [Unreleased] 2025-12-23
+### Changed
+- C/SRC/dirsize.exe: Version 4.0
+  - Updated the Ctrl-C detection.
+  - Use the new error message routines.
+  - Removed global variables that had equivalent WDT_* flags.
+  - Changed options -k, -m, -g to -K, -M, -G, and -md -to -m.
+- redo.exe:
+  - Do not compile options -o & -O in the DOS version.
+
+## [Unreleased] 2025-12-22
+### Fixed
+- C/SysLib/pathnames.h: Fixed TRIM_PATHNAME_BUF() and TRIM_NODENAME_BUF().
+- C/SysLib/cwd-pwd.c: Fixed ChDir() which may have failed without setting iErr.
+- C/MsvcLibX/src/iconv.c, fwrite.c: Fixed bugs which caused *puts* and fwrite* to write garbage for 0-size input.
+
+### New
+- C/SysLib/pferror.c, mainutil.h, progname.h: Added new error messages routines, all beginning with the actually used program name.
+
+### Changed
+- C/SysLib/WalkDirTree.c: Use the new error message routines.
+- redo.exe:
+  - Use the new error message routines.
+  - Added options -o & -O, and default to mode Once (ie. detect multiply linked directories, and if so, run only once there.)
+
 ## [Unreleased] 2025-12-18
 ### New
 - C/MsvcLibX/src/getcwd.c: Added routine getcwd0().
@@ -13,7 +56,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/MsvcLibX/include/sys/wait.h: DOS/WIN32 port of standard C library's sys/wait.h.
 
 ### Changed
-- redo.exe: Version 4.0
+- redo.exe:
   - Rewritten using SysLib's WalkDirTree().
   - Added options -c, -C, -f, -F, -X.		
   - In verbose mode, display statistics in the end.
@@ -56,7 +99,7 @@ For more details about changes in a particular area, see the README.txt and/or N
   - Added option -l for listing directory lengths.
   - Added option -m for setting a max recursion depth.
   - Improved two error messages.
-- C/SRC/dirsize.exe: Version 4.0
+- C/SRC/dirsize.exe:
   - Added a verbose message. Removed an unused function prototype.
   - Restructured to use SysToolsLib's WalkDirTree() recursive features, instead of duplicating them.
   - All recursive calls now output pathnames that consistently begin with the requested path.
