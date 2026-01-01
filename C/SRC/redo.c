@@ -9,11 +9,12 @@
 *		    model, and linked with at least a 16 KB stack. This was   *
 *		    due to the sorting of the directory names, which required *
 *		    building (possibly) large tables of names.		      *
-*		    As of 2025-12, the new version based on SysLib's	      *
-*		    WalkDirTree() does not need as much	memory anymore, and   *
-*		    can be built using the small memory model. But if a	      *
-*		    sorting option is added to WalkDirTree(), it'll be	      *
-*		    necessary to use the large memory model again.	      *
+*		    As of 2025-12, the new redo version based on SysLib's     *
+*		    WalkDirTree() uses far less memory than the original      *
+*		    version. The DOS version can be built using the small     *
+*		    memory model, and seems to work fine on small DOS VMs.    *
+*		    Yet, as there's still some sorting done, it's safer	      *
+*		    to still use the large memory model.		      *
 *		    							      *
 *   History								      *
 *    1986-09-03 JFL jf.larvoire@hp.com created this program.		      *
@@ -75,6 +76,9 @@
 *    2025-12-20 JFL Use the new error message routines.                       *
 *    2025-12-21 JFL Added options -o & -O, and default to mode Once.          *
 *    2025-12-23 JFL Do not compile options -o & -O in the DOS version.	      *
+*    2026-01-01 JFL Added back the ability to sort directories.		      *
+*                   Added options -s & -S to control sorting.		      *
+*		    This brings the feature set on a par with version 3.3.    *
 *		    Version 4.0.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
@@ -84,7 +88,7 @@
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
 #define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2025-12-23"
+#define PROGRAM_DATE    "2026-01-01"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -105,6 +109,7 @@
 #include <stdarg.h>
 #include <limits.h>
 #include <sys/wait.h>
+#include <strings.h>
 /* SysLib include files */
 #include "dirx.h"		/* Directory access functions eXtensions */
 #include "pathnames.h"		/* Pathname management functions */
@@ -128,6 +133,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #include <process.h>
 #include <conio.h>	/* For _kbhit() */
+#include <dos.h>
 
 #pragma warning(disable:4001) /* Ignore the "nonstandard extension 'single line comment' was used" warning */
 
@@ -360,6 +366,7 @@ void finis(int retcode, ...);	    /* Return to the initial drive & exit */
 void OnControlC(int iSignal);
 void usage(int iErr);               /* Display a brief help and exit */
 void DoPerPath(const char *pszPath, void *pRef);
+void SortDEList(struct dirent **pDEList, int nDE);
 
 int redo(char *from, wdt_opts *);   /* Recurse the directory tree */
 
@@ -390,6 +397,12 @@ int main(int argc, char *argv[]) {
   char *pszConclusion = "Redo done";
   char *pszFrom = NULL;
   wdt_opts wdtOpts = {0};
+#ifdef _MSDOS
+  int iErr;
+  dos_fs_info dosFsInfo;
+  char *pszRoot = "@:\\";
+#endif
+  int iSort = -1;
 
   wdtOpts.iFlags |= WDT_CD;	/* Change directories by default */
 #if OS_HAS_LINKS
@@ -471,6 +484,14 @@ int main(int argc, char *argv[]) {
 	pszConclusion = NULL;
 	continue;
       }
+      if (streq(option, "s")) {
+	iSort = TRUE;
+	continue;
+      }
+      if (streq(option, "S")) {
+	iSort = FALSE;
+	continue;
+      }
       if (streq(option, "v")) {
 	iVerbose = TRUE;
 	continue;
@@ -535,6 +556,28 @@ int main(int argc, char *argv[]) {
     finis(RETCODE_INACCESSIBLE, "Can't get CWD. %s", strerror(errno));
   }
 
+  /* Optionally enable sorting */
+#ifdef _MSDOS
+  if (iSort == -1) { /* If not specified, autodetect if sorting is necessary */
+    pszRoot[0] = (char)(_getdrive() + '@');
+    iErr = dos_get_volume_info(pszRoot, &dosFsInfo);
+    if (iErr) finis(RETCODE_INACCESSIBLE, "Can't get the filesystem type. %s", strerror(errno));
+    _strupr(dosFsInfo.szFsType);
+    if (strstr(dosFsInfo.szFsType, "FAT")) { /* Ex: FAT12, FAT16, FAT32, ExFAT */
+      iSort = TRUE;	/* Sort the directories for all FAT types */
+    } else {	/* Ex: CDFS, or NTFS on VM host */
+      iSort = FALSE;	/* Don't sort these, as they're sorted already */
+    }
+  }
+#endif
+#ifdef _WIN32
+  if (iSort == -1) iSort = FALSE;   /* Default off, as it's useless for NTFS */
+#endif
+#ifdef _UNIX
+  if (iSort == -1) iSort = TRUE;    /* Default on, as it's useful for Ext4 */
+#endif
+  if (iSort) wdtOpts.pSortProc = SortDEList;
+
   /* Make sure to restore the initial drive/directory in case of a Ctrl-C */
   signal(SIGINT, OnControlC);
 
@@ -579,18 +622,18 @@ Usage: redo [SWITCHES] COMMAND_LINE\n\
 \n\
 Switches:\n\
   -?              Display this help screen and exit\n\
-  -c              Change directories while recursing. (Default)\n\
-  -C              Do not change directories while recursing.\n\
+  -c              Change directories while recursing (Default)\n\
+  -C              Do not change directories while recursing\n\
 "
 DEBUG_CODE(
 "\
-  -d              Debug mode. Display how things work internally.\n\
+  -d              Debug mode. Display how things work internally\n\
 "
 )
 #if OS_HAS_LINKS
 "\
-  -f              Follow links to directories while recursing. (Default)\n\
-  -F              Do not follow links to directories while recursing.\n\
+  -f              Follow links to directories while recursing (Default)\n\
+  -F              Do not follow links to directories while recursing\n\
 "
 #endif
 "\
@@ -601,12 +644,30 @@ DEBUG_CODE(
 "
 #if OS_HAS_LINKS
 "\
-  -o              Run only once in directories linked multiple times. (Default)\n\
-  -O              Run again even it's been in the same directory before.\n\
+  -o              Run only once in directories linked multiple times (Default)\n\
+  -O              Run again even it's been in the same directory before\n\
+"
+#endif
+#ifdef _MSDOS
+"\
+  -s              Sort directories (Default for FAT drives)\n\
+  -S              Don't sort directories (Default for non-FAT drives)\n\
+"
+#endif
+#ifdef _WIN32
+"\
+  -s              Sort directories (Useless on NTFS drives)\n\
+  -S              Don't sort directories (Default)\n\
+"
+#endif
+#ifdef _UNIX
+"\
+  -s              Sort directories (Default)\n\
+  -S              Don't sort directories\n\
 "
 #endif
 "\
-  -X              Display the commands to be executed, but don't run them.\n\
+  -X              Display the commands to be executed, but don't run them\n\
   -v              Verbose mode. Display the paths, and the commands executed.\n\
   -V              Display the program version and exit\n\
 \n\
@@ -906,19 +967,90 @@ cleanup_and_return:
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function:	    spawnvp						      |
+|   Function	    CompareDirent	                                      |
+|                                                                             |
+|   Description     Compare two files, for sorting the file list	      |
+|                                                                             |
+|   Parameters      struct dirent **ppDE1	First file structure	      |
+|	  	    struct dirent **ppDE2	Second file structure	      |
+|                                                                             |
+|   Returns	    0  : Equal		                                      |
+|                   <0 : file1<file2	                                      |
+|                   >0 : file1>file2	                                      |
+|                                                                             |
+|   Notes	                                                              |
+|                                                                             |
+|   History								      |
+|    1994-05-27 JFL Updated cmpfif() for REDO.				      |
+|    2025-12-30 JFL Rewritten as a struct dirent comparison routine.	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+int DirentIsDir(struct dirent *pDE) {
+  /* return (pDE->d_type == DT_DIR); */
+  /* Actually, check in the extra flags if the entry is a directory OR a link to one */
+  return ((*DirentExtraFlags(pDE) & DEF_ISDIR) != 0);
+}
+
+int CDECL CompareDirent(struct dirent **ppDE1, struct dirent **ppDE2) {
+  int ret;
+  struct dirent *pDE1 = *ppDE1;
+  struct dirent *pDE2 = *ppDE2;
+
+  /* List directories before files */
+  ret = DirentIsDir(pDE2) - DirentIsDir(pDE1);
+  if (ret) return ret;
+
+  /* If both files, or both directories, list names alphabetically */
+#ifndef _UNIX
+  ret = strcasecmp(pDE1->d_name, pDE2->d_name);
+  if (ret) return ret;
+#endif
+
+  /* Finally do a case dependent comparison */
+  return strcmp(pDE1->d_name, pDE2->d_name);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    SortDEList		                                      |
+|                                                                             |
+|   Description     Sort a list of directory entries			      |
+|                                                                             |
+|   Parameters      struct dirent **pDEList	List of directory entries     |
+|	  	    int nDE			Number of entries	      |
+|                                                                             |
+|   Returns	    Nothing                                                   |
+|                                                                             |
+|   Notes	                                                              |
+|                                                                             |
+|   History								      |
+|    1994-05-27 JFL Updated trie() for REDO.				      |
+|    2025-12-30 JFL Rewritten as a struct dirent sorting routine.	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+typedef int (CDECL *pCompareProc)(const void *item1, const void *item2); /* qsort() callback proc type */
+
+void SortDEList(struct dirent **pDEList, int nDE) {
+  qsort(pDEList, nDE, sizeof(struct dirent *), (pCompareProc)CompareDirent);
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    spawnvp						      |
 |									      |
-|   Description:    Start an outside application			      |
+|   Description     Start an outside application			      |
 |									      |
-|   Parameters:     int iMode		Spawning mode. P_WAIT or P_NOWAIT     |
+|   Parameters      int iMode		Spawning mode. P_WAIT or P_NOWAIT     |
 |		    char *pszCommand	Program to start		      |
 |		    char **argv		List of arguments, terminated by NULL |
 |									      |
-|   Returns:	    The exit code (if P_WAIT) or the process ID (if P_NOWAIT) |
+|   Returns	    The exit code (if P_WAIT) or the process ID (if P_NOWAIT) |
 |									      |
-|   Notes:	    Unix port of a Microsoft function			      |
+|   Notes	    Unix port of a Microsoft function			      |
 |									      |
-|   History:								      |
+|   History								      |
 |    2014-03-27 JFL Created this routine				      |
 |    2025-12-16 JFL Do not display an error message here.		      |
 |    2025-12-18 JFL Specify the pid number to wait for.			      |
