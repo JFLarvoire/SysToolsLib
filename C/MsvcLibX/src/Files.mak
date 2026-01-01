@@ -191,7 +191,7 @@ aswprintf.c: $(XI)\msvclibx.h $(XI)\stdio.h $(XI)\stdlib.h $(XI)\stdarg.h
 
 basename.c: $(XI)\libgen.h $(XI)\limits.h $(XI)\msvclibx.h $(XI)\stdlib.h $(XI)\string.h
 
-chdir.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\iconv.h $(XI)\stdio.h $(XI)\string.h $(XI)\unistd.h $(XI)\windows.h
+chdir.c: $(MI)\debugm.h $(XI)\dos.h $(XI)\errno.h $(XI)\iconv.h $(XI)\stdio.h $(XI)\string.h $(XI)\unistd.h $(XI)\windows.h
 
 clock_gettime.c: $(XI)\errno.h $(XI)\msvclibx.h $(XI)\time.h $(XI)\sys\stat.h $(XI)\windows.h
 
@@ -225,7 +225,7 @@ fullpath.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\limits.h $(XI)\stdlib.h $(XI)\lim
 
 fwrite.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\iconv.h $(XI)\msvclibx.h $(XI)\stdio.h $(XI)\unistd.h $(XI)\windows.h
 
-getcwd.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\stdio.h $(XI)\unistd.h $(XI)\windows.h
+getcwd.c: $(MI)\debugm.h $(XI)\dos.h $(XI)\errno.h $(XI)\stdio.h $(XI)\unistd.h $(XI)\windows.h
 
 getenv.c: $(MI)\debugm.h $(CI)\dict.h $(XI)\errno.h $(XI)\stdlib.h $(XI)\string.h $(XI)\iconv.h
 
@@ -299,7 +299,7 @@ strptime.c: $(XI)\string.h $(XI)\time.h
 
 symlink.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\reparsept.h $(XI)\unistd.h $(XI)\windows.h
 
-uname.c: $(XI)\msvclibx.h $(XI)\stdlib.h $(XI)\sys\utsname.h $(XI)\windows.h
+uname.c: $(XI)\msvclibx.h $(XI)\dos.h $(XI)\stdlib.h $(XI)\sys\utsname.h $(XI)\windows.h
 
 unlink.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\msvclibx.h $(XI)\sys\stat.h $(XI)\string.h $(XI)\windows.h
 

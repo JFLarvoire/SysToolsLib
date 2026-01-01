@@ -15,6 +15,7 @@
 *    2025-11-11 JFL Added routines dos_getcwd() and getcwdX() for DOS. 	      *
 *    2025-11-19 JFL Changed dos_getcwd() return value to be same as getcwd's. *
 *    2025-12-03 JFL Added routine getcwd0().                       	      *
+*    2025-12-31 JFL Moved DOS FS Info structures and definitions to dos.h.    *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -117,20 +118,6 @@ char *dos_getcwd(int iDrive, char *pszBuf, int iBufLen) { /* Limited to 64-byte 
 
   return pszBuf;
 }
-
-typedef struct _dos_fs_info {
-  int iFlags;		/* File system flags */
-  int iNameLength;	/* Maximum length of file name [usually 255 for LFN] */
-  int iPathLength;	/* Maximum length of path [usually 260] */
-  char szFsType[32];	/* ASCIZ, e.g. "FAT","NTFS","CDFS" */
-} dos_fs_info;
-
-/* File system flags */
-#define DOS_FS_CASE_SENSITIVE	0x0001	/* Searches are case sensitive */
-#define DOS_FS_CASE_PRESERVED	0x0002	/* Preserves case in directory entries */
-#define DOS_FS_UNICODE_NAMES	0x0004	/* Uses Unicode characters in file and directory names */
-#define DOS_FS_DOS_LFN		0x4000	/* Supports DOS long filename functions */
-#define DOS_FS_COMPRESSED	0x8000	/* Volume is compressed */
 
 /* Call MS-DOS function 71A0H "Get Volume Information" */
 /* Assumes the volume is FAT on old DOS versions <= 6 */
