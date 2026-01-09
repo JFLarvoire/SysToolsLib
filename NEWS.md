@@ -4,11 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2026-01-09
+### Fixed
+- C/MsvcLibX/src/readlink.c: Fixed readlink() when the target is an empty "" string.
+
+### Changed
+- Truename.exe version 1.1.6: Option -d can now be repeated in the debug version, to display extra debug information.
+- C/MsvcLibX/src: Moved CompactPath() & CompactPathW() from realpath.c to new CompactPath.c.
+
 ## [Unreleased] 2026-01-01
 ### New
 - C/MsvcLibX/include/dos.h: New dos.h front end to MSVC's dos.h.
 - C/SysLib/dirx.h: Added macros for accessing non-standard parts of the dirent structure.
 - C/SysLib/WalkDirTree.c, pathnames.h: Added to WalkDirTree() the ability to optionally sort directories.
+- C/LoDosLib/doserr.h: MS-DOS error codes from the MS-DOS 5 Programmer's Reference, appendix C.
 
 ### Changed
 - C/MsvcLibX/... include/dos.h, src/getcwd.c, src/Files.mak:
@@ -24,7 +33,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 
 ## [Unreleased] 2025-12-23
 ### Changed
-- C/SRC/dirsize.exe: Version 4.0
+- dirsize.exe: Version 4.0
   - Updated the Ctrl-C detection.
   - Use the new error message routines.
   - Removed global variables that had equivalent WDT_* flags.
