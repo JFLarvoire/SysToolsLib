@@ -53,6 +53,7 @@ OBJECTS = \
     +basename.obj		\
     +chdir.obj			\
     +clock_gettime.obj		\
+    +CompactPath.obj		\
     +dasprintf.obj		\
     +debugv.obj			\
     +dirent.obj			\
@@ -194,6 +195,8 @@ basename.c: $(XI)\libgen.h $(XI)\limits.h $(XI)\msvclibx.h $(XI)\stdlib.h $(XI)\
 chdir.c: $(MI)\debugm.h $(XI)\dos.h $(XI)\errno.h $(XI)\iconv.h $(XI)\stdio.h $(XI)\string.h $(XI)\unistd.h $(XI)\windows.h
 
 clock_gettime.c: $(XI)\errno.h $(XI)\msvclibx.h $(XI)\time.h $(XI)\sys\stat.h $(XI)\windows.h
+
+CompactPath.c: $(MI)\debugm.h $(XI)\errno.h $(XI)\unistd.h $(XI)\reparsept.h $(XI)\string.h $(XI)\unistd.h $(XI)\windows.h
 
 dasprintf.c: $(XI)\msvclibx.h $(XI)\stdio.h $(XI)\stdlib.h $(XI)\stdarg.h
 
