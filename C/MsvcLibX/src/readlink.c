@@ -33,6 +33,7 @@
 *                   Resolve*Links*() as MlxResolve*Links*(), etc.             *
 *    2025-08-03 JFL Added MlxReadWci(), etc.				      *
 *		    Added MlxSetProcessPlaceholderCompatibilityMode(), etc.   *
+*    2026-01-03 JFL Fixed readlinkM() when the target is an empty "" string.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -607,6 +608,7 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
   }
 
   nResult = readlinkW(wszPath, wszTarget, WIDE_PATH_MAX);
+  if (nResult == 0) buf[0] = '\0'; // This can happen for WCI links, see https://github.com/JFLarvoire/SysToolsLib/issues/45
   if (nResult <= 0) return nResult;
 
   pszDefaultChar = (cp == CP_UTF8) ? NULL : "?";
