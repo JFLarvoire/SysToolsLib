@@ -27,6 +27,7 @@
 *    2019-06-12 JFL Added PROGRAM_DESCRIPTION definition. Version 1.1.4.      *
 *    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.1.5.		      *
+*    2026-01-03 JFL Option -d can now be repeated. Version 1.1.6.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -34,8 +35,8 @@
 
 #define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
-#define PROGRAM_VERSION "1.1.5"
-#define PROGRAM_DATE    "2022-10-19"
+#define PROGRAM_VERSION "1.1.6"
+#define PROGRAM_DATE    "2026-01-03"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -115,7 +116,7 @@ int main(int argc, char *argv[]) {
 #endif
       DEBUG_CODE(
 	if (streq(arg+1, "d")) {
-	  DEBUG_ON();
+	  DEBUG_MORE();
 	  continue;
 	}
       )
