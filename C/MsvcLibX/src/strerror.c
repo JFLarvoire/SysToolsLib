@@ -9,6 +9,7 @@
 *   History:								      *
 *    2014-03-06 JFL Created this module.				      *
 *    2015-05-31 JFL Get the strerror() prototype from string.h.		      *
+*    2026-01-18 JFL Added a messsage for ENOTSUP.			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -25,30 +26,31 @@
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function        strerror	                                              |
+|   Function        strerrorX	                                              |
 |                                                                             |
-|   Description     UTF-8 version of strerror				      |
+|   Description     Extend strerror() with additional error codes	      |
 |                                                                             |
 |   Parameters      int errnum		Error number			      |
 |                                                                             |
 |   Returns         Pointer to the corresponding error message.		      |
 |                                                                             |
-|   Notes                                                                     |
+|   Notes           Workaround for the missing entries in MSVC list	      |
 |                                                                             |
 |   History								      |
 |    2014-03-06 JFL Created this routine.                      		      |
 *                                                                             *
 \*---------------------------------------------------------------------------*/
 
-#pragma warning(disable:4100) /* Ignore the "unreferenced formal parameter" warning */
+#undef strerror
 
-char *strerror(int errnum) {
+char *strerrorX(int errnum) {
   switch (errnum) {
     case ELOOP:
-      return "Symbolic links loop found"; /* Workaround for the missing entry in MSVC list */
+      return "Symbolic links loop found";
+    case ENOTSUP:
+      return "Operation not supported";
     default:
-      if (errnum > _sys_nerr) errnum = _sys_nerr;
-      return _sys_errlist[errnum];
+      return strerror(errnum);
   }
 }
 
