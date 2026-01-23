@@ -210,6 +210,7 @@ buffer_is_too_small:
 |   History								      |
 |    2014-02-19 JFL Created the 8-bit version of this routine.                |
 |    2017-10-04 JFL Adapted to 16-bit characters.                             |
+|    2026-01-23 JFL Simplified and fixed the debug output, w. DEBUG_W* macros.|
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -226,14 +227,9 @@ int CompactPathW(const WCHAR *path, WCHAR *outbuf, size_t bufsize) {
   int nParts = 0;
   int isAbsolute = FALSE;
   int nDotDotParts = 0;
-  DEBUG_CODE(
-    char *pszUtf8;
-  )
   int iLen;
 
-  DEBUG_WSTR2NEWUTF8(path, pszUtf8);
-  DEBUG_ENTER(("CompactPathW(L\"%s\", 0x%p, %lu);\n", pszUtf8, outbuf, (unsigned long)bufsize));
-  DEBUG_FREEUTF8(pszUtf8);
+  DEBUG_WENTER((L"CompactPathW(L\"%s\", 0x%p, %lu);\n", path, outbuf, (unsigned long)bufsize));
 
   pcIn = path;
   inSize = (int)lstrlenW(path) + 1;
@@ -275,9 +271,7 @@ int CompactPathW(const WCHAR *path, WCHAR *outbuf, size_t bufsize) {
       lPart += 1;
     } else { /* End of a node */
       lParts[nParts++] = lPart;
-      DEBUG_WSTR2NEWUTF8(pParts[nParts-1], pszUtf8);
-      XDEBUG_PRINTF(("pParts[%d] = \"%.*s\"; l = %d\n", nParts-1, lPart, pszUtf8, lPart));
-      DEBUG_FREEUTF8(pszUtf8);
+      XDEBUG_WPRINTF((L"pParts[%d] = \"%.*s\"; l = %d\n", nParts-1, lPart, pParts[nParts-1], lPart));
     }
     lastc = c;
     if (c == L'\0') break;
@@ -285,9 +279,7 @@ int CompactPathW(const WCHAR *path, WCHAR *outbuf, size_t bufsize) {
 
   /* Eliminate . and .. parts */
   for (i=0; i<nParts; i++) {
-    DEBUG_WSTR2NEWUTF8(pParts[i], pszUtf8);
-    XDEBUG_PRINTF(("for pParts[%d] = \"%.*s\"\n", i, lParts[i], pszUtf8));
-    DEBUG_FREEUTF8(pszUtf8);
+    XDEBUG_WPRINTF((L"for pParts[%d] = \"%.*s\"\n", i, lParts[i], pParts[i]));
     if ((pParts[i][0] == L'.') && (lParts[i] == 1)) { /* It's a . part */
 its_a_dot_part:
       XDEBUG_PRINTF(("It's a L'.'. Removing part #%d\n", i));
@@ -356,9 +348,7 @@ buffer_is_too_small:
   *pcOut = L'\0';
 
   iLen = (int)(pcOut - outbuf);
-  DEBUG_WSTR2NEWUTF8(outbuf, pszUtf8);
-  DEBUG_LEAVE(("return %d; // L\"%s\"\n", iLen, pszUtf8));
-  DEBUG_FREEUTF8(pszUtf8);
+  DEBUG_WLEAVE((L"return %d; // L\"%s\"\n", iLen, outbuf));
   return iLen;
 }
 
