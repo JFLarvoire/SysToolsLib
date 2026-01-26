@@ -608,7 +608,7 @@ ssize_t readlinkM(const char *path, char *buf, size_t bufsize, UINT cp) {
   }
 
   nResult = readlinkW(wszPath, wszTarget, WIDE_PATH_MAX);
-  if (nResult == 0) buf[0] = '\0'; // This can happen for WCI links, see https://github.com/JFLarvoire/SysToolsLib/issues/45
+  if (nResult == 0) buf[0] = '\0'; /* This can happen for WCI links, see https://github.com/JFLarvoire/SysToolsLib/issues/45 */
   if (nResult <= 0) return nResult;
 
   pszDefaultChar = (cp == CP_UTF8) ? NULL : "?";
