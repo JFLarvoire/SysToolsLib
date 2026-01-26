@@ -12,6 +12,7 @@
 *    2025-08-07 JFL Added getenv() definitions.				      *
 *    2025-08-10 JFL Added setenv() definitions.				      *
 *    2025-08-15 JFL Redefine unsetenv() to a more standard definition.	      *
+*    2026-01-23 JFL Added realpath() definitions.			      *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -38,6 +39,8 @@ extern int mkstemp(char *pszTemplate);	 /* Create a temporary file */
 /* MSVC defines the System V's _putenv() routine, but not BSD's setenv() */
 int setenv(const char *pszName, const char *pszValue, int iOverwrite);
 
+char *realpath(const char *path, char *outbuf);
+
 #endif /* defined(_MSDOS) */
 
 /************************ Win32-specific definitions *************************/
@@ -50,6 +53,7 @@ extern char *_fullpathU(char *absPath, const char *relPath, size_t maxLength);
 
 #if defined(_UTF8_SOURCE)
 #define _fullpath _fullpathU		/* For processing UTF-8 pathnames */
+/* Else use MSVC lib's _fullpath, which supports ANSI names by default */
 #endif
 
 /* Create a temporary directory */
@@ -91,6 +95,17 @@ int setenvM(const char *pszName, const char *pszValue, int iOverwrite, UINT cp);
 #define setenv setenvU			/* For getting UTF-8 values */
 #else
 #define setenv setenvA			/* For getting ANSI values */
+#endif
+
+/* Resolve all links in a pathname */
+WCHAR *realpathW(const WCHAR *wpath, WCHAR *wbuf);		/* Posix routine realpath - Wide char version */
+char *realpathM(const char *path, char *buf, UINT cp);		/* Posix routine realpath - Multibyte char version */
+#define realpathA(path, buf) realpathM(path, buf, CP_ACP)	/* Posix routine realpath - ANSI version */
+#define realpathU(path, buf) realpathM(path, buf, CP_UTF8)	/* Posix routine realpath - UTF-8 version */
+#if defined(_UTF8_SOURCE)
+#define realpath realpathU		/* For resolving UTF-8 pathnames */
+#else
+#define realpath realpathA		/* For resolving ANSI pathnames */
 #endif
 
 #endif /* defined(_WIN32) */

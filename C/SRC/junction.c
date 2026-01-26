@@ -545,7 +545,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
     }
     case IO_REPARSE_TAG_CLOUD: {
       DWORD dwAttr = pDE->d_attribs;
-      pszType = "PlaceHldr";	/* Place Holder for a file in cloud storage */
+      pszType = "CloudLnk";	/* Place Holder for a file in cloud storage */
       /* MsvcLibX does not know how to find the cloud target pathname */
       strcpy(buf, (dwAttr & FILE_ATTRIBUTE_OFFLINE) ? "↑" : "↕"); /* ↑=Remote ↕=Both ↓=Local */ 
       strcat(buf, "☁");
@@ -553,9 +553,9 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
       break;
     }
     case IO_REPARSE_TAG_WCI: {
-      pszType = "WCILink";
-      /* MsvcLibX reads WCI links targets as relative to an unknown GUID-defined base */
-      strcpy(buf, "✉ \\");	/* ✉ standing for a container base. (Docker 🐋 whale does not print) */
+      pszType = "ContainerLnk";
+      /* MsvcLibX reads WCI links targets as relative to an unknown GUID-defined container root directory */
+      strcpy(buf, "⛟ \\");	/* ⛟ or ✉ standing for a container base. (Docker 🐋 whale does not print) */
       int iLen = lstrlen(buf);
       iErr = MlxReadWci(pszRelPath, buf + iLen, sizeof(buf) - iLen) ? 0 : -1;
       break;

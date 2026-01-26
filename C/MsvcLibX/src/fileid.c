@@ -9,7 +9,11 @@
 *   History								      *
 *    2022-01-05 JFL Created this module.				      *
 *    2025-12-06 JFL Extend MlxGetFileID() as MlxGetFileAttributesAndID().     *
-*                                                                             *
+*    2026-01-14 JFL Extracted new routine HasGetFileInformationByHandleEx()   *
+*		    out of MlxGetFileAttributesAndID().			      *
+*                   Moved GetFileInformationByHandleEx() access definitions   *
+*		    to sys/stat.h.					      *
+*                   							      *
 *         © Copyright 2022 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
@@ -25,6 +29,60 @@
 /* MsvcLibX library extensions */
 #include "msvclibx.h"
 #include "debugm.h"
+
+#ifdef _WIN32
+
+#include <windows.h>
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    HasGetFileInformationByHandleEx			      |
+|									      |
+|   Description     Init access to GetFileInformationByHandleEx, if available |
+|									      |
+|   Parameters      None						      |
+|		    							      |
+|   Returns 	    TRUE: Available; FALSE: Not available		      |
+|		    							      |
+|   Notes	    Allows building applications that run in older versions   |
+|		    of Windows, and use GetFileInformationByHandleEx() in     |
+|		    newer versions where it's available.		      |
+|		    							      |
+|   History								      |
+|    2026-01-04 JFL Created this routine                               	      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+/* The GetFileInformationByHandleEx() function is not available in Windows 95 */
+/* The FileIdInfo class info is only available in Windows 8 and later */
+/* https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle */
+/* https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex */
+/* https://docs.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info */
+static int bGetFileInformationByHandleExLoaded = 0; /* TRUE if the following pointer has been initialized */
+static int bHasFileIdInfo = -1; /* -1=Unknown; 0=No; 1=Yes, Windows supports GetFileInformationByHandleEx(FileIdInfo) */
+/* Pointer to GetFileInformationByHandleEx() if the OS implements it */
+PGETFILEINFORMATIONBYHANDLEEX pGetFileInformationByHandleEx = NULL;
+
+BOOL HasGetFileInformationByHandleEx(void) {
+  /* Check once if GetFileInformationByHandleEx() is available */
+  if (!bGetFileInformationByHandleExLoaded) {
+    DWORD dwVersion = GetVersion();
+    int iMajor = (int)(LOBYTE(LOWORD(dwVersion)));
+    int iMinor = (int)(HIBYTE(LOWORD(dwVersion)));
+    int iVersion = (iMajor << 8) | iMinor;
+    char *pszLib = (iMajor < 6) ? "fileextd.dll" : "kernel32.dll" ;
+
+    pGetFileInformationByHandleEx = (PGETFILEINFORMATIONBYHANDLEEX)GetProcAddress(
+      GetModuleHandle(pszLib), "GetFileInformationByHandleEx"
+    );
+    bHasFileIdInfo = (pGetFileInformationByHandleEx && (iVersion >= 0x602)); /* Windows 8 = version 6.2 */
+    DEBUG_PRINTF(("WinVer = 0x%X; pGetFileInformationByHandleEx = %p; bHasFileIdInfo = %d;\n",
+		  iVersion, pGetFileInformationByHandleEx, bHasFileIdInfo));
+
+    bGetFileInformationByHandleExLoaded = 1;
+  }
+  return (pGetFileInformationByHandleEx != NULL);
+}
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -66,31 +124,7 @@
 *									      *
 \*---------------------------------------------------------------------------*/
 
-#ifdef _WIN32
-
-#include <windows.h>
-
-BOOL bMlxStatSetInode = 0; /* Control whether lstat() & stat() do call MlxGetFileIDW() here */
-
-#define USE_EXTENDED_FUNCTION 1 /* 0 = Smaller function, but may not return unique IDs on ReFS */
-
-#if USE_EXTENDED_FUNCTION
-
-/* The GetFileInformationByHandleEx() function is not available in Windows 95 */
-/* The FileIdInfo class info is only available in Windows 8 and later */
-/* https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle */
-/* https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex */
-/* https://docs.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info */
-int bHasFileIdInfo = -1; /* -1=Unknown; 0=No; 2=Yes, Windows supports GetFileInformationByHandleEx(FileIdInfo) */
-typedef BOOL (*PGETFILEINFORMATIONBYHANDLEEX)(HANDLE, int, LPVOID, DWORD);
-PGETFILEINFORMATIONBYHANDLEEX pGetFileInformationByHandleEx; /* Pointer to GetFileInformationByHandleEx() */
-#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_WIN8)
-#define FileIdInfo 18 /* Defined in WinBase.h, starting in the Windows 8 SDK */
-#endif
-
-#pragma warning(disable:4996)       /* Ignore the deprecated name warning */
-
-#endif /* USE_EXTENDED_FUNCTION */
+/* #pragma warning(disable:4996)       /* Ignore the deprecated name warning */
 
 BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA *pAttr, FILE_ID *pFID, BOOL bLink) {
   HANDLE hFile;
@@ -99,23 +133,8 @@ BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA
 
   DEBUG_WENTER((L"MlxGetFileAttributesAndIDW(\"%s\", %p, %d);\n", pwszName, pFID, bLink));
 
-#if USE_EXTENDED_FUNCTION
-
-  /* Check once if GetFileInformationByHandleEx(FileIdInfo) is available */
-  if (bHasFileIdInfo == -1) {
-    DWORD dwVersion = GetVersion();
-    int iMajor = (int)(LOBYTE(LOWORD(dwVersion)));
-    int iMinor = (int)(HIBYTE(LOWORD(dwVersion)));
-    pGetFileInformationByHandleEx = (PGETFILEINFORMATIONBYHANDLEEX)GetProcAddress(
-      GetModuleHandle("kernel32.dll"), "GetFileInformationByHandleEx"
-    );
-    bHasFileIdInfo = (pGetFileInformationByHandleEx && (
-                      (iMajor > 6) || ((iMajor == 6) && (iMinor > 1)))); /* Windows 8 = version 6.2 */
-    DEBUG_PRINTF(("Version = %d.%d; pGetFileInformationByHandleEx = %p; bHasFileIdInfo = %d;\n",
-		  iMajor, iMinor, pGetFileInformationByHandleEx, bHasFileIdInfo));
-  }
-
-#endif /* USE_EXTENDED_FUNCTION */
+  /* Initialize access to GetFileInformationByHandleEx(FileIdInfo), if it is available */
+  HasGetFileInformationByHandleEx(); /* Also sets bHasFileIdInfo */
 
   hFile = CreateFileW(pwszName,
 		      0, /* 0 = Neither read or write. Was GENERIC_READ. */
@@ -148,14 +167,12 @@ BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA
   }
 
   if (pFID) {
-#if USE_EXTENDED_FUNCTION
-    if (bHasFileIdInfo) {
+    if (bHasFileIdInfo) { /* If we have extended IDs (In Windows 8 and later) */
       XDEBUG_PRINTF(("GetFileInformationByHandleEx(%p, FileIdInfo, %p, %d);\n", hFile, pFID, sizeof(FILE_ID)));
       bDone = pGetFileInformationByHandleEx(hFile, FileIdInfo, pFID, sizeof(FILE_ID));
       if (bDone) goto cleanup_and_return_done;
       DEBUG_PRINTF(("  // GetFileInformationByHandleEx() failed. Win32 error 0x%lX. Using the base ID infos.\n", GetLastError()));
-    }
-#endif /* USE_EXTENDED_FUNCTION */
+    } /* Else we only have short IDs (Up to Windows 7) */
     pFID->dwIDVol0 = fi.dwVolumeSerialNumber;
     pFID->dwIDVol1 = 0;
     pFID->dwIDFil0 = fi.nFileIndexLow;
@@ -164,9 +181,7 @@ BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA
     pFID->dwIDFil3 = 0;
   }
 
-#if USE_EXTENDED_FUNCTION
 cleanup_and_return_done:
-#endif /* USE_EXTENDED_FUNCTION */
   CloseHandle(hFile);
   RETURN_BOOL_COMMENT(1, ("Volume ID 0x%08lX, File ID 0x%lX%07lX, Attributes 0x%04lX\n",
 			  pFID->dwIDVol0, pFID->dwIDFil1, pFID->dwIDFil0, pAttr->dwFileAttributes));

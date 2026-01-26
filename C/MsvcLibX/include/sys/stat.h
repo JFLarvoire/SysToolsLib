@@ -24,6 +24,7 @@
 *    2018-05-31 JFL Changed dirent2stat() first arg to (const _dirent *).     *
 *    2025-12-06 JFL Renamed GetFileID() as GetFileIDEx(), adding a third      *
 *		    argument, and redefining the old name as a macro.	      *
+*    2026-01-12 JFL Added GetFileInformationByHandleEx() access definitions.  *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -286,6 +287,79 @@ extern BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_
 #define MlxGetLinkIDW(pwszName, pFID) MlxGetFileAttributesAndIDW(pwszName, NULL, pFID, 1) /* If it's a link, get the ID of the link itself */
 #define MlxGetFileID(pszName, pFID) MlxGetFileAttributesAndID(pszName, NULL, pFID, 0) /* If it's a link, get the ID of the target file or dir */
 #define MlxGetLinkID(pszName, pFID) MlxGetFileAttributesAndID(pszName, NULL, pFID, 1) /* If it's a link, get the ID of the link itself */
+
+/* ------------------------------------------------------------------------- */
+/* Proprietary routines for calling WIN32 low-level file information APIs on systems that support them */
+
+/* The GetFileInformationByHandle() function is available in Windows 95, and all later versions of Windows */
+/* https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle */
+/* No need for a front-end routine for this one */
+
+/* --------------------- GetFileInformationByHandleEx() -------------------- */
+/* The GetFileInformationByHandleEx() function is only available in Windows XP and later */
+/* https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex */
+typedef BOOL (WINAPI *PGETFILEINFORMATIONBYHANDLEEX)(HANDLE hFile, int nInfoClass, LPVOID lpOutBuf, DWORD dwBufLen);
+extern PGETFILEINFORMATIONBYHANDLEEX pGetFileInformationByHandleEx; /* Pointer to GetFileInformationByHandleEx(), if available */
+BOOL HasGetFileInformationByHandleEx(void); /* Tell if GetFileInformationByHandleEx() is available, and init pGetFileInformationByHandleEx if not done already */
+/* New file information classes were introduced in each new version of Windows */
+/* Define information classes introduced in Vista, and thus missing in Win95 or WinXP SDKs */
+#if _WIN32_WINNT < 0x0600
+#define FileNameInfo 2 /* Defined in WinBase.h, starting in the Vista SDK */
+typedef struct _FILE_NAME_INFO {
+    DWORD FileNameLength;
+    WCHAR FileName[1];
+} FILE_NAME_INFO, *PFILE_NAME_INFO;
+
+#define FileStreamInfo 7 /* Defined in WinBase.h, starting in the Vista SDK */
+typedef struct _FILE_STREAM_INFO {
+  DWORD         NextEntryOffset;
+  DWORD         StreamNameLength;
+  LARGE_INTEGER StreamSize;
+  LARGE_INTEGER StreamAllocationSize;
+  WCHAR         StreamName[1];
+} FILE_STREAM_INFO, *PFILE_STREAM_INFO;
+#endif /*  _WIN32_WINNT < 0x0600 */
+
+/* Define information classes introduced in Windows 8, and thus missing in Win95 to Win7 SDKs */
+#if _WIN32_WINNT < 0x0602
+#define FileIdInfo 18 /* Defined in WinBase.h, starting in the Windows 8 SDK */
+typedef struct _FILE_ID_128 {                               
+    BYTE  Identifier[16];                                   
+} FILE_ID_128, *PFILE_ID_128;                               
+typedef struct _FILE_ID_INFO {
+    ULONGLONG VolumeSerialNumber;
+    FILE_ID_128 FileId;
+} FILE_ID_INFO, *PFILE_ID_INFO;
+#endif /*  _WIN32_WINNT < 0x0602 */
+
+/* ----------------------- GetFileInformationByName() ---------------------- */
+/* The GetFileInformationByName() function is only available in Windows XP and later */
+/* https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyname */
+typedef BOOL (WINAPI *PGETFILEINFORMATIONBYNAME)(LPWSTR, int, LPVOID, DWORD);
+extern PGETFILEINFORMATIONBYNAME pGetFileInformationByName; /* Pointer to GetFileInformationByName(), if available */
+/* New file information classes were introduced in each new version of Windows */
+
+/* Define information classes introduced in Windows 11, and thus missing in Win95 to Win10 SDKs */
+#if !defined(NTDDI_VERSION) || !defined(NTDDI_WIN11_ZN) || NTDDI_VERSION < NTDDI_WIN11_ZN
+#define FileStatBasicByNameInfo 3
+typedef struct _FILE_STAT_BASIC_INFORMATION {
+    LARGE_INTEGER FileId;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER AllocationSize;
+    LARGE_INTEGER EndOfFile;
+    DWORD FileAttributes;
+    DWORD ReparseTag;
+    DWORD NumberOfLinks;
+    DWORD DeviceType;
+    DWORD DeviceCharacteristics;
+    DWORD Reserved;
+    LARGE_INTEGER VolumeSerialNumber;
+    FILE_ID_128 FileId128;
+} FILE_STAT_BASIC_INFORMATION, *PFILE_STAT_BASIC_INFORMATION;
+#endif
 
 #endif /* defined(_WIN32) */
 

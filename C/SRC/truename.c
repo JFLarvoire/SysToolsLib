@@ -28,6 +28,7 @@
 *    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.1.5.		      *
 *    2026-01-03 JFL Option -d can now be repeated. Version 1.1.6.	      *
+*    2026-01-23 JFL Now using the rewritten MsvcLibX routines. Version 1.2.   *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -35,8 +36,8 @@
 
 #define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
-#define PROGRAM_VERSION "1.1.6"
-#define PROGRAM_DATE    "2026-01-03"
+#define PROGRAM_VERSION "1.2"
+#define PROGRAM_DATE    "2026-01-23"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -99,11 +100,12 @@ int main(int argc, char *argv[]) {
   int i;
   char *pszPath = NULL;
   ssize_t n = -1;
-  char buf[NAME_MAX] = "";
-  char absName[NAME_MAX];
+  char buf[PATH_MAX] = "";
+  char absName[PATH_MAX];
   int bGetAbsName = TRUE;
   int bResolveLinks = TRUE;
   int bResolveShortNames = TRUE;
+  int bUsedMlxResolveLinks = FALSE;
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
@@ -188,13 +190,14 @@ int main(int argc, char *argv[]) {
 
   if (bGetAbsName) {
     char *lpPart;
-    n = GetFullPathNameU(pszPath, sizeof(absName), absName, &lpPart);
+    n = GetFullPathName(pszPath, sizeof(absName), absName, &lpPart);
     if (!n) {
       DEBUG_CODE(
       DWORD dwError = GetLastError();
       )
       DEBUG_PRINTF(("Win32Error = %d (0x%X)\n", dwError, dwError));
-      fprintf(stderr, "truename: failed to get the absolute name of \"%s\": %s!\n", pszPath);
+      errno = Win32ErrorToErrno();
+      pfcerror("Failed to get the absolute name");
       return 1;
     }
     DEBUG_PRINTF(("absName = \"%s\"\n", absName));
@@ -202,26 +205,53 @@ int main(int argc, char *argv[]) {
     strcpy(buf, absName); /* In case we use option -L to NOT resolve links */
   }
 
-  if (bResolveLinks) n = MlxResolveLinks(pszPath, buf, sizeof(buf));
-
-  if (n >= 0) {
-    if (bResolveShortNames) {
-      char longName[sizeof(buf)];
-      n = GetLongPathNameU(buf, longName, sizeof(buf)); /* This will NOT correct long names case */
-      if (!n) goto report_err;
-      strcpy(buf, longName);
+  if (bResolveLinks) {
+    /* Resolves links with the same algorithm as realpath().
+       But don't use realpath() directly, because:
+       - We want to optionally _not_ correct the name case or expand short names.
+       - We need to know if it did the resolution using MlxGetFileName() or MlxResolveLinks().*/
+    /* First try letting Windows do the resolution itself */
+    int iErr = MlxGetFileName(pszPath, buf, sizeof(buf));
+    if (iErr && (errno == ENOSYS)) {
+      /* The OS does not support name resolution. Do it ourselves */
+      char *pszPath2 = malloc(UTF8_PATH_MAX);
+      if (!pszPath2) {
+      	pfcerror(NULL); /* Will print something like "Out of memory" */
+      	return 1;
+      }
+      bUsedMlxResolveLinks = TRUE;
+      iErr = MlxResolveSubstDrives(pszPath, pszPath2, UTF8_PATH_MAX);
+      if (!iErr) iErr = MlxResolveLinks(pszPath2, buf, sizeof(buf));
+      free(pszPath2);
     }
-    /* Correct the pathname case.
-       This is necessary because both command line arguments, and link targets,
-       may not match the actual targets names case */
-    /* FixNameCase(buf); /* Already done by GetLongPathName() */
-    printf("%s\n", buf);
-  } else {
-report_err:
-    DEBUG_PRINTF(("errno = %d\n", errno));
-    fprintf(stderr, "truename: Error processing pathname \"%s\": %s!\n", pszPath, strerror(errno));
-    return 1;
+    if (iErr) {
+      pfcerror("Failed to resolve links");
+      return 1;
+    }
   }
+
+  if (bResolveShortNames) {
+    char longName[sizeof(buf)];
+    n = GetLongPathName(buf, longName, sizeof(buf)); /* Also corrects the name case */
+    if (!n) {
+      errno = Win32ErrorToErrno();
+      /* Detect a special corner case: Sometimes MlxGetFileName() processes a
+         name successfully, but GetLongPathName() fails with access denied */
+      if (bResolveLinks && (errno == EACCES)) {
+      	if ((!strchr(buf, '~')) && (!bUsedMlxResolveLinks)) {
+      	  goto print_result; /* It's not a short name, and MlxGetFileName() DID fix the name case */
+      	}
+      }
+      pfcerror("Failed to get the long pathname");
+      return 1;
+    }
+    strcpy(buf, longName);
+  }
+
+  /* No need to correct the pathname case anymore, as it's already done by GetLongPathName() */
+print_result:
+  printf("%s\n", buf);
+
   return 0;
 }
 
