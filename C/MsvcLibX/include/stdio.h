@@ -22,6 +22,7 @@
 *    2020-07-28 JFL Added standard implementations of snprintf(), vnsprintf().*
 *    2022-11-29 JFL Make sure all functions with variable # of arguments      *
 *		    use the _cdecl calling convention.			      *
+*    2026-01-28 JFL Use the fputwsW() workaround for all MSVC versions.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -116,10 +117,10 @@ extern int printfA(const char *pszFormat, ...);
 #define printf printfA		/* For outputing ANSI strings */
 #endif
 #define wprintf printfW
-#if _MSC_VER < 1500 /* Up to VS 8/2005, fputws() is broken. It outputs just the 1st character. */
-extern int fputwsW(const wchar_t *pws, FILE *f);
+/* fputws() is broken: Up to VS 8/2005, it outputs just the first character;
+   and in all later versions it fails to display unicode plane 1+ characters. */
+extern int fputwsW(const wchar_t *pws, FILE *f); /* Our workaround routine */
 #define fputws fputwsW		/* Use our workaround routine instead */
-#endif
 
 /* Wide-character string formatting, similar to GNU asprintf(), etc, extensions */
 extern int vaswprintf(wchar_t **ppwszBuf, const wchar_t *pwszFormat, va_list vl);

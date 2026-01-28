@@ -34,6 +34,7 @@
 *    2025-08-04 JFL Disabled debug output by default, to avoid lots of        *
 *                   useless output when debugging other routines.             *
 *    2025-12-22 JFL Fixed fputsM, which output garbage for empty "" input.    *
+*    2026-01-28 JFL Fixed Unicode plane 1+ characters output on the console.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -649,7 +650,10 @@ int isTranslatedFile(int iFile, UINT cp, UINT *pcpOut) {
 #undef fputc
 #undef fwrite
 
-#if _MSC_VER < 1500 /* Up to VS 8/2005, fputws() is broken. It outputs just the 1st character. */
+#if 0	/* This workaround has the same bug as MSVC's own fputws() in later versions:
+	   It cannot display UTF-16 plane 1 characters */ 
+	   
+#if _MSC_VER < 1500 /* Up to VS 8/2005, fputws() is broken. It outputs just the first character. */
 /* Actually it's _setmode() that does not support _O_WTEXT, but the effect is the same */
 int fputwsW(const wchar_t *pws, FILE *f) {
   wint_t wi;
@@ -659,6 +663,35 @@ int fputwsW(const wchar_t *pws, FILE *f) {
   }
   return 0;
 }
+#endif
+
+#else	/* Updated workaround, for all MSVC versions up to VS 2026 at least */
+
+#undef fputws	/* Make sure fputws() refers to Microsoft's own, not our fputwsW() */
+
+int fputwsW(const wchar_t *pws, FILE *f) {
+  int iRet = 0;
+  int iFile = fileno(f);
+  if (isConsole(iFile)) {	/* Writing to the console */
+    /* Supplementary Plane characters are displayed correctly by Windows Terminal only
+       if both elements of a surrogate pair are printed by a single WriteConsoleW call. */ 
+    HANDLE hConsole = (HANDLE)_get_osfhandle(iFile);
+    BOOL bDone;
+    fflush(f); /* Make sure any output cached earlier makes it to the console first */
+    bDone = WriteConsoleW(hConsole, pws, lstrlenW(pws), NULL, NULL);
+    if (!bDone) {
+      iRet = EOF;
+      errno = Win32ErrorToErrno();
+    }
+  } else {			/* Writing to a file */
+    /* Simply use fputws, which writes UTF-16 surrogate pairs successfully to files */
+    iRet = fputws(pws, f);
+  }
+  return iRet;
+}
+
+#define fputws fputwsW	/* Use this workaround further down */
+
 #endif
 
 #define IS_ASCII(c) ((c&0x80) == 0)
