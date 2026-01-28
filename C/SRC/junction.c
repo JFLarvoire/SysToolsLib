@@ -32,6 +32,7 @@
 *    2026-01-27 JFL Output a Docker "🐋" whale ahead of WCI links targets,    *
 *		    to make it clear its root is in a container.	      *
 *    2026-01-28 JFL Output type-specific arrows for other reparse points types.
+*		    Added option -m to limit the recursive search depth.      *
 *                                                                             *
 \*****************************************************************************/
 
@@ -112,6 +113,7 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 #endif
 "\
   -l DIR  List junctions in a directory\n\
+  -m MAX  Maximum depth when searching recursively. Default: 0 = unlimited\n\
   -o      Make sure to search linked folders only once. (slower, useful w. -f)\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
   -R      Display the raw junction target. Default: Display the relative target\n\
@@ -221,6 +223,15 @@ int main(int argc, char *argv[]) {
       if (streq(opt, "l")) {	/* List all junctions in a directory */
 	action = ACT_SCAN;
 	opts.iFlags |= WDT_NORECURSE;
+	continue;
+      }
+      if (streq(opt, "m")) {	/* Maximum depth */
+	if (((i+1)<argc) && !IsSwitch(argv[i+1])) {
+	  opts.iMaxDepth = atoi(argv[++i]);
+	} else {
+	  pferror("Max depth value missing");
+	  return 2;
+	}
 	continue;
       }
       if (streq(opt, "nobanner")) { /* For MS compatibility. Ignore that */
@@ -545,6 +556,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
 
   iErr = -1;
   switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
+    int iLen;
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
 read_link:
@@ -573,7 +585,7 @@ read_link:
     }
     case IO_REPARSE_TAG_APPEXECLINK: {
       pszType = "AppExecLnk";
-      int iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
+      iLen = MlxReadAppExecLink(pszRelPath, buf, sizeof(buf)); /* Get the target of an appexeclink */
       iErr = (iLen <= 0) ? -1 : 0;
       break;
     }
@@ -592,7 +604,7 @@ read_link:
       /* MsvcLibX reads WCI links targets as relative to an unknown GUID-defined container root directory */
       strcpy(buf, (dwAttr & FILE_ATTRIBUTE_OFFLINE) ? "↑" : "↕"); /* ↑=Remote ↕=Both ↓=Local */ 
       strcat(buf, "🐋\\");
-      int iLen = lstrlen(buf);
+      iLen = lstrlen(buf);
       iErr = MlxReadWci(pszRelPath, buf + iLen, sizeof(buf) - iLen) ? 0 : -1;
       break;
     }
@@ -702,7 +714,12 @@ int ExposeAllReparsePoints() {
 |		    							      |
 |   Returns	    							      |
 |		    							      |
-|   Notes	    							      |
+|   Notes	    Prefer ASCII or Unicode 1 symbols for link types that     |
+|		    may occur on Windows XP, as XP does not support Unicode 2.|
+|		    For link types introducted in Windows 7 or 8, prefer      |
+|		    Unicode 1 symbols.					      |
+|		    For link types introducted in Windows 10 or later, any    |
+|		    unicode char. is OK, and the more colorfull the better.   |
 |		    							      |
 |   History	    							      |
 |    2026-01-28 JFL Created this routine.				      |
@@ -712,17 +729,17 @@ int ExposeAllReparsePoints() {
 char *GetTagArrow(DWORD dwTag) {
   switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
     case IO_REPARSE_TAG_MOUNT_POINT: /* = Junction */
-      return "-J>";
+      return "-J>"; /* J or 💽 or 💾 or 📀 considered */
     case IO_REPARSE_TAG_SYMLINK:
-      return "-S>";
+      return "-S>"; /* S or 📁 or 📂 or 📃 or 📄 considered */
     case IO_REPARSE_TAG_LX_SYMLINK:
     case IO_REPARSE_TAG_AF_UNIX:
-    case IO_REPARSE_TAG_LX_FIFO:
+    case IO_REPARSE_TAG_LX_FIFO: /* ➰ considered */
     case IO_REPARSE_TAG_LX_CHR:
     case IO_REPARSE_TAG_LX_BLK:
       return "-🐧>";
     case IO_REPARSE_TAG_APPEXECLINK:
-      return "-X>";
+      return "-🔥>"; /* X or 🔥 considered */
     case IO_REPARSE_TAG_CLOUD:
       return "-☁ >"; /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
     case IO_REPARSE_TAG_WCI:
