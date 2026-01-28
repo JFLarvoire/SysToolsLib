@@ -12,6 +12,7 @@
 *                   Automatically prepend the program name to the error msg.  *
 *                   Added functions that automatically append the LibC error. *
 *                   Added functions for displaying warnings.	              *
+*    2026-01-28 JFL Allow not passing a message, and show just on the C error.*
 *                                                                             *
 \*****************************************************************************/
 
@@ -36,8 +37,9 @@ int pGenError(char *pszType, char *pszFormat, va_list vl, char *pszCause) {
   const char *pszName = getprogname();
   if (pszName && pszName[0]) n += fprintf(stderr, "%s: ", pszName);
   if (pszType) n += fprintf(stderr, "%s: ", pszType); /* Error, Warning, Info, etc... */
-  n += vfprintf(stderr, pszFormat, vl);	/* The main part of the error message */
-  if (pszCause) n += fprintf(stderr, ": %s", pszCause); /* Optional C or OS error message */
+  if (pszFormat) n += vfprintf(stderr, pszFormat, vl);	/* The main part of the error message */
+  if (pszFormat && pszCause) n += fprintf(stderr, ": ");
+  if (pszCause) n += fprintf(stderr, "%s", pszCause); /* Optional C or OS error message */
   if (fputs("\n", stderr) >= 0) n += 1;
   return n;
 }
