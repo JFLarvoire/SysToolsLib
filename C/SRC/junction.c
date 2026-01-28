@@ -29,12 +29,15 @@
 *    2025-07-29 JFL Added the ability to expose hidden (Ex. Cloud) links.     *
 *    2025-07-30 JFL Display WCI links targets & cloud links offline mode.     *
 *    2025-08-03 JFL Restructured, and added Linux fifo, char, & block devices.*
+*    2026-01-27 JFL Output a Docker "🐋" whale ahead of WCI links targets,    *
+*		    to make it clear its root is in a container.	      *
+*    2026-01-28 JFL Output type-specific arrows for other reparse points types.
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2025-08-03"
+#define PROGRAM_VERSION "2026-01-28"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -69,6 +72,7 @@ typedef struct { /* Reference data to pass to the WalkDirTree callback */
 } JCB_REF;	 /* Initialize as {0}, except for the inut flags */
 int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pJcbRef);
 int ExposeAllReparsePoints(void);
+char *GetTagArrow(DWORD dwTag);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -165,6 +169,7 @@ int main(int argc, char *argv[]) {
   int iRaw = FALSE;
   int iAbs = FALSE;
   int iVerbose = FALSE;
+  int iAllTypes = FALSE;
   action_t action = ACT_GET;
   wdt_opts opts = {0};		/* Must be cleared before use */
   JCB_REF jcbRef = {0};		/* Must be cleared before use */
@@ -241,6 +246,7 @@ int main(int argc, char *argv[]) {
       }
       if (streq(opt, "t")) {	/* With -l or -r, list all types of reparse points, not just junctions */
 	jcbRef.iFlags |= JCB_ALLTYPES;
+	iAllTypes = TRUE;
 	ExposeAllReparsePoints();
 	continue;
       }
@@ -282,7 +288,7 @@ int main(int argc, char *argv[]) {
     FILE_ID fid;
     BOOL bDone = MlxGetFileID(pszPath, &fid);
     if (!bDone) {
-      pferror("Failed to get the file ID for \"%s\". %s", pszPath, strerror(errno));
+      pfcerror("Failed to get the file ID for \"%s\"", pszPath);
       return 1;
     }
     if (fid.dwIDVol1 || fid.dwIDFil3 || fid.dwIDFil2) {
@@ -325,7 +331,7 @@ int main(int argc, char *argv[]) {
   if (action == ACT_CREATE) { /* Create a junction to this target */
     iErr = junction(pszTarget, pszJunction);
     if (iErr) {
-      pferror("Failed to create junction \"%s\". %s", pszJunction, strerror(errno));
+      pfcerror("Failed to create junction \"%s\"", pszJunction);
       return 1;
     }
     if (iVerbose) {
@@ -337,14 +343,40 @@ int main(int argc, char *argv[]) {
   }
 
   if (action == ACT_GET) {
-    if (iRaw | iAbs) {
+    int iOffset = 0;
+    DWORD dwTag = MlxGetReparseTag(pszJunction);
+    if (!dwTag) {
+      pfcerror(NULL);
+      return 1;
+    }
+    dwTag &= IO_REPARSE_TAG_TYPE_BITS;
+    if ((dwTag != IO_REPARSE_TAG_MOUNT_POINT) && !iAllTypes) {
+      pferror("This is not a junction. Use option -t to read other reparse point types.");
+      return 1;
+    }
+    switch (dwTag) {
+      case IO_REPARSE_TAG_CLOUD:
+	strcpy(buf, "☁ \\?"); /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
+	/* TO DO: We don't know how to get the target location in the cloud */
+	iErr = 0;
+	break;
+      case IO_REPARSE_TAG_WCI:
+	strcpy(buf, "🐋\\");
+	iOffset = lstrlen(buf);
+	iErr = MlxReadWci(pszJunction, buf + iOffset, sizeof(buf) - iOffset) ? 0 : -1;
+	break;
+      default: {
+	if (iRaw | iAbs) {
       iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
-    } else {
-      /* Read the link, as if it were a relative symbolic link */
-      iErr = (int)readlink(pszJunction, buf, sizeof(buf));
+	} else {
+	  /* Read the link, as if it were a relative symbolic link */
+	  iErr = (int)readlink(pszJunction, buf, sizeof(buf));
+	}
+	break;
+      }
     }
     if (iErr == -1) {
-      pferror("Failed to read junction \"%s\". %s", pszJunction, strerror(errno));
+      pfcerror("Failed to read junction \"%s\"", pszJunction);
       return 1;
     }
     pszTarget = buf;
@@ -352,7 +384,8 @@ int main(int argc, char *argv[]) {
       if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
     }
     if (iVerbose) {
-      printf("%s -> %s\n", pszJunction, pszTarget);
+      char *pszArrow = iAllTypes ? GetTagArrow(dwTag) : "->";
+      printf("%s %s %s\n", pszJunction, pszArrow, pszTarget);
     } else {
       printf("%s\n", pszTarget);
     }
@@ -365,14 +398,14 @@ int main(int argc, char *argv[]) {
     if (iErr == -1) {
       if (errno == ENOENT) return 0;	/* Deleted an already deleted junction is OK */
 not_junction:
-      pferror("\"%s\" is not a junction. %s", pszJunction, strerror(errno));
+      pfcerror("\"%s\" is not a junction", pszJunction);
       return 1;
     }
     dwTag = MlxGetReparseTag(pszJunction);
     if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) goto not_junction;
     iErr = unlink(pszJunction);
     if (iErr) {
-      pferror("Failed to delete junction \"%s\". %s", pszJunction, strerror(errno));
+      pfcerror("Failed to delete junction \"%s\"", pszJunction);
       return 1;
     }
     if (iVerbose) {
@@ -514,6 +547,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
+read_link:
       if (iRaw | iAbs) {
 	iErr = MlxReadLink(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
       } else {
@@ -535,7 +569,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
     }
     case IO_REPARSE_TAG_LX_SYMLINK: {
       pszType = "LinuxLink";
-      break;
+      goto read_link;
     }
     case IO_REPARSE_TAG_APPEXECLINK: {
       pszType = "AppExecLnk";
@@ -548,14 +582,16 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
       pszType = "CloudLnk";	/* Place Holder for a file in cloud storage */
       /* MsvcLibX does not know how to find the cloud target pathname */
       strcpy(buf, (dwAttr & FILE_ATTRIBUTE_OFFLINE) ? "↑" : "↕"); /* ↑=Remote ↕=Both ↓=Local */ 
-      strcat(buf, "☁");
+      strcat(buf, "☁ \\?"); /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
       iErr = 0;
       break;
     }
     case IO_REPARSE_TAG_WCI: {
-      pszType = "ContainerLnk";
+      DWORD dwAttr = pDE->d_attribs;
+      pszType = "WciLink";
       /* MsvcLibX reads WCI links targets as relative to an unknown GUID-defined container root directory */
-      strcpy(buf, "⛟ \\");	/* ⛟ or ✉ standing for a container base. (Docker 🐋 whale does not print) */
+      strcpy(buf, (dwAttr & FILE_ATTRIBUTE_OFFLINE) ? "↑" : "↕"); /* ↑=Remote ↕=Both ↓=Local */ 
+      strcat(buf, "🐋\\");
       int iLen = lstrlen(buf);
       iErr = MlxReadWci(pszRelPath, buf + iLen, sizeof(buf) - iLen) ? 0 : -1;
       break;
@@ -605,7 +641,8 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
     if (!iAllTypes) {
       printf("%s -> %s\n", pszRelPath, pszTarget);
     } else {
-      printf("%-10s %s -> %s\n", pszType, pszRelPath, pszTarget);
+      char *pszArrow = GetTagArrow(dwTag);
+      printf("%-10s %s %s %s\n", pszType, pszRelPath, pszArrow, pszTarget);
     }
   }
   return 0;
@@ -655,3 +692,42 @@ int ExposeAllReparsePoints() {
   RETURN_INT_COMMENT(0, ("Success\n"));
 }
 	
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetTagArrow						      |
+|									      |
+|   Description     Return an arrow uniquely identifying the tag type         |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    							      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History	    							      |
+|    2026-01-28 JFL Created this routine.				      |
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+char *GetTagArrow(DWORD dwTag) {
+  switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
+    case IO_REPARSE_TAG_MOUNT_POINT: /* = Junction */
+      return "-J>";
+    case IO_REPARSE_TAG_SYMLINK:
+      return "-S>";
+    case IO_REPARSE_TAG_LX_SYMLINK:
+    case IO_REPARSE_TAG_AF_UNIX:
+    case IO_REPARSE_TAG_LX_FIFO:
+    case IO_REPARSE_TAG_LX_CHR:
+    case IO_REPARSE_TAG_LX_BLK:
+      return "-🐧>";
+    case IO_REPARSE_TAG_APPEXECLINK:
+      return "-X>";
+    case IO_REPARSE_TAG_CLOUD:
+      return "-☁ >"; /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
+    case IO_REPARSE_TAG_WCI:
+      return "-🐋>"; /* Docker 🐋 whale, ⛟ or ✉ considered as symbols for a container */
+    default:
+      return "-?>";
+  }
+}
