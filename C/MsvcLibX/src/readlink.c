@@ -34,6 +34,7 @@
 *    2025-08-03 JFL Added MlxReadWci(), etc.				      *
 *		    Added MlxSetProcessPlaceholderCompatibilityMode(), etc.   *
 *    2026-01-03 JFL Fixed readlinkM() when the target is an empty "" string.  *
+*    2026-01-27 JFL Make sure MlxGetReparseTag() always sets errno on error.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -66,10 +67,15 @@ DWORD MlxGetReparseTagW(const WCHAR *pwszPath) {
   DWORD dwTag = 0;
 
   hFind = FindFirstFileW(pwszPath, &findFileData);
-  if (hFind == INVALID_HANDLE_VALUE ) return 0;
+  if (hFind == INVALID_HANDLE_VALUE ) {
+    errno = Win32ErrorToErrno();
+    return 0;
+  }
   CloseHandle(hFind);
   if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
     dwTag = findFileData.dwReserved0;
+  } else {
+    errno = EBADF; /* Not a reparse point */
   }
   return dwTag;
 }
