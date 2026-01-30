@@ -88,6 +88,10 @@
 *		    Version 2.2.					      *
 *    2025-06-11 JFL Fixed a missing line when run from the top of the console.*
 *		    Version 2.2.1.					      *
+*    2026-01-29 JFL Make sure _not_ to use any MsvcLibX modified output fnct. *
+*		    Fixed the output of double-width Unicode characters.      *
+*    2026-01-30 JFL Bugfix: Output the full UTF-8 sequence in code page 65001.*
+*		    Version 2.3.					      *
 *		    							      *
 *       © Copyright 2016-2017 Hewlett Packard Enterprise Development LP       *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -95,8 +99,8 @@
 
 #define PROGRAM_DESCRIPTION "Show characters and their codes"
 #define PROGRAM_NAME    "chars"
-#define PROGRAM_VERSION "2.2.1"
-#define PROGRAM_DATE    "2025-06-11"
+#define PROGRAM_VERSION "2.3"
+#define PROGRAM_DATE    "2026-01-30"
 
 #define _CRT_SECURE_NO_WARNINGS 1 /* Avoid Visual C++ 2005 security warnings */
 
@@ -201,6 +205,18 @@
 #define CDECL
 #endif
 #endif
+
+#ifdef MSVCLIBX_VERSION /* If built using MsvcLibX */
+/* Undefine all modified routines defined in MsvcLibX' stdio.h */
+#undef vfprintf
+#undef fprintf
+#undef printf
+#undef wprintf
+#undef fputs
+#undef fputws
+#undef fputc
+#undef puts
+#endif /* MSVCLIBX_VERSION */
 
 /* SysToolsLib include files */
 #include "debugm.h"     /* SysToolsLib debug macros. Include first. */
@@ -621,9 +637,9 @@ int ParseCharCode(char *pszString, int *pCode, int *pOutFlags);
 #if defined(_MSDOS)
 int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2);
 #elif defined(_WIN32)
-int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char *pszCode2);
-#else
-int PrintCharCode(int iCode, int iFlags);
+int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char cCode2[], int nCode2);
+#else /*  defined(_UNIX) */
+int PrintCharCode(int iCode, int iFlags, char cCode2[], int nCode2);
 #endif
 int PrintRange(int iFirst, int iLast, int iFlags);
 int DetectAnsi(int iFlags);
@@ -1006,9 +1022,9 @@ arg_ignored:
     char c = 'x';
 #ifdef _WIN32
     WCHAR wcBuf[3] = {0};
-    char szBuf[8];
-    int nInBuf = 0;
 #endif
+    char cBuf[8] = {0};
+    int nInBuf = 0;
 #if SUPPORTS_UTF8
     int isUnicodeChar = isUTF8 || ((rangeDefs[i].iFlags & CF_UNICODE) != 0);
     iFlags &= ~CF_UNICODE;
@@ -1027,6 +1043,8 @@ arg_ignored:
     if (iLast > iMax) {
       fprintf(stderr, "Warning: The last requested char. \\%c%02X is larger than the last possible one \\%c%02X\n", c, iLast, c, iMax);
     }
+    DEBUG_PRINT_INT_VAR(iFirst);
+    DEBUG_PRINT_INT_VAR(iLast);
 
     /* Change the code page if needed */
 #if SUPPORTS_UTF8
@@ -1040,18 +1058,20 @@ arg_ignored:
 			           0,			/* dwFlags, */
 			           wcBuf,		/* lpWideCharStr, */
 			           -1,			/* cchWideChar, */
-			           szBuf,		/* lpMultiByteStr, */
-			           sizeof(szBuf),	/* cbMultiByte, */
+			           cBuf,		/* lpMultiByteStr, */
+			           sizeof(cBuf),	/* cbMultiByte, */
 			           NULL,		/* lpDefaultChar, */
 			           NULL			/* lpUsedDefaultChar */
 			           );
       if (!nInBuf) {
 	DEBUG_PRINTF(("Can't convert the first character to CP %u" EOL, uCP1));
       } else {
+      	DEBUG_CODE(
       	int j;
 	DEBUG_PRINTF(("iFirst[CP %u] = ", uCP1));
-      	for (j=0; szBuf[j]; j++) DEBUG_PRINTF(("\\x%02X", szBuf[j] & 0xFF));
+      	for (j=0; cBuf[j]; j++) DEBUG_PRINTF(("\\x%02X", cBuf[j] & 0xFF));
 	DEBUG_PRINTF((EOL));
+	)
       }
       if (iVerbose) printf("Switching to code page %d" EOL, CP_UTF8);
       fflush(stdout);
@@ -1072,6 +1092,8 @@ arg_ignored:
 #endif /* defined(_UNIX) */
       iFlags |= CF_UTF8;
       isUTF8 = TRUE;
+    } else if (isUnicodeChar && isUTF8) {
+      nInBuf = ToUtf8(iFirst, cBuf);
     }
 
     if (isUTF8 && !isUnicodeChar) {
@@ -1106,20 +1128,26 @@ arg_ignored:
       iExitCode += PrintCharCode(iFirst, iFlags, uCP, iFirst);
 #elif defined(_WIN32)
       int uCP2 = 0;
-      char *pszCode2 = szBuf;
+      char *pBytes = cBuf;
       char *pszArgCP1 = rangeDefs[i].pszArgCP1;
       /* char *pszArgUTF8 = rangeDefs[i].pszArgUTF8; */
+      DEBUG_CODE(
       int j;
       DEBUG_PRINTF(("pszArgCP1 = \""));
       for (j=0; pszArgCP1[j]; j++) DEBUG_PRINTF(("\\x%02X", pszArgCP1[j] & 0xFF));
       DEBUG_PRINTF(("\"" EOL));
+      )
       if (isUnicodeChar /* && (iFlags & CF_VERBOSE) */ && (strlen(pszArgCP1) > 0)) {
       	uCP2 = uCP1;
-	if ((pszCode2[0] == '?') && (iFirst != '?')) pszCode2 = NULL;
+	if (nInBuf && (pBytes[0] == '?') && (iFirst != '?')) {
+	  pBytes = NULL;
+	  nInBuf = 0;
+	}
       }
-      iExitCode += PrintCharCode(iFirst, iFlags, uCP2, pszCode2);
+      iExitCode += PrintCharCode(iFirst, iFlags, uCP2, pBytes, nInBuf);
 #else
-      iExitCode += PrintCharCode(iFirst, iFlags);
+      char *pBytes = nInBuf ? cBuf : NULL;
+      iExitCode += PrintCharCode(iFirst, iFlags, pBytes, nInBuf);
 #endif /* defined(_WIN32) */
     }
   }
@@ -1559,26 +1587,29 @@ int PrintCharCode(int iCode, int iFlags, unsigned uCP2, int iCode2) {
   char buf[5];
   DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X, %u, 0x%02X)" EOL, iCode, iFlags, uCP2, iCode2));
 #elif defined(_WIN32)
-int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char *pszCode2) {
+int PrintCharCode(int iCode, int iFlags, unsigned uCP2, char cCode2[], int nCode2) {
   char buf[5];
   WCHAR wcBuf[3];
   int nwc;
   int j;
   DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X, %u, ", iCode, iFlags, uCP2));
+#else
+int PrintCharCode(int iCode, int iFlags, char cCode2[], int nCode2) {
+  char buf[5]; 
+  int j;
+  DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X, ", iCode, iFlags));
+#endif
+#if !defined(_MSDOS)
   DEBUG_CODE(
-  if (pszCode2) {
+  if (cCode2) {
     DEBUG_PRINTF(("\""));
-    for (j=0; pszCode2[j]; j++) DEBUG_PRINTF(("\\x%02X", pszCode2[j] & 0xFF));
-    DEBUG_PRINTF(("\""));
+    for (j=0; j<nCode2; j++) DEBUG_PRINTF(("\\x%02X", cCode2[j] & 0xFF));
+    DEBUG_PRINTF(("\", %d", nCode2));
   } else {
     DEBUG_PRINTF(("NULL"));
   }
   )
   DEBUG_PRINTF((")" EOL));
-#else
-int PrintCharCode(int iCode, int iFlags) {
-  char buf[5];
-  DEBUG_ENTER(("PrintCharCode(0x%02X, 0x%X)" EOL, iCode, iFlags));
 #endif
 
 #if SUPPORTS_UTF8
@@ -1627,8 +1658,8 @@ int PrintCharCode(int iCode, int iFlags) {
       /* Output the equivalent character code in the selected code page */
       if (uCP2) {
 	printf("CP%u ", uCP2);
-      	if (pszCode2) {
-	  for (j=0; pszCode2[j]; j++) printf("\\x%02X", pszCode2[j] & 0xFF);
+      	if (cCode2) {
+	  for (j=0; j < nCode2; j++) printf("\\x%02X", cCode2[j] & 0xFF);
 	} else {
 	  Puts("(undefined)");
 	}
@@ -1636,9 +1667,9 @@ int PrintCharCode(int iCode, int iFlags) {
       }
 #endif
     } else if (!(iFlags & CF_QUIET)) {
-#ifdef _WIN32
-      if (pszCode2) {
-	for (j=0; pszCode2[j]; j++) printf("\\x%02X", pszCode2[j] & 0xFF);
+#if defined(_WIN32) || defined(_UNIX)
+      if (cCode2) {
+	for (j=0; j < nCode2; j++) printf("\\x%02X", cCode2[j] & 0xFF);
 	Puts(" ");
       }
 #endif
@@ -1718,9 +1749,7 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
 #if ANSI_IS_OPTIONAL
   int isANSI = ((iFlags & CF_ANSI) != 0);
 #endif
-#if EXTRA_CHARS_IN_CONTROL_CODES
   int iErr;
-#endif
 #if SUPPORTS_UTF8
   int isUTF8 = ((iFlags & CF_UTF8) != 0);
   int isUnicode = ((iFlags & CF_UNICODE) != 0);
@@ -1778,8 +1807,10 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
       for (i=0; i<8; i++) {
 	int k, l;
 #if EXTRA_CHARS_IN_CONTROL_CODES
-	int iRow0, iCol0, iRow1, iCol1;
+	int iRow0, iCol0;
 #endif
+	int iRow1, iCol1;
+
 	if (!(i&3)) iCol += Print("  ");
 
 	l = k = (iBase + 16*i)+j;
@@ -1824,17 +1855,13 @@ int PrintRange(int iFirst, int iLast, int iFlags) {
 	    break;
 	}
 
-	iCol += printf("  %02X ", k); /* Print the numeric code, with at least 2 characters */
+	iCol += printf(" %02X ", k); /* Print the numeric code, with at least 2 characters, possibly up to 5 */
 #if EXTRA_CHARS_IN_CONTROL_CODES
         iRow0 = iCol0 = 0; /* Prevent an (incorrect) uninitialized variable warning later on */
 	if (isTTY && (l < ' ')) { /* Old DOS and Windows consoles display extra characters in the control codes range */
 	  fflush(stdout);
 	  iErr = GetCursorPosition(&iCol0, &iRow0);
-	  if (iErr) {
-failed_to_get_cursor_coord:
-	    fprintf(stderr, "Failed to get the cursor coordinates\n");
-	    RETURN_INT(1);
-	  }
+	  if (iErr) goto failed_to_get_cursor_coord;
 	}
 #endif /* EXTRA_CHARS_IN_CONTROL_CODES */
 #if SUPPORTS_UTF8
@@ -1846,30 +1873,42 @@ failed_to_get_cursor_coord:
 	} else
 #endif /* SUPPORTS_UTF8 */
 	PUTC(l); /* Do not use printf %c for the char, else the NUL char is not written */
-	iCol += 1; /* Theoretically, the cursor should move 1 column forward, but there are exceptions */
+	/* For ASCII characters, the cursor will move 1 column forward;
+	   For Control Codes, it can stay still, or move a lot, possibly on another line;
+	   For non-ASCII characters, ex. Unicode, it can move 0, 1, or 2 columns */
+	if (isTTY) {
+	  iCol += 2; /* We want to end up 2 columns to the right in all cases */
+	  if ((l < ' ') || (l >= '\x7F')) { /* Problematic characters */
+	    fflush(stdout);
+	    iErr = GetCursorPosition(&iCol1, &iRow1);
+	    if (iErr) {
 #if EXTRA_CHARS_IN_CONTROL_CODES
-	if (isTTY && (l < ' ')) { /* The cursor may make wild moves for some control codes */
-	  fflush(stdout);
-	  iErr = GetCursorPosition(&iCol1, &iRow1);
-	  if (iErr) goto failed_to_get_cursor_coord;
-	  if (iCol1 == iCol0 && iRow1 == iRow0) {
-	    /* The cursor did not move, so add a space to keep the alignment of subsequent columns */
-	    PUTC(' ');
-	  } else if (iCol1 < iCol0) {
-	    /* Most likely this is FF or VT, and the terminal interpreted it as CRLF */
-	    int iScrolled = (iRow0 == (nRows -1)) ? 1 : 0; /* The display scrolled if the cursor was on the last line */
-	    SetCursorPosition(iCol0+1, iRow0-iScrolled);
-	  }
-	}
-#endif /* EXTRA_CHARS_IN_CONTROL_CODES */
-	if (isTTY && (l >= '\x7F')) { /* The cursor may not move for undefined or 0-width characters */
-#ifdef _UNIX
-	  printf("\x1B[%dG", iCol+1); /* Go to absolute column iCol (1-based in ANSI coordinates) */
-#else /* DOS, Windows */
-	  fflush(stdout);
-	  GetCursorPosition(&iCol1, &iRow1);
-	  if (iCol1 != iCol) SetCursorPosition(iCol, iRow1);
+failed_to_get_cursor_coord:
 #endif
+	      fprintf(stderr, "Failed to get the cursor coordinates\n");
+	      RETURN_INT(1);
+	    }
+#if EXTRA_CHARS_IN_CONTROL_CODES
+	    if (l < ' ') { /* The cursor may make wild moves for some control codes */
+	      if (iCol1 < iCol0) {
+		/* Most likely this is FF or VT, and the terminal interpreted it as CRLF */
+		/* Return the cursor to its initial location... Which may have scrolled up 1 line */
+		int iScrolled = (iRow0 == (nRows -1)) ? 1 : 0; /* The display scrolled if the cursor was on the last line */
+		iCol1 = iCol0;
+		iRow1 = iRow0-iScrolled;
+		SetCursorPosition(iCol1, iRow1);
+	      }
+	    }
+#endif /* EXTRA_CHARS_IN_CONTROL_CODES */
+#ifdef _UNIX
+	    iCol1 -= 1; /* It's 1-based in Unix */
+#endif
+	    while (iCol1++ < iCol) PUTC(' '); /* The cursor may move 0, 1, or 2 characters */
+	  } else {  /* The cursor did move 1 column for ASCII chars */
+	    PUTC(' '); /* Make it move a second column */
+	  }
+	} else { /* Writing to a file or a pipe. No way to control columns alignments */
+	  PUTC(' '); /* Make it at least look good for ASCII */
 	}
       }
       Puts(EOL);
