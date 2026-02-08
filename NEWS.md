@@ -4,6 +4,62 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2026-02-07
+### Changed
+- C/MsvcLibX/src/fileid.c: Added new routine MlxAttrAndTag2Type(), merging the inconsistent implementations previously
+  in readdir() in dirent.c, and lstat() in lstat.c.
+- C/MsvcLibX/src/lstat.c: Moved the conversion of the Win32 attributes and reparse tag to a C file type to new routine MlxAttrAndTag2Type().
+- C/MsvcLibX/src/dirent.c: Moved the conversion of the Win32 attributes and reparse tag to a C file type to new routine MlxAttrAndTag2Type().
+- C/MsvcLibX/include/sys/stat.h: Added the prototype for MlxAttrAndTag2Type().
+- C/MsvcLibX/src/err2errno.c: Added case ERROR_CANT_ACCESS_FILE, which happens when doing a stat on AppExecLinks or WciLinks.
+- C/MsvcLibX/src/readlink.c: Decode junction target raw pathnames beginning with '\??\Global\C:', etc, or'\??\UNC\server\share\dir', etc.
+
+## [Unreleased] 2026-01-30
+### Fixed
+- chars.exe: Version 2.3
+  - Fixed the output of double-width Unicode characters.
+  - Bugfix: Output the full UTF-8 sequence in code page 65001.
+
+## [Unreleased] 2026-01-28
+### Fixed
+- C/MsvcLibX/src/iconv.c: Fixed Unicode plane 1+ characters output on the console.
+- C/MsvcLibX/include/stdio.h: Use the fixed fputwsW() routine, instead of fputws(), in all MSVC versions.
+- C/MsvcLibX/src/readlink.c: Make sure MlxGetReparseTag() always sets errno on error.
+
+### Changed
+- C/SysLib/pferror.c: Allow not passing a message, and show just on the C error.
+- junction.exe: Version 2026-01-28
+  - Output a Docker whale ahead of WCI links targets, to make it clear its root is in a container.
+  - Output type-specific arrows for other reparse points types. Ex: Fire for AppExecLinks
+  - Added option -m to limit the recursive search depth.
+
+## [Unreleased] 2026-01-23
+### Changed
+- C/MsvcLibX/include/errno.h: Added realpath() definitions.
+- C/MsvcLibX/include/unistd.h:  
+  Moved realpath() definitions to stdlib.h.  
+  Added MlxResolveSubstDrives(), MlxGetFileName().
+- C/MsvcLibX/include/sys/stat.h: Added GetFileInformationByHandleEx() access definitions.
+- C/MsvcLibX/src/fileid.c:  
+  Moved GetFileInformationByHandleEx() access definitions to sys/stat.h.  
+  Extracted new routine HasGetFileInformationByHandleEx() out of MlxGetFileAttributesAndID().
+- C/MsvcLibX/src/realpath.c:  
+  Added routines MlxResolveSubstDrives(), MlxGetFileName().  
+  Converted MlxResolveLinks() to a wide W routine, with M U A versions deriving from it.  
+  Converted realpath() to a wide W routine, with M U A versions deriving from it.
+- Truename.exe version 1.2:  
+  - Now resolves substituted and network drives.  
+  - Now uses a WIN32 API introduced in Windows Vista, which resolves names at the OS level.
+  - If that API is not available (Windows XP), it reverts to using the old "manual" link resolution algorithm.
+
+## [Unreleased] 2026-01-23
+### Fixed
+- C/MsvcLibX/src/CompactPath.c: Simplified and fixed the debug output, w. DEBUG_W* macros.
+
+## [Unreleased] 2026-01-18
+### New
+- C/MsvcLibX: include/errno.h, src/strerror.c: Added a definition and error message for ENOTSUP.
+
 ## [Unreleased] 2026-01-09
 ### Fixed
 - C/MsvcLibX/src/readlink.c: Fixed readlink() when the target is an empty "" string.
