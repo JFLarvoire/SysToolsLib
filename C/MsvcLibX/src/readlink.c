@@ -35,6 +35,8 @@
 *		    Added MlxSetProcessPlaceholderCompatibilityMode(), etc.   *
 *    2026-01-03 JFL Fixed readlinkM() when the target is an empty "" string.  *
 *    2026-01-27 JFL Make sure MlxGetReparseTag() always sets errno on error.  *
+*    2026-02-06 JFL Decode junction targets raw names beginning with          *
+*                   '\??\Global\C:', etc, or'\??\UNC\server\share\dir', etc.  *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -162,7 +164,6 @@ int TrimTailSlashesW(WCHAR *pwszPath) {
 |    2014-03-19 JFL Split routine ReadReparsePointW() from readlinkW().       |
 |		    Fail in case a junction target is on another server drive.|
 |    2021-11-29 JFL Renamed ReadReparsePoint*() as MlxReadReparsePoint*().    |
-|		    							      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -486,11 +487,26 @@ ssize_t readlinkW(const WCHAR *path, WCHAR *buf, size_t bufsize) {
   // For example: '\??\Volume{5e58015c-ba64-4048-928d-06aa03c983f9}\' */
   nRead = lstrlenW(buf);
   if ((nRead >= 7) && (!strncmpW(buf, L"\\??\\", 4))) {
-    if (!strncmpW(buf+5, L":\\", 2)) {
-      nRead -= 4;
-      CopyMemory(buf, buf+4, (nRead+1)*sizeof(WCHAR));
-      XDEBUG_WPRINTF((L"buf = \"%s\"; // Removed \"\\??\\\".\n", buf));
-    } else { /* Return an error for other types, as Posix SW cannot handle them successfully. */
+    WCHAR *pwszPath = buf + 4;
+    nRead -= 4;
+    /* Some junction targets begin with '\??\Global\C:\...'
+       Apparently it's even possible to have '\??\Global\Global\C:\...' */
+    while ((!strncmpW(pwszPath, L"Global\\", 7))) {
+      XDEBUG_PRINTF(("Removing \"Global\\\"\n"));
+      pwszPath += 7;
+      nRead -= 7;
+    }
+    if ((nRead > 2) && (!strncmpW(pwszPath+1, L":\\", 2))) {
+      XDEBUG_WPRINTF((L"buf = \"%s\"; // Removed the \"%.*s\" prefix.\n", pwszPath, (int)(pwszPath - buf), buf));
+      CopyMemory(buf, pwszPath, (nRead+1)*sizeof(WCHAR));
+    } else if (!strncmpW(pwszPath, L"UNC\\", 4)) { /* This is a network share */
+      /* Ex: '\??\UNC\server\share\dir' or '\??\Global\UNC\server\share\dir' */
+      pwszPath += 3; /* Skip the 'UNC', but keep the '\' */
+      nRead -= 3;
+      XDEBUG_WPRINTF((L"buf = \"\\%s\"; // Removed the \"%.*s\" prefix.\n", pwszPath, (int)(pwszPath - buf), buf));
+      CopyMemory(buf+1, pwszPath, (nRead+1)*sizeof(WCHAR)); /* Keep the initial '\', to generate '\\server\share\dir' */
+      nRead += 1; /* For the initial \ */
+    } else { /* Return an error for other types (Ex: Volumes), as Posix SW cannot handle them successfully. */
       errno = EINVAL;
       DEBUG_WLEAVE((L"return -1; // Unsupported mount point type: %s\n", buf+4));
       return -1;
