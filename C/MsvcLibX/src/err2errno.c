@@ -52,6 +52,8 @@
 |    2014-03-05 JFL Added the default call to _get_errno_from_oserr().        |
 |    2015-12-07 JFL Use the new error conversion routine name in the UCRT.    |
 |    2017-10-31 JFL Added case ERROR_FILENAME_EXCED_RANGE.		      |
+|    2021-12-26 JFL Added case ERROR_CANT_RESOLVE_FILENAME.		      |
+|    2026-02-02 JFL Added case ERROR_CANT_ACCESS_FILE.			      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -139,6 +141,9 @@ int Win32ErrorToErrno() {
       return ENAMETOOLONG;
     case ERROR_CANT_RESOLVE_FILENAME:
       return ELOOP; /* Most likely because there were more than 16 consecutive links. Broken links return ERROR_FILE_NOT_FOUND. */
+    case ERROR_CANT_ACCESS_FILE: /* Happens when doing a stat on AppExecLinks or WciLinks */
+      /* return ENXIO; // No such device or address */
+      return EAGAIN; /* Resource temporarily unavailable */
     default: {
       int errno0, errno1;
       errno0 = errno; /* Preserve the initial errno */
