@@ -13,6 +13,9 @@
 *		    out of MlxGetFileAttributesAndID().			      *
 *                   Moved GetFileInformationByHandleEx() access definitions   *
 *		    to sys/stat.h.					      *
+*    2026-02-03 JFL Added new routine MlxAttrAndTag2Type().		      *
+*    2026-02-04 JFL Merged the two versions from readdir() and lstat().	      *
+*    2026-02-06 JFL Added some debugging output.			      *
 *                   							      *
 *         © Copyright 2022 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -202,6 +205,145 @@ BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_DATA *p
   free(pwszName);
 
   return bDone;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    MlxAttrAndTag2Type					      |
+|									      |
+|   Description     Find the file type, based on its WIN32 Attribs & Rep. Tag |
+|									      |
+|   Parameters      WCHAR *pwszDir	The file path or pathname	      |
+|		    WCHAR *pwszName	Optional file name		      |
+|		    DWORD dwAttr	The file attributes		      |
+|		    DWORD dwTag		Optional reparse point tag	      |
+|		    			Read if not provided.		      |
+|		    							      |
+|   Returns	    The file dirent type = Top 4 bits of the stat st_mode     |
+|		    							      |
+|   Notes	    This is a shared subroutine of lstat() and readdir(),     |
+|		    ensuring that both set consistent file types.  	      |
+|		    							      |
+|		    It's located in this module, as lstat() also relies on    |
+|		    MlxGetFileAttributesAndID(), and most programs that use   |
+|		    readdir() will also call stat() or lstat().		      |
+|		    							      |
+|   History								      |
+|    2026-02-04 JFL Created this routine, by merging the two versions in      |
+|		    lstat() and readdir().				      |
+*									      *
+\*---------------------------------------------------------------------------*/
+
+#include <dirent.h>
+#include <unistd.h>
+#include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
+
+#if _DEBUG
+static char *pszTypes[16] = {
+  "UNKNOWN",	/*  0  */
+  "FIFO",	/*  1  // Fifo (not used in DOS/Windows dirs) */
+  "CHR",	/*  2  // Character device (not used in DOS/Windows) */
+  "?",		/*  3  // Undefined */
+  "DIR",	/*  4  // Directory */
+  "?",		/*  5  // Undefined */
+  "BLK",	/*  6  // Block device (not used in DOS/Windows) */
+  "?",		/*  7  // Undefined */
+  "REG",	/*  8  // Normal file */
+  "?",		/*  9  // Undefined */
+  "LNK",	/* 10  // Symbolic link */
+  "?",		/* 11  // Undefined */
+  "SOCK",	/* 12  // Socket (not used in DOS/Windows dirs) */
+  "?",		/* 13  // Undefined */
+  "?",		/* 14  // Undefined */
+  "VOLID"	/* 15  // Volume ID (non-standard extension for MS-DOS FAT) */
+};
+#endif /* _DEBUG */
+
+unsigned char MlxAttrAndTag2Type(WCHAR *pwszDir, WCHAR *pwszName, DWORD dwAttr, DWORD dwTag) {
+  unsigned char bType = DT_UNKNOWN;
+  WCHAR *pwszPathname = NULL;
+  WCHAR *pwszBuf = NULL;
+
+  DEBUG_WENTER((L"MlxAttrAndTag2Type(\"%s\", \"%s\", 0x%04X, 0x%04X);\n", pwszDir, pwszName, dwAttr, dwTag));
+
+  if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
+    if (pwszDir && pwszName) {
+      pwszPathname = ConcatPathW(pwszDir, pwszName, NULL, 0);
+      if (!pwszPathname) {
+	DEBUG_LEAVE(("return 0; // ConcatPathW() failed\n"));
+	goto cleanup_and_exit;
+      }
+      pwszName = pwszPathname;
+    } else { /* Only one of the two is defined */
+      pwszName = pwszDir ? pwszDir : pwszName;
+    }
+    /* JUNCTIONs and SYMLINKDs both have the FILE_ATTRIBUTE_DIRECTORY flag also set.
+    // Test the FILE_ATTRIBUTE_REPARSE_POINT flag first, to make sure they're seen as symbolic links.
+    //
+    // All symlinks are reparse points, but not all reparse points are symlinks. */
+    if (!dwTag) dwTag = MlxGetReparseTagW(pwszName); /* Make the tag optional */
+    if (!dwTag) {
+      DEBUG_LEAVE(("return 0; // MlxGetReparseTagW() failed\n"));
+      goto cleanup_and_exit;
+    }
+    switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
+      case IO_REPARSE_TAG_MOUNT_POINT: { /* NTFS junction or mount point */
+	ssize_t n;
+	pwszBuf = malloc(sizeof(WCHAR) * WIDE_PATH_MAX);
+	if (!pwszBuf) {
+	  DEBUG_LEAVE(("return 0; // malloc() failed\n"));
+	  goto cleanup_and_exit;
+	}
+	/* We must read the link to distinguish junctions from mount points. */
+	n = readlinkW(pwszName, pwszBuf, WIDE_PATH_MAX);
+	/* Junction targets are absolute pathnames, starting with a drive letter. Ex: C: */
+	/* readlink() fails if the reparse point does not target a valid WIN32 pathname */
+	/* Special case: readlink() fails with EXDEV if a network junction target is on an inaccessible drive. Yet it's a valid junction */
+	if ((n < 0) && (errno != EXDEV)) break; /* This is not a junction. */
+	/* This is a junction. Fall through to the symlink case. */
+      }
+      case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */
+      case IO_REPARSE_TAG_APPEXECLINK:		/* UWP application execution link */
+      	/* Only list here the link types for which we know how to locate the
+      	   target in Windows file system. */
+	bType = DT_LNK;				/* Symbolic link */
+	break;
+      case IO_REPARSE_TAG_AF_UNIX:		/* Linux Sub-System Socket */
+	bType = DT_SOCK;
+	break;
+      case IO_REPARSE_TAG_LX_FIFO:		/* Linux Sub-System FIFO */
+	bType = DT_FIFO;
+	break;
+      case IO_REPARSE_TAG_LX_CHR:		/* Linux Sub-System Character Device */
+	bType = DT_CHR;
+	break;
+      case IO_REPARSE_TAG_LX_BLK:		/* Linux Sub-System Block Device */
+	bType = DT_BLK;
+	break;
+      case IO_REPARSE_TAG_NFS:			/* NFS symbolic link */
+      case IO_REPARSE_TAG_LX_SYMLINK:		/* LinuX subsystem symlink */
+      	/* These are links in principle, but we don't know how to find their`
+      	   targets in the Windows file system. So we have to treat them as
+      	   normal files for now. Fall through to the default case. */
+      default: /* Unknown reparse point type. Treat it as a normal file below */
+	/* bType = DT_UNKNOWN;	// We don't know what this reparse point is */
+	break;
+    }
+  }
+  if (bType == DT_UNKNOWN) {
+    if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
+      bType = DT_DIR;		/* Subdirectory */
+    else if (dwAttr & FILE_ATTRIBUTE_DEVICE)
+      bType = DT_CHR;		/* Device (we don't know if character or block) */
+    else
+      bType = DT_REG;		/* A normal file by default */
+  }
+
+  DEBUG_LEAVE(("return %d; // %s\n", (int)bType, pszTypes[bType]));
+cleanup_and_exit:
+  free(pwszPathname);
+  free(pwszBuf);
+  return bType;
 }
 
 #endif /* defined(_WIN32) */

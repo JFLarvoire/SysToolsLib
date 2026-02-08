@@ -25,6 +25,7 @@
 *    2025-12-06 JFL Renamed GetFileID() as GetFileIDEx(), adding a third      *
 *		    argument, and redefining the old name as a macro.	      *
 *    2026-01-12 JFL Added GetFileInformationByHandleEx() access definitions.  *
+*    2026-02-03 JFL Added the prototype for MlxAttrAndTag2Type().	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -235,6 +236,10 @@ extern int lstat(const char *path, struct stat *buf);
     extern int lstat64(const char *path, struct stat64 *buf);
   #endif
 #endif
+
+/* Proprietary function for making sure that readdir() & lstat() return consistent file types */
+/* The dirent.d_type field is the same as bits 15:12 of the stat.st_mode field */
+unsigned char MlxAttrAndTag2Type(WCHAR *pwszDir, WCHAR *pwszName, DWORD dwAttr, DWORD dwTag);
 
 /* Proprietary function for recovering dirent infos without calling stat */
 /* Note: MSDOS has a single stat version, and its dirent2stat implementation is in dirent.c */

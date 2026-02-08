@@ -44,6 +44,8 @@
 *    2025-11-11 JFL Prevent a "varargs matches remaining parameters" warning. *
 *    2025-11-23 JFL Make sure the debug output prints unsigned sizes.         *
 *    2025-11-25 JFL Fixed the MSDOS readdir() errno handling.                 *
+*    2026-02-03 JFL Moved the conversion of the Win32 attributes and reparse  *
+*		    tag to a C file type to new routine MlxAttrAndTag2Type(). *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -456,85 +458,9 @@ _dirent *readdirW(DIR *pDir) {
   /* Set the standard fields */
   lstrcpyW((WCHAR *)(pDirent->d_name), pDir->wfd.cFileName);
   dwAttr = pDir->wfd.dwFileAttributes;
-  pDirent->d_type = DT_UNKNOWN;
-  if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
-    /* JUNCTIONs and SYMLINKDs both have the FILE_ATTRIBUTE_DIRECTORY flag also set.
-    // Test the FILE_ATTRIBUTE_REPARSE_POINT flag first, to make sure they're seen as symbolic links.
-    //
-    // All symlinks are reparse points, but not all reparse points are symlinks. */
-    dwTag = pDir->wfd.dwReserved0;	/* No need to call GetReparseTag(), we got it already. */
-    switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
-      case IO_REPARSE_TAG_MOUNT_POINT:	/* NTFS junction or mount point */
-	{ /* We must read the link to distinguish junctions from mount points. */
-	WCHAR *pwszPath = NULL;
-	WCHAR *pwszBuf = NULL;
-	ssize_t lwszDirName = lstrlenW(pDir->pwszDirName);
-	ssize_t lwPath = lwszDirName + 1 + lstrlenW(pDir->wfd.cFileName) + 1;
-	ssize_t lwBuf = PATH_MAX; /* This will be sufficient in most cases, If not, the buf will be extended below */
-	ssize_t lLink;
-	pwszPath = malloc(sizeof(WCHAR) * lwPath);
-	if (!pwszPath) {
-return_ENOMEM:
-	  DEBUG_LEAVE(("return NULL; // Out of memory\n"));
-	  return NULL;
-	}
-	lstrcpyW(pwszPath, pDir->pwszDirName);
-	if (lwszDirName && (pwszPath[lwszDirName-1] != L'\\')) pwszPath[lwszDirName++] = L'\\';
-	lstrcpyW(pwszPath+lwszDirName, pDir->wfd.cFileName);
-realloc_wBuf:
-	pwszBuf = malloc(sizeof(WCHAR) * lwBuf);
-	if (!pwszBuf) {
-	  free(pwszPath);
-	  goto return_ENOMEM;
-	}
-	lLink = readlinkW(pwszPath, pwszBuf, lwBuf);
-	/* Junction targets are absolute pathnames, starting with a drive letter. Ex: C: */
-	/* readlink() fails if the reparse point does not target a valid pathname */
-	if (lLink < 0) {
-	  if (errno == ENAMETOOLONG) { /* The output buffer was too small. Retry with a bigger one */
-	    free(pwszBuf); /* No need to copy the old content */
-	    lwBuf *= 2;
-	    goto realloc_wBuf;
-	  }
-	  /* pDirent->d_type = DT_UNKNOWN;	// This is not a valid junction */
-	} else {
-	  pDirent->d_type = DT_LNK; /* This is a junction. Treat it as a symlink */
-	}
-	free(pwszPath);
-	free(pwszBuf);
-	break;
-	}
-      case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */
-      case IO_REPARSE_TAG_NFS:			/* NFS symbolic link */
-      case IO_REPARSE_TAG_LX_SYMLINK:		/* LinuX subsystem symlink */
-      case IO_REPARSE_TAG_APPEXECLINK:		/* UWP application execution link */
-	pDirent->d_type = DT_LNK;		/* Symbolic link */
-	break;
-      case IO_REPARSE_TAG_AF_UNIX:		/* Linux Sub-System Socket */
-	pDirent->d_type = DT_SOCK;
-	break;
-      case IO_REPARSE_TAG_LX_FIFO:		/* Linux Sub-System FIFO */
-	pDirent->d_type = DT_FIFO;
-	break;
-      case IO_REPARSE_TAG_LX_CHR:		/* Linux Sub-System Character Device */
-	pDirent->d_type = DT_CHR;
-	break;
-      case IO_REPARSE_TAG_LX_BLK:		/* Linux Sub-System Block Device */
-	pDirent->d_type = DT_BLK;
-	break;
-      default: /* Unknown reparse point type. Treat it as a normal file below */
-	/* pDirent->d_type = DT_UNKNOWN;	// We don't know what this is */
-	break;
-    }
-  }
-  if (pDirent->d_type == DT_UNKNOWN) {
-    if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
-      pDirent->d_type = DT_DIR;		/* Subdirectory */
-    else if (dwAttr & FILE_ATTRIBUTE_DEVICE)
-      pDirent->d_type = DT_CHR;		/* Device (we don't know if character or block) */
-    else
-      pDirent->d_type = DT_REG;		/* A normal file by default */
-  }
+  dwTag = pDir->wfd.dwReserved0;	/* No need to call GetReparseTag(), we got it already. */
+  /* Make sure that what is set here is consistent with what lstat() sets in lstat.c */
+  pDirent->d_type = MlxAttrAndTag2Type(pDir->pwszDirName, pDir->wfd.cFileName, dwAttr, dwTag);
 
   /* Set the OS-specific extensions */
   lstrcpyW((WCHAR *)(pDirent->d_shortname), pDir->wfd.cAlternateFileName);

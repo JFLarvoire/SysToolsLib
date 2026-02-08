@@ -23,6 +23,8 @@
 *    2025-12-06 JFL stat() and lstat() are now front ends to the new lstatX(),*
 *                   extending the old lstat() with MlxGetFileAttributesAndID()*
 *                   instead of GetFileAttributesEx() and MlxGetFileID().      *
+*    2026-02-04 JFL Moved the conversion of the Win32 attributes and reparse  *
+*		    tag to a C file type to new routine MlxAttrAndTag2Type(). *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -139,14 +141,14 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   DWORD dwAttr;
   WIN32_FILE_ATTRIBUTE_DATA fileData;
   unsigned __int64 qwSize;
-  int bIsJunction = FALSE;
-  int bIsMountPoint = FALSE;
   DWORD dwTag = 0;
   DEBUG_CODE(
   char szTime[100];
   )
   WCHAR *pwszName = NULL;
   FILE_ID fid;
+  int errno0 = errno;
+  unsigned short wType;
 
   /* If (bLink is TRUE), the function name is "lstatXXX", else it's "statXXX" */
   DEBUG_ENTER(("%s(\"%s\", 0x%p);\n", (STRINGIZE(lstat) + !bLink), path, pStat));
@@ -171,8 +173,30 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
 
   bDone = MlxGetFileAttributesAndIDW(pwszName, &fileData, &fid, bLink); /* Superset of GetFileAttributesEx() */
   if (!bDone) {
-    errno = Win32ErrorToErrno();
+    int errno1 = errno = Win32ErrorToErrno();
+    if ((!bLink) && (errno == EAGAIN)) { /* This may happen with AppExecLinks or WciLinks, when the target object can't be accessed */
+      /* Check if it's a case we can resolve */
+      dwTag = MlxGetReparseTagW(pwszName); /* Returns 0 if this isn't a reparse point */
+      if (dwTag == IO_REPARSE_TAG_APPEXECLINK) {
+	/* Yes, we can resolve that case: Get the AppExecLink target, and try again */
+	char *pszTarget = malloc(UTF8_PATH_MAX);
+	if (pszTarget) {
+	  int iRet = MlxReadAppExecLinkU(path, pszTarget, UTF8_PATH_MAX);
+	  if (iRet >= 0) {
+	    errno = errno0;
+	    iRet = lstatX(pszTarget, pStat, bLink);
+	  }
+	  free(pszTarget);
+	  if (iRet == 0) {
+	    free(pwszName);
+	    RETURN_INT_COMMENT(0, ("Pass it on\n"));
+	  }
+	  errno1 = errno; /* Ex: File not found */
+      	}
+      }
+    }
     free(pwszName);
+    errno = errno1;
     RETURN_INT_COMMENT(-1, ("MlxGetFileAttributesAndID(); // Failed\n"));
   }
   dwAttr = fileData.dwFileAttributes;
@@ -200,46 +224,15 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
 #define _MAX_FILE_SIZE 0x7FFFFFFFL
   if (qwSize > _MAX_FILE_SIZE) pStat->st_size = (off_t)_MAX_FILE_SIZE;
 #endif
-  /* Standard attributes */
+  /* Standard attributes - Make sure that what is set here is consistent with what readdir() sets in dirent.c */
+  pStat->st_mode = 0;
   /* File type */
-check_attr_again:
-  if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
-    /* JUNCTIONs and SYMLINKDs both have the FILE_ATTRIBUTE_DIRECTORY flag also set.
-    // Test the FILE_ATTRIBUTE_REPARSE_POINT flag first, to make sure they're seen as symbolic links.
-    //
-    // All symlinks are reparse points, but not all reparse points are symlinks. */
-    dwTag = MlxGetReparseTagU(path);
-    switch (dwTag) {
-      case IO_REPARSE_TAG_MOUNT_POINT:	/* NTFS junction or mount point */
-	{ /* We must read the link to distinguish junctions from mount points. */
-	WCHAR wbuf[WIDE_PATH_MAX];
-	ssize_t n;
-	bIsMountPoint = TRUE;
-	n = readlinkW(pwszName, wbuf, WIDE_PATH_MAX);
-	/* Junction targets are absolute pathnames, starting with a drive letter. Ex: C: */
-	/* readlink() fails if the reparse point does not target a valid WIN32 pathname */
-	/* Special case: readlink() fails with EXDEV if a network junction target is on an inaccessible drive. Yet it's a valid junction */
-	if ((n < 0) && (errno != EXDEV)) goto this_is_not_a_symlink; /* This is not a junction. */
-	bIsJunction = TRUE; /* Else this is a junction. Fall through to the symlink case. */
-	}
-      case IO_REPARSE_TAG_SYMLINK:		/* NTFS symbolic link */
-      case IO_REPARSE_TAG_APPEXECLINK:		/* Application Execution link */
-	pStat->st_mode |= S_IFLNK;		/* Symbolic link */
-	break;
-      default:	/* Anything else is definitely not like a Unix symlink */
-this_is_not_a_symlink:
-	dwAttr &= ~FILE_ATTRIBUTE_REPARSE_POINT;
-	goto check_attr_again;
-    }
-  } else if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
-    pStat->st_mode |= S_IFDIR;		/* Subdirectory */
-  else if (dwAttr & FILE_ATTRIBUTE_DEVICE)
-    pStat->st_mode |= S_IFCHR;		/* Device (we don't know if character or block) */
-  else
-    pStat->st_mode |= S_IFREG;		/* A normal file by default */
-  /* pStat->st_mode |= (pDirent->d_type << 12); /* Set the 4-bit type field */
+  wType = MlxAttrAndTag2Type(pwszName, NULL, dwAttr, dwTag);
+  pStat->st_mode |= wType << 12; /* Set the 4-bit type field */
+  /* File mode bits */
   pStat->st_mode |= _S_IREAD | _S_IWRITE | _S_IEXEC; /* Assume it's fully accessible */
   if (dwAttr & FILE_ATTRIBUTE_READONLY) pStat->st_mode &= ~_S_IWRITE;
+  /* TO DO: Correct the read & exec mode bits */
   /* DOS-specific attributes */
   if (dwAttr & FILE_ATTRIBUTE_HIDDEN) pStat->st_mode |= S_HIDDEN;
   if (dwAttr & FILE_ATTRIBUTE_ARCHIVE) pStat->st_mode |= S_ARCHIVE;
@@ -250,7 +243,9 @@ this_is_not_a_symlink:
   if (dwAttr & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED) pStat->st_mode |= S_NOT_CONTENT_INDEXED;
   if (dwAttr & FILE_ATTRIBUTE_OFFLINE) pStat->st_mode |= S_OFFLINE;
   if (dwAttr & FILE_ATTRIBUTE_SPARSE_FILE) pStat->st_mode |= S_SPARSE_FILE;
-  if (bIsMountPoint) pStat->st_mode |= S_MOUNT_POINT; /* Will allow to distinguish junctions from mount points */
+  if ((dwTag & IO_REPARSE_TAG_TYPE_BITS) == IO_REPARSE_TAG_MOUNT_POINT) {
+    pStat->st_mode |= S_MOUNT_POINT; /* Will allow to distinguish junctions from symlinkds and mount points */
+  }
   /* if (dwAttr & FILE_ATTRIBUTE_TEMPORARY) pStat->st_mode |= S_TEMPORARY; */
   /* if (dwAttr & FILE_ATTRIBUTE_VIRTUAL) pStat->st_mode |= S_VIRTUAL; */
 #if _MSVCLIBX_STAT_DEFINED
