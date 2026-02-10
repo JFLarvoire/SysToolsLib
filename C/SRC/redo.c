@@ -80,6 +80,8 @@
 *                   Added options -s & -S to control sorting.		      *
 *		    This brings the feature set on a par with version 3.3.    *
 *		    Version 4.0.					      *
+*    2026-02-10 JFL Added a description of option -q in the help screen.      *
+*		    Version 4.0.1.					      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -87,8 +89,8 @@
 
 #define PROGRAM_DESCRIPTION "Execute a command recursively in all subdirectories"
 #define PROGRAM_NAME    "redo"
-#define PROGRAM_VERSION "4.0"
-#define PROGRAM_DATE    "2026-01-01"
+#define PROGRAM_VERSION "4.0.1"
+#define PROGRAM_DATE    "2026-02-10"
 
 #include <config.h>	/* OS and compiler-specific definitions */
 
@@ -648,6 +650,9 @@ DEBUG_CODE(
   -O              Run again even it's been in the same directory before\n\
 "
 #endif
+"\
+  -q              Quiet mode. Do not report subdirectory access errors\n\
+"
 #ifdef _MSDOS
 "\
   -s              Sort directories (Default for FAT drives)\n\
@@ -667,9 +672,9 @@ DEBUG_CODE(
 "
 #endif
 "\
-  -X              Display the commands to be executed, but don't run them\n\
   -v              Verbose mode. Display the paths, and the commands executed.\n\
   -V              Display the program version and exit\n\
+  -X              Display the commands to be executed, but don't run them\n\
 \n\
 Command line:     Any valid command and arguments.\n\
                   The special sequence \"{}\" is replaced by the current\n\
