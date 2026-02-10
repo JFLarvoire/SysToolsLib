@@ -287,6 +287,7 @@ int lstat(const char *path, struct stat *pStat) {
 |		    Resolving the tail links is sufficient, and much faster.  |
 |    2017-03-24 JFL Only resolve links if it's a link.                        |
 |    2023-11-23 JFL In debug mode, don't print errno if there's no error.     |
+|    2026-02-10 JFL Set the st_dev and st_ino fields too.		      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -338,6 +339,9 @@ int dirent2stat(const _dirent *pDirent, struct stat *pStat) {
   pStat->st_Win32Attrs = pDirent->d_attribs;
   pStat->st_ReparseTag = pDirent->d_ReparseTag;
 #endif
+  /* Unique IDs */
+  pStat->st_ino = pDirent->d_ino; /* Always 0 in MsvcLibX' struct dirent */
+  pStat->st_dev = 0;		  /* No corresponding field in "" dirent */
 
   return 0;
 }

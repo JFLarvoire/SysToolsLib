@@ -46,6 +46,7 @@
 *    2025-11-25 JFL Fixed the MSDOS readdir() errno handling.                 *
 *    2026-02-03 JFL Moved the conversion of the Win32 attributes and reparse  *
 *		    tag to a C file type to new routine MlxAttrAndTag2Type(). *
+*    2026-02-10 JFL Make sure readdir() at least clears the d_ino field.      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -297,6 +298,7 @@ _dirent *readdir(DIR *pDir) { /* Read a directory entry. Return pDir, or NULL fo
     iErr = srchnext(pFI);
   }
   if (!iErr) {
+    pDirent->d_ino = 0; /* TO DO: Get the actual value, if this is not too costly */
     pDirent->d_type = DT_REG;			/* A normal file by default */
     if (pDirent->d_attribs & _A_SUBDIR) pDirent->d_type = DT_DIR;  /* Subdirectory */
     if (pDirent->d_attribs & _A_VOLID) pDirent->d_type = DT_VOLID; /* Volume ID file */
@@ -457,6 +459,7 @@ _dirent *readdirW(DIR *pDir) {
 
   /* Set the standard fields */
   lstrcpyW((WCHAR *)(pDirent->d_name), pDir->wfd.cFileName);
+  pDirent->d_ino = 0; /* TO DO: Get the actual value, if this is not too costly */
   dwAttr = pDir->wfd.dwFileAttributes;
   dwTag = pDir->wfd.dwReserved0;	/* No need to call GetReparseTag(), we got it already. */
   /* Make sure that what is set here is consistent with what lstat() sets in lstat.c */
