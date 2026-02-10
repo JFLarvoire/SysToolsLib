@@ -28,6 +28,10 @@
 *    2025-12-20 JFL Use the new error message routines.                       *
 *    2025-12-28 JFL Avoid calling stat() multiple times for links and dirs.   *
 *    2026-01-01 JFL Added the ability to optionally sort directories.	      *
+*    2026-02-10 JFL When an "Access Denied" error occurs when attempting to   *
+*		    read a (possibly linked) directory, give it a second      *
+*		    chance to be read through another pathname.		      *
+*		    Bugfix: The callback was sometimes called twice for dirs. *
 *                                                                             *
 \*****************************************************************************/
 
@@ -376,6 +380,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     pFakeInOutDE = (struct dirent *)calloc(offsetof(struct dirent, d_name) + 2, 1);
     if (!pFakeInOutDE) goto out_of_memory;
     pFakeInOutDE->d_type = DT_ENTER;
+    XDEBUG_PRINTF(("// Callback on directory opened\n"));
     iRet = pWalkDirTreeCB(path, pFakeInOutDE, pRef); /* Notify the callback of the directory entry */
     if (iRet) goto cleanup_and_return;;	/* -1 = Error, abort; 1 = Success, stop */
   }
@@ -435,6 +440,10 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	  case EBADF:	/* Unsupported link type, ex: Linux symlink */
 	  case EINVAL:	/* Unsupported reparse point type */
 	    pszBadLinkMsg = "Unsupported link type"; break;
+#ifdef _WIN32
+	  case EAGAIN: /* This may happen with AppExecLinks, WciLinks, etc, when the target object can't be accessed */
+	    break; /* These can't be recursed into, but this is not an error */
+#endif
 	  default: { /* There's a real error we don't know how to handle */
 	    char *pszVerb = (pDE->d_type == DT_LNK) ? "resolve" : "access";
 	    if (iPrintErrors) pfcerror("Can't %s \"%s\"", pszVerb, pPathname);
@@ -448,6 +457,7 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
     /* Report the valid directory entry to the callback */
     if (!(pOpts->iFlags & WDT_DIRONLY)) {
       if (!(pOpts->pSortProc)) {
+	XDEBUG_PRINTF(("// Callback on valid dirent, if !DIRONLY && !sort\n"));
 	iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
 	if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
       } else { /* Sorted list requested */
@@ -493,21 +503,42 @@ static int WalkDirTree1(const char *path, wdt_opts *pOpts, pWalkDirTreeCB_t pWal
 	  }
 	}
 #endif /* OS_HAS_LINKS */
-	if (!(pOpts->pSortProc)) {
-	  iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
-	  if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
-	} else { /* Sorted list requested */
-	  pDEList = AppendDirentList(pDEList, pDE, &nDEListSize, &nDE);
-	  if (!pDEList) goto out_of_memory;
-	  piFlags = DirentExtraFlags(pDEList[nDE-1]);
-	  *piFlags = DEF_ISDIR;
+	if (pOpts->iFlags & WDT_DIRONLY) {
+	  if (!(pOpts->pSortProc)) {
+	    XDEBUG_PRINTF(("// Callback on valid dirent, if DIRONLY && !sort\n"));
+	    iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
+	    if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
+	  } else { /* Sorted list requested */
+	    pDEList = AppendDirentList(pDEList, pDE, &nDEListSize, &nDE);
+	    if (!pDEList) goto out_of_memory;
+	    piFlags = DirentExtraFlags(pDEList[nDE-1]);
+	    *piFlags = DEF_ISDIR;
+	  }
 	}
 	if (!(pOpts->iFlags & WDT_NORECURSE)) {
 	  if ((!pOpts->iMaxDepth) || (iDepth < pOpts->iMaxDepth)) {
 	    if (!(pOpts->pSortProc)) {
+#if OS_HAS_LINKS
+	      ino_t nFile0 = pOpts->nFile;
+	      int nErr0 = pOpts->nErr;
+#endif /* OS_HAS_LINKS */
 	      /* if (!list.path) list.path = pPathname; */
 	      iRet = WalkDirTree1(pPathname, pOpts, pWalkDirTreeCB, pRef, &list, iDepth+1);
 	      DEBUG_PRINTF(("// Back walking in \"%s\"\n", path));
+#if OS_HAS_LINKS
+	      if (pOpts->iFlags & WDT_ONCE) {
+		if ((pOpts->nFile == nFile0) && (pOpts->nErr > nErr0) && (errno == EACCES)) {
+		  /* There was an Access Denied error _reading_ the directory contents.
+		     This may occur in Windows' junction "C:\Documents and Settings",
+		     pointing to "C:\Users", whereas reading the former is denied,
+		     but reading the latter is authorized. */
+		  /* In this case, remove the target from the dictionary, to give
+		     it a second chance to be read through another pathname */
+		  DEBUG_PRINTF(("// Forget \"%s\" and allow visiting it again\n", pPathname));
+		  DeleteDictValue(dict, pUniqueID);
+		}
+	      }
+#endif /* OS_HAS_LINKS */
 	    } else { /* Sorted list requested */
 	      *piFlags |= DEF_RECURSE; /* Flag that a recursive call to WalkDirTree1() is to be done */
 	    }
@@ -554,6 +585,7 @@ print_dir_op_error:
       pDE = pDEList[i];
       pPathname = NewJoinedPath(path, pDE->d_name);
       if (!pPathname) goto out_of_memory;
+      XDEBUG_PRINTF(("// Callback on valid dirent, if sort\n"));
       iRet = pWalkDirTreeCB(pPathname, pDE, pRef);
       if (iRet) break;	/* -1 = Error, abort; 1 = Success, stop */
       if (*DirentExtraFlags(pDE) & DEF_RECURSE) { /* A recursive call to WalkDirTree1() is requested */
@@ -583,6 +615,7 @@ cleanup_and_return:
   if (pFakeInOutDE) { /* Only notify the exit if the entry notification was sent */
     if (!(pOpts->iFlags & WDT_INONLY)) {
       pFakeInOutDE->d_type = DT_LEAVE;
+      XDEBUG_PRINTF(("// Callback on directory closed\n"));
       iRet = pWalkDirTreeCB(path, pFakeInOutDE, pRef); /* Notify the callback of the directory exit */
     }
   }
