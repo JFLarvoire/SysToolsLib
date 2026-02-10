@@ -46,19 +46,21 @@
 *    2025-08-20 JFL Fixed static alternatives for all inline functions        *
 *                   changed on 08-15.                                         *
 *                   Fixed the case of SysLib.h.                               *
+*    2026-02-09 JFL Output debug information only in eXtra debug mode.	      *
+*    2026-02-10 JFL Fixed a debug output indentation error.		      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
+
+#ifndef _DICT_H
+#define _DICT_H
 
 /* Implemented as a self-balancing binary tree */
 #include "tree.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
-#ifndef _DICT_H
-#define _DICT_H
 
 #ifdef _WIN32
 /* These are standard routines, but Microsoft thinks not */
@@ -213,7 +215,7 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {
     char key1[80] = "NULL";
     char key2[80] = "NULL";
     char *pszKeyCmp = "NULL";
-    if (iDebug) {
+    if (TREE_DEBUG_IS_ON()) {
       if (pn1) snprintf(key1, sizeof(key1), "\"%s\"", pn1->pszKey);
       if (pn2) snprintf(key2, sizeof(key2), "\"%s\"", pn2->pszKey);
       if (tree) {
@@ -221,7 +223,7 @@ int TREE_CMP(dictnode)(dictnode *pn1, dictnode *pn2) {
 	else if (tree->keycmp == _stricmp) pszKeyCmp = "stricmp";
 	else pszKeyCmp = "???";
       }
-      DEBUG_PRINTF(("%s(%s, %s)\n", pszKeyCmp, key1, key2));
+      printf("%*s%s(%s, %s)\n", iIndent, "", pszKeyCmp, key1, key2);
     }
   })
   if (tree) {

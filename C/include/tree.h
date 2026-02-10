@@ -17,11 +17,14 @@
 *		    Else, for simple maps, it's the user's responsibility     *
 *		    to prevent the creation of duplicates.		      *
 *		    							      *
+*		    The optional debugging output, included when the _DEBUG   *
+*		    macro is defined, is designed to be independant of, but   *
+*		    compatible with, that in NMaker's debugm.h.		      *
+*		    							      *
 *		    Known issues:					      *
 *		    - The TREE_DEFINE_* macros will fail if the node type     *
 *		      passed by the user has the same name as one of the      *
 *                     variables used internally by the macro.                 *
-*		    							      *
 *		    							      *
 *		    Usage:						      *
 * "public" macros:                                                            *
@@ -74,6 +77,8 @@
 *                   allow having multiple kinds of trees in the same program. *
 *    2024-06-22 JFL Fixed the declaration of inline routines.                 *
 *    2024-07-21 JFL Improved the fix for compatibility with C99 compilers.    *
+*    2026-02-09 JFL Output debug information only in eXtra debug mode.	      *
+*    2026-02-10 JFL Fixed a debug output missing error.			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -91,14 +96,24 @@
 #define TREE_V(arg) TREE_S(arg)  /* Valueizing operator (Get the value of a macro expression) */
 #define TREE_CAT(arg1, arg2) arg1##arg2 /* Concatenation operator */
 #if defined(_DEBUG) && !defined(_MSDOS) /* These macros cause error "out of macro expansion space" with VC++ 1.52 */
+#ifndef _DEBUGM_H /* Defined by NMaker's debugm.h */
+extern int iDebug;	/* 0 = Debug off; 1 = Debug on; 2 = eXtra debug on */
+extern int iIndent;	/* Debug output indentation spaces, proportional to twice the call depth */
+#endif /* _DEBUGM_H */
 #define TREE_IF_DEBUG(tokens) tokens
+#ifndef TREE_DEBUG_MIN
+#define TREE_DEBUG_MIN 1 /* Define it as 0 to enable debugging output when iDebug > 0 */
+#endif
+#define TREE_DEBUG_IS_ON() iDebug > TREE_DEBUG_MIN
 #define TREE_ENTRY(node_t,args) TREE_LOG_ENTRY_##node_t args
 #define TREE_RETURN(node_t,result) return TREE_LOG_RETURN_##node_t(result)
 #define TREE_RETURN_PVOID(node_t,result) return TREE_LOG_RETURN_PVOID_##node_t(result)
 #define TREE_RETURN_INT(node_t,result) return TREE_LOG_RETURN_INT_##node_t(result)
+#include <stdio.h>
 #include <stdarg.h>
 #else
 #define TREE_IF_DEBUG(tokens)
+#define TREE_DEBUG_IS_ON() 0
 #define TREE_ENTRY(node_t,args)
 #define TREE_RETURN(node_t,result) return (result)
 #define TREE_RETURN_PVOID(node_t,result) return (result)
@@ -410,7 +425,7 @@ void *TREE_RFOREACH_##node_t(node_t *root, TREE_##node_t##_CB *function, void *r
 TREE_IF_DEBUG(									\
 void TREE_LOG_ENTRY_##node_t(char *format, ...) {				\
   va_list args;									\
-  if (iDebug) {									\
+  if (TREE_DEBUG_IS_ON()) {								\
     va_start(args, format);							\
     printf("%*s", iIndent, "");							\
     vprintf(format, args);							\
@@ -421,7 +436,7 @@ void TREE_LOG_ENTRY_##node_t(char *format, ...) {				\
 }										\
 										\
 node_t *TREE_LOG_RETURN_##node_t(node_t *result) {				\
-  if (iDebug) {									\
+  if (TREE_DEBUG_IS_ON()) {								\
     char buf[80];								\
     TREE_SPRINT(node_t)(buf, sizeof(buf), result);				\
     printf("%*sreturn %p (%s)\n", iIndent, "", result, buf);			\
@@ -432,7 +447,7 @@ node_t *TREE_LOG_RETURN_##node_t(node_t *result) {				\
 }										\
 										\
 void *TREE_LOG_RETURN_PVOID_##node_t(void *result) {				\
-  if (iDebug) {									\
+  if (TREE_DEBUG_IS_ON()) {								\
     printf("%*sreturn %p\n", iIndent, "", result);				\
     fflush(stdout);								\
   }										\
@@ -441,7 +456,7 @@ void *TREE_LOG_RETURN_PVOID_##node_t(void *result) {				\
 }										\
 										\
 int TREE_LOG_RETURN_INT_##node_t(int result) {					\
-  if (iDebug) {									\
+  if (TREE_DEBUG_IS_ON()) {								\
     printf("%*sreturn %d\n", iIndent, "", result);				\
     fflush(stdout);								\
   }										\
