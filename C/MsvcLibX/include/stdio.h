@@ -23,6 +23,7 @@
 *    2022-11-29 JFL Make sure all functions with variable # of arguments      *
 *		    use the _cdecl calling convention.			      *
 *    2026-01-28 JFL Use the fputwsW() workaround for all MSVC versions.	      *
+*    2026-02-10 JFL Added a missing prototype for vprintf() in Windows.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -116,6 +117,7 @@ extern int printfA(const char *pszFormat, ...);
 #define fprintf fprintfA	/* For outputing ANSI strings */
 #define printf printfA		/* For outputing ANSI strings */
 #endif
+#define vprintf(f, vl) vfprintf(stdout, f, vl)
 #define wprintf printfW
 /* fputws() is broken: Up to VS 8/2005, it outputs just the first character;
    and in all later versions it fails to display unicode plane 1+ characters. */
