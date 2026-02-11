@@ -453,6 +453,7 @@ typedef struct _FILE_STAT_BASIC_INFORMATION {
 #define S_TYPEISTMO(pStat) 0	/* Test for a typed memory object */
 
 /* Structure stat standard st_mode flags */
+/* Warning: These constants are octal, with Unix-compatible values */
 #define S_ISUID    04000    /* Set UID bit                                     */
 #define S_ISGID    02000    /* Set-group-ID bit                                */
 #define S_ISVTX    01000    /* Sticky bit                                      */
@@ -481,17 +482,18 @@ typedef struct _FILE_STAT_BASIC_INFORMATION {
 /* Structure stat extensions for DOS/Windows file attributes */
 #define S_IFVOLID  0xF000   /* Volume ID pseudo-file, defined in FAT root dir */
 #define S_ISVOLID(m) S_ISTYPE(m, S_IFVOLID) /* Test for a FAT volume ID */
-#define S_HIDDEN		01	/* Reuse permissions bit not used in DOS/Windows */
-#define S_ARCHIVE		02	/* Reuse permissions bit not used in DOS/Windows */
-#define S_SYSTEM		04	/* Reuse permissions bit not used in DOS/Windows */
-#define S_COMPRESSED		010	/* Reuse permissions bit not used in DOS/Windows */
-#define S_ENCRYPTED		020	/* Reuse permissions bit not used in DOS/Windows */
-#define S_NOT_CONTENT_INDEXED	040	/* Reuse permissions bit not used in DOS/Windows */
+/* Warning: These constants are octal, for comparison with Unix-compatible values above */
+#define S_HIDDEN		01	/* Reuse others permissions bit, not used in DOS/Windows */
+#define S_ARCHIVE		02	/* Reuse others permissions bit, not used in DOS/Windows */
+#define S_SYSTEM		04	/* Reuse others permissions bit, not used in DOS/Windows */
+#define S_COMPRESSED		010	/* Reuse group permissions bit, not used in DOS/Windows */
+#define S_ENCRYPTED		020	/* Reuse group permissions bit, not used in DOS/Windows */
+#define S_NOT_CONTENT_INDEXED	040	/* Reuse group permissions bit, not used in DOS/Windows */
 #define S_OFFLINE		01000	/* Reuse sticky bit, not used in DOS/Windows */
 #define S_SPARSE_FILE		02000	/* Reuse GID bit, not used in DOS/Windows */
 #define S_MOUNT_POINT		04000	/* Reuse UID bit, not used in DOS/Windows */
-/* #define S_TEMPORARY			/* Reuse UID bit, not used in DOS/Windows */
-/* #define S_VIRTUAL			/* No bit left for this one */
+/* #define S_TEMPORARY			// No bit left for this one */
+/* #define S_VIRTUAL			// No bit left for this one */
 
 #if defined(_MSDOS)
 #define _mkdirx(path, mode) _mkdir(path)
