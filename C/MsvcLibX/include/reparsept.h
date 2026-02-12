@@ -15,10 +15,14 @@
 *    2020-12-14 JFL Added lots of definitions from newer MS docs and others.  *
 *    2023-11-11 JFL Updated definitions and comments.                         *
 *    2025-07-29 JFL Added support for Windows Container Isolation Links.      *
+*    2026-02-11 JFL Added a #define guards to prevent multiple inclusion.     *
 *									      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
 \*****************************************************************************/
+
+#ifndef _REPARSEPT_H
+#define _REPARSEPT_H
 
 /* Reparse point reference information:
    
@@ -306,3 +310,5 @@ typedef struct _REPARSE_WCI_READ_BUFFER { // For tag IO_REPARSE_TAG_WCI
 #define WCI_READ_BUFFER_HEADER_SIZE (sizeof(WCI_READ_BUFFER) - sizeof(WCHAR))
 
 #pragma pack()
+
+#endif /* _REPARSEPT_H */
