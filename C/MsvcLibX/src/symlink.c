@@ -28,6 +28,7 @@
 *    2021-11-29 JFL Use the wide-string debug macros.                         *
 *                   Do not allow setting an external target on a netw. share. *
 *                   Allow passing native target names to junction().          *
+*    2026-02-10 JFL Fixed the creation of junctions with targets > 260 chars. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -258,29 +259,26 @@ junctionW_exit:
 
 /* MsvcLibX-specific routine to create an NTFS junction - MultiByte char version */
 int junctionM(const char *targetName, const char *junctionName, UINT cp) {
-  WCHAR *pwszJunction;
-  WCHAR *pwszTarget;
-  int iRet;
+  WCHAR *pwszJunction = NULL;
+  WCHAR *pwszTarget = NULL;
+  int iRet = -1;
 
   /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
   pwszJunction = MultiByteToNewWidePath(cp,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
 					junctionName	/* lpMultiByteStr, */
 					);
-  if (!pwszJunction) {
-    /* errno = Win32ErrorToErrno();			// errno is already set by MultiByteToNewWidePath() */
-    return -1;
-  }
-  /* Convert the pathname to a unicode string, with the proper extension prefixes if it's longer than 260 bytes */
-  pwszTarget = MultiByteToNewWidePath(cp,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
-    				      targetName	/* lpMultiByteStr, */
-    				      );
-  if (!pwszTarget) {
-    /* errno = Win32ErrorToErrno();			// errno is already set by MultiByteToNewWidePath() */
-    free(pwszJunction);
-    return -1;
-  }
-  
+  if (!pwszJunction) goto cleanup_and_exit; /* errno is already set by MultiByteToNewWidePath() */
+
+  /* Convert the pathname to a unicode string */
+  /* Do not prepend the '\?\' prefix for long paths, as junction targets will get their own '\??\' prefix. */
+  pwszTarget = MultiByteToNewWideString(cp,		/* CodePage, (CP_ACP, CP_OEMCP, CP_UTF8, ...) */
+    				        targetName	/* lpMultiByteStr, */
+    				        );
+  if (!pwszTarget) goto cleanup_and_exit; /* errno is already set by MultiByteToNewWidePath() */
+
   iRet = junctionW(pwszTarget, pwszJunction);
+
+cleanup_and_exit:
   free(pwszJunction);
   free(pwszTarget);
   return iRet;
