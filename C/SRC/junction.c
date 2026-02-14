@@ -33,12 +33,22 @@
 *		    to make it clear its root is in a container.	      *
 *    2026-01-28 JFL Output type-specific arrows for other reparse points types.
 *		    Added option -m to limit the recursive search depth.      *
+*    2026-02-03 JFL Reversed options -d & -D, as I made too many mistakes.    *
+*    2026-02-06 JFL Decode junction targets raw pathnames beginning with      *
+*                   '\??\Global\C:', etc, or '\??\UNC\server\share\dir', etc. *
+*    2026-02-07 JFL Changed the default target format to the absolute or      *
+*                   relative formats, with the minimum number of parts.       *
+*                   Added option --rel to force relative format in all cases. *
+*                   Added option --min to force the default minimal format.   *
+*    2026-02-10 JFL Fixed the creation of junctions with target paths > 260 b.*
+*    2026-02-11 JFL Allow deleting any junction, even if invalid.	      *
+*    2026-02-13 JFL Output a specific arrow for SymLinkDs.		      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2026-01-28"
+#define PROGRAM_VERSION "2026-02-13"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -60,20 +70,33 @@
 #error "Only Windows has junctions"
 #endif
 
+enum {	/* Target output format, passed in JCB_FORMAT flags below */
+  F_MIN,	/* The simplest possible, with the least number of '\' */
+  F_RAW,	/* The raw content of the reparse point */
+  F_REL,	/* The relative path */
+  F_ABS		/* The absolute path */
+};
+
 /* Local definitions and forward references */
-#define JCB_VERBOSE   0x0001
-#define JCB_ONCE      0x0002
-#define JCB_ALLTYPES  0x0004
-#define JCB_RAW       0x0008
-#define JCB_ABS       0x0010
+#define JCB_FORMAT    0x000F	/* One of the F_XXX enum values above */
+#define JCB_VERBOSE   0x0010
+#define JCB_ONCE      0x0020
+#define JCB_ALLTYPES  0x0040
 typedef struct { /* Reference data to pass to the WalkDirTree callback */
   int iFlags;		/* Input: A combination of JCB_xxx flags */
   long nJunction;	/* Output: The number of junctions found */
   void *pTree;		/* Internal: The binary tree of known junctions */
 } JCB_REF;	 /* Initialize as {0}, except for the inut flags */
+
+#if _DEBUG
+int iShowINode = FALSE;
+#endif
+
 int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pJcbRef);
 int ExposeAllReparsePoints(void);
-char *GetTagArrow(DWORD dwTag);
+char *GetLinkArrow(DWORD dwAttrs, DWORD dwTag);
+char *GetAbsTargetPath(char *pszRawTarget); /* Get the absolute path of a junction raw target */
+int FormatJunctionTarget(const char *pszJunction, char *buf, int nBufSize, int iFormat);
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -99,13 +122,13 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 \n\
   -?      Display this help and exit\n\
   -1      Make sure to list junctions only once. (Useful with -f) \n\
-  -a      Display the absolute target. Default: Display the relative target\n"
+  -a      Always display the absolute targets. Default: -M\n"
 #ifdef _DEBUG
 "\
-  -D      Enable debug output. Use twice to get extra debugging information\n"
+  -d      Enable debug output. Use twice to get extra debugging information\n"
 #endif
 "\
-  -d      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
+  -D      Delete the junction. Same as setting TARGET_DIR = \"\"\n\
   -f      Follow junctions and symlinkds when searching recursively\n"
 #ifdef _DEBUG
 "\
@@ -114,10 +137,12 @@ Usage: " PROGRAM_NAME " [OPTIONS] JUNCTION [TARGET_DIR]\n\
 "\
   -l DIR  List junctions in a directory\n\
   -m MAX  Maximum depth when searching recursively. Default: 0 = unlimited\n\
+  -M      Show the relative or absolute target w. the min. # of parts (default)\n\
   -o      Make sure to search linked folders only once. (slower, useful w. -f)\n\
   -q      Quiet mode. Do not report access errors when searching recursively\n\
-  -R      Display the raw junction target. Default: Display the relative target\n\
+  -R      Always display the raw junction targets. Default: -M\n\
   -r|-s DIR  List junctions recursively in a directory tree\n\
+  --rel   Always display the relative targets. Default: -M\n\
   -t      With -l or -r, list all types of reparse points, with their types\n\
   -V      Display this program version and exit\n\
   -v      Verbose mode. Report both the junction and target. Show search stats.\n\
@@ -168,8 +193,7 @@ int main(int argc, char *argv[]) {
   char *pszJunction = NULL;
   char *pszTarget = NULL;
   char buf[PATH_MAX];
-  int iRaw = FALSE;
-  int iAbs = FALSE;
+  int iFormat = F_MIN;
   int iVerbose = FALSE;
   int iAllTypes = FALSE;
   action_t action = ACT_GET;
@@ -191,8 +215,7 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "a")) {	/* Show the absolute target path */
-	jcbRef.iFlags |= JCB_ABS;
-      	iAbs = TRUE;
+      	iFormat = F_ABS;
 	continue;
       }
       if (streq(opt, "accepteula")) { /* For MS compatibility. Ignore that */
@@ -203,12 +226,16 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       DEBUG_CODE(
-	if (streq(opt, "D")) {	/* Enable the debug mode */
+	if (streq(opt, "d")) {	/* Enable the debug mode */
 	  DEBUG_MORE();
 	  continue;
 	}
+	if (streq(opt, "-inode")) {	/* Output the inode before the link */
+	  iShowINode = TRUE;
+	  continue;
+	}
       )
-      if (streq(opt, "d")) {	/* Delete a junction */
+      if (streq(opt, "D")) {	/* Delete a junction */
 	action = ACT_DELETE;
 	continue;
       }
@@ -234,6 +261,10 @@ int main(int argc, char *argv[]) {
 	}
 	continue;
       }
+      if (streq(opt, "-min")) { /* Show the abs or rel target, with the minimum number of parts (default) */
+      	iFormat = F_MIN;
+	continue;
+      }
       if (streq(opt, "nobanner")) { /* For MS compatibility. Ignore that */
 	continue;
       }
@@ -246,8 +277,11 @@ int main(int argc, char *argv[]) {
 	continue;
       }
       if (streq(opt, "R")) {	/* Show the raw junction target */
-	jcbRef.iFlags |= JCB_RAW;
-      	iRaw = TRUE;
+      	iFormat = F_RAW;
+	continue;
+      }
+      if (streq(opt, "-rel")) { /* Show the relative junction target */
+      	iFormat = F_REL;
 	continue;
       }
       if (streq(opt, "r") || streq(opt, "s")) {	/* List recursively all junctions in a directory tree */
@@ -293,6 +327,7 @@ int main(int argc, char *argv[]) {
 #endif     /* causing an unreachable code warning in ALL versions of the MS C compiler! */
     return 2;
   }
+  jcbRef.iFlags |= iFormat;
 
   if (action == ACT_GETID) { /* Debug: Dump the volume and file ID */
     char *pszPath = pszJunction ? pszJunction : ".";
@@ -323,11 +358,11 @@ int main(int argc, char *argv[]) {
       int nSkipped = opts.nErr;
       if (iErr == -1) nSkipped -= 1; /* Remove the final unrecoverable error, which _was_ displayed last */
       if (opts.iFlags & WDT_QUIET) { /* Most errors were hidden and ignored */
-	if (nSkipped) fprintf(stderr, "Warning: %d errors were ignored\n", nSkipped);
+	if (nSkipped) pfwarning("%d errors were ignored\n", nSkipped);
       } else { /* All errors were displayed. Print a summary */
 	if (   (nSkipped > 1)
 	    || ((nSkipped == 1) && (jcbRef.nJunction > 10))) {
-	  fprintf(stderr, "Notice: %d errors were ignored\n", nSkipped);
+	  pfnotice("Notice", "%d errors were ignored\n", nSkipped);
 	}
       }
     }
@@ -377,25 +412,22 @@ int main(int argc, char *argv[]) {
 	iErr = MlxReadWci(pszJunction, buf + iOffset, sizeof(buf) - iOffset) ? 0 : -1;
 	break;
       default: {
-	if (iRaw | iAbs) {
-      iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
-	} else {
-	  /* Read the link, as if it were a relative symbolic link */
-	  iErr = (int)readlink(pszJunction, buf, sizeof(buf));
-	}
+      	iErr = FormatJunctionTarget(pszJunction, buf, sizeof(buf), iFormat);
 	break;
       }
     }
     if (iErr == -1) {
-      pfcerror("Failed to read junction \"%s\"", pszJunction);
-      return 1;
+      if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) {
+	pfcerror("Failed to read junction \"%s\"", pszJunction);
+	return 1;
+      }
+      /* If it's not a supported junction type, report the raw target */
+      iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
     }
     pszTarget = buf;
-    if (iAbs) {
-      if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
-    }
     if (iVerbose) {
-      char *pszArrow = iAllTypes ? GetTagArrow(dwTag) : "->";
+      DWORD dwAttrs = GetFileAttributes(pszJunction);
+      char *pszArrow = iAllTypes ? GetLinkArrow(dwAttrs, dwTag) : "->";
       printf("%s %s %s\n", pszJunction, pszArrow, pszTarget);
     } else {
       printf("%s\n", pszTarget);
@@ -404,16 +436,21 @@ int main(int argc, char *argv[]) {
   }
 
   if (action == ACT_DELETE) {
-    DWORD dwTag;
-    iErr = (int)readlink(pszJunction, buf, sizeof(buf));
-    if (iErr == -1) {
-      if (errno == ENOENT) return 0;	/* Deleted an already deleted junction is OK */
-not_junction:
-      pfcerror("\"%s\" is not a junction", pszJunction);
+    DWORD dwTag = MlxGetReparseTag(pszJunction) & IO_REPARSE_TAG_TYPE_BITS;
+    if (!dwTag) {
+      if (errno == ENOENT) return 0; /* Deleting an already deleted junction is not an error */
+      pfcerror("\"%s\" is not a reparse point", pszJunction);
       return 1;
     }
-    dwTag = MlxGetReparseTag(pszJunction);
-    if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) goto not_junction;
+    if (dwTag != IO_REPARSE_TAG_MOUNT_POINT) {
+      pferror("\"%s\" is not a junction", pszJunction);
+      return 1;
+    }
+    iErr = FormatJunctionTarget(pszJunction, buf, sizeof(buf), iFormat);
+    if (iErr == -1) { /* If it's not a supported link type, report the raw target */
+      iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
+      if (iErr == -1) strcpy(buf, "?");
+    }
     iErr = unlink(pszJunction);
     if (iErr) {
       pfcerror("Failed to delete junction \"%s\"", pszJunction);
@@ -496,14 +533,15 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   int iVerbose = pJcbRef->iFlags & JCB_VERBOSE;
   int iOnce = pJcbRef->iFlags & JCB_ONCE;
   int iAllTypes = pJcbRef->iFlags & JCB_ALLTYPES;
-  int iRaw = pJcbRef->iFlags & JCB_RAW;
-  int iAbs = pJcbRef->iFlags & JCB_ABS;
+  int iFormat = pJcbRef->iFlags & JCB_FORMAT;
   tree *pTree = pJcbRef->pTree;
   char buf[PATH_MAX];
   char *pszTarget = buf;
   char *pszType = "?";
   char szTag[16];
   int iErr;
+  FILE_ID fid;
+  struct stat sStat = {0};
 
   if (!(pDE->d_attribs & FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
 
@@ -511,8 +549,6 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
   if ((!iAllTypes) && (dwTag != IO_REPARSE_TAG_MOUNT_POINT)) return 0;
 
   if (iOnce) { /* Check if that same junction has been seen before */
-    struct stat sStat;
-
     if (!pTree) { /* Create the tree, if this has not yet been done */
       pTree = pJcbRef->pTree = new_knownJunction_tree();
       if (!pTree) goto out_of_memory;
@@ -520,8 +556,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
 
     iErr = dirent2stat(pDE, &sStat);
     if ((!iErr) && !sStat.st_ino) {
-      FILE_ID fid;
-      BOOL bDone = MlxGetFileID(pszRelPath, &fid);
+      BOOL bDone = MlxGetLinkID(pszRelPath, &fid);
       if (bDone) {
 	sStat.st_dev = *(dev_t *)(&fid.dwIDVol0);
 	sStat.st_ino = *(ino_t *)(&fid.dwIDFil0);
@@ -536,7 +571,7 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
       pPrevious = get_knownJunction(pTree, pThis);
       if (pPrevious) { /* The same junction has been seen before under another pathname */
 	if (iVerbose) {
-	  fprintf(stderr, "Notice: Junction \"%s\" is the same as \"%s\"\n", pszRelPath, pPrevious->pszPathname);
+	  pfnotice("Notice", "Junction \"%s\" is the same as \"%s\"\n", pszRelPath, pPrevious->pszPathname);
 	}
 	free(pThis);
 	return 0;
@@ -560,16 +595,12 @@ int ShowJunctionsCB(const char *pszRelPath, const struct dirent *pDE, void *pRef
     case IO_REPARSE_TAG_MOUNT_POINT: {
       pszType = "Junction";
 read_link:
-      if (iRaw | iAbs) {
-	iErr = MlxReadLink(pszRelPath, buf, sizeof(buf)) ? 0 : -1;
-      } else {
-	iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
-      }
+      iErr = FormatJunctionTarget(pszRelPath, buf, sizeof(buf), iFormat);
       break;
     }
     case IO_REPARSE_TAG_SYMLINK: {
       pszType = "Symlink";
-      /* Using MlxReadLink() in iRaw mode here makes no sense, as SymLinks can
+      /* Using MlxReadLink() in raw mode here makes no sense, as SymLinks can
          be relative or absolute, and the latter just have an extra \??\ prefix */
       iErr = (int)readlink(pszRelPath, buf, sizeof(buf));
       if (iErr != -1) {
@@ -647,13 +678,22 @@ read_link:
       printf("%-10s %s\n", pszType, pszRelPath);
     }
   } else {
-    if (iAbs) {
-      if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
-    }
+    DEBUG_CODE(
+      if (iShowINode) {
+	if (!sStat.st_ino) {
+	  BOOL bDone = MlxGetLinkID(pszRelPath, &fid);
+	  if (bDone) {
+	    sStat.st_ino = *(ino_t *)(&fid.dwIDFil0);
+	    if (*(ino_t *)(&fid.dwIDFil2)) sStat.st_ino = 0; /* This is an ReFS ID that does not fit on 64 bits */
+	  }
+	}
+	printf("[%0.16llX] ", (unsigned long long)sStat.st_ino);
+      }
+    )
     if (!iAllTypes) {
       printf("%s -> %s\n", pszRelPath, pszTarget);
     } else {
-      char *pszArrow = GetTagArrow(dwTag);
+      char *pszArrow = GetLinkArrow(pDE->d_attribs, dwTag);
       printf("%-10s %s %s %s\n", pszType, pszRelPath, pszArrow, pszTarget);
     }
   }
@@ -706,9 +746,9 @@ int ExposeAllReparsePoints() {
 	
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    GetTagArrow						      |
+|   Function	    GetLinkArrow					      |
 |									      |
-|   Description     Return an arrow uniquely identifying the tag type         |
+|   Description     Return an arrow uniquely identifying the link type        |
 |		    							      |
 |   Parameters	    							      |
 |		    							      |
@@ -723,28 +763,141 @@ int ExposeAllReparsePoints() {
 |		    							      |
 |   History	    							      |
 |    2026-01-28 JFL Created this routine.				      |
+|    2026-02-13 JFL Renamed, and added the dwAttrs argument for SymLinkDs.    |
 *		    							      *
 \*---------------------------------------------------------------------------*/
 
-char *GetTagArrow(DWORD dwTag) {
+char *GetLinkArrow(DWORD dwAttrs, DWORD dwTag) {
   switch (dwTag & IO_REPARSE_TAG_TYPE_BITS) {
-    case IO_REPARSE_TAG_MOUNT_POINT: /* = Junction */
+    case IO_REPARSE_TAG_MOUNT_POINT: /* = Junction */		/* >= NT */
       return "-J>"; /* J or 💽 or 💾 or 📀 considered */
-    case IO_REPARSE_TAG_SYMLINK:
-      return "-S>"; /* S or 📁 or 📂 or 📃 or 📄 considered */
-    case IO_REPARSE_TAG_LX_SYMLINK:
+    case IO_REPARSE_TAG_SYMLINK:				/* >= Vista ? */
+      if (dwAttrs & FILE_ATTRIBUTE_DIRECTORY) {
+	return "-D>"; /* D or 📁 or 📂 considered */
+      } else {
+	return "-S>"; /* S or 📃 or 📄 considered */
+      }
+    case IO_REPARSE_TAG_WCI:					/* >= Win10 ? */
+      return "-🐋>"; /* Docker 🐋 whale, ⛟ or ✉ considered as symbols for a container */
+    case IO_REPARSE_TAG_CLOUD:					/* >= Win10 ? */
+      return "-☁ >"; /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
+    case IO_REPARSE_TAG_APPEXECLINK:				/* >= Win10 ? */
+      return "-🔥>"; /* X or 🔥 considered */
+    case IO_REPARSE_TAG_LX_SYMLINK:				/* >= Win10 ? */
     case IO_REPARSE_TAG_AF_UNIX:
     case IO_REPARSE_TAG_LX_FIFO: /* ➰ considered */
     case IO_REPARSE_TAG_LX_CHR:
     case IO_REPARSE_TAG_LX_BLK:
       return "-🐧>";
-    case IO_REPARSE_TAG_APPEXECLINK:
-      return "-🔥>"; /* X or 🔥 considered */
-    case IO_REPARSE_TAG_CLOUD:
-      return "-☁ >"; /* Add a space after the cloud, as the cloud is double width, but the cursor moves only 1 column */
-    case IO_REPARSE_TAG_WCI:
-      return "-🐋>"; /* Docker 🐋 whale, ⛟ or ✉ considered as symbols for a container */
     default:
       return "-?>";
   }
 }
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    GetAbsTargetPath					      |
+|									      |
+|   Description     Get the absolute path of a junction raw target	      |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    							      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History	    							      |
+|    2026-02-07 JFL Created this routine.				      |
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+char *GetAbsTargetPath(char *pszRawTarget) {
+  char *pszTarget = pszRawTarget;
+  if (!strncmp(pszTarget, "\\??\\", 4)) pszTarget += 4;
+  /* Some junction targets begin with '\??\Global\C:\...'
+     Apparently it's even possible to have '\??\Global\Global\C:\...' */
+  while (!strncmp(pszTarget, "Global\\", 7)) pszTarget += 7;
+  if (!strncmp(pszTarget, "UNC\\", 4)) {
+    /* Ex: '\??\UNC\server\share\dir' or '\??\Global\UNC\server\share\dir' */
+    pszTarget += 2;
+    pszTarget[0] = '\\'; /* Generate '\\server\share\dir' */
+  }
+  DEBUG_PRINTF(("GetAbsTargetPath() = \"%s\";\n", pszTarget));
+  return pszTarget;
+}
+
+/*---------------------------------------------------------------------------*\
+*                                                                             *
+|   Function	    FormatJunctionTarget				      |
+|									      |
+|   Description     Get the junction target, and format it as requested	      |
+|		    							      |
+|   Parameters	    							      |
+|		    							      |
+|   Returns	    							      |
+|		    							      |
+|   Notes	    							      |
+|		    							      |
+|   History	    							      |
+|    2026-02-07 JFL Created this routine.				      |
+*		    							      *
+\*---------------------------------------------------------------------------*/
+
+int FormatJunctionTarget(const char *pszJunction, char *buf, int nBufSize, int iFormat) {
+  int iErr;
+  char *bufRaw;
+  char *pszAbs;
+  int i;
+  int iLength;
+
+  DEBUG_ENTER(("FormatJunctionTarget(\"%s\", 0x%p, %d, %d);\n", pszJunction, buf, nBufSize, iFormat));
+
+  bufRaw = malloc(PATH_MAX);
+  if (!bufRaw) RETURN_INT(-1);
+
+  switch (iFormat) {
+    case F_RAW:
+      iErr = MlxReadLink(pszJunction, buf, sizeof(buf)) ? 0 : -1;
+      break;
+    case F_ABS:
+      iErr = MlxReadLink(pszJunction, bufRaw, PATH_MAX) ? 0 : -1;
+      if (iErr) break;
+      pszAbs = GetAbsTargetPath(bufRaw);
+      if (!pszAbs) { iErr = -1; break; } 
+      iLength = lstrlen(pszAbs);
+      if (iLength >= nBufSize) { iErr = -1; errno = ERANGE; break; } 
+      strcpy(buf, pszAbs);
+      break;
+    case F_REL:
+      /* Read the link, as if it were a relative symbolic link */
+      iErr = (int)readlink(pszJunction, buf, nBufSize);
+      if (iErr > 0) iErr = 0; /* Actually not an error, but the target name length */
+      break;
+    default: { /* case F_MIN: */
+      int nRel, nAbs;
+      iErr = MlxReadLink(pszJunction, bufRaw, PATH_MAX) ? 0 : -1;
+      if (iErr) break; /* We can't read the raw target, so we won't be able to read the relative target either */
+      pszAbs = GetAbsTargetPath(bufRaw);
+      if (!pszAbs) { iErr = -1; break; } /* Idem */
+      for (nAbs=i=0; pszAbs[i]; i++) if (pszAbs[i]=='\\') nAbs++;
+DEBUG_PRINT_INT_VAR(nAbs);
+      iErr = (int)readlink(pszJunction, buf, nBufSize);
+      if (iErr > 0) iErr = 0; /* Actually not an error, but the target name length */
+      if (iErr) break; /* Unlikely at this stage, but who knows */
+      iErr = 0;
+      for (nRel=i=0; buf[i]; i++) if (buf[i]=='\\') nRel++;
+DEBUG_PRINT_INT_VAR(nRel);
+      if (nAbs < nRel) {
+	iLength = lstrlen(pszAbs);
+DEBUG_PRINT_INT_VAR(iLength);
+	if (iLength >= nBufSize) { iErr = -1; errno = ERANGE; break; } 
+	strcpy(buf, pszAbs);
+      }
+      break;
+    }
+  }
+  if (iErr) iErr = -1;
+  free(bufRaw);
+  RETURN_INT_COMMENT(iErr, ("buf = \"%s\"\n", iErr ? "" : buf));
+}
+
