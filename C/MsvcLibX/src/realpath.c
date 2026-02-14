@@ -33,6 +33,7 @@
 *                   M U A versions deriving from it.			      *
 *    2026-01-23 JFL Converted realpath() to a wide W routine, with M U A      *
 *                   versions deriving from it.				      *
+*    2026-02-12 JFL Manage the case of APPEXECLINKs.			      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -119,6 +120,7 @@ realpath_failed:
 #ifdef _WIN32
 
 #include <windows.h>	/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
+#include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_APPEXECLINK, etc */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -551,6 +553,7 @@ int MlxResolveSubstDrivesM(const char *path, char *buf, size_t bufsize, UINT cp)
 |		    							      |
 |   History								      |
 |    2026-01-22 JFL Created this routine                                      |
+|    2026-02-13 JFL Also resolve the tail name, not just the path.            |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -580,7 +583,7 @@ int MlxGetFileNameW(const WCHAR *pwPath, WCHAR *pwOutBuf, size_t lBuf) {
 		      0,			/* dwShareMode - Others can do anything */
 		      NULL,			/* lpSecurityAttributes */
 		      OPEN_EXISTING,		/* dwCreationDisposition */
-		      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, /* dwFlagsAndAttributes - Allow opening directories too */
+		      FILE_FLAG_BACKUP_SEMANTICS, /* dwFlagsAndAttributes - Allow opening directories too */
 		      NULL			/* hTemplateFile */
 		      );
   if (hFile == INVALID_HANDLE_VALUE) {
@@ -679,6 +682,7 @@ int MlxGetFileNameM(const char *path, char *buf, size_t bufsize, UINT cp) {
 |		    							      |
 |   History								      |
 |    2026-01-22 JFL Created this routine                                      |
+|    2026-02-13 JFL Fixed memory leaks in case of error.                      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -686,7 +690,9 @@ WCHAR *realpathW(const WCHAR *pwPath, WCHAR *pwOutBuf) {
   int iErr;
   WCHAR *pwPath2 = NULL;
   WCHAR *pwOutBuf0 = pwOutBuf;
+  WCHAR *pwResult = NULL;
   int n;
+  DWORD dwTag;
 
   DEBUG_WENTER((L"realpathW(\"%s\", 0x%p);\n", pwPath, pwOutBuf));
 
@@ -704,30 +710,79 @@ WCHAR *realpathW(const WCHAR *pwPath, WCHAR *pwOutBuf) {
   if (iErr && (errno == ENOSYS)) {
     /* The OS does not support name resolution. Do it ourselves */
     pwPath2 = malloc(sizeof(WCHAR) * WIDE_PATH_MAX);
-    if (!pwPath2) RETURN_CONST_COMMENT(NULL, ("Out of memory\n"));
+    if (!pwPath2) {
+      DEBUG_LEAVE(("return NULL; // Out of memory\n"));
+      goto cleanup_and_return;
+    }
     iErr = MlxResolveSubstDrivesW(pwPath, pwPath2, WIDE_PATH_MAX);
     if (!iErr) iErr = MlxResolveLinksW(pwPath2, pwOutBuf, WIDE_PATH_MAX);
     free(pwPath2);
   }
+  if (iErr && (errno == EAGAIN)) {
+    /* Returned for all reparse points that aren't resolved by MlxGetFileNameW */
+    dwTag = MlxGetReparseTagW(pwOutBuf) & IO_REPARSE_TAG_TYPE_BITS;
+    /* Special case for AppExecLinks, which we can resolve another way */
+    if (dwTag == IO_REPARSE_TAG_APPEXECLINK) {
+      pwPath2 = _wcsdup(pwOutBuf);
+      if (!pwPath2) {
+	DEBUG_LEAVE(("return NULL; // Out of memory\n"));
+	goto cleanup_and_return;
+      }
+      n = MlxReadAppExecLinkW(pwPath2, pwOutBuf, WIDE_PATH_MAX);
+      if (!n) {
+	DEBUG_WLEAVE((L"return NULL; // Failed to resolve AppExecLink \"%s\". %S\n", pwPath2, strerror(errno)));
+	goto cleanup_and_return;
+      }
+      dwTag = MlxGetReparseTagW(pwOutBuf); /* Check if the target exists */
+      if (!dwTag && (errno == ENOENT)) { /* It does not */
+	DEBUG_WLEAVE((L"return NULL; // Dangling AppExecLink \"%s\". %S\n", pwPath2, strerror(errno)));
+	errno = EXDEV; /* "Improper link" */
+	goto cleanup_and_return;
+      }
+      free(pwPath2);
+      /* Repeat the resolution for that target file */
+      pwPath2 = _wcsdup(pwOutBuf);
+      if (!pwPath2)  {
+	DEBUG_LEAVE(("return NULL; // Out of memory\n"));
+	goto cleanup_and_return;
+      }
+      pwResult = realpathW(pwPath2, pwOutBuf);
+      /* free(pwPath2); // Done again in the common exit */
+      goto cleanup_and_return;
+    } else if (dwTag) { /* Any other type of reparse point */
+      errno = EXDEV; /* "Improper link" */
+    }
+  }
   if (iErr) {
-    RETURN_CONST_COMMENT(NULL, ("Resolution failed. %s\n", strerror(errno)));
+    DEBUG_LEAVE(("return NULL; // Resolution failed. %s\n", strerror(errno)));
+    goto cleanup_and_return;
   }
 
   /* Change short names to long names, and correct the name case */
-  pwPath2 = _wcsdup(pwOutBuf);
-  if (!pwPath2) RETURN_CONST_COMMENT(NULL, ("Out of memory\n"));
   n = GetLongPathNameW(pwPath2, pwOutBuf, WIDE_PATH_MAX);
   free(pwPath2);
   if (!n) {
     errno = Win32ErrorToErrno();
-    RETURN_CONST_COMMENT(NULL, ("Can't get long pathnames. %s\n", strerror(errno)));
+    DEBUG_LEAVE(("return NULL; // Can't get long pathnames. %s\n", strerror(errno)));
+    goto cleanup_and_return;
   }
 
-  /* If we dynamically allocated the result, resize it to avoid wasting space */
-  if (!pwOutBuf0) pwOutBuf = ShrinkBuf(pwOutBuf, sizeof(WCHAR) * (lstrlenW(pwOutBuf) + 1));
+  pwResult = pwOutBuf;
+  DEBUG_WLEAVE((L"return \"%s\"\n", pwResult));
 
-  DEBUG_WLEAVE((L"return \"%s\"\n", pwOutBuf));
-  return pwOutBuf;
+cleanup_and_return:
+  free(pwPath2);
+
+  /* If we dynamically allocated the result, resize it to avoid wasting space */
+  if (!pwOutBuf0) {
+    if (pwResult) {
+      pwResult = ShrinkBuf(pwOutBuf, sizeof(WCHAR) * (lstrlenW(pwOutBuf) + 1));
+    } else {
+      free(pwOutBuf);
+    }
+  }
+
+  return pwResult;
 }
 
 /* Multibyte version of the same */
