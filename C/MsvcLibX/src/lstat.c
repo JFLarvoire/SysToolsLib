@@ -25,6 +25,9 @@
 *                   instead of GetFileAttributesEx() and MlxGetFileID().      *
 *    2026-02-04 JFL Moved the conversion of the Win32 attributes and reparse  *
 *		    tag to a C file type to new routine MlxAttrAndTag2Type(). *
+*    2026-02-11 JFL Decode st_mode flags in the debugging output.             *
+*                   Fixed the setting of st_mode flag S_MOUNT_POINT.	      *
+*                   Moved the APPEXECLINK fix to MlxGetFileAttributesAndIDW().*
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -112,13 +115,14 @@ int dirent2stat(const _dirent *pDirent, struct _stat *pStat) {
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
-|   Function	    lstat						      |
+|   Function	    lstatX						      |
 |									      |
-|   Description	    Common definition of all _lstatXY() functions             |
+|   Description	    Common definition of all _statXY() & _lstatXY() functions |
 |									      |
 |   Parameters      const char *path		The symlink name	      |
 |		    struct stat *buf		Output buffer		      |
-|									      |
+|		    BOOL is_lstat		1 = lstat(); 0 = stat()	      |
+|		    							      |
 |   Returns	    0 = Success, -1 = Failure				      |
 |									      |
 |   Notes	    See sys\stat.h for a description of how the stat and      |
@@ -127,6 +131,7 @@ int dirent2stat(const _dirent *pDirent, struct _stat *pStat) {
 |   History								      |
 |    2014-02-06 JFL Created this routine                               	      |
 |    2014-02-28 JFL Added support for UTF-8 pathnames.                 	      |
+|    2026-02-11 JFL Moved the APPEXECLINK fix to MlxGetFileAttributesAndIDW().|
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -136,7 +141,7 @@ int dirent2stat(const _dirent *pDirent, struct _stat *pStat) {
 
 #define lstatX CONCAT_TOKENS_VALUE(lstat, X)
 
-int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
+int lstatX(const char *path, struct stat *pStat, BOOL is_lstat) {
   BOOL bDone;
   DWORD dwAttr;
   WIN32_FILE_ATTRIBUTE_DATA fileData;
@@ -144,14 +149,14 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   DWORD dwTag = 0;
   DEBUG_CODE(
   char szTime[100];
+  char szAttrs[250]; /* Enough space for 13 attribute names, averaging 10 chars. each */
   )
   WCHAR *pwszName = NULL;
   FILE_ID fid;
-  int errno0 = errno;
   unsigned short wType;
 
-  /* If (bLink is TRUE), the function name is "lstatXXX", else it's "statXXX" */
-  DEBUG_ENTER(("%s(\"%s\", 0x%p);\n", (STRINGIZE(lstat) + !bLink), path, pStat));
+  /* If (is_lstat is TRUE), the function name is "lstatXXX", else it's "statXXX" */
+  DEBUG_ENTER(("%s(\"%s\", 0x%p);\n", (STRINGIZE(lstat) + !is_lstat), path, pStat));
 
 #if USE_MSVC_STAT
   dwAttr = GetFileAttributes(path);
@@ -171,32 +176,9 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   pwszName = MultiByteToNewWidePath(CP_UTF8, path);
   if (!pwszName) RETURN_INT_COMMENT(-1, ("errno=%d - %s\n", errno, strerror(errno)));
 
-  bDone = MlxGetFileAttributesAndIDW(pwszName, &fileData, &fid, bLink); /* Superset of GetFileAttributesEx() */
+  bDone = MlxGetFileAttributesAndIDW(pwszName, &fileData, &fid, is_lstat); /* Superset of GetFileAttributesEx() */
   if (!bDone) {
-    int errno1 = errno = Win32ErrorToErrno();
-    if ((!bLink) && (errno == EAGAIN)) { /* This may happen with AppExecLinks or WciLinks, when the target object can't be accessed */
-      /* Check if it's a case we can resolve */
-      dwTag = MlxGetReparseTagW(pwszName); /* Returns 0 if this isn't a reparse point */
-      if (dwTag == IO_REPARSE_TAG_APPEXECLINK) {
-	/* Yes, we can resolve that case: Get the AppExecLink target, and try again */
-	char *pszTarget = malloc(UTF8_PATH_MAX);
-	if (pszTarget) {
-	  int iRet = MlxReadAppExecLinkU(path, pszTarget, UTF8_PATH_MAX);
-	  if (iRet >= 0) {
-	    errno = errno0;
-	    iRet = lstatX(pszTarget, pStat, bLink);
-	  }
-	  free(pszTarget);
-	  if (iRet == 0) {
-	    free(pwszName);
-	    RETURN_INT_COMMENT(0, ("Pass it on\n"));
-	  }
-	  errno1 = errno; /* Ex: File not found */
-      	}
-      }
-    }
     free(pwszName);
-    errno = errno1;
     RETURN_INT_COMMENT(-1, ("MlxGetFileAttributesAndID(); // Failed\n"));
   }
   dwAttr = fileData.dwFileAttributes;
@@ -205,6 +187,10 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   XDEBUG_PRINTF(("ftLastWriteTime = %s\n", szTime));
   qwSize = ((unsigned __int64)fileData.nFileSizeHigh << 32) | fileData.nFileSizeLow;
   XDEBUG_PRINTF(("nFileSize = %I64d\n", qwSize));
+
+  if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
+    dwTag = MlxGetReparseTagW(pwszName);
+  }
 
   ZeroMemory(pStat, sizeof(struct stat));
   /* Set times */
@@ -259,7 +245,25 @@ int lstatX(const char *path, struct stat *pStat, BOOL bLink) {
   if (*(ino_t *)(&fid.dwIDFil2)) *(ino_t *)(&fid.dwIDFil0) = 0; /* This is an ReFS ID that does not fit on 64 bits */
 
   free(pwszName);
-  RETURN_INT_COMMENT(0, ("%s  mode = 0x%04X  size = %I64d bytes\n", szTime, pStat->st_mode, qwSize));
+
+  DEBUG_CODE({
+    extern char *szLibcFileTypes[16];
+    strcpy(szAttrs, szLibcFileTypes[pStat->st_mode >> 12]);
+    if (pStat->st_mode & S_MOUNT_POINT) strcat(szAttrs, " MOUNT_POINT");
+    if (pStat->st_mode & _S_IREAD) strcat(szAttrs, " READ");
+    if (pStat->st_mode & _S_IWRITE) strcat(szAttrs, " WRITE");
+    if (pStat->st_mode & _S_IEXEC) strcat(szAttrs, " EXEC");
+    if (pStat->st_mode & S_HIDDEN) strcat(szAttrs, " HIDDEN");
+    if (pStat->st_mode & S_ARCHIVE) strcat(szAttrs, " ARCHIVE");
+    if (pStat->st_mode & S_SYSTEM) strcat(szAttrs, " SYSTEM");
+    if (pStat->st_mode & S_COMPRESSED) strcat(szAttrs, " COMPRESSED");
+    if (pStat->st_mode & S_ENCRYPTED) strcat(szAttrs, " ENCRYPTED");
+    if (pStat->st_mode & S_NOT_CONTENT_INDEXED) strcat(szAttrs, " NOT_INDEXED");
+    if (pStat->st_mode & S_OFFLINE) strcat(szAttrs, " OFFLINE");
+    if (pStat->st_mode & S_SPARSE_FILE) strcat(szAttrs, " SPARSE");
+  })
+
+  RETURN_INT_COMMENT(0, ("%s  mode = 0x%04X = {%s}  size = %I64d bytes\n", szTime, pStat->st_mode, szAttrs, qwSize));
 }
 
 int lstat(const char *path, struct stat *pStat) {

@@ -30,12 +30,14 @@
 #include <stdio.h>
 #include <sys/stat.h>	/* Public definitions for this module */
 /* MsvcLibX library extensions */
+#include <unistd.h>
 #include "msvclibx.h"
 #include "debugm.h"
 
 #ifdef _WIN32
 
 #include <windows.h>
+#include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
 
 /*---------------------------------------------------------------------------*\
 *                                                                             *
@@ -124,6 +126,7 @@ BOOL HasGetFileInformationByHandleEx(void) {
 |		    This allows collecting WIN32_FILE_ATTRIBUTE_DATA at the   |
 |		    same time as the device and file IDs, and also to select  |
 |		    if we want the information for a link or its target.      |
+|    2026-02-11 JFL Moved the APPEXECLINK workaround here from lstatX().      |
 *									      *
 \*---------------------------------------------------------------------------*/
 
@@ -133,6 +136,7 @@ BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA
   HANDLE hFile;
   BOOL bDone;
   BY_HANDLE_FILE_INFORMATION fi;
+  int errno0 = errno;
 
   DEBUG_WENTER((L"MlxGetFileAttributesAndIDW(\"%s\", %p, %d);\n", pwszName, pFID, bLink));
 
@@ -147,7 +151,28 @@ BOOL MlxGetFileAttributesAndIDW(const WCHAR *pwszName, WIN32_FILE_ATTRIBUTE_DATA
 		      FILE_FLAG_BACKUP_SEMANTICS | (bLink ? FILE_FLAG_OPEN_REPARSE_POINT : 0),
 		      NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    errno = Win32ErrorToErrno();
+    int errno1 = errno = Win32ErrorToErrno();
+    if ((!bLink) && (errno == EAGAIN)) { /* This may happen with stat(AppExecLinks or WciLinks), when the target object can't be accessed */
+      /* Check if it's a case we can resolve */
+      DWORD dwTag = MlxGetReparseTagW(pwszName); /* Returns 0 if this isn't a reparse point */
+      if ((dwTag & IO_REPARSE_TAG_TYPE_BITS) == IO_REPARSE_TAG_APPEXECLINK) {
+	/* Yes, we can resolve that case: Get the AppExecLink target, and try again */
+	WCHAR *pwszTarget = malloc(WIDE_PATH_MAX * sizeof(WCHAR));
+	if (pwszTarget) {
+	  int iRet = MlxReadAppExecLinkW(pwszName, pwszTarget, WIDE_PATH_MAX);
+	  if (iRet >= 0) {
+	    errno = errno0;
+	    bDone = MlxGetFileAttributesAndIDW(pwszTarget, pAttr, pFID, bLink);
+	  } else {
+	    bDone = FALSE;
+	  }
+	  free(pwszTarget);
+	  if (bDone) RETURN_BOOL_COMMENT(bDone, ("Pass it on\n"));
+	  errno1 = errno; /* Ex: File not found */
+      	}
+      }
+    }
+    errno = errno1;
     DEBUG_WLEAVE((L"return FALSE; // Failed to open \"%s\"\n", pwszName));
     return 0;
   }
@@ -231,30 +256,30 @@ BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_DATA *p
 |   History								      |
 |    2026-02-04 JFL Created this routine, by merging the two versions in      |
 |		    lstat() and readdir().				      |
+|    2026-02-11 JFL Made szLibcFileTypes[] public, for debug use in lstat.c.  |
 *									      *
 \*---------------------------------------------------------------------------*/
 
 #include <dirent.h>
 #include <unistd.h>
-#include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
 
 #if _DEBUG
-static char *pszTypes[16] = {
+char *szLibcFileTypes[16] = {
   "UNKNOWN",	/*  0  */
   "FIFO",	/*  1  // Fifo (not used in DOS/Windows dirs) */
   "CHR",	/*  2  // Character device (not used in DOS/Windows) */
-  "?",		/*  3  // Undefined */
+  "#3?",	/*  3  // Undefined */
   "DIR",	/*  4  // Directory */
-  "?",		/*  5  // Undefined */
+  "#5?",	/*  5  // Undefined */
   "BLK",	/*  6  // Block device (not used in DOS/Windows) */
-  "?",		/*  7  // Undefined */
+  "#7?",	/*  7  // Undefined */
   "REG",	/*  8  // Normal file */
-  "?",		/*  9  // Undefined */
+  "#9?",	/*  9  // Undefined */
   "LNK",	/* 10  // Symbolic link */
-  "?",		/* 11  // Undefined */
+  "#11?",	/* 11  // Undefined */
   "SOCK",	/* 12  // Socket (not used in DOS/Windows dirs) */
-  "?",		/* 13  // Undefined */
-  "?",		/* 14  // Undefined */
+  "#13?",	/* 13  // Undefined */
+  "#14?",	/* 14  // Undefined */
   "VOLID"	/* 15  // Volume ID (non-standard extension for MS-DOS FAT) */
 };
 #endif /* _DEBUG */
@@ -339,7 +364,7 @@ unsigned char MlxAttrAndTag2Type(WCHAR *pwszDir, WCHAR *pwszName, DWORD dwAttr, 
       bType = DT_REG;		/* A normal file by default */
   }
 
-  DEBUG_LEAVE(("return %d; // %s\n", (int)bType, pszTypes[bType]));
+  DEBUG_LEAVE(("return %d; // %s\n", (int)bType, szLibcFileTypes[bType]));
 cleanup_and_exit:
   free(pwszPathname);
   free(pwszBuf);
