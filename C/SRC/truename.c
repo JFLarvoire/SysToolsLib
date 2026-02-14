@@ -28,7 +28,8 @@
 *    2021-11-29 JFL Renamed ResolveLinks*() as MlxResolveLinks*().	      *
 *    2022-10-19 JFL Moved IsSwitch() to SysLib. Version 1.1.5.		      *
 *    2026-01-03 JFL Option -d can now be repeated. Version 1.1.6.	      *
-*    2026-01-23 JFL Now using the rewritten MsvcLibX routines. Version 1.2.   *
+*    2026-01-23 JFL Now using the rewritten MsvcLibX routines.		      *
+*    2026-02-12 JFL Fixed the case of APPEXECLINKs. Version 1.2.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -37,7 +38,7 @@
 #define PROGRAM_DESCRIPTION "Get the canonic name of a path, with all links resolved"
 #define PROGRAM_NAME    "truename"
 #define PROGRAM_VERSION "1.2"
-#define PROGRAM_DATE    "2026-01-23"
+#define PROGRAM_DATE    "2026-02-12"
 
 #include "predefine.h" /* Define optional features we need in the C libraries */
 
@@ -47,6 +48,7 @@
 #include <errno.h>
 #include <unistd.h>	/* For the symlink and readlink functions */
 #include <limits.h>	/* Defines PATH_MAX and NAME_MAX */
+#include <sys/stat.h>
 /* SysToolsLib include files */
 #include "debugm.h"	/* SysToolsLib debug macros. Include first. */
 #include "mainutil.h"	/* SysLib helper routines for main() */
@@ -60,6 +62,7 @@ DEBUG_GLOBALS	/* Define global variables used by debugging macros. (Necessary fo
 
 #include <windows.h>		/* Also includes MsvcLibX' WIN32 UTF-8 extensions */
 #include <iconv.h>              /* For the codePage variable */
+#include "reparsept.h"		/* For the undocumented IO_REPARSE_TAG_APPEXECLINK, etc */
 
 #define cp codePage		/* Initial console code page in iconv.c */
 
@@ -106,6 +109,8 @@ int main(int argc, char *argv[]) {
   int bResolveLinks = TRUE;
   int bResolveShortNames = TRUE;
   int bUsedMlxResolveLinks = FALSE;
+  struct stat st;
+  int iErr;
 
   for (i=1; i<argc; i++) {
     char *arg = argv[i];
@@ -188,6 +193,14 @@ int main(int argc, char *argv[]) {
 
   if (!pszPath) usage();
 
+  /* Make sure the file exists */
+  iErr = lstat(pszPath, &st);
+  if (iErr) {
+report_C_error_and_exit:
+    pfcerror(NULL); /* Will print something like "File not found" */
+    return 1;
+  }
+
   if (bGetAbsName) {
     char *lpPart;
     n = GetFullPathName(pszPath, sizeof(absName), absName, &lpPart);
@@ -206,23 +219,47 @@ int main(int argc, char *argv[]) {
   }
 
   if (bResolveLinks) {
+resolve_links:
     /* Resolves links with the same algorithm as realpath().
        But don't use realpath() directly, because:
        - We want to optionally _not_ correct the name case or expand short names.
        - We need to know if it did the resolution using MlxGetFileName() or MlxResolveLinks().*/
     /* First try letting Windows do the resolution itself */
-    int iErr = MlxGetFileName(pszPath, buf, sizeof(buf));
+    iErr = MlxGetFileName(pszPath, buf, sizeof(buf));
     if (iErr && (errno == ENOSYS)) {
       /* The OS does not support name resolution. Do it ourselves */
       char *pszPath2 = malloc(UTF8_PATH_MAX);
-      if (!pszPath2) {
-      	pfcerror(NULL); /* Will print something like "Out of memory" */
-      	return 1;
-      }
+      if (!pszPath2) goto report_C_error_and_exit;
       bUsedMlxResolveLinks = TRUE;
       iErr = MlxResolveSubstDrives(pszPath, pszPath2, UTF8_PATH_MAX);
       if (!iErr) iErr = MlxResolveLinks(pszPath2, buf, sizeof(buf));
       free(pszPath2);
+    }
+    if (iErr && (errno == EAGAIN)) {
+      /* Returned for all reparse points that aren't resolved by MlxGetFileName */
+      DWORD dwTag = MlxGetReparseTag(buf) & IO_REPARSE_TAG_TYPE_BITS;
+      /* Special case for AppExecLinks, which we can resolve another way */
+      if (dwTag == IO_REPARSE_TAG_APPEXECLINK) {
+	char *pszCopy = strdup(buf);
+	if (!pszCopy) goto report_C_error_and_exit;
+	iErr = !MlxReadAppExecLink(pszCopy, buf, sizeof(buf));
+	if (iErr) {
+	  pfcerror("Failed to resolve AppExecLink \"%s\"", pszCopy);
+	  return 1;
+	}
+	dwTag = MlxGetReparseTag(buf); /* Check if the target exists */
+	if (!dwTag && (errno == ENOENT)) { /* It does not */
+	  pferror("Dangling AppExecLink \"%s\"", pszCopy);
+	  return 1;
+	}
+	free(pszCopy);
+	/* Repeat the resolution for that target file */
+	pszPath = strdup(buf); /* No need to free that memory before exiting */
+	if (!pszPath) goto report_C_error_and_exit;
+	goto resolve_links;
+      } else if (dwTag) { /* Any other type of reparse point */
+	errno = EXDEV; /* "Improper link" */
+      }
     }
     if (iErr) {
       pfcerror("Failed to resolve links");
