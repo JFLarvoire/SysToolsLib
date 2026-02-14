@@ -78,6 +78,7 @@ OBJECTS = $(OBJECTS1:.obj=.o) $(UNIX_OBJECTS)
 
 MI=$(NMINCLUDE)
 CI=$(STINCLUDE)
+SX=$(MSVCLIBX)/include
 
 $(S)/Block.cpp: $(S)/Block.h $(S)/File.h $(S)/FloppyDisk.h $(S)/HardDisk.h $(S)/LogDisk.h
 
@@ -96,7 +97,7 @@ $(S)/crc32.h: $(S)/SysLib.h
 
 $(S)/cwd-pwd.c: $(MI)/debugm.h $(S)/SysLib.h $(S)/dirx.h $(S)/pathnames.h
 
-$(S)/dict.c: $(CI)/dict.h $(CI)/tree.h
+$(S)/dict.c: $(CI)/dict.h $(CI)/tree.h $(SX)/stdio.h
 
 $(S)/DupArgLineTail.c: $(S)/SysLib.h $(S)/CmdLine.h
 
