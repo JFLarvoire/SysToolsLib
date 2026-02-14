@@ -12,6 +12,7 @@
 *    2014-06-30 JFL Added support for 32K Unicode paths.           	      *
 *    2017-03-18 JFL Created this module, with 3 versions unlink[AUM]().       *
 *    2017-10-03 JFL Fixed support for pathnames >= 260 characters. 	      *
+*    2026-02-11 JFL Allow deleting any junction, even if invalid.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -62,6 +63,11 @@ int unlinkM(const char *path, UINT cp) {
 
   iErr = lstat(path, &st); /* TODO: Change this to lstatM() or lstatW when available */
   if (iErr) RETURN_INT(iErr);
+
+  if ((S_ISDIR(st.st_mode)) && (st.st_mode & S_MOUNT_POINT)) { /* This is a mount point, pointing to another drive */
+    st.st_mode &= ~S_IFMT;	/* Clear the file type (a directory here) */
+    st.st_mode |= S_IFLNK;	/* Change it to a link, so that it's handled like a junction below */
+  }
 
   if ((!S_ISREG(st.st_mode)) && (!S_ISLNK(st.st_mode))) {
     errno = ENOENT;
