@@ -4,6 +4,45 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [Unreleased] 2026-02-14
+### Fixed
+- junction.exe: Version 2026-02-13:
+  - Decode junction targets raw pathnames beginning with '\??\Global\C:', etc, or '\??\UNC\server\share\dir', etc.
+  - Fixed the creation of junctions with target paths > 260 characters.
+  - Allow deleting any junction, even if invalid.
+- C/MsvcLibX/include/reparsept.h: Added a #define guards to prevent multiple inclusion.
+- C/MsvcLibX/src/lstat.c: Fixed the setting of st_mode flag S_MOUNT_POINT.
+- C/MsvcLibX/src/symlink.c: Fixed the creation of junctions with targets > 260 chars.
+- C/MsvcLibX/src/unlink.c: Allow deleting any junction, even if invalid.
+- C/MsvcLibX/src/realpath.c: Fixed memory leaks in case of error.
+
+### Changed
+- junction.exe: Version 2026-02-13:
+  - Reversed options -d & -D, as I made too many mistakes.
+  - Changed the default target format to the absolute or relative formats, with the minimum number of parts.
+  - Added option --rel to force relative format in all cases.
+  - Added option --min to force the default minimal format.
+  - Output a specific arrow for SymLinkDs.
+- truename.exe: Version 1.2: Now displaying the target pathname of APPEXECLINKs.
+- C/MsvcLibX/include/sys/stat.h: Updated comments
+- C/MsvcLibX/src/lstat.c: Decode st_mode flags in the debugging output.
+- C/MsvcLibX/src/lstat.c, C/MsvcLibX/src/fileid.c: Moved the APPEXECLINK attributes fix from lstatX() to MlxGetFileAttributesAndIDW().
+- C/MsvcLibX/src/realpath.c: Manage the case of APPEXECLINKs.
+- C/SRC/truename.C: Now using the rewritten MsvcLibX routines.
+
+## [Unreleased] 2026-02-10
+### Fixed
+- redo.exe: Version 4.0.1: Added a description of option -q in the help screen.
+- C/include/tree.h, C/include/dict.h: Fixed several debugging output issues.
+- C/MsvcLibX/src/dirent.c: Make sure all versions of readdir() at least clear the d_ino field.
+- C/MsvcLibX/src/lstat.c: Make sure dirent2stat() sets the st_dev and st_ino fields too.
+- C/SysLib/WalkDirTree.c: Bugfix: The callback was sometimes called twice for dirs.
+
+### Changed
+- C/include/tree.h, C/include/dict.h: Output debug information only in eXtra debug mode.
+- C/SysLib/WalkDirTree.c: When an "Access Denied" error occurs when attempting to read a (possibly linked) directory,
+  give it a second chance to be read through another pathname.
+
 ## [Unreleased] 2026-02-07
 ### Changed
 - C/MsvcLibX/src/fileid.c: Added new routine MlxAttrAndTag2Type(), merging the inconsistent implementations previously
@@ -30,7 +69,7 @@ For more details about changes in a particular area, see the README.txt and/or N
 - C/SysLib/pferror.c: Allow not passing a message, and show just on the C error.
 - junction.exe: Version 2026-01-28
   - Output a Docker whale ahead of WCI links targets, to make it clear its root is in a container.
-  - Output type-specific arrows for other reparse points types. Ex: Fire for AppExecLinks
+  - Output type-specific arrows for other reparse points types. Ex: Fire for AppExecLinks, Whale for containers, Cloud for cloud.
   - Added option -m to limit the recursive search depth.
 
 ## [Unreleased] 2026-01-23
@@ -47,7 +86,7 @@ For more details about changes in a particular area, see the README.txt and/or N
   Added routines MlxResolveSubstDrives(), MlxGetFileName().  
   Converted MlxResolveLinks() to a wide W routine, with M U A versions deriving from it.  
   Converted realpath() to a wide W routine, with M U A versions deriving from it.
-- Truename.exe version 1.2:  
+- Truename.exe:  
   - Now resolves substituted and network drives.  
   - Now uses a WIN32 API introduced in Windows Vista, which resolves names at the OS level.
   - If that API is not available (Windows XP), it reverts to using the old "manual" link resolution algorithm.
