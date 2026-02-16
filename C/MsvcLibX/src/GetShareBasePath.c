@@ -15,6 +15,7 @@
 *   History								      *
 *    2021-11-24 JFL Created the GetShareBasePath() routine.		      *
 *    2021-11-28 JFL Moved it to this new module.			      *
+*    2026-02-16 JFL Tweaked the heuristic for network shares named "root".    *
 *                                                                             *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -164,6 +165,8 @@ WCHAR *MlxGetShareBasePathW(const WCHAR *pwszShareUNC) { // Name must be \\SERVE
     pwszShareBasePath[1] = L':';
     lstrcpyW(pwszShareBasePath+2, pwsz);
     if (pwsz2) pwszShareBasePath[2 + (pwsz2 - pwsz)] = L'\0';
+    /* Heuristic: If the share name is root, assume it refers to C:\, not to C:\root */
+    if (!_wcsicmp(pwszShareBasePath+3, L"root")) pwszShareBasePath[3] = L'\0';
   }
 
   /* Now append the optional \SUBPATH */
