@@ -4,6 +4,20 @@ Major changes for the System Tools Library are recorded here.
 
 For more details about changes in a particular area, see the README.txt and/or NEWS.txt file in each subdirectory.
 
+## [1.23] 2026-02-20
+### Fixed
+- junction.exe: Version 2.0: Better error messages, which were incorrect in some cases.
+- ag.exe: Version 2.2.6: Rebuilt with the latest MsvcLibX. This fixes the inability to display Unicode characters > 0xFFFF.
+
+### Changed
+- C/MsvcLibX/src/GetShareBasePath.c: Tweaked the heuristic for network shares named "root".
+- C/MsvcLibX/src/err2errno.c: Added new routine MlxGetWin32ErrorMessage().
+- C/MsvcLibX/include/errno.h: Declare new routine MlxGetWin32ErrorMessage().
+- C/MsvcLibX/include/sys/stat.h: Allow reading the reparse tag using GetFileInformationByHandleEx(FileAttributeTagInfo).
+- C/MsvcLibX/include/readlink.c: try reading the reparse tag using GetFileInformationByHandleEx(FileAttributeTagInfo).
+- C/MsvcLibX/include/fileid.c, lstat.c, readlink.c: Work around a bug with Win7 VMware VMs reading null reparse tags
+  on their host's shared folders.
+
 ## [Unreleased] 2026-02-14
 ### Fixed
 - junction.exe: Version 2026-02-13:

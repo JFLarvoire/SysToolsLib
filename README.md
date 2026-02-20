@@ -52,7 +52,7 @@ Batch and PowerShell for Windows-only tools; Python and Tcl for cross-OS tools; 
 
 Jean-François Larvoire
 jf.larvoire@free.fr
-2024-06-11
+2026-02-20
 
 
 Installation
