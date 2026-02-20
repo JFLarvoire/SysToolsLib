@@ -28,6 +28,8 @@
 *    2026-02-11 JFL Decode st_mode flags in the debugging output.             *
 *                   Fixed the setting of st_mode flag S_MOUNT_POINT.	      *
 *                   Moved the APPEXECLINK fix to MlxGetFileAttributesAndIDW().*
+*    2026-02-19 JFL Added a workaround for Win7 VMware VMs reading null	      *
+*		    reparse tags on their host's shared folders.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -190,6 +192,7 @@ int lstatX(const char *path, struct stat *pStat, BOOL is_lstat) {
 
   if (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT) {
     dwTag = MlxGetReparseTagW(pwszName);
+    if (!dwTag) dwAttr &= ~FILE_ATTRIBUTE_REPARSE_POINT; /* Workaround for Win7 VMware VMs reading null reparse tags on their host's shared folders */
   }
 
   ZeroMemory(pStat, sizeof(struct stat));

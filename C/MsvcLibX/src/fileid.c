@@ -16,6 +16,8 @@
 *    2026-02-03 JFL Added new routine MlxAttrAndTag2Type().		      *
 *    2026-02-04 JFL Merged the two versions from readdir() and lstat().	      *
 *    2026-02-06 JFL Added some debugging output.			      *
+*    2026-02-19 JFL Added a workaround for Win7 VMware VMs reading null	      *
+*		    reparse tags on their host's shared folders.	      *
 *                   							      *
 *         © Copyright 2022 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -308,6 +310,10 @@ unsigned char MlxAttrAndTag2Type(WCHAR *pwszDir, WCHAR *pwszName, DWORD dwAttr, 
     // All symlinks are reparse points, but not all reparse points are symlinks. */
     if (!dwTag) dwTag = MlxGetReparseTagW(pwszName); /* Make the tag optional */
     if (!dwTag) {
+      if (errno == ENXIO ) { /* Workaround for Win7 VMware VMs reading null reparse tags on their host's shared folders */
+      	dwAttr &= ~FILE_ATTRIBUTE_REPARSE_POINT;
+      	goto skip_reparse_point_cases;
+      }
       DEBUG_LEAVE(("return 0; // MlxGetReparseTagW() failed\n"));
       goto cleanup_and_exit;
     }
@@ -355,6 +361,7 @@ unsigned char MlxAttrAndTag2Type(WCHAR *pwszDir, WCHAR *pwszName, DWORD dwAttr, 
 	break;
     }
   }
+skip_reparse_point_cases:
   if (bType == DT_UNKNOWN) {
     if (dwAttr & FILE_ATTRIBUTE_DIRECTORY)
       bType = DT_DIR;		/* Subdirectory */

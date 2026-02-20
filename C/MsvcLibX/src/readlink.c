@@ -39,6 +39,8 @@
 *                   '\??\Global\C:', etc, or'\??\UNC\server\share\dir', etc.  *
 *    2026-02-17 JFL Added, then commented-out, a tentative fix for Win7 VMs   *
 *                   reading null reparse tags on their host's shared folders. *
+*    2026-02-19 JFL Return errno=ENXIO to distinguish that particular problem.*
+*                   Prevent a misleading error with root directories.	      *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -75,6 +77,13 @@ DWORD MlxGetReparseTagW(const WCHAR *pwszPath) {
   DWORD dwTag = 0;
 
   XDEBUG_WPRINTF((L"MlxGetReparseTagW(\"%s\");\n", pwszPath));
+
+  /* Prevent a misleading error in FindFirstFile() with root directories */
+  if ((!wcscmp(pwszPath, L"\\")) || (pwszPath[0] && (!wcscmp(pwszPath+1, L":\\")))) {
+    errno = EBADF; /* Not a reparse point */
+    XDEBUG_PRINTF(("  return 0; // %s\n", strerror(errno)));
+    return 0;
+  }
 
   hFind = FindFirstFileW(pwszPath, &findFileData);
   if (hFind == INVALID_HANDLE_VALUE ) {
@@ -124,6 +133,10 @@ DWORD MlxGetReparseTagW(const WCHAR *pwszPath) {
 #endif
     {
       XDEBUG_PRINTF(("  return (dwReserved0 = 0x%X);\n", dwTag));
+    }
+    if (!dwTag) { /* This is incoherent, but it happens in Win7 VMware VMs accessing their host's shared folders */
+      /* Return a unique error code, to allow the caller to distinguish this error case */
+      errno = ENXIO; /* "No such device or address" */
     }
   } else {
     XDEBUG_PRINTF(("  return 0; // Not a reparse point\n"));
