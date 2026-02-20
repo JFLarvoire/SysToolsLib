@@ -43,12 +43,14 @@
 *    2026-02-10 JFL Fixed the creation of junctions with target paths > 260 b.*
 *    2026-02-11 JFL Allow deleting any junction, even if invalid.	      *
 *    2026-02-13 JFL Output a specific arrow for SymLinkDs.		      *
+*    2026-02-19 JFL Improved error messages in some cases. Version 2.0.	      *
 *                                                                             *
 \*****************************************************************************/
 
 #define PROGRAM_DESCRIPTION "Manage NTFS junctions as if they were relative symbolic links"
 #define PROGRAM_NAME    "junction"
-#define PROGRAM_VERSION "2026-02-13"
+#define PROGRAM_VERSION "2.0"
+#define PROGRAM_DATE    "2026-02-19"
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _UTF8_SOURCE
@@ -192,6 +194,7 @@ int main(int argc, char *argv[]) {
   int iErr = 1;		/* Assume failure */
   char *pszJunction = NULL;
   char *pszTarget = NULL;
+  char *pszType;		/* "reparse point" or "junction" */
   char buf[PATH_MAX];
   int iFormat = F_MIN;
   int iVerbose = FALSE;
@@ -329,6 +332,8 @@ int main(int argc, char *argv[]) {
   }
   jcbRef.iFlags |= iFormat;
 
+  pszType = (jcbRef.iFlags & JCB_ALLTYPES) ? "reparse point" : "junction";
+
   if (action == ACT_GETID) { /* Debug: Dump the volume and file ID */
     char *pszPath = pszJunction ? pszJunction : ".";
     FILE_ID fid;
@@ -350,9 +355,9 @@ int main(int argc, char *argv[]) {
     char *pszDir = pszJunction ? pszJunction : ".";
     iErr = WalkDirTree(pszDir, &opts, ShowJunctionsCB, &jcbRef);
     if (iVerbose) {
-      printf("# Scanned %lld entries in %lld directories, and found %ld %s\n",
+      printf("# Scanned %lld entries in %lld directories, and found %ld %s%s\n",
 	     (long long)opts.nFile, (long long)opts.nDir, jcbRef.nJunction,
-	     (jcbRef.iFlags & JCB_ALLTYPES) ? "reparse points" : "junctions");
+	     pszType, (jcbRef.nJunction > 1) ? "s" : "");
     }
     if (opts.nErr) {
       int nSkipped = opts.nErr;
@@ -392,8 +397,15 @@ int main(int argc, char *argv[]) {
     int iOffset = 0;
     DWORD dwTag = MlxGetReparseTag(pszJunction);
     if (!dwTag) {
-      pfcerror(NULL);
-      return 1;
+      switch (errno) {
+        case EBADF:	/* Not a reparse point */
+        case ENXIO:	/* Known issue with Win7 VMware VMs accessing their host's shared folders */
+      	  pferror("This is not a %s", pszType);
+	  return 1;
+      	default:	/* Ex: ENOENT = No such file or directory */
+	  pfcerror(NULL);
+	  return 1;
+      }
     }
     dwTag &= IO_REPARSE_TAG_TYPE_BITS;
     if ((dwTag != IO_REPARSE_TAG_MOUNT_POINT) && !iAllTypes) {
