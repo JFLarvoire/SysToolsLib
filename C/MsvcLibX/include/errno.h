@@ -10,6 +10,7 @@
 *    2021-12-12 JFL Created this file.					      *
 *    2022-12-12 JFL Added a definition for EOVERFLOW.			      *
 *    2026-01-18 JFL Added a definition for ENOTSUP.			      *
+*    2026-02-19 JFL Added a prototype for MlxGetWin32ErrorMessage().	      *
 *									      *
 *         © Copyright 2021 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -75,7 +76,10 @@ extern "C" {
 
 #ifdef _WIN32	/* Automatically defined when targeting a Win32 application */
 
+#include "sys/types.h" /* For DWORD definition */
+
 /* Library-specific routine used internally by many standard routines */
+extern char *MlxGetWin32ErrorMessage(DWORD dwError); /* Must be freed with LocalFree() */
 extern int Win32ErrorToErrno(); /* Converts the last WIN32 error to a Posix error code */
 
 /*
