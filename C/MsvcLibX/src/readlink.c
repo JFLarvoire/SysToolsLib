@@ -37,6 +37,8 @@
 *    2026-01-27 JFL Make sure MlxGetReparseTag() always sets errno on error.  *
 *    2026-02-06 JFL Decode junction targets raw names beginning with          *
 *                   '\??\Global\C:', etc, or'\??\UNC\server\share\dir', etc.  *
+*    2026-02-17 JFL Added, then commented-out, a tentative fix for Win7 VMs   *
+*                   reading null reparse tags on their host's shared folders. *
 *                                                                             *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -55,6 +57,10 @@
 
 #include <windows.h>
 #include "iconv.h"
+#define USE_TAG_0_FIX 0 /* 1 = Include a workaround for the (dwTag == 0) issue on Win7 VMs */
+#if USE_TAG_0_FIX
+#include "sys/stat.h"
+#endif
 #include "reparsept.h" /* For the undocumented IO_REPARSE_TAG_LX_SYMLINK, etc */
 
 #pragma warning(disable:4201) /* Ignore the "nonstandard extension used : nameless struct/union" warning */
@@ -68,15 +74,59 @@ DWORD MlxGetReparseTagW(const WCHAR *pwszPath) {
   WIN32_FIND_DATAW findFileData;
   DWORD dwTag = 0;
 
+  XDEBUG_WPRINTF((L"MlxGetReparseTagW(\"%s\");\n", pwszPath));
+
   hFind = FindFirstFileW(pwszPath, &findFileData);
   if (hFind == INVALID_HANDLE_VALUE ) {
+    XDEBUG_PRINTF(("  return 0; // FindFirstFile() failed\n"));
     errno = Win32ErrorToErrno();
     return 0;
   }
   CloseHandle(hFind);
   if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
     dwTag = findFileData.dwReserved0;
+#if USE_TAG_0_FIX /* The following code works, but does not fix the (dwTag == 0) issue on Win7 VMs */
+    if (!dwTag) { /* This is incoherent, but it happens in Win7 VMware VMs accessing their host's shared folders */
+      FILE_ATTRIBUTE_TAG_INFO fati;
+      int lFni = sizeof(FILE_ATTRIBUTE_TAG_INFO);
+      HANDLE hFile;
+      BOOL bDone;
+      if (!HasGetFileInformationByHandleEx() || (LOBYTE(LOWORD(GetVersion())) < 6)) {
+	errno = ENOSYS; /* Supported in Windows Vista and later */
+	XDEBUG_PRINTF(("  return 0; // Unsupported on this system\n"));
+	return 0;
+      }
+      hFile = CreateFileW(pwszPath,		/* lpFileName */
+			  0,			/* dwDesiredAccess - 0 = Neither read or write = Only metadata access */
+			  0,			/* dwShareMode - Others can do anything */
+			  NULL,			/* lpSecurityAttributes */
+			  OPEN_EXISTING,	/* dwCreationDisposition */
+			  FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, /* dwFlagsAndAttributes - Allow opening directories too */
+			  NULL			/* hTemplateFile */
+			  );
+      if (hFile == INVALID_HANDLE_VALUE) {
+	errno = Win32ErrorToErrno();
+	XDEBUG_PRINTF(("  return 0; // %s\n", strerror(errno)));
+	return 0;
+      }
+      /* GetFileInformationByHandleEx() is supported in Windows Vista and later */
+      DEBUG_PRINTF(("GetFileInformationByHandleEx(hFile, FileAttributeTagInfo, fati, buflen=%d);\n", lFni));
+      bDone = pGetFileInformationByHandleEx(hFile, FileAttributeTagInfo, &fati, (DWORD)lFni);
+      CloseHandle(hFile);
+      if (!bDone) {
+	errno = Win32ErrorToErrno();
+	XDEBUG_PRINTF(("  return 0; // %s\n", strerror(errno)));
+	return 0;
+      }
+      dwTag = fati.ReparseTag;
+      XDEBUG_PRINTF(("  return (fati.ReparseTag = 0x%X);\n", dwTag));
+    } else
+#endif
+    {
+      XDEBUG_PRINTF(("  return (dwReserved0 = 0x%X);\n", dwTag));
+    }
   } else {
+    XDEBUG_PRINTF(("  return 0; // Not a reparse point\n"));
     errno = EBADF; /* Not a reparse point */
   }
   return dwTag;

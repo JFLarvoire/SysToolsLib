@@ -26,6 +26,7 @@
 *		    argument, and redefining the old name as a macro.	      *
 *    2026-01-12 JFL Added GetFileInformationByHandleEx() access definitions.  *
 *    2026-02-03 JFL Added the prototype for MlxAttrAndTag2Type().	      *
+*    2026-02-17 JFL Added struct _FILE_ATTRIBUTE_TAG_INFO, etc.		      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -323,6 +324,12 @@ typedef struct _FILE_STREAM_INFO {
   LARGE_INTEGER StreamAllocationSize;
   WCHAR         StreamName[1];
 } FILE_STREAM_INFO, *PFILE_STREAM_INFO;
+
+#define FileAttributeTagInfo 9 /* Defined in WinBase.h, starting in the Vista SDK */
+typedef struct _FILE_ATTRIBUTE_TAG_INFO {
+  DWORD FileAttributes;
+  DWORD ReparseTag;
+} FILE_ATTRIBUTE_TAG_INFO, *PFILE_ATTRIBUTE_TAG_INFO;
 #endif /*  _WIN32_WINNT < 0x0600 */
 
 /* Define information classes introduced in Windows 8, and thus missing in Win95 to Win7 SDKs */
