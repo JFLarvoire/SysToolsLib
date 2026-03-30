@@ -27,6 +27,7 @@
 *    2026-01-12 JFL Added GetFileInformationByHandleEx() access definitions.  *
 *    2026-02-03 JFL Added the prototype for MlxAttrAndTag2Type().	      *
 *    2026-02-17 JFL Added struct _FILE_ATTRIBUTE_TAG_INFO, etc.		      *
+*    2026-03-29 JFL Fixed the FILE_ID_128 conditional redefinition.	      *
 *		    							      *
 *         © Copyright 2016 Hewlett Packard Enterprise Development LP          *
 * Licensed under the Apache 2.0 license - www.apache.org/licenses/LICENSE-2.0 *
@@ -297,6 +298,15 @@ extern BOOL MlxGetFileAttributesAndID(const char *pszName, WIN32_FILE_ATTRIBUTE_
 /* ------------------------------------------------------------------------- */
 /* Proprietary routines for calling WIN32 low-level file information APIs on systems that support them */
 
+/* The constants and structures they use are defined in Windows SDKs,
+   starting with the first Windows version they appear in.
+   But even in more recent SDKs, they're compiled out if constant _WIN32_WINNT
+   is defined by the user, and targets an older version of Windows.
+   If undefined, the SDK sets _WIN32_WINNT to the latest kernel supported. */
+#if !defined(_WIN32_WINNT) /* A very old SDK indeed, not supporting NT */
+#  define _WIN32_WINNT 0x0400 /* Make sure the following conditional blocks work anyway */
+#endif
+
 /* The GetFileInformationByHandle() function is available in Windows 95, and all later versions of Windows */
 /* https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle */
 /* No need for a front-end routine for this one */
@@ -312,8 +322,8 @@ BOOL HasGetFileInformationByHandleEx(void); /* Tell if GetFileInformationByHandl
 #if _WIN32_WINNT < 0x0600
 #define FileNameInfo 2 /* Defined in WinBase.h, starting in the Vista SDK */
 typedef struct _FILE_NAME_INFO {
-    DWORD FileNameLength;
-    WCHAR FileName[1];
+  DWORD FileNameLength;
+  WCHAR FileName[1];
 } FILE_NAME_INFO, *PFILE_NAME_INFO;
 
 #define FileStreamInfo 7 /* Defined in WinBase.h, starting in the Vista SDK */
@@ -332,15 +342,22 @@ typedef struct _FILE_ATTRIBUTE_TAG_INFO {
 } FILE_ATTRIBUTE_TAG_INFO, *PFILE_ATTRIBUTE_TAG_INFO;
 #endif /*  _WIN32_WINNT < 0x0600 */
 
+/* The FILE_ID_128 structure has been introduced in the Windows 8.0 SDK,
+   at the same time as the FILE_INVALID_FILE_ID constant,
+   but it is not in a conditional block depending on _WIN32_WINNT version */
+#ifndef FILE_INVALID_FILE_ID
+#define FILE_INVALID_FILE_ID ((LONGLONG)-1LL) 
+typedef struct _FILE_ID_128 {                               
+  BYTE  Identifier[16];                                   
+} FILE_ID_128, *PFILE_ID_128;                               
+#endif
+
 /* Define information classes introduced in Windows 8, and thus missing in Win95 to Win7 SDKs */
 #if _WIN32_WINNT < 0x0602
 #define FileIdInfo 18 /* Defined in WinBase.h, starting in the Windows 8 SDK */
-typedef struct _FILE_ID_128 {                               
-    BYTE  Identifier[16];                                   
-} FILE_ID_128, *PFILE_ID_128;                               
 typedef struct _FILE_ID_INFO {
-    ULONGLONG VolumeSerialNumber;
-    FILE_ID_128 FileId;
+  ULONGLONG VolumeSerialNumber;
+  FILE_ID_128 FileId;
 } FILE_ID_INFO, *PFILE_ID_INFO;
 #endif /*  _WIN32_WINNT < 0x0602 */
 
@@ -352,24 +369,29 @@ extern PGETFILEINFORMATIONBYNAME pGetFileInformationByName; /* Pointer to GetFil
 /* New file information classes were introduced in each new version of Windows */
 
 /* Define information classes introduced in Windows 11, and thus missing in Win95 to Win10 SDKs */
+/* For both Windows 10 and Windows 11, _WIN32_WINNT = 0x0A00.
+   As far as the kernel is concerned, Windows 11 is just a service release of Windows 10.
+   The service release is defined in variable NTDDI_VERSION, where the high word
+   is equal to _WIN32_WINNT, and the low word is the service release version.
+   The original version of Windows 11 is NTDDI_WIN11_ZN = 0x0A00000E. */
 #if !defined(NTDDI_VERSION) || !defined(NTDDI_WIN11_ZN) || NTDDI_VERSION < NTDDI_WIN11_ZN
 #define FileStatBasicByNameInfo 3
 typedef struct _FILE_STAT_BASIC_INFORMATION {
-    LARGE_INTEGER FileId;
-    LARGE_INTEGER CreationTime;
-    LARGE_INTEGER LastAccessTime;
-    LARGE_INTEGER LastWriteTime;
-    LARGE_INTEGER ChangeTime;
-    LARGE_INTEGER AllocationSize;
-    LARGE_INTEGER EndOfFile;
-    DWORD FileAttributes;
-    DWORD ReparseTag;
-    DWORD NumberOfLinks;
-    DWORD DeviceType;
-    DWORD DeviceCharacteristics;
-    DWORD Reserved;
-    LARGE_INTEGER VolumeSerialNumber;
-    FILE_ID_128 FileId128;
+  LARGE_INTEGER FileId;
+  LARGE_INTEGER CreationTime;
+  LARGE_INTEGER LastAccessTime;
+  LARGE_INTEGER LastWriteTime;
+  LARGE_INTEGER ChangeTime;
+  LARGE_INTEGER AllocationSize;
+  LARGE_INTEGER EndOfFile;
+  DWORD FileAttributes;
+  DWORD ReparseTag;
+  DWORD NumberOfLinks;
+  DWORD DeviceType;
+  DWORD DeviceCharacteristics;
+  DWORD Reserved;
+  LARGE_INTEGER VolumeSerialNumber;
+  FILE_ID_128 FileId128;
 } FILE_STAT_BASIC_INFORMATION, *PFILE_STAT_BASIC_INFORMATION;
 #endif
 
